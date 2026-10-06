@@ -1,0 +1,147 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum BrandRole {
+  owner
+  admin
+  editor
+  approver
+  viewer
+}
+
+enum AssetKind {
+  video
+  image
+  carousel
+}
+
+enum IngestStatus {
+  ingesting
+  needs_review
+  ready
+  failed
+  source_missing
+}
+
+enum ApprovalStatus {
+  needs_review
+  approved
+  rejected
+}
+
+enum EligibilityType {
+  evergreen
+  annual
+  one_time
+}
+
+model Organization {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  slug      String   @unique
+  brands    Brand[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Brand {
+  id                  String        @id @default(uuid()) @db.Uuid
+  organizationId      String        @db.Uuid
+  organization        Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name                String
+  slug                String
+  timezone            String        @default("America/New_York")
+  approvalPolicy      String        @default("creator")
+  allowAutoVariants   Boolean       @default(false)
+  brandVoice          String?
+  settings            Json          @default("{}")
+  status              String        @default("active")
+  members             BrandMember[]
+  storageConnections  StorageConnection[]
+  assets              Asset[]
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  @@unique([organizationId, slug])
+}
+
+model User {
+  id             String        @id @default(uuid()) @db.Uuid
+  email          String        @unique
+  name           String?
+  authProviderId String?       @unique
+  brandMemberships BrandMember[]
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+}
+
+model BrandMember {
+  brandId String    @db.Uuid
+  userId  String    @db.Uuid
+  role    BrandRole
+  brand   Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  user    User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([brandId, userId])
+}
+
+model StorageConnection {
+  id           String   @id @default(uuid()) @db.Uuid
+  brandId      String   @db.Uuid
+  brand        Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  provider     String   @default("dropbox")
+  accountRef   String
+  secretRef    String
+  rootPath     String
+  syncCursor   String?
+  lastSyncedAt DateTime?
+  status       String   @default("active")
+  assets       Asset[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Asset {
+  id                    String           @id @default(uuid()) @db.Uuid
+  brandId               String           @db.Uuid
+  brand                 Brand            @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  storageConnectionId   String?          @db.Uuid
+  storageConnection     StorageConnection? @relation(fields: [storageConnectionId], references: [id])
+  sourceFileId          String?
+  sourcePath            String?
+  contentHash           String?
+  filename              String
+  mimeType              String?
+  fileSizeBytes         BigInt?
+  kind                  AssetKind
+  width                 Int?
+  height                Int?
+  aspectRatio           Decimal?         @db.Decimal(6, 4)
+  durationMs            Int?
+  ingestStatus          IngestStatus     @default(ingesting)
+  title                 String?
+  topic                 String?
+  contentGroup          String?
+  creativeNotes         String?
+  folderSuggestions     Json             @default("{}")
+  eligibilityType       EligibilityType  @default(evergreen)
+  eligibleFrom          DateTime?        @db.Date
+  eligibleUntil         DateTime?        @db.Date
+  annualFromMmdd        Int?
+  annualUntilMmdd       Int?
+  containsSpecificPricing Boolean        @default(false)
+  priority              String           @default("normal")
+  approvalStatus        ApprovalStatus   @default(needs_review)
+  retiredAt             DateTime?
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+
+  @@index([brandId, approvalStatus, ingestStatus])
+  @@index([brandId, eligibilityType])
+}
