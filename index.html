@@ -1,1 +1,96 @@
-dddd
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Elettro Brand OS</title>
+  <meta name="description" content="Create. Approve. The engine distributes. Elettro Brand OS turns an approved creative library into an always-on publishing system.">
+  <style>
+    :root {
+      --bg: #f7f6f3;
+      --fg: #16161a;
+      --muted: #5c5c66;
+      --accent: #e8590c;
+      --line: #e2e0da;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #111114;
+        --fg: #f2f1ee;
+        --muted: #9a9aa3;
+        --accent: #ff7a2e;
+        --line: #26262c;
+      }
+    }
+    * { box-sizing: border-box; margin: 0; }
+    body {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      line-height: 1.5;
+    }
+    header, footer {
+      padding: 24px 16px;
+      max-width: 960px;
+      width: 100%;
+      margin: 0 auto;
+    }
+    .logo { font-weight: 700; letter-spacing: -0.01em; }
+    .logo span { color: var(--accent); }
+    main {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      max-width: 960px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 48px 16px;
+    }
+    h1 {
+      font-size: clamp(2.25rem, 7vw, 4.5rem);
+      line-height: 1.05;
+      letter-spacing: -0.03em;
+      font-weight: 800;
+    }
+    h1 em { font-style: normal; color: var(--accent); }
+    p.lede {
+      margin-top: 24px;
+      max-width: 34rem;
+      font-size: 1.125rem;
+      color: var(--muted);
+    }
+    .status {
+      display: inline-block;
+      margin-top: 32px;
+      padding: 6px 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      font-size: 0.875rem;
+      color: var(--muted);
+    }
+    footer {
+      border-top: 1px solid var(--line);
+      font-size: 0.875rem;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo">Elettro <span>Brand OS</span></div>
+  </header>
+  <main>
+    <div>
+      <h1>Create. Approve.<br><em>The engine distributes.</em></h1>
+      <p class="lede">Elettro Brand OS turns an approved creative library into an always-on publishing system, so your best content actually gets seen.</p>
+      <div class="status">In development</div>
+    </div>
+  </main>
+  <footer>
+    &copy; 2026 Elettro Interactive
+  </footer>
+</body>
+</html>
