@@ -1,0 +1,17 @@
+{
+  "name": "elettro-brand-os",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "services/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=@elettro/web",
+    "build": "npm run build --workspace=@elettro/web",
+    "lint": "npm run lint --workspace=@elettro/web",
+    "db:generate": "npm run generate --workspace=@elettro/database",
+    "db:migrate": "npm run migrate --workspace=@elettro/database"
+  }
+}
