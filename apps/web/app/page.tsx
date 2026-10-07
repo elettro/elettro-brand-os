@@ -1,8 +1,9 @@
+import Link from "next/link";
 import { BrandSwitcher } from "@/components/brand-switcher";
 import { sprintOneBrands } from "@/lib/brands";
 
 const pipeline = [
-  ["Dropbox", "Connect one or more brand root folders."],
+  ["Dropbox", "One connected Dropbox account with six mapped brand roots."],
   ["Ingestion", "Detect files, hashes, paths, file type and technical metadata."],
   ["AI analysis", "Suggest description, topic, product, tags and creative family."],
   ["Human review", "Confirm metadata, eligibility, annual rules and approval."],
@@ -13,15 +14,13 @@ export default function DashboardPage() {
   return (
     <div className="shell">
       <aside className="sidebar">
-        <div className="brandmark">
-          Elettro <span>Brand OS</span>
-        </div>
+        <div className="brandmark">Elettro <span>Brand OS</span></div>
 
         <div className="nav-section">
           <div className="nav-label">Workspace</div>
-          <a className="nav-item active" href="/">Dashboard</a>
-          <a className="nav-item" href="#">Assets</a>
-          <a className="nav-item" href="#">Content Pool</a>
+          <Link className="nav-item active" href="/">Dashboard</Link>
+          <Link className="nav-item" href="/assets">Assets</Link>
+          <Link className="nav-item" href="/content-pool">Content Pool</Link>
           <a className="nav-item" href="#">Calendar</a>
         </div>
 
@@ -46,36 +45,21 @@ export default function DashboardPage() {
             <div className="eyebrow">Publishing Engine · Sprint 1</div>
             <h1>Create. Approve. The engine distributes.</h1>
           </div>
-          <BrandSwitcher brands={[...sprintOneBrands]} />
+          <BrandSwitcher brands={sprintOneBrands} />
         </div>
 
         <div className="grid stats">
-          <div className="card">
-            <div className="metric">Brands</div>
-            <div className="metric-value">3</div>
-          </div>
-          <div className="card">
-            <div className="metric">Dropbox connections</div>
-            <div className="metric-value">0</div>
-          </div>
-          <div className="card">
-            <div className="metric">Assets indexed</div>
-            <div className="metric-value">0</div>
-          </div>
-          <div className="card">
-            <div className="metric">Approved in pool</div>
-            <div className="metric-value">0</div>
-          </div>
+          <div className="card"><div className="metric">Brands</div><div className="metric-value">6</div></div>
+          <div className="card"><div className="metric">Dropbox accounts</div><div className="metric-value">1</div></div>
+          <div className="card"><div className="metric">Assets indexed</div><div className="metric-value">0</div></div>
+          <div className="card"><div className="metric">Approved in pool</div><div className="metric-value">0</div></div>
         </div>
 
         <div className="hero">
           <section className="card">
-            <span className="status-chip">Foundation active</span>
+            <span className="status-chip">Sprint 1 implementation</span>
             <h2>First vertical slice</h2>
-            <p className="muted">
-              Sprint 1 proves the real workflow before social publishing is connected.
-            </p>
-
+            <p className="muted">The app shell, asset review screens, eligibility engine and Content Pool logic are now being wired before live Dropbox credentials.</p>
             <div className="pipeline">
               {pipeline.map(([title, description], index) => (
                 <div className="pipeline-row" key={title}>
@@ -87,23 +71,15 @@ export default function DashboardPage() {
           </section>
 
           <aside className="card">
-            <h2>Next integration</h2>
-            <p className="muted">
-              Dropbox OAuth and PostgreSQL are the next live dependencies.
-            </p>
+            <h2>Brand roots</h2>
+            <p className="muted">Each root and all of its subfolders map to one brand automatically.</p>
             <div className="pipeline">
-              <div className="pipeline-row">
-                <strong>SolarMeister</strong>
-                <span className="muted">Europe/Berlin</span>
-              </div>
-              <div className="pipeline-row">
-                <strong>Stashbox</strong>
-                <span className="muted">America/New_York</span>
-              </div>
-              <div className="pipeline-row">
-                <strong>Elettro</strong>
-                <span className="muted">America/New_York</span>
-              </div>
+              {sprintOneBrands.map((brand) => (
+                <div className="pipeline-row" key={brand.id}>
+                  <strong>{brand.name}</strong>
+                  <span className="muted">{brand.timezone}</span>
+                </div>
+              ))}
             </div>
           </aside>
         </div>
