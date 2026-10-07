@@ -22,7 +22,7 @@ Most brands don't lack content. What they lack is the operational bandwidth to d
 ## 2. Core Principles
 
 1. **Folders are for humans. Metadata powers the automation.** Folder paths may *suggest* metadata at ingestion. The planner never selects by folder name.
-2. **Nothing publishes without approval.** Only approved assets can enter the Content Pool.
+2. **Only approved assets can publish.** Newly loaded assets are approved by default. If the user checks **Send to approval queue** during import, the asset enters `needs_review` instead.
 3. **Rules decide eligibility. AI decides among the eligible.** Eligibility windows, cooldowns, and spacing are deterministic and auditable (SQL and code). AI handles ranking, copy, titles, and gap analysis.
 4. **One asset, many executions.** One master asset produces several platform-optimized posts. Copy is never pasted across platforms unchanged.
 5. **The Ledger is the memory.** Every publication is recorded. Cooldowns, history, and performance all read from it.
@@ -100,7 +100,7 @@ Analytics feedback → informs future scoring
 3. Run media inspection (ffprobe or sharp): width, height, aspect ratio, orientation, duration, codec, and format.
 4. Run AI analysis on a representative frame or image plus the filename and path. It returns a description, suggested topic, suggested product, suggested creative family, and tags.
 5. Apply **folder-suggested metadata**. Path segments map to campaign, product, or season hints. These are suggestions only and are flagged as such.
-6. Set status to `needs_review`.
+6. Set approval status to `approved` by default. If **Send to approval queue** is checked during import, set approval status to `needs_review`.
 
 ### 5.3 Moves, renames, deletes
 
@@ -152,7 +152,8 @@ Rule: if `contains_specific_pricing = true`, the eligibility type is forced to `
   - `creator` — any brand editor can approve.
   - `client` — requires a user with the `approver` role (the client).
   - `creator_and_client` — both required.
-- Bulk approval is supported, since approving 20 assets at once is the expected workflow.
+- Asset import includes a **Send to approval queue** checkbox. It is **unchecked by default**. Unchecked imports enter as `approved`; checked imports enter as `needs_review`.
+- Bulk approval is supported for client/review workflows.
 - **Retire** removes an asset from the pool permanently but keeps its history. One-time assets auto-retire after `eligible_until`.
 
 ---
