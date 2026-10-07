@@ -22,11 +22,19 @@ enum AssetKind {
 }
 
 enum IngestStatus {
-  ingesting
-  needs_review
+  raw
+  analyzing
+  needs_metadata
   ready
   failed
   source_missing
+}
+
+enum EnrichmentStatus {
+  pending
+  suggested
+  reviewed
+  failed
 }
 
 enum ApprovalStatus {
@@ -41,44 +49,60 @@ enum EligibilityType {
   one_time
 }
 
+enum SubjectType {
+  person
+  group
+  product
+  topic
+  event
+  show
+  other
+}
+
 model Organization {
-  id        String   @id @default(uuid()) @db.Uuid
-  name      String
-  slug      String   @unique
-  brands    Brand[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                 String              @id @default(uuid()) @db.Uuid
+  name               String
+  slug               String              @unique
+  brands             Brand[]
+  storageConnections StorageConnection[]
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
 }
 
 model Brand {
-  id                  String        @id @default(uuid()) @db.Uuid
-  organizationId      String        @db.Uuid
-  organization        Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  name                String
-  slug                String
-  timezone            String        @default("America/New_York")
-  approvalPolicy      String        @default("creator")
-  allowAutoVariants   Boolean       @default(false)
-  brandVoice          String?
-  settings            Json          @default("{}")
-  status              String        @default("active")
-  members             BrandMember[]
-  storageConnections  StorageConnection[]
-  assets              Asset[]
-  createdAt           DateTime      @default(now())
-  updatedAt           DateTime      @updatedAt
+  id                String             @id @default(uuid()) @db.Uuid
+  organizationId    String             @db.Uuid
+  organization      Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name              String
+  slug              String
+  timezone          String             @default("America/New_York")
+  approvalPolicy    String             @default("creator")
+  allowAutoVariants Boolean            @default(false)
+  brandVoice        String?
+  settings          Json               @default("{}")
+  status            String             @default("active")
+  members           BrandMember[]
+  storageRoots      BrandStorageRoot[]
+  assets            Asset[]
+  collections       Collection[]
+  campaigns         Campaign[]
+  subjects          Subject[]
+  metadataPresets   MetadataPreset[]
+  intakeBatches     IntakeBatch[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
 
   @@unique([organizationId, slug])
 }
 
 model User {
-  id             String        @id @default(uuid()) @db.Uuid
-  email          String        @unique
-  name           String?
-  authProviderId String?       @unique
+  id               String        @id @default(uuid()) @db.Uuid
+  email            String        @unique
+  name             String?
+  authProviderId   String?       @unique
   brandMemberships BrandMember[]
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
 }
 
 model BrandMember {
@@ -92,56 +116,176 @@ model BrandMember {
 }
 
 model StorageConnection {
-  id           String   @id @default(uuid()) @db.Uuid
-  brandId      String   @db.Uuid
-  brand        Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  provider     String   @default("dropbox")
-  accountRef   String
-  secretRef    String
-  rootPath     String
-  syncCursor   String?
-  lastSyncedAt DateTime?
-  status       String   @default("active")
-  assets       Asset[]
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id             String             @id @default(uuid()) @db.Uuid
+  organizationId String             @db.Uuid
+  organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  provider       String             @default("dropbox")
+  accountRef     String
+  secretRef      String
+  syncCursor     String?
+  lastSyncedAt   DateTime?
+  status         String             @default("active")
+  roots          BrandStorageRoot[]
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+}
+
+model BrandStorageRoot {
+  id                  String            @id @default(uuid()) @db.Uuid
+  brandId             String            @db.Uuid
+  storageConnectionId String            @db.Uuid
+  brand               Brand             @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  storageConnection   StorageConnection @relation(fields: [storageConnectionId], references: [id], onDelete: Cascade)
+  rootPath            String
+  rootPathLower       String
+  status              String            @default("active")
+  assets              Asset[]
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  @@unique([storageConnectionId, rootPathLower])
+  @@index([brandId])
+}
+
+model IntakeBatch {
+  id              String    @id @default(uuid()) @db.Uuid
+  brandId         String    @db.Uuid
+  brand           Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  name            String?
+  source          String    @default("dropbox")
+  creatorNote     String?
+  defaultMetadata Json      @default("{}")
+  assets          Asset[]
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model Collection {
+  id          String   @id @default(uuid()) @db.Uuid
+  brandId     String   @db.Uuid
+  brand       Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  name        String
+  slug        String
+  description String?
+  assets      Asset[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([brandId, slug])
+}
+
+model Campaign {
+  id          String   @id @default(uuid()) @db.Uuid
+  brandId     String   @db.Uuid
+  brand       Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  name        String
+  slug        String
+  description String?
+  startsAt    DateTime?
+  endsAt      DateTime?
+  assets      Asset[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([brandId, slug])
+}
+
+model Subject {
+  id        String      @id @default(uuid()) @db.Uuid
+  brandId   String      @db.Uuid
+  brand     Brand       @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  name      String
+  slug      String
+  type      SubjectType @default(other)
+  assets    AssetSubject[]
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  @@unique([brandId, slug])
+}
+
+model AssetSubject {
+  assetId   String  @db.Uuid
+  subjectId String  @db.Uuid
+  asset     Asset   @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  subject   Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  confidence Decimal? @db.Decimal(5,4)
+  source    String  @default("human")
+
+  @@id([assetId, subjectId])
+}
+
+model MetadataPreset {
+  id              String   @id @default(uuid()) @db.Uuid
+  brandId         String   @db.Uuid
+  brand           Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  name            String
+  description     String?
+  metadata        Json
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([brandId, name])
 }
 
 model Asset {
-  id                    String           @id @default(uuid()) @db.Uuid
-  brandId               String           @db.Uuid
-  brand                 Brand            @relation(fields: [brandId], references: [id], onDelete: Cascade)
-  storageConnectionId   String?          @db.Uuid
-  storageConnection     StorageConnection? @relation(fields: [storageConnectionId], references: [id])
-  sourceFileId          String?
-  sourcePath            String?
-  contentHash           String?
-  filename              String
-  mimeType              String?
-  fileSizeBytes         BigInt?
-  kind                  AssetKind
-  width                 Int?
-  height                Int?
-  aspectRatio           Decimal?         @db.Decimal(6, 4)
-  durationMs            Int?
-  ingestStatus          IngestStatus     @default(ingesting)
-  title                 String?
-  topic                 String?
-  contentGroup          String?
-  creativeNotes         String?
-  folderSuggestions     Json             @default("{}")
-  eligibilityType       EligibilityType  @default(evergreen)
-  eligibleFrom          DateTime?        @db.Date
-  eligibleUntil         DateTime?        @db.Date
-  annualFromMmdd        Int?
-  annualUntilMmdd       Int?
-  containsSpecificPricing Boolean        @default(false)
-  priority              String           @default("normal")
-  approvalStatus        ApprovalStatus   @default(needs_review)
-  retiredAt             DateTime?
-  createdAt             DateTime         @default(now())
-  updatedAt             DateTime         @updatedAt
+  id                      String             @id @default(uuid()) @db.Uuid
+  brandId                 String             @db.Uuid
+  brand                   Brand              @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  storageRootId           String?            @db.Uuid
+  storageRoot             BrandStorageRoot?  @relation(fields: [storageRootId], references: [id])
+  intakeBatchId           String?            @db.Uuid
+  intakeBatch             IntakeBatch?       @relation(fields: [intakeBatchId], references: [id])
+  collectionId            String?            @db.Uuid
+  collection              Collection?        @relation(fields: [collectionId], references: [id])
+  campaignId              String?            @db.Uuid
+  campaign                Campaign?          @relation(fields: [campaignId], references: [id])
+  subjects                AssetSubject[]
+  sourceFileId            String?
+  sourcePath              String?
+  sourcePathLower         String?
+  contentHash             String?
+  filename                String
+  mimeType                String?
+  fileSizeBytes           BigInt?
+  kind                    AssetKind
+  width                   Int?
+  height                  Int?
+  aspectRatioLabel        String?
+  aspectRatio             Decimal?           @db.Decimal(8, 5)
+  orientation             String?
+  durationMs              Int?
+  hasAudio                Boolean?
+  ingestStatus            IngestStatus       @default(raw)
+  enrichmentStatus        EnrichmentStatus   @default(pending)
+  title                   String?
+  aiDescription           String?
+  topic                   String?
+  contentGroup            String?
+  creativeFamily          String?
+  creatorNote             String?
+  creativeNotes           String?
+  folderSuggestions       Json               @default("{}")
+  aiSuggestions           Json               @default("{}")
+  eligibilityType         EligibilityType    @default(evergreen)
+  eligibleFrom            DateTime?          @db.Date
+  eligibleUntil           DateTime?          @db.Date
+  annualFromMmdd          Int?
+  annualUntilMmdd         Int?
+  containsSpecificPricing Boolean            @default(false)
+  priority                String             @default("normal")
+  allowedDestinations     String[]           @default([])
+  excludedDestinations    String[]           @default([])
+  approvalStatus          ApprovalStatus     @default(needs_review)
+  producedAt              DateTime?
+  firstApprovedAt         DateTime?
+  retiredAt               DateTime?
+  createdAt               DateTime           @default(now())
+  updatedAt               DateTime           @updatedAt
 
   @@index([brandId, approvalStatus, ingestStatus])
   @@index([brandId, eligibilityType])
+  @@index([brandId, collectionId])
+  @@index([brandId, campaignId])
+  @@index([sourcePathLower])
 }
