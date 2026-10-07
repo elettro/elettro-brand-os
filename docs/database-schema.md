@@ -205,7 +205,7 @@ CREATE TABLE assets (
   cooldown_override_days int,
 
   -- approval / lifecycle
-  approval_status  approval_status NOT NULL DEFAULT 'needs_review',
+  approval_status  approval_status NOT NULL DEFAULT 'approved',
   approved_by      uuid REFERENCES users,
   approved_at      timestamptz,
   client_approved_by uuid REFERENCES users,
