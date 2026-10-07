@@ -198,3 +198,22 @@ h1 {
     grid-template-columns: 1fr;
   }
 }
+
+.intake-control > input,
+.intake-control > select {
+  width: 100%;
+  border: 1px solid var(--line);
+  background: white;
+  border-radius: 9px;
+  padding: 10px 11px;
+  color: var(--text);
+}
+
+.status-chip[href] {
+  text-decoration: none;
+}
+
+button:disabled {
+  opacity: .45;
+  cursor: not-allowed !important;
+}
