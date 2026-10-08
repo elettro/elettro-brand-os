@@ -127,3 +127,37 @@ AI suggestions do not override deterministic eligibility or publishing safety ru
 ## Core principle
 
 **Dump now. Enrich later. Set shared meaning once. Touch only the exceptions.**
+
+
+## Seasonal eligibility
+
+Assets can be either:
+
+- evergreen / always available
+- date-window restricted
+
+A date-window restricted asset has a start date and stop date plus an annual-repeat switch.
+
+- annual repeat OFF = one-time absolute date window
+- annual repeat ON = repeat the month/day window every year
+
+Example:
+
+- Start: 2026-09-15
+- Stop: 2026-12-25
+- Repeat annually: ON
+
+This becomes an annual Sep 15 → Dec 25 eligibility window.
+
+The user should not have to choose “annual” vs “one-time” from separate abstract modes. The UI derives that from the annual-repeat checkbox.
+
+## Approval behavior
+
+New assets default to approved.
+
+The intake form provides an optional **Send to approval queue** checkbox.
+
+- unchecked = approved immediately
+- checked = needs review
+
+Client workflows can opt into approval without burdening creator-owned assets.
