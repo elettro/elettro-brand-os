@@ -23,8 +23,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "24"
-          cache: npm
-          cache-dependency-path: services/dev-api-lambda/package-lock.json
 
       - name: Install production dependencies
         run: npm install --omit=dev
