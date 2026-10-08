@@ -1,7 +1,12 @@
-import { mockAssets } from "@/lib/mock-assets";
+import { getContentPool } from "@/lib/dev-api";
 
-export default function ContentPoolPage() {
-  const approved = mockAssets.filter((asset) => asset.approval === "approved" && asset.status === "ready");
+export default async function ContentPoolPage() {
+  let approved: Awaited<ReturnType<typeof getContentPool>>["assets"] = [];
+  try {
+    approved = (await getContentPool()).assets;
+  } catch {
+    approved = [];
+  }
 
   return (
     <main className="main">
@@ -13,8 +18,8 @@ export default function ContentPoolPage() {
         {approved.map((asset) => (
           <article className="card" key={asset.id}>
             <strong>{asset.filename}</strong>
-            <p className="muted">{asset.brandId} · {asset.kind} · {asset.contentGroup}</p>
-            <span className="status-chip">{asset.eligibility}</span>
+            <p className="muted">{asset.brandName} · {asset.kind} · {asset.contentGroup ?? "—"}</p>
+            <span className="status-chip">{asset.eligibilityType ?? "evergreen"}</span>
           </article>
         ))}
       </div>

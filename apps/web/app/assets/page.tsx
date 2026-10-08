@@ -1,7 +1,13 @@
 import Link from "next/link";
-import { mockAssets } from "@/lib/mock-assets";
+import { getAssets } from "@/lib/dev-api";
 
-export default function AssetsPage() {
+export default async function AssetsPage() {
+  let assets: Awaited<ReturnType<typeof getAssets>>["assets"] = [];
+  try {
+    assets = (await getAssets()).assets;
+  } catch {
+    assets = [];
+  }
   return (
     <main className="main">
       <div className="topbar">
@@ -45,17 +51,17 @@ export default function AssetsPage() {
             </tr>
           </thead>
           <tbody>
-            {mockAssets.map((asset) => (
+            {assets.map((asset) => (
               <tr key={asset.id}>
                 <td style={{ padding: "12px 8px", borderBottom: "1px solid var(--line)" }}>
                   <Link href={`/assets/${asset.id}`}>{asset.filename}</Link>
                 </td>
-                <td style={{ padding: "12px 8px", borderBottom: "1px solid var(--line)" }}>{asset.brandId}</td>
+                <td style={{ padding: "12px 8px", borderBottom: "1px solid var(--line)" }}>{asset.brandName}</td>
                 <td style={{ padding: "12px 8px", borderBottom: "1px solid var(--line)" }}>{asset.kind}</td>
-                <td style={{ padding: "12px 8px", borderBottom: "1px solid var(--line)" }}>{asset.contentGroup}</td>
-                <td style={{ padding: "12px 8px", borderBottom: "1px solid var(--line)" }}>{asset.eligibility}</td>
-                <td style={{ padding: "12px 8px", borderBottom: "1px solid var(--line)" }}>{asset.approval}</td>
-                <td style={{ padding: "12px 8px", borderBottom: "1px solid var(--line)" }}>{asset.status}</td>
+                <td style={{ padding: "12px 8px", borderBottom: "1px solid var(--line)" }}>{asset.contentGroup ?? "—"}</td>
+                <td style={{ padding: "12px 8px", borderBottom: "1px solid var(--line)" }}>{asset.aspectRatioLabel ?? "—"}</td>
+                <td style={{ padding: "12px 8px", borderBottom: "1px solid var(--line)" }}>{asset.approvalStatus ?? "—"}</td>
+                <td style={{ padding: "12px 8px", borderBottom: "1px solid var(--line)" }}>{asset.ingestStatus ?? "—"}</td>
               </tr>
             ))}
           </tbody>
