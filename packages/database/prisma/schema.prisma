@@ -21,6 +21,12 @@ enum AssetKind {
   carousel
 }
 
+enum AssetSourceType {
+  dropbox
+  shopify
+  direct_upload
+}
+
 enum IngestStatus {
   raw
   analyzing
@@ -89,6 +95,7 @@ model Brand {
   subjects          Subject[]
   metadataPresets   MetadataPreset[]
   intakeBatches     IntakeBatch[]
+  shopifyStores     ShopifyStore[]
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
 
@@ -145,6 +152,45 @@ model BrandStorageRoot {
 
   @@unique([storageConnectionId, rootPathLower])
   @@index([brandId])
+}
+
+model ShopifyStore {
+  id             String           @id @default(uuid()) @db.Uuid
+  brandId        String           @db.Uuid
+  brand          Brand            @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  shopDomain     String
+  displayName    String?
+  secretRef      String
+  status         String           @default("active")
+  lastSyncedAt   DateTime?
+  products       ShopifyProduct[]
+  assets         Asset[]
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@unique([brandId, shopDomain])
+}
+
+model ShopifyProduct {
+  id                String       @id @default(uuid()) @db.Uuid
+  shopifyStoreId    String       @db.Uuid
+  shopifyStore      ShopifyStore @relation(fields: [shopifyStoreId], references: [id], onDelete: Cascade)
+  externalProductId String
+  title             String
+  handle            String?
+  vendor            String?
+  productType       String?
+  status            String?
+  tags              String[]     @default([])
+  collectionRefs    Json         @default("[]")
+  productUrl        String?
+  rawMetadata       Json         @default("{}")
+  assets            Asset[]
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  @@unique([shopifyStoreId, externalProductId])
+  @@index([shopifyStoreId, title])
 }
 
 model IntakeBatch {
@@ -241,7 +287,15 @@ model Asset {
   campaignId              String?            @db.Uuid
   campaign                Campaign?          @relation(fields: [campaignId], references: [id])
   subjects                AssetSubject[]
-  sourceFileId            String?
+  sourceType              AssetSourceType    @default(dropbox)
+  shopifyStoreId           String?            @db.Uuid
+  shopifyStore             ShopifyStore?      @relation(fields: [shopifyStoreId], references: [id])
+  shopifyProductId         String?            @db.Uuid
+  shopifyProduct           ShopifyProduct?    @relation(fields: [shopifyProductId], references: [id])
+  sourceExternalId         String?
+  sourceFileId             String?
+  sourceUrl                String?
+  sourceMetadata           Json               @default("{}")
   sourcePath              String?
   sourcePathLower         String?
   contentHash             String?
@@ -276,7 +330,7 @@ model Asset {
   priority                String             @default("normal")
   allowedDestinations     String[]           @default([])
   excludedDestinations    String[]           @default([])
-  approvalStatus          ApprovalStatus     @default(needs_review)
+  approvalStatus          ApprovalStatus     @default(approved)
   producedAt              DateTime?
   firstApprovedAt         DateTime?
   retiredAt               DateTime?
@@ -288,4 +342,6 @@ model Asset {
   @@index([brandId, collectionId])
   @@index([brandId, campaignId])
   @@index([sourcePathLower])
+  @@index([sourceType, sourceExternalId])
+  @@index([shopifyStoreId, shopifyProductId])
 }
