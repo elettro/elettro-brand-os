@@ -16,3 +16,5 @@ if (process.env.NODE_ENV !== "production") {
 
 export * from "./eligibility";
 export * from "./content-pool";
+
+export * from "./intake";
