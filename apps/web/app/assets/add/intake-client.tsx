@@ -18,7 +18,11 @@ export function IntakeClient() {
   const [campaign, setCampaign] = useState("");
   const [topic, setTopic] = useState("");
   const [creativeFamily, setCreativeFamily] = useState("");
-  const [eligibility, setEligibility] = useState("evergreen");
+  const [eligibilityMode, setEligibilityMode] = useState<"evergreen" | "window">("evergreen");
+  const [windowStart, setWindowStart] = useState("");
+  const [windowEnd, setWindowEnd] = useState("");
+  const [repeatAnnually, setRepeatAnnually] = useState(false);
+  const [sendToApprovalQueue, setSendToApprovalQueue] = useState(false);
   const [priority, setPriority] = useState("normal");
   const [creatorNote, setCreatorNote] = useState("");
   const [selectedNetworks, setSelectedNetworks] = useState(networks);
@@ -104,11 +108,13 @@ export function IntakeClient() {
           <Field label="Creative Family">
             <input value={creativeFamily} onChange={(e) => setCreativeFamily(e.target.value)} placeholder="Optional" />
           </Field>
-          <Field label="Eligibility">
-            <select value={eligibility} onChange={(e) => setEligibility(e.target.value)}>
-              <option value="evergreen">Evergreen</option>
-              <option value="annual">Annual seasonal window</option>
-              <option value="one_time">One-time window</option>
+          <Field label="Availability">
+            <select
+              value={eligibilityMode}
+              onChange={(e) => setEligibilityMode(e.target.value as "evergreen" | "window")}
+            >
+              <option value="evergreen">Evergreen / always available</option>
+              <option value="window">Start + stop date window</option>
             </select>
           </Field>
           <Field label="Priority">
@@ -123,7 +129,54 @@ export function IntakeClient() {
           </Field>
         </div>
 
+        {eligibilityMode === "window" && (
+          <div className="card" style={{ marginTop: 18, background: "var(--panel-soft)" }}>
+            <div className="eyebrow">Publishing window</div>
+            <h3 style={{ margin: "5px 0 12px" }}>When is this content allowed to run?</h3>
+            <div className="grid" style={{ gridTemplateColumns: "repeat(2, minmax(0,1fr))" }}>
+              <Field label="Start date">
+                <input type="date" value={windowStart} onChange={(e) => setWindowStart(e.target.value)} />
+              </Field>
+              <Field label="Stop date">
+                <input type="date" value={windowEnd} onChange={(e) => setWindowEnd(e.target.value)} />
+              </Field>
+            </div>
+            <label style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 14 }}>
+              <input
+                type="checkbox"
+                checked={repeatAnnually}
+                onChange={(e) => setRepeatAnnually(e.target.checked)}
+              />
+              <span>
+                <strong>Repeat this window every year</strong>
+                <span className="muted" style={{ display: "block" }}>
+                  Checked = annual seasonal content. Unchecked = one-time date window.
+                </span>
+              </span>
+            </label>
+            {repeatAnnually && windowStart && windowEnd && (
+              <div className="status-chip" style={{ marginTop: 12 }}>
+                Annual window · {windowStart.slice(5)} → {windowEnd.slice(5)}
+              </div>
+            )}
+          </div>
+        )}
+
         <div style={{ marginTop: 18 }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+            <input
+              type="checkbox"
+              checked={sendToApprovalQueue}
+              onChange={(e) => setSendToApprovalQueue(e.target.checked)}
+            />
+            <span>
+              <strong>Send to approval queue</strong>
+              <span className="muted" style={{ display: "block" }}>
+                Default is unchecked. Assets are approved immediately unless this is selected.
+              </span>
+            </span>
+          </label>
+
           <div className="metric" style={{ marginBottom: 8 }}>Allowed destinations</div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             {networks.map((network) => (
