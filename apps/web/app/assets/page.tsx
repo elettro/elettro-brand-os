@@ -8,15 +8,34 @@ export default function AssetsPage() {
         <div>
           <div className="eyebrow">Content</div>
           <h1>Asset Library</h1>
-          <p className="muted">Files detected from configured Dropbox brand roots will appear here for review.</p>
+          <p className="muted">One catalog, multiple source libraries. Dropbox files stay in Dropbox; Shopify media stays in Shopify.</p>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <Link className="status-chip" href="/assets/shopify">Shopify</Link>
           <Link className="status-chip" href="/assets/needs-metadata">Needs Metadata</Link>
           <Link className="status-chip" href="/assets/add">Add Assets</Link>
         </div>
       </div>
 
-      <div className="card" style={{ marginTop: 20, overflowX: "auto" }}>
+      <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", marginBottom: 18 }}>
+        <Link className="card" href="/assets" style={{ textDecoration: "none", color: "inherit" }}>
+          <div className="eyebrow">All Sources</div>
+          <h2>All Assets</h2>
+          <p className="muted">Unified catalog across Dropbox, Shopify, and future sources.</p>
+        </Link>
+        <div className="card">
+          <div className="eyebrow">Creator Library</div>
+          <h2>Dropbox</h2>
+          <p className="muted">Human-organized production assets. Files remain in Dropbox.</p>
+        </div>
+        <Link className="card" href="/assets/shopify" style={{ textDecoration: "none", color: "inherit" }}>
+          <div className="eyebrow">Commerce Library</div>
+          <h2>Shopify</h2>
+          <p className="muted">Product media indexed from Shopify without copying files into Dropbox.</p>
+        </Link>
+      </div>
+
+      <div className="card" style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr>
