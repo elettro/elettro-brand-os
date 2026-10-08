@@ -63,6 +63,88 @@ export const handler = async (event = {}) => {
     await client.connect();
     console.log("[health] PostgreSQL connect succeeded");
 
+    const requestPath =
+      event?.rawPath ||
+      event?.requestContext?.http?.path ||
+      event?.path ||
+      "";
+
+    const requestAction =
+      event?.action ||
+      (requestPath === "/brands" ? "brands" : null) ||
+      (requestPath === "/dashboard" ? "dashboard" : null) ||
+      (requestPath === "/assets" ? "assets" : null) ||
+      (requestPath === "/content-pool" ? "content-pool" : null);
+
+    if (requestAction === "brands") {
+      const result = await client.query(
+        'SELECT "id", "name", "slug", "timezone", "status" FROM "Brand" ORDER BY "name"'
+      );
+      return json(200, { ok: true, brands: result.rows });
+    }
+
+    if (requestAction === "dashboard") {
+      const result = await client.query(`
+        SELECT
+          (SELECT COUNT(*)::int FROM "Brand" WHERE "status" = 'active') AS "brands",
+          (SELECT COUNT(*)::int FROM "StorageConnection" WHERE "status" = 'active') AS "dropboxAccounts",
+          (SELECT COUNT(*)::int FROM "Asset") AS "assetsIndexed",
+          (
+            SELECT COUNT(*)::int
+            FROM "Asset"
+            WHERE "approvalStatus" = 'approved'
+              AND "ingestStatus" = 'ready'
+              AND "retiredAt" IS NULL
+          ) AS "approvedInPool"
+      `);
+      return json(200, { ok: true, dashboard: result.rows[0] });
+    }
+
+    if (requestAction === "assets") {
+      const result = await client.query(`
+        SELECT
+          a."id",
+          a."filename",
+          a."kind",
+          a."sourceType",
+          a."ingestStatus",
+          a."approvalStatus",
+          a."contentGroup",
+          a."topic",
+          a."aspectRatioLabel",
+          b."slug" AS "brandSlug",
+          b."name" AS "brandName"
+        FROM "Asset" a
+        JOIN "Brand" b ON b."id" = a."brandId"
+        ORDER BY a."createdAt" DESC
+        LIMIT 100
+      `);
+      return json(200, { ok: true, assets: result.rows });
+    }
+
+    if (requestAction === "content-pool") {
+      const result = await client.query(`
+        SELECT
+          a."id",
+          a."filename",
+          a."kind",
+          a."contentGroup",
+          a."topic",
+          a."eligibilityType",
+          a."priority",
+          b."slug" AS "brandSlug",
+          b."name" AS "brandName"
+        FROM "Asset" a
+        JOIN "Brand" b ON b."id" = a."brandId"
+        WHERE a."approvalStatus" = 'approved'
+          AND a."ingestStatus" = 'ready'
+          AND a."retiredAt" IS NULL
+        ORDER BY a."updatedAt" DESC
+        LIMIT 100
+      `);
+      return json(200, { ok: true, assets: result.rows });
+    }
+
     if (event?.action === "init-db") {
       console.log("[init] starting schema initialization");
       const initSql = readFileSync(new URL("./init.sql", import.meta.url), "utf8");
