@@ -23,9 +23,11 @@ export const handler = async () => {
   let client;
 
   try {
+    console.log("[health] starting Secrets Manager lookup");
     const response = await secrets.send(
       new GetSecretValueCommand({ SecretId: secretId })
     );
+    console.log("[health] Secrets Manager lookup succeeded");
 
     if (!response.SecretString) {
       throw new Error("Database secret has no SecretString value");
@@ -42,6 +44,7 @@ export const handler = async () => {
       throw new Error("Database secret is missing host/username/password");
     }
 
+    console.log("[health] preparing PostgreSQL client");
     client = new Client({
       host,
       port,
@@ -55,8 +58,11 @@ export const handler = async () => {
       query_timeout: 5000
     });
 
+    console.log("[health] starting PostgreSQL connect");
     await client.connect();
+    console.log("[health] PostgreSQL connect succeeded");
     const result = await client.query("SELECT 1 AS ok");
+    console.log("[health] SELECT 1 succeeded");
 
     return json(200, {
       ok: true,
@@ -65,6 +71,7 @@ export const handler = async () => {
       result: result.rows[0]
     });
   } catch (error) {
+    console.error("[health] failed:", error instanceof Error ? error.message : error);
     return json(500, {
       ok: false,
       error: error instanceof Error ? error.message : "Unknown database connection error"
