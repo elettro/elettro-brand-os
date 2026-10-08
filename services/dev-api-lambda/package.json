@@ -1,0 +1,13 @@
+{
+  "name": "@elettro/dev-api-lambda",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "npm ci --omit=dev && zip -r elettro-brand-os-dev-api.zip index.mjs node_modules package.json"
+  },
+  "dependencies": {
+    "@aws-sdk/client-secrets-manager": "^3.910.0",
+    "pg": "^8.16.3"
+  }
+}
