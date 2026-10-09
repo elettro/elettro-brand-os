@@ -5,6 +5,8 @@ const secrets = new SecretsManagerClient({});
 const lambda = new LambdaClient({});
 
 const DROPBOX_ROOT = "/1---elettro-brand-os";
+const MAX_RUNTIME_MS = 22000;
+const PAGE_LIMIT = 500;
 
 function json(statusCode, body) {
   return { statusCode, headers: { "content-type": "application/json" }, body: JSON.stringify(body) };
@@ -29,7 +31,7 @@ async function dropboxList(token, cursor) {
         recursive: true,
         include_deleted: false,
         include_non_downloadable_files: false,
-        limit: 100
+        limit: PAGE_LIMIT
       };
 
   const response = await fetch(`https://api.dropboxapi.com/2/${endpoint}`, {
@@ -88,23 +90,49 @@ async function invokeWriter(entries, listing) {
 }
 
 export const handler = async (event = {}) => {
+  const startedAt = Date.now();
+
   try {
     const token = await getDropboxToken();
-    const cursor = event.cursor || null;
-    const listing = await dropboxList(token, cursor);
 
-    const files = (listing.entries || []).filter((entry) => entry[".tag"] === "file");
-    const writer = await invokeWriter(files, listing);
+    let cursor = event.cursor || null;
+    let pagesProcessed = 0;
+    let received = 0;
+    let filesSent = 0;
+    let indexed = 0;
+    let skipped = 0;
+    let hasMore = true;
+
+    while (hasMore && Date.now() - startedAt < MAX_RUNTIME_MS) {
+      const listing = await dropboxList(token, cursor);
+      pagesProcessed += 1;
+      received += listing.entries?.length || 0;
+
+      const files = (listing.entries || []).filter((entry) => entry[".tag"] === "file");
+      filesSent += files.length;
+
+      const writer = await invokeWriter(files, listing);
+      indexed += Number(writer.indexed || 0);
+      skipped += Number(writer.skipped || 0);
+
+      cursor = listing.cursor || null;
+      hasMore = Boolean(listing.has_more);
+
+      if (!hasMore) break;
+    }
 
     return json(200, {
       ok: true,
-      message: "Dropbox page fetched and handed to DB writer",
-      received: listing.entries?.length || 0,
-      filesSent: files.length,
-      indexed: writer.indexed ?? null,
-      skipped: writer.skipped ?? null,
-      hasMore: Boolean(listing.has_more),
-      cursor: listing.cursor || null
+      message: hasMore
+        ? "Dropbox sync paused before timeout; run again to continue from saved cursor"
+        : "Dropbox sync completed",
+      pagesProcessed,
+      received,
+      filesSent,
+      indexed,
+      skipped,
+      hasMore,
+      cursor
     });
   } catch (error) {
     console.error("[dropbox-sync] failed", error);
