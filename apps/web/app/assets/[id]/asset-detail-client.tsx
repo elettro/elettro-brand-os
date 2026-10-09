@@ -27,6 +27,8 @@ export function AssetDetailClient({ asset }: { asset: ApiAsset }) {
   const [contentGroup, setContentGroup] = useState(asset.contentGroup || "");
   const [creativeFamily, setCreativeFamily] = useState(asset.creativeFamily || "");
   const [creativeNotes, setCreativeNotes] = useState(asset.creativeNotes || "");
+  const [tags, setTags] = useState<string[]>(asset.tags || []);
+  const [tagInput, setTagInput] = useState("");
   const [priority, setPriority] = useState(asset.priority || "normal");
   const [eligibilityType, setEligibilityType] = useState<"evergreen" | "annual" | "one_time">(
     (asset.eligibilityType as "evergreen" | "annual" | "one_time") || "evergreen"
@@ -95,6 +97,51 @@ export function AssetDetailClient({ asset }: { asset: ApiAsset }) {
     }
   };
 
+  const tagCharacterCount = tags.join(", ").length;
+
+  const addTags = (raw: string) => {
+    const candidates = raw
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean);
+
+    if (!candidates.length) return;
+
+    setTags((current) => {
+      const next = [...current];
+
+      for (const candidate of candidates) {
+        const exists = next.some((tag) => tag.toLowerCase() === candidate.toLowerCase());
+        if (exists) continue;
+
+        const proposed = [...next, candidate].join(", ");
+        if (proposed.length > 500) break;
+        next.push(candidate);
+      }
+
+      return next;
+    });
+
+    setTagInput("");
+  };
+
+  const removeTag = (tagToRemove: string) => {
+    setTags((current) => current.filter((tag) => tag !== tagToRemove));
+  };
+
+  const handleTagKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter" || event.key === ",") {
+      event.preventDefault();
+      addTags(tagInput);
+      return;
+    }
+
+    if (event.key === "Backspace" && !tagInput && tags.length) {
+      event.preventDefault();
+      setTags((current) => current.slice(0, -1));
+    }
+  };
+
   const save = async (markReady = false) => {
     setBusy(true);
     setMessage("");
@@ -105,6 +152,7 @@ export function AssetDetailClient({ asset }: { asset: ApiAsset }) {
         contentGroup: contentGroup || null,
         creativeFamily: creativeFamily || null,
         creativeNotes: creativeNotes || null,
+        tags,
         priority,
         eligibilityType: containsSpecificPricing ? "one_time" : eligibilityType,
         containsSpecificPricing,
@@ -316,6 +364,104 @@ export function AssetDetailClient({ asset }: { asset: ApiAsset }) {
                   </label>
                 </div>
               ))}
+            </div>
+          </div>
+
+          <div style={{ marginTop: 20 }}>
+            <div className="metric" style={{ marginBottom: 8 }}>Tags</div>
+            <div
+              style={{
+                minHeight: 54,
+                width: "100%",
+                display: "flex",
+                flexWrap: "wrap",
+                alignItems: "center",
+                gap: 8,
+                padding: 10,
+                border: "1px solid var(--line)",
+                borderRadius: 10,
+                background: "white",
+                boxSizing: "border-box"
+              }}
+              onClick={(event) => {
+                const input = event.currentTarget.querySelector("input");
+                input?.focus();
+              }}
+            >
+              {tags.map((tag) => (
+                <span
+                  key={tag}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "5px 8px",
+                    borderRadius: 7,
+                    background: "var(--panel-soft)",
+                    border: "1px solid var(--line)",
+                    fontSize: 13,
+                    lineHeight: 1.2
+                  }}
+                >
+                  {tag}
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      removeTag(tag);
+                    }}
+                    aria-label={`Remove tag ${tag}`}
+                    style={{
+                      border: 0,
+                      background: "transparent",
+                      padding: 0,
+                      lineHeight: 1,
+                      cursor: "pointer",
+                      fontWeight: 800
+                    }}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+
+              <input
+                value={tagInput}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  if (value.includes(",")) {
+                    addTags(value);
+                  } else {
+                    setTagInput(value);
+                  }
+                }}
+                onKeyDown={handleTagKeyDown}
+                onBlur={() => {
+                  if (tagInput.trim()) addTags(tagInput);
+                }}
+                placeholder={tags.length ? "Add tag" : "Add tags"}
+                style={{
+                  flex: "1 1 180px",
+                  minWidth: 140,
+                  border: 0,
+                  outline: "none",
+                  padding: "6px 2px",
+                  background: "transparent"
+                }}
+              />
+            </div>
+            <div
+              className="muted"
+              style={{
+                marginTop: 6,
+                display: "flex",
+                justifyContent: "space-between",
+                gap: 12,
+                fontSize: 12
+              }}
+            >
+              <span>Type a tag, then press Enter or comma. Backspace removes the previous tag.</span>
+              <span>{tagCharacterCount}/500</span>
             </div>
           </div>
 
