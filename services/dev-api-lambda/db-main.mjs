@@ -415,6 +415,33 @@ export const handler = async (event = {}) => {
 
     if (requestAction === "assets") {
       const assetId = event?.queryStringParameters?.id || null;
+      const metadataOptions = event?.queryStringParameters?.metadataOptions === "1";
+      const brandSlug = event?.queryStringParameters?.brandSlug || null;
+
+      if (metadataOptions) {
+        if (!brandSlug) {
+          return json(400, { ok: false, error: "brandSlug is required for metadata options" });
+        }
+
+        const result = await client.query(`
+          SELECT
+            ARRAY_REMOVE(ARRAY_AGG(DISTINCT a."topic" ORDER BY a."topic"), NULL) AS "topics",
+            ARRAY_REMOVE(ARRAY_AGG(DISTINCT a."contentGroup" ORDER BY a."contentGroup"), NULL) AS "contentGroups",
+            ARRAY_REMOVE(ARRAY_AGG(DISTINCT a."creativeFamily" ORDER BY a."creativeFamily"), NULL) AS "creativeFamilies"
+          FROM "Asset" a
+          JOIN "Brand" b ON b."id" = a."brandId"
+          WHERE b."slug" = $1
+            AND a."retiredAt" IS NULL
+        `, [brandSlug]);
+
+        const row = result.rows[0] || {};
+        return json(200, {
+          ok: true,
+          topics: (row.topics || []).filter(Boolean),
+          contentGroups: (row.contentGroups || []).filter(Boolean),
+          creativeFamilies: (row.creativeFamilies || []).filter(Boolean)
+        });
+      }
 
       if (assetId) {
         const result = await client.query(`
