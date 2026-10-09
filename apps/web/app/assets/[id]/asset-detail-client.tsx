@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   bulkUpdateAssets,
@@ -9,7 +9,7 @@ import {
   type BulkAssetMetadata
 } from "@/lib/dev-api";
 
-const DESTINATIONS = ["instagram", "facebook", "tiktok", "youtube", "threads", "x", "website"];
+const DESTINATIONS = ["instagram", "facebook", "tiktok", "youtube", "threads", "x", "website", "rss"];
 
 function mmddToInput(value?: number | null) {
   if (!value) return "";
@@ -40,8 +40,42 @@ export function AssetDetailClient({ asset }: { asset: ApiAsset }) {
   const [excludedDestinations, setExcludedDestinations] = useState<string[]>(asset.excludedDestinations || []);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [previewOpen, setPreviewOpen] = useState(false);
+
+  useEffect(() => {
+    if (!previewOpen) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setPreviewOpen(false);
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [previewOpen]);
 
   const thumbnail = getAssetThumbnailUrl(asset.sourcePath, asset.kind);
+
+  const allDestinationsAllowed = DESTINATIONS.every((destination) => allowedDestinations.includes(destination));
+  const allDestinationsExcluded = DESTINATIONS.every((destination) => excludedDestinations.includes(destination));
+
+  const toggleAllDestinations = (mode: "allow" | "exclude") => {
+    if (mode === "allow") {
+      if (allDestinationsAllowed) {
+        setAllowedDestinations([]);
+      } else {
+        setAllowedDestinations([...DESTINATIONS]);
+        setExcludedDestinations([]);
+      }
+      return;
+    }
+
+    if (allDestinationsExcluded) {
+      setExcludedDestinations([]);
+    } else {
+      setExcludedDestinations([...DESTINATIONS]);
+      setAllowedDestinations([]);
+    }
+  };
 
   const toggleDestination = (value: string, mode: "allow" | "exclude") => {
     if (mode === "allow") {
@@ -115,11 +149,28 @@ export function AssetDetailClient({ asset }: { asset: ApiAsset }) {
         <div className="card">
           <div style={{ minHeight: 320, maxHeight: 560, display: "grid", placeItems: "center", background: "var(--panel-soft)", borderRadius: 12, overflow: "hidden" }}>
             {thumbnail ? (
-              <img
-                src={thumbnail}
-                alt={asset.filename}
-                style={{ maxWidth: "100%", maxHeight: 540, width: "auto", height: "auto", objectFit: "contain", display: "block" }}
-              />
+              <button
+                type="button"
+                onClick={() => setPreviewOpen(true)}
+                aria-label={`Open large preview for ${asset.filename}`}
+                style={{
+                  border: 0,
+                  padding: 0,
+                  margin: 0,
+                  background: "transparent",
+                  cursor: "zoom-in",
+                  display: "grid",
+                  placeItems: "center",
+                  width: "100%",
+                  height: "100%"
+                }}
+              >
+                <img
+                  src={thumbnail}
+                  alt={asset.filename}
+                  style={{ maxWidth: "100%", maxHeight: 540, width: "auto", height: "auto", objectFit: "contain", display: "block" }}
+                />
+              </button>
             ) : <span className="muted">No preview available</span>}
           </div>
 
@@ -212,6 +263,37 @@ export function AssetDetailClient({ asset }: { asset: ApiAsset }) {
 
           <div style={{ marginTop: 18 }}>
             <div className="metric" style={{ marginBottom: 8 }}>Destination rules</div>
+
+            <div
+              style={{
+                display: "flex",
+                gap: 18,
+                alignItems: "center",
+                flexWrap: "wrap",
+                marginBottom: 10,
+                paddingBottom: 10,
+                borderBottom: "1px solid var(--line)"
+              }}
+            >
+              <strong style={{ minWidth: 140 }}>All destinations</strong>
+              <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <input
+                  type="checkbox"
+                  checked={allDestinationsAllowed}
+                  onChange={() => toggleAllDestinations("allow")}
+                />
+                Select / deselect all Allow
+              </label>
+              <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <input
+                  type="checkbox"
+                  checked={allDestinationsExcluded}
+                  onChange={() => toggleAllDestinations("exclude")}
+                />
+                Select / deselect all Exclude
+              </label>
+            </div>
+
             <div style={{ display: "grid", gap: 8 }}>
               {DESTINATIONS.map((destination) => (
                 <div key={destination} style={{ display: "grid", gridTemplateColumns: "140px 1fr 1fr", gap: 10, alignItems: "center" }}>
@@ -268,6 +350,62 @@ export function AssetDetailClient({ asset }: { asset: ApiAsset }) {
           </div>
         </section>
       </section>
+
+      {previewOpen && thumbnail && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Large preview for ${asset.filename}`}
+          onClick={() => setPreviewOpen(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 9999,
+            display: "grid",
+            placeItems: "center",
+            padding: 24,
+            background: "rgba(0,0,0,0.82)",
+            cursor: "zoom-out"
+          }}
+        >
+          <div
+            style={{
+              maxWidth: "94vw",
+              maxHeight: "92vh",
+              display: "grid",
+              gap: 12,
+              justifyItems: "center"
+            }}
+          >
+            <img
+              src={thumbnail}
+              alt={asset.filename}
+              style={{
+                maxWidth: "94vw",
+                maxHeight: "84vh",
+                width: "auto",
+                height: "auto",
+                objectFit: "contain",
+                display: "block",
+                borderRadius: 12,
+                boxShadow: "0 24px 80px rgba(0,0,0,0.55)",
+                background: "#111"
+              }}
+            />
+            <div
+              style={{
+                color: "#fff",
+                fontSize: 13,
+                textAlign: "center",
+                maxWidth: "82vw",
+                overflowWrap: "anywhere"
+              }}
+            >
+              {asset.filename}
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
