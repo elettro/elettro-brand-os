@@ -69,7 +69,7 @@ export async function getContentPool() {
 }
 
 
-export function getAssetThumbnailUrl(sourcePath?: string | null) {
+export function getAssetThumbnailUrl(sourcePath?: string | null, kind: string = "image") {
   if (!sourcePath) return null;
-  return `${apiBaseUrl}/dropbox/thumbnail?path=${encodeURIComponent(sourcePath)}`;
+  return `${apiBaseUrl}/dropbox/thumbnail?path=${encodeURIComponent(sourcePath)}&kind=${encodeURIComponent(kind)}`;
 }
