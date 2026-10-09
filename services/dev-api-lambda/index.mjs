@@ -158,6 +158,112 @@ async function backfillFolderHints(event) {
   }
 }
 
+
+function normalizeBulkMetadata(input = {}) {
+  const clean = {};
+  const copy = (key) => {
+    if (Object.prototype.hasOwnProperty.call(input, key)) {
+      const value = input[key];
+      clean[key] = typeof value === "string" ? value.trim() || null : value;
+    }
+  };
+
+  ["topic", "contentGroup", "creativeFamily", "priority", "eligibilityType"].forEach(copy);
+
+  if (Object.prototype.hasOwnProperty.call(input, "eligibleFrom")) {
+    clean.eligibleFrom = input.eligibleFrom || null;
+  }
+  if (Object.prototype.hasOwnProperty.call(input, "eligibleUntil")) {
+    clean.eligibleUntil = input.eligibleUntil || null;
+  }
+  if (Object.prototype.hasOwnProperty.call(input, "annualFromMmdd")) {
+    clean.annualFromMmdd = input.annualFromMmdd || null;
+  }
+  if (Object.prototype.hasOwnProperty.call(input, "annualUntilMmdd")) {
+    clean.annualUntilMmdd = input.annualUntilMmdd || null;
+  }
+
+  return clean;
+}
+
+async function bulkUpdateAssets(event) {
+  let client;
+  try {
+    client = await connectDatabase();
+
+    let body = event?.body;
+    if (typeof body === "string") {
+      body = body ? JSON.parse(body) : {};
+    }
+    body = body || {};
+
+    const assetIds = Array.isArray(body.assetIds)
+      ? body.assetIds.filter((id) => typeof id === "string" && id.trim())
+      : [];
+
+    if (!assetIds.length) {
+      return json(400, { ok: false, error: "assetIds is required" });
+    }
+
+    const metadata = normalizeBulkMetadata(body.metadata || {});
+    const values = [assetIds];
+    const sets = [];
+    let param = 2;
+
+    const addSet = (column, value, cast = "") => {
+      sets.push(`"${column}" = ${param}${cast}`);
+      values.push(value);
+      param += 1;
+    };
+
+    if (Object.prototype.hasOwnProperty.call(metadata, "topic")) addSet("topic", metadata.topic);
+    if (Object.prototype.hasOwnProperty.call(metadata, "contentGroup")) addSet("contentGroup", metadata.contentGroup);
+    if (Object.prototype.hasOwnProperty.call(metadata, "creativeFamily")) addSet("creativeFamily", metadata.creativeFamily);
+    if (Object.prototype.hasOwnProperty.call(metadata, "priority")) addSet("priority", metadata.priority);
+    if (Object.prototype.hasOwnProperty.call(metadata, "eligibilityType")) addSet("eligibilityType", metadata.eligibilityType, '::"EligibilityType"');
+    if (Object.prototype.hasOwnProperty.call(metadata, "eligibleFrom")) addSet("eligibleFrom", metadata.eligibleFrom, "::date");
+    if (Object.prototype.hasOwnProperty.call(metadata, "eligibleUntil")) addSet("eligibleUntil", metadata.eligibleUntil, "::date");
+    if (Object.prototype.hasOwnProperty.call(metadata, "annualFromMmdd")) addSet("annualFromMmdd", metadata.annualFromMmdd);
+    if (Object.prototype.hasOwnProperty.call(metadata, "annualUntilMmdd")) addSet("annualUntilMmdd", metadata.annualUntilMmdd);
+
+    sets.push('"enrichmentStatus" = \'reviewed\'::"EnrichmentStatus"');
+
+    if (body.markReady) {
+      sets.push('"ingestStatus" = \'ready\'::"IngestStatus"');
+      sets.push('"firstApprovedAt" = COALESCE("firstApprovedAt", CURRENT_TIMESTAMP)');
+    } else {
+      sets.push('"ingestStatus" = CASE WHEN "ingestStatus" = \'raw\' THEN \'needs_metadata\'::"IngestStatus" ELSE "ingestStatus" END');
+    }
+
+    sets.push('"updatedAt" = CURRENT_TIMESTAMP');
+
+    const result = await client.query(
+      `UPDATE "Asset"
+       SET ${sets.join(", ")}
+       WHERE "id" = ANY($1::uuid[])
+         AND "retiredAt" IS NULL
+       RETURNING "id","ingestStatus","enrichmentStatus"`,
+      values
+    );
+
+    return json(200, {
+      ok: true,
+      updated: result.rowCount,
+      assets: result.rows
+    });
+  } catch (error) {
+    console.error("[bulk-metadata] failed", error);
+    return json(500, {
+      ok: false,
+      error: error instanceof Error ? error.message : "Unknown bulk metadata error"
+    });
+  } finally {
+    if (client) {
+      try { await client.end(); } catch {}
+    }
+  }
+}
+
 async function ingestDropboxPage(event) {
   let client;
 
@@ -361,6 +467,13 @@ export const handler = async (event = {}) => {
 
   if (event?.action === "backfill-folder-hints") {
     return backfillFolderHints(event);
+  }
+
+  if (
+    event?.action === "bulk-update-assets" ||
+    (requestPath === "/assets/bulk-update" && event?.requestContext?.http?.method === "POST")
+  ) {
+    return bulkUpdateAssets(event);
   }
 
   return existingHandler(event);
