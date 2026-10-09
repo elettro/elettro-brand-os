@@ -28,7 +28,7 @@ jobs:
         run: npm install --omit=dev --workspaces=false
 
       - name: Package Lambda
-        run: zip -r elettro-brand-os-dev-api.zip index.mjs init.sql node_modules package.json
+        run: zip -r elettro-brand-os-dev-api.zip index.mjs db-main.mjs init.sql node_modules package.json
 
       - name: Upload Lambda package
         uses: actions/upload-artifact@v4
