@@ -300,10 +300,10 @@ button:disabled {
   overflow: hidden;
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 5;
   white-space: normal;
   overflow-wrap: anywhere;
-  min-height: calc(1.35em * 3);
+  min-height: calc(1.35em * 5);
 }
 
 .asset-meta-row {
