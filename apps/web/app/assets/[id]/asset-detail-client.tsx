@@ -23,6 +23,8 @@ function inputToMmdd(value: string) {
 }
 
 export function AssetDetailClient({ asset }: { asset: ApiAsset }) {
+  const [title, setTitle] = useState(asset.title || "");
+  const [editingTitle, setEditingTitle] = useState(false);
   const [topic, setTopic] = useState(asset.topic || "");
   const [contentGroup, setContentGroup] = useState(asset.contentGroup || "");
   const [creativeFamily, setCreativeFamily] = useState(asset.creativeFamily || "");
@@ -148,6 +150,7 @@ export function AssetDetailClient({ asset }: { asset: ApiAsset }) {
 
     try {
       const metadata: BulkAssetMetadata = {
+        title: title.trim() || null,
         topic: topic || null,
         contentGroup: contentGroup || null,
         creativeFamily: creativeFamily || null,
@@ -182,10 +185,86 @@ export function AssetDetailClient({ asset }: { asset: ApiAsset }) {
   return (
     <main className="main">
       <div className="topbar">
-        <div>
+        <div style={{ minWidth: 0, flex: 1 }}>
           <div className="eyebrow">Asset Review</div>
-          <h1 style={{ overflowWrap: "anywhere" }}>{asset.filename}</h1>
-          <p className="muted">{asset.brandName} · {asset.kind} · {asset.aspectRatioLabel || asset.folderSuggestions?.aspectRatioLabel || "ratio unknown"}</p>
+
+          {editingTitle ? (
+            <input
+              autoFocus
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              onBlur={() => setEditingTitle(false)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  setEditingTitle(false);
+                }
+                if (event.key === "Escape") {
+                  setTitle(asset.title || "");
+                  setEditingTitle(false);
+                }
+              }}
+              placeholder={asset.filename}
+              aria-label="Asset display title"
+              style={{
+                width: "100%",
+                maxWidth: 1100,
+                boxSizing: "border-box",
+                fontSize: "clamp(32px, 3.2vw, 56px)",
+                lineHeight: 1.08,
+                fontWeight: 800,
+                letterSpacing: "-0.02em",
+                color: "inherit",
+                background: "white",
+                border: "2px solid var(--accent)",
+                borderRadius: 10,
+                padding: "6px 10px",
+                outline: "none"
+              }}
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={() => setEditingTitle(true)}
+              title="Click to edit display title"
+              style={{
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 10,
+                width: "100%",
+                maxWidth: 1100,
+                textAlign: "left",
+                border: 0,
+                padding: 0,
+                margin: 0,
+                background: "transparent",
+                color: "inherit",
+                cursor: "text"
+              }}
+            >
+              <h1 style={{ margin: 0, overflowWrap: "anywhere" }}>
+                {title.trim() || asset.filename}
+              </h1>
+              <span
+                aria-hidden="true"
+                style={{
+                  flex: "0 0 auto",
+                  marginTop: 10,
+                  fontSize: 18,
+                  color: "var(--muted)"
+                }}
+              >
+                ✎
+              </span>
+            </button>
+          )}
+
+          <p className="muted" style={{ marginBottom: 4 }}>
+            {asset.brandName} · {asset.kind} · {asset.aspectRatioLabel || asset.folderSuggestions?.aspectRatioLabel || "ratio unknown"}
+          </p>
+          <p className="muted" style={{ marginTop: 0, overflowWrap: "anywhere", fontSize: 12 }}>
+            Original file: {asset.filename}
+          </p>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <Link className="status-chip" href="/assets/needs-metadata">Needs Metadata</Link>

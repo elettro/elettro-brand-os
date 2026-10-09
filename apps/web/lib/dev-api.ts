@@ -104,6 +104,7 @@ export function getAssetThumbnailUrl(sourcePath?: string | null, kind: string = 
 
 
 export type BulkAssetMetadata = {
+  title?: string | null;
   topic?: string | null;
   contentGroup?: string | null;
   creativeFamily?: string | null;
