@@ -1,8 +1,130 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getAssetThumbnailUrl, type ApiAsset } from "@/lib/dev-api";
+
+const MAX_THUMBNAIL_LOADS = 6;
+let activeThumbnailLoads = 0;
+const thumbnailQueue: Array<() => void> = [];
+
+function pumpThumbnailQueue() {
+  while (activeThumbnailLoads < MAX_THUMBNAIL_LOADS && thumbnailQueue.length) {
+    const next = thumbnailQueue.shift();
+    if (!next) break;
+    activeThumbnailLoads += 1;
+    next();
+  }
+}
+
+function queueThumbnailLoad(task: (release: () => void) => void) {
+  let cancelled = false;
+  thumbnailQueue.push(() => {
+    if (cancelled) {
+      activeThumbnailLoads = Math.max(0, activeThumbnailLoads - 1);
+      pumpThumbnailQueue();
+      return;
+    }
+
+    let released = false;
+    const release = () => {
+      if (released) return;
+      released = true;
+      activeThumbnailLoads = Math.max(0, activeThumbnailLoads - 1);
+      pumpThumbnailQueue();
+    };
+
+    task(release);
+  });
+  pumpThumbnailQueue();
+
+  return () => {
+    cancelled = true;
+  };
+}
+
+function AssetThumbnail({
+  sourcePath,
+  kind,
+  filename
+}: {
+  sourcePath: string;
+  kind: string;
+  filename: string;
+}) {
+  const baseUrl = getAssetThumbnailUrl(sourcePath, kind);
+  const [src, setSrc] = useState<string>();
+  const attemptRef = useRef(0);
+  const releaseRef = useRef<(() => void) | null>(null);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!baseUrl) return;
+
+    let disposed = false;
+    let cancelQueued = () => {};
+
+    const schedule = (delay = 0) => {
+      retryTimerRef.current = setTimeout(() => {
+        cancelQueued = queueThumbnailLoad((release) => {
+          if (disposed) {
+            release();
+            return;
+          }
+
+          releaseRef.current = release;
+          const separator = baseUrl.includes("?") ? "&" : "?";
+          setSrc(`${baseUrl}${separator}attempt=${attemptRef.current}`);
+        });
+      }, delay);
+    };
+
+    schedule();
+
+    return () => {
+      disposed = true;
+      cancelQueued();
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+      releaseRef.current?.();
+      releaseRef.current = null;
+    };
+  }, [baseUrl]);
+
+  const releaseSlot = () => {
+    releaseRef.current?.();
+    releaseRef.current = null;
+  };
+
+  const handleError = () => {
+    releaseSlot();
+
+    if (attemptRef.current >= 3 || !baseUrl) return;
+    attemptRef.current += 1;
+
+    retryTimerRef.current = setTimeout(() => {
+      queueThumbnailLoad((release) => {
+        releaseRef.current = release;
+        const separator = baseUrl.includes("?") ? "&" : "?";
+        setSrc(`${baseUrl}${separator}attempt=${attemptRef.current}`);
+      });
+    }, 700 * attemptRef.current);
+  };
+
+  if (!src) {
+    return <div className="asset-thumbnail-loading">Loading preview…</div>;
+  }
+
+  return (
+    <img
+      className="asset-thumbnail"
+      src={src}
+      alt={filename}
+      decoding="async"
+      onLoad={releaseSlot}
+      onError={handleError}
+    />
+  );
+}
 
 function formatBytes(value: ApiAsset["fileSizeBytes"]) {
   const bytes = Number(value || 0);
@@ -89,11 +211,10 @@ export function AssetLibraryClient({ assets }: { assets: ApiAsset[] }) {
           <Link href={`/assets/${asset.id}`} className="asset-tile" key={asset.id}>
             <div className={`asset-preview asset-preview-${asset.kind}`}>
               {asset.sourceType === "dropbox" && asset.sourcePath ? (
-                <img
-                  className="asset-thumbnail"
-                  src={getAssetThumbnailUrl(asset.sourcePath, asset.kind) || undefined}
-                  alt={asset.filename}
-                  loading="lazy"
+                <AssetThumbnail
+                  sourcePath={asset.sourcePath}
+                  kind={asset.kind}
+                  filename={asset.filename}
                 />
               ) : (
                 <>
