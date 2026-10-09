@@ -46,7 +46,15 @@ function queueMetadataThumbnailLoad(task: (release: () => void) => void) {
   };
 }
 
-function MetadataThumbnail({ asset }: { asset: ApiAsset }) {
+function MetadataThumbnail({
+  asset,
+  onPreviewStart,
+  onPreviewEnd
+}: {
+  asset: ApiAsset;
+  onPreviewStart: (asset: ApiAsset) => void;
+  onPreviewEnd: () => void;
+}) {
   const baseUrl = getAssetThumbnailUrl(asset.sourcePath, asset.kind);
   const [src, setSrc] = useState<string>();
   const attemptRef = useRef(0);
@@ -139,22 +147,37 @@ function MetadataThumbnail({ asset }: { asset: ApiAsset }) {
   }
 
   return (
-    <img
-      src={src}
-      alt={asset.filename}
-      decoding="async"
-      loading="lazy"
-      onLoad={releaseSlot}
-      onError={handleError}
+    <div
+      onMouseEnter={() => onPreviewStart(asset)}
+      onMouseLeave={onPreviewEnd}
       style={{
-        width: 128,
-        height: 96,
-        objectFit: "cover",
+        width: 112,
+        height: 112,
+        display: "grid",
+        placeItems: "center",
         borderRadius: 10,
-        display: "block",
-        background: "var(--panel-soft)"
+        background: "var(--panel-soft)",
+        overflow: "hidden",
+        cursor: "zoom-in"
       }}
-    />
+    >
+      <img
+        src={src}
+        alt={asset.filename}
+        decoding="async"
+        loading="lazy"
+        onLoad={releaseSlot}
+        onError={handleError}
+        style={{
+          maxWidth: "100%",
+          maxHeight: "100%",
+          width: "auto",
+          height: "auto",
+          objectFit: "contain",
+          display: "block"
+        }}
+      />
+    </div>
   );
 }
 
@@ -167,6 +190,41 @@ export function NeedsMetadataClient({ assets }: { assets: ApiAsset[] }) {
   const [eligibilityType, setEligibilityType] = useState<"evergreen" | "annual" | "one_time">("evergreen");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [previewAsset, setPreviewAsset] = useState<ApiAsset | null>(null);
+  const previewCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!previewAsset) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setPreviewAsset(null);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [previewAsset]);
+
+  const clearPreviewClose = () => {
+    if (previewCloseTimerRef.current) {
+      clearTimeout(previewCloseTimerRef.current);
+      previewCloseTimerRef.current = null;
+    }
+  };
+
+  const openPreview = (asset: ApiAsset) => {
+    clearPreviewClose();
+    setPreviewAsset(asset);
+  };
+
+  const schedulePreviewClose = () => {
+    clearPreviewClose();
+    previewCloseTimerRef.current = setTimeout(() => {
+      setPreviewAsset(null);
+      previewCloseTimerRef.current = null;
+    }, 120);
+  };
 
   const allSelected = assets.length > 0 && selected.size === assets.length;
   const selectedAssets = useMemo(
@@ -335,7 +393,11 @@ export function NeedsMetadataClient({ assets }: { assets: ApiAsset[] }) {
                     />
                   </td>
                   <td style={{ padding: "10px 8px", borderBottom: "1px solid var(--line)", verticalAlign: "middle" }}>
-                    <MetadataThumbnail asset={asset} />
+                    <MetadataThumbnail
+                      asset={asset}
+                      onPreviewStart={openPreview}
+                      onPreviewEnd={schedulePreviewClose}
+                    />
                   </td>
                   <td style={{ padding: "10px 8px", borderBottom: "1px solid var(--line)", maxWidth: 360, verticalAlign: "middle" }}>
                     <Link href={`/assets/${asset.id}`} style={{ overflowWrap: "anywhere" }}>{asset.filename}</Link>
@@ -370,6 +432,55 @@ export function NeedsMetadataClient({ assets }: { assets: ApiAsset[] }) {
       {selectedAssets.length > 0 && (
         <div className="muted" style={{ marginTop: 10 }}>
           Selected batch includes {selectedAssets.length} asset{selectedAssets.length === 1 ? "" : "s"}.
+        </div>
+      )}
+
+      {previewAsset && getAssetThumbnailUrl(previewAsset.sourcePath, previewAsset.kind) && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Preview ${previewAsset.filename}`}
+          onMouseEnter={clearPreviewClose}
+          onMouseLeave={schedulePreviewClose}
+          onClick={() => setPreviewAsset(null)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 9999,
+            display: "grid",
+            placeItems: "center",
+            padding: 28,
+            background: "rgba(0,0,0,0.72)",
+            cursor: "zoom-out"
+          }}
+        >
+          <div
+            style={{
+              maxWidth: "84vw",
+              maxHeight: "86vh",
+              display: "grid",
+              gap: 10,
+              justifyItems: "center"
+            }}
+          >
+            <img
+              src={getAssetThumbnailUrl(previewAsset.sourcePath, previewAsset.kind) || undefined}
+              alt={previewAsset.filename}
+              style={{
+                maxWidth: "84vw",
+                maxHeight: "78vh",
+                width: "auto",
+                height: "auto",
+                objectFit: "contain",
+                borderRadius: 12,
+                boxShadow: "0 20px 70px rgba(0,0,0,0.45)",
+                background: "#111"
+              }}
+            />
+            <div style={{ color: "white", fontSize: 13, textAlign: "center", maxWidth: "70vw", overflowWrap: "anywhere" }}>
+              {previewAsset.filename}
+            </div>
+          </div>
         </div>
       )}
     </>
