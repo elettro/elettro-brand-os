@@ -414,6 +414,55 @@ export const handler = async (event = {}) => {
     }
 
     if (requestAction === "assets") {
+      const assetId = event?.queryStringParameters?.id || null;
+
+      if (assetId) {
+        const result = await client.query(`
+          SELECT
+            a."id",
+            a."filename",
+            a."kind",
+            a."sourceType",
+            a."sourcePath",
+            a."fileSizeBytes",
+            a."ingestStatus",
+            a."enrichmentStatus",
+            a."approvalStatus",
+            a."title",
+            a."aiDescription",
+            a."contentGroup",
+            a."topic",
+            a."creativeFamily",
+            a."creativeNotes",
+            a."aspectRatioLabel",
+            a."folderSuggestions",
+            a."eligibilityType",
+            a."eligibleFrom",
+            a."eligibleUntil",
+            a."annualFromMmdd",
+            a."annualUntilMmdd",
+            a."containsSpecificPricing",
+            a."priority",
+            a."allowedDestinations",
+            a."excludedDestinations",
+            a."width",
+            a."height",
+            a."durationMs",
+            a."hasAudio",
+            a."createdAt",
+            a."updatedAt",
+            b."slug" AS "brandSlug",
+            b."name" AS "brandName"
+          FROM "Asset" a
+          JOIN "Brand" b ON b."id" = a."brandId"
+          WHERE a."id" = $1::uuid
+          LIMIT 1
+        `, [assetId]);
+
+        if (!result.rows[0]) return json(404, { ok: false, error: "Asset not found" });
+        return json(200, { ok: true, asset: result.rows[0] });
+      }
+
       const result = await client.query(`
         SELECT
           a."id",
@@ -429,6 +478,8 @@ export const handler = async (event = {}) => {
           a."topic",
           a."aspectRatioLabel",
           a."folderSuggestions",
+          a."eligibilityType",
+          a."priority",
           a."createdAt",
           b."slug" AS "brandSlug",
           b."name" AS "brandName"
@@ -446,6 +497,10 @@ export const handler = async (event = {}) => {
           a."id",
           a."filename",
           a."kind",
+          a."sourcePath",
+          a."aspectRatioLabel",
+          a."folderSuggestions",
+          a."createdAt",
           a."contentGroup",
           a."topic",
           a."eligibilityType",
