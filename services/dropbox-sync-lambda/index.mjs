@@ -174,10 +174,24 @@ async function dropboxList(token, cursor, limit = PAGE_LIMIT) {
     body: JSON.stringify(body)
   });
 
-  const payload = await response.json();
-  if (!response.ok) {
-    throw new Error(`Dropbox ${endpoint} failed: ${response.status} ${JSON.stringify(payload)}`);
+  const raw = await response.text();
+  let payload;
+  try {
+    payload = raw ? JSON.parse(raw) : {};
+  } catch {
+    payload = { raw };
   }
+
+  if (!response.ok) {
+    throw new Error(
+      `Dropbox ${endpoint} failed: ${response.status} ${typeof payload?.raw === "string" ? payload.raw : JSON.stringify(payload)}`
+    );
+  }
+
+  if (!payload || typeof payload !== "object") {
+    throw new Error(`Dropbox ${endpoint} returned an invalid response`);
+  }
+
   return payload;
 }
 
