@@ -1,8 +1,11 @@
 import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
 import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
+import { S3Client, GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
+import { createHash } from "node:crypto";
 
 const secrets = new SecretsManagerClient({});
 const lambda = new LambdaClient({});
+const s3 = new S3Client({});
 
 const DROPBOX_ROOT = "/1---elettro-brand-os";
 const MAX_RUNTIME_MS = 22000;
@@ -22,6 +25,71 @@ async function getDropboxToken() {
   return config.accessToken;
 }
 
+async function fetchDropboxThumbnailBytes(token, path) {
+  const response = await fetch("https://content.dropboxapi.com/2/files/get_thumbnail_v2", {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "dropbox-api-arg": JSON.stringify({
+        resource: { ".tag": "path", path },
+        format: { ".tag": "jpeg" },
+        size: { ".tag": "w640h480" },
+        mode: { ".tag": "bestfit" }
+      })
+    }
+  });
+
+  if (!response.ok) {
+    const detail = await response.text();
+    const error = new Error(`Dropbox thumbnail failed: ${response.status} ${detail}`);
+    error.statusCode = response.status;
+    throw error;
+  }
+
+  return Buffer.from(await response.arrayBuffer());
+}
+
+function thumbnailCacheKey(path) {
+  const digest = createHash("sha256").update(path.toLowerCase()).digest("hex");
+  return `dropbox/${digest}.jpg`;
+}
+
+async function getCachedThumbnail(bucket, key) {
+  if (!bucket) return null;
+  try {
+    const result = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+    const bytes = Buffer.from(await result.Body.transformToByteArray());
+    return bytes;
+  } catch (error) {
+    if (error?.name === "NoSuchKey" || error?.$metadata?.httpStatusCode === 404) return null;
+    throw error;
+  }
+}
+
+async function putCachedThumbnail(bucket, key, bytes) {
+  if (!bucket) return;
+  await s3.send(new PutObjectCommand({
+    Bucket: bucket,
+    Key: key,
+    Body: bytes,
+    ContentType: "image/jpeg",
+    CacheControl: "private, max-age=2592000"
+  }));
+}
+
+function imageResponse(bytes, cacheStatus) {
+  return {
+    statusCode: 200,
+    headers: {
+      "content-type": "image/jpeg",
+      "cache-control": "private, max-age=86400",
+      "x-thumbnail-cache": cacheStatus
+    },
+    isBase64Encoded: true,
+    body: bytes.toString("base64")
+  };
+}
+
 async function dropboxThumbnail(token, path, kind = "image") {
   if (!path || typeof path !== "string" || !path.toLowerCase().startsWith(DROPBOX_ROOT)) {
     return {
@@ -31,7 +99,29 @@ async function dropboxThumbnail(token, path, kind = "image") {
     };
   }
 
-  if (kind === "video") {
+  const bucket = process.env.THUMBNAIL_BUCKET || "";
+  const key = thumbnailCacheKey(path);
+
+  try {
+    const cached = await getCachedThumbnail(bucket, key);
+    if (cached) return imageResponse(cached, "HIT");
+
+    const bytes = await fetchDropboxThumbnailBytes(token, path);
+    await putCachedThumbnail(bucket, key, bytes);
+    return imageResponse(bytes, bucket ? "MISS" : "BYPASS");
+  } catch (thumbnailError) {
+    if (kind !== "video") {
+      return {
+        statusCode: thumbnailError?.statusCode === 409 ? 404 : 502,
+        headers: { "content-type": "application/json", "cache-control": "no-store" },
+        body: JSON.stringify({
+          ok: false,
+          error: "Thumbnail unavailable",
+          detail: thumbnailError instanceof Error ? thumbnailError.message : "Unknown thumbnail error"
+        })
+      };
+    }
+
     const response = await fetch("https://api.dropboxapi.com/2/files/get_temporary_link", {
       method: "POST",
       headers: {
@@ -54,44 +144,12 @@ async function dropboxThumbnail(token, path, kind = "image") {
       statusCode: 302,
       headers: {
         location: payload.link,
-        "cache-control": "private, max-age=240"
+        "cache-control": "private, max-age=240",
+        "x-thumbnail-cache": "VIDEO-FALLBACK"
       },
       body: ""
     };
   }
-
-  const response = await fetch("https://content.dropboxapi.com/2/files/get_thumbnail_v2", {
-    method: "POST",
-    headers: {
-      authorization: `Bearer ${token}`,
-      "dropbox-api-arg": JSON.stringify({
-        resource: { ".tag": "path", path },
-        format: { ".tag": "jpeg" },
-        size: { ".tag": "w640h480" },
-        mode: { ".tag": "bestfit" }
-      })
-    }
-  });
-
-  if (!response.ok) {
-    const detail = await response.text();
-    return {
-      statusCode: response.status === 409 ? 404 : response.status,
-      headers: { "content-type": "application/json", "cache-control": "no-store" },
-      body: JSON.stringify({ ok: false, error: "Thumbnail unavailable", detail })
-    };
-  }
-
-  const bytes = Buffer.from(await response.arrayBuffer());
-  return {
-    statusCode: 200,
-    headers: {
-      "content-type": "image/jpeg",
-      "cache-control": "private, max-age=300"
-    },
-    isBase64Encoded: true,
-    body: bytes.toString("base64")
-  };
 }
 
 async function dropboxList(token, cursor) {
