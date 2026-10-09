@@ -44,6 +44,10 @@ export type ApiAsset = {
   approvalStatus?: string;
   contentGroup?: string | null;
   topic?: string | null;
+  creativeFamily?: string | null;
+  creativeNotes?: string | null;
+  title?: string | null;
+  aiDescription?: string | null;
   aspectRatioLabel?: string | null;
   folderSuggestions?: {
     folderPath?: string | null;
@@ -53,7 +57,19 @@ export type ApiAsset = {
     filename?: string | null;
   } | null;
   eligibilityType?: string;
+  eligibleFrom?: string | null;
+  eligibleUntil?: string | null;
+  annualFromMmdd?: number | null;
+  annualUntilMmdd?: number | null;
+  containsSpecificPricing?: boolean;
   priority?: string;
+  allowedDestinations?: string[];
+  excludedDestinations?: string[];
+  width?: number | null;
+  height?: number | null;
+  durationMs?: number | null;
+  hasAudio?: boolean | null;
+  updatedAt?: string;
   brandSlug: string;
   brandName: string;
   createdAt?: string;
@@ -69,6 +85,10 @@ export async function getDashboard() {
 
 export async function getAssets() {
   return fetchJson<{ ok: boolean; assets: ApiAsset[] }>("/assets");
+}
+
+export async function getAsset(id: string) {
+  return fetchJson<{ ok: boolean; asset: ApiAsset }>(`/assets?id=${encodeURIComponent(id)}`);
 }
 
 export async function getContentPool() {
@@ -92,6 +112,10 @@ export type BulkAssetMetadata = {
   eligibleUntil?: string | null;
   annualFromMmdd?: number | null;
   annualUntilMmdd?: number | null;
+  containsSpecificPricing?: boolean;
+  allowedDestinations?: string[];
+  excludedDestinations?: string[];
+  creativeNotes?: string | null;
 };
 
 export async function bulkUpdateAssets(input: {
