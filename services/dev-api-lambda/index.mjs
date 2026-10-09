@@ -79,6 +79,85 @@ async function connectDatabase() {
   return client;
 }
 
+
+function folderHintsFromPath(sourcePath = "", brandSlug = "") {
+  const normalized = String(sourcePath || "").replace(/\\/g, "/");
+  const lower = normalized.toLowerCase();
+  const root = `/1---elettro-brand-os/${brandSlug.toLowerCase()}/`;
+  const start = lower.indexOf(root);
+  const relative = start >= 0 ? normalized.slice(start + root.length) : normalized.replace(/^\/+/, "");
+  const parts = relative.split("/").filter(Boolean);
+  const filename = parts.pop() || "";
+  const typeHint = parts[0] || null;
+  const topicHint = parts[1] || null;
+  const ratioHint = parts.find((part) => /^\d{1,2}x\d{1,2}$/i.test(part)) || null;
+
+  return {
+    folderPath: parts.join("/"),
+    typeHint,
+    topicHint,
+    aspectRatioLabel: ratioHint,
+    filename
+  };
+}
+
+async function backfillFolderHints(event) {
+  let client;
+  try {
+    client = await connectDatabase();
+
+    const limit = Math.min(Math.max(Number(event?.limit || 500), 1), 1000);
+    const rows = await client.query(
+      `SELECT
+         a."id",
+         a."sourcePath",
+         a."aspectRatioLabel",
+         b."slug" AS "brandSlug"
+       FROM "Asset" a
+       JOIN "Brand" b ON b."id" = a."brandId"
+       WHERE a."sourceType" = 'dropbox'
+         AND a."retiredAt" IS NULL
+         AND a."ingestStatus" IN ('raw','needs_metadata')
+       ORDER BY a."createdAt" ASC
+       LIMIT $1`,
+      [limit]
+    );
+
+    let updated = 0;
+    for (const row of rows.rows) {
+      const hints = folderHintsFromPath(row.sourcePath || "", row.brandSlug || "");
+      await client.query(
+        `UPDATE "Asset"
+         SET "folderSuggestions" = $2::jsonb,
+             "aspectRatioLabel" = COALESCE("aspectRatioLabel", $3),
+             "ingestStatus" = 'needs_metadata',
+             "enrichmentStatus" = 'suggested',
+             "updatedAt" = CURRENT_TIMESTAMP
+         WHERE "id" = $1`,
+        [row.id, JSON.stringify(hints), hints.aspectRatioLabel]
+      );
+      updated += 1;
+    }
+
+    return json(200, {
+      ok: true,
+      message: "Folder hints backfilled",
+      scanned: rows.rowCount,
+      updated
+    });
+  } catch (error) {
+    console.error("[metadata-backfill] failed", error);
+    return json(500, {
+      ok: false,
+      error: error instanceof Error ? error.message : "Unknown metadata backfill error"
+    });
+  } finally {
+    if (client) {
+      try { await client.end(); } catch {}
+    }
+  }
+}
+
 async function ingestDropboxPage(event) {
   let client;
 
@@ -266,6 +345,10 @@ export const handler = async (event = {}) => {
     requestPath === "/dropbox/ingest-page"
   ) {
     return ingestDropboxPage(event);
+  }
+
+  if (event?.action === "backfill-folder-hints") {
+    return backfillFolderHints(event);
   }
 
   return existingHandler(event);
