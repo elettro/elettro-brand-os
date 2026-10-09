@@ -23,7 +23,8 @@ function inputToMmdd(value: string) {
 }
 
 export function AssetDetailClient({ asset }: { asset: ApiAsset }) {
-  const [title, setTitle] = useState(asset.title || "");
+  const initialDisplayTitle = asset.title || asset.filename;
+  const [title, setTitle] = useState(initialDisplayTitle);
   const [editingTitle, setEditingTitle] = useState(false);
   const [topic, setTopic] = useState(asset.topic || "");
   const [contentGroup, setContentGroup] = useState(asset.contentGroup || "");
@@ -150,7 +151,7 @@ export function AssetDetailClient({ asset }: { asset: ApiAsset }) {
 
     try {
       const metadata: BulkAssetMetadata = {
-        title: title.trim() || null,
+        title: title.trim() === asset.filename && !asset.title ? null : title.trim() || null,
         topic: topic || null,
         contentGroup: contentGroup || null,
         creativeFamily: creativeFamily || null,
@@ -200,7 +201,7 @@ export function AssetDetailClient({ asset }: { asset: ApiAsset }) {
                   setEditingTitle(false);
                 }
                 if (event.key === "Escape") {
-                  setTitle(asset.title || "");
+                  setTitle(initialDisplayTitle);
                   setEditingTitle(false);
                 }
               }}
