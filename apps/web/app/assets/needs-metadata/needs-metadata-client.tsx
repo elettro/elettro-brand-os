@@ -48,12 +48,10 @@ function queueMetadataThumbnailLoad(task: (release: () => void) => void) {
 
 function MetadataThumbnail({
   asset,
-  onPreviewStart,
-  onPreviewEnd
+  onPreview
 }: {
   asset: ApiAsset;
-  onPreviewStart: (asset: ApiAsset) => void;
-  onPreviewEnd: () => void;
+  onPreview: (asset: ApiAsset) => void;
 }) {
   const baseUrl = getAssetThumbnailUrl(asset.sourcePath, asset.kind);
   const [src, setSrc] = useState<string>();
@@ -147,9 +145,10 @@ function MetadataThumbnail({
   }
 
   return (
-    <div
-      onMouseEnter={() => onPreviewStart(asset)}
-      onMouseLeave={onPreviewEnd}
+    <button
+      type="button"
+      onClick={() => onPreview(asset)}
+      aria-label={`Open preview for ${asset.filename}`}
       style={{
         width: 112,
         height: 112,
@@ -158,7 +157,9 @@ function MetadataThumbnail({
         borderRadius: 10,
         background: "var(--panel-soft)",
         overflow: "hidden",
-        cursor: "zoom-in"
+        cursor: "zoom-in",
+        border: 0,
+        padding: 0
       }}
     >
       <img
@@ -177,7 +178,7 @@ function MetadataThumbnail({
           display: "block"
         }}
       />
-    </div>
+    </button>
   );
 }
 
@@ -191,7 +192,6 @@ export function NeedsMetadataClient({ assets }: { assets: ApiAsset[] }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [previewAsset, setPreviewAsset] = useState<ApiAsset | null>(null);
-  const previewCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!previewAsset) return;
@@ -206,24 +206,8 @@ export function NeedsMetadataClient({ assets }: { assets: ApiAsset[] }) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [previewAsset]);
 
-  const clearPreviewClose = () => {
-    if (previewCloseTimerRef.current) {
-      clearTimeout(previewCloseTimerRef.current);
-      previewCloseTimerRef.current = null;
-    }
-  };
-
   const openPreview = (asset: ApiAsset) => {
-    clearPreviewClose();
     setPreviewAsset(asset);
-  };
-
-  const schedulePreviewClose = () => {
-    clearPreviewClose();
-    previewCloseTimerRef.current = setTimeout(() => {
-      setPreviewAsset(null);
-      previewCloseTimerRef.current = null;
-    }, 120);
   };
 
   const allSelected = assets.length > 0 && selected.size === assets.length;
@@ -395,8 +379,7 @@ export function NeedsMetadataClient({ assets }: { assets: ApiAsset[] }) {
                   <td style={{ padding: "10px 8px", borderBottom: "1px solid var(--line)", verticalAlign: "middle" }}>
                     <MetadataThumbnail
                       asset={asset}
-                      onPreviewStart={openPreview}
-                      onPreviewEnd={schedulePreviewClose}
+                      onPreview={openPreview}
                     />
                   </td>
                   <td style={{ padding: "10px 8px", borderBottom: "1px solid var(--line)", maxWidth: 360, verticalAlign: "middle" }}>
@@ -440,8 +423,6 @@ export function NeedsMetadataClient({ assets }: { assets: ApiAsset[] }) {
           role="dialog"
           aria-modal="true"
           aria-label={`Preview ${previewAsset.filename}`}
-          onMouseEnter={clearPreviewClose}
-          onMouseLeave={schedulePreviewClose}
           onClick={() => setPreviewAsset(null)}
           style={{
             position: "fixed",
