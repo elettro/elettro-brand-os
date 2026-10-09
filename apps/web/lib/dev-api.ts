@@ -80,3 +80,35 @@ export function getAssetThumbnailUrl(sourcePath?: string | null, kind: string = 
   if (!sourcePath) return null;
   return `${apiBaseUrl}/dropbox/thumbnail?path=${encodeURIComponent(sourcePath)}&kind=${encodeURIComponent(kind)}`;
 }
+
+
+export type BulkAssetMetadata = {
+  topic?: string | null;
+  contentGroup?: string | null;
+  creativeFamily?: string | null;
+  priority?: string;
+  eligibilityType?: "evergreen" | "annual" | "one_time";
+  eligibleFrom?: string | null;
+  eligibleUntil?: string | null;
+  annualFromMmdd?: number | null;
+  annualUntilMmdd?: number | null;
+};
+
+export async function bulkUpdateAssets(input: {
+  assetIds: string[];
+  metadata?: BulkAssetMetadata;
+  markReady?: boolean;
+}) {
+  const response = await fetch("/api/assets/bulk-update", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(input)
+  });
+
+  const payload = await response.json();
+  if (!response.ok) {
+    throw new Error(payload?.error || "Bulk asset update failed");
+  }
+
+  return payload as { ok: boolean; updated: number };
+}
