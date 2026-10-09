@@ -405,3 +405,99 @@ button:disabled {
   font-size: 11px;
   font-weight: 700;
 }
+
+
+.asset-view-switch {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 3px;
+  background: #f8fafc;
+}
+
+.asset-view-switch button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  border-radius: 7px;
+  padding: 7px 10px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.asset-view-switch button.active {
+  background: white;
+  color: var(--text);
+  box-shadow: 0 1px 4px rgba(17, 24, 39, .08);
+}
+
+.asset-folder-browser {
+  margin-bottom: 16px;
+}
+
+.asset-breadcrumbs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 14px;
+}
+
+.asset-breadcrumbs button {
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  padding: 2px 3px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.asset-breadcrumb-separator {
+  color: #98a2b3;
+}
+
+.asset-folder-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 10px;
+}
+
+.asset-folder-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas:
+    "icon name"
+    "icon count";
+  column-gap: 10px;
+  align-items: center;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-soft);
+  padding: 12px;
+  cursor: pointer;
+}
+
+.asset-folder-card:hover {
+  border-color: #cfd4dc;
+  background: white;
+}
+
+.asset-folder-icon {
+  grid-area: icon;
+  font-size: 24px;
+}
+
+.asset-folder-name {
+  grid-area: name;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.asset-folder-count {
+  grid-area: count;
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 2px;
+}
