@@ -231,6 +231,10 @@ async function ingestDropboxPage(event) {
         serverModified: entry.server_modified || null,
         clientModified: entry.client_modified || null
       });
+      const folderHints = folderHintsFromPath(
+        entry.path_display || entry.path_lower || "",
+        brandSlug || ""
+      );
 
       const existing = await client.query(
         `SELECT "id" FROM "Asset"
@@ -252,6 +256,10 @@ async function ingestDropboxPage(event) {
                "fileSizeBytes" = $7,
                "kind" = $8::"AssetKind",
                "sourceMetadata" = $9::jsonb,
+               "folderSuggestions" = $10::jsonb,
+               "aspectRatioLabel" = COALESCE("aspectRatioLabel", $11),
+               "ingestStatus" = CASE WHEN "ingestStatus" = 'raw' THEN 'needs_metadata'::"IngestStatus" ELSE "ingestStatus" END,
+               "enrichmentStatus" = CASE WHEN "enrichmentStatus" = 'pending' THEN 'suggested'::"EnrichmentStatus" ELSE "enrichmentStatus" END,
                "updatedAt" = CURRENT_TIMESTAMP
            WHERE "id" = $1`,
           [
@@ -263,7 +271,9 @@ async function ingestDropboxPage(event) {
             entry.name,
             String(entry.size || 0),
             kind,
-            sourceMetadata
+            sourceMetadata,
+            JSON.stringify(folderHints),
+            folderHints.aspectRatioLabel
           ]
         );
       } else {
@@ -271,10 +281,10 @@ async function ingestDropboxPage(event) {
           `INSERT INTO "Asset"
             ("brandId","storageRootId","sourceType","sourceFileId","sourceMetadata",
              "sourcePath","sourcePathLower","contentHash","filename","fileSizeBytes",
-             "kind","ingestStatus","enrichmentStatus","approvalStatus","updatedAt")
+             "kind","folderSuggestions","aspectRatioLabel","ingestStatus","enrichmentStatus","approvalStatus","updatedAt")
            VALUES
-            ($1,$2,'dropbox',$3,$4::jsonb,$5,$6,$7,$8,$9,$10::"AssetKind",
-             'raw','pending','approved',CURRENT_TIMESTAMP)`,
+            ($1,$2,'dropbox',$3,$4::jsonb,$5,$6,$7,$8,$9,$10::"AssetKind",$11::jsonb,$12,
+             'needs_metadata','suggested','approved',CURRENT_TIMESTAMP)`,
           [
             brandId,
             rootByBrandId.get(brandId) || null,
@@ -285,7 +295,9 @@ async function ingestDropboxPage(event) {
             entry.content_hash || null,
             entry.name,
             String(entry.size || 0),
-            kind
+            kind,
+            JSON.stringify(folderHints),
+            folderHints.aspectRatioLabel
           ]
         );
       }
