@@ -22,12 +22,41 @@ async function getDropboxToken() {
   return config.accessToken;
 }
 
-async function dropboxThumbnail(token, path) {
+async function dropboxThumbnail(token, path, kind = "image") {
   if (!path || typeof path !== "string" || !path.toLowerCase().startsWith(DROPBOX_ROOT)) {
     return {
       statusCode: 400,
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ ok: false, error: "Invalid Dropbox asset path" })
+    };
+  }
+
+  if (kind === "video") {
+    const response = await fetch("https://api.dropboxapi.com/2/files/get_temporary_link", {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${token}`,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({ path })
+    });
+
+    const payload = await response.json();
+    if (!response.ok || !payload.link) {
+      return {
+        statusCode: response.status === 409 ? 404 : response.status,
+        headers: { "content-type": "application/json", "cache-control": "no-store" },
+        body: JSON.stringify({ ok: false, error: "Video preview unavailable", detail: payload })
+      };
+    }
+
+    return {
+      statusCode: 302,
+      headers: {
+        location: payload.link,
+        "cache-control": "private, max-age=240"
+      },
+      body: ""
     };
   }
 
@@ -39,8 +68,7 @@ async function dropboxThumbnail(token, path) {
         resource: { ".tag": "path", path },
         format: { ".tag": "jpeg" },
         size: { ".tag": "w640h480" },
-        mode: { ".tag": "bestfit" },
-        quality: 80
+        mode: { ".tag": "bestfit" }
       })
     }
   });
@@ -150,7 +178,8 @@ export const handler = async (event = {}) => {
         event?.queryStringParameters?.path ||
         event?.queryStringParameters?.sourcePath ||
         "";
-      return await dropboxThumbnail(token, sourcePath);
+      const kind = event?.queryStringParameters?.kind || "image";
+      return await dropboxThumbnail(token, sourcePath, kind);
     }
 
     let cursor = event.cursor || null;
