@@ -319,6 +319,7 @@ model Asset {
   creativeFamily          String?
   creatorNote             String?
   creativeNotes           String?
+  tags                    String[]           @default([])
   folderSuggestions       Json               @default("{}")
   aiSuggestions           Json               @default("{}")
   eligibilityType         EligibilityType    @default(evergreen)
