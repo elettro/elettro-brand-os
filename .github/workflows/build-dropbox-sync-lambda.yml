@@ -1,12 +1,12 @@
-name: Build DEV API Lambda
+name: Build Dropbox Sync Lambda
 
 on:
   push:
     branches:
       - develop
     paths:
-      - "services/dev-api-lambda/**"
-      - ".github/workflows/build-dev-api-lambda.yml"
+      - "services/dropbox-sync-lambda/**"
+      - ".github/workflows/build-dropbox-sync-lambda.yml"
   workflow_dispatch:
 
 jobs:
@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: services/dev-api-lambda
+        working-directory: services/dropbox-sync-lambda
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -28,11 +28,11 @@ jobs:
         run: npm install --omit=dev --workspaces=false
 
       - name: Package Lambda
-        run: zip -r elettro-brand-os-dev-api.zip index.mjs db-main.mjs init.sql node_modules package.json
+        run: zip -r elettro-brand-os-dev-dropbox-sync.zip index.mjs node_modules package.json
 
       - name: Upload Lambda package
         uses: actions/upload-artifact@v4
         with:
-          name: elettro-brand-os-dev-api
-          path: services/dev-api-lambda/elettro-brand-os-dev-api.zip
+          name: elettro-brand-os-dev-dropbox-sync
+          path: services/dropbox-sync-lambda/elettro-brand-os-dev-dropbox-sync.zip
           if-no-files-found: error
