@@ -298,8 +298,12 @@ button:disabled {
   font-weight: 750;
   line-height: 1.35;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  min-height: calc(1.35em * 3);
 }
 
 .asset-meta-row {
