@@ -168,7 +168,7 @@ function normalizeBulkMetadata(input = {}) {
     }
   };
 
-  ["topic", "contentGroup", "creativeFamily", "priority", "eligibilityType", "creativeNotes"].forEach(copy);
+  ["title", "topic", "contentGroup", "creativeFamily", "priority", "eligibilityType", "creativeNotes"].forEach(copy);
 
   if (Object.prototype.hasOwnProperty.call(input, "tags")) {
     const seen = new Set();
@@ -249,6 +249,7 @@ async function bulkUpdateAssets(event) {
       param += 1;
     };
 
+    if (Object.prototype.hasOwnProperty.call(metadata, "title")) addSet("title", metadata.title);
     if (Object.prototype.hasOwnProperty.call(metadata, "topic")) addSet("topic", metadata.topic);
     if (Object.prototype.hasOwnProperty.call(metadata, "contentGroup")) addSet("contentGroup", metadata.contentGroup);
     if (Object.prototype.hasOwnProperty.call(metadata, "creativeFamily")) addSet("creativeFamily", metadata.creativeFamily);
