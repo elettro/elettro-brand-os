@@ -153,7 +153,7 @@ async function dropboxThumbnail(token, path, kind = "image") {
   }
 }
 
-async function dropboxList(token, cursor) {
+async function dropboxList(token, cursor, limit = PAGE_LIMIT) {
   const endpoint = cursor ? "files/list_folder/continue" : "files/list_folder";
   const body = cursor
     ? { cursor }
@@ -162,7 +162,7 @@ async function dropboxList(token, cursor) {
         recursive: true,
         include_deleted: false,
         include_non_downloadable_files: false,
-        limit: PAGE_LIMIT
+        limit
       };
 
   const response = await fetch(`https://api.dropboxapi.com/2/${endpoint}`, {
@@ -179,6 +179,87 @@ async function dropboxList(token, cursor) {
     throw new Error(`Dropbox ${endpoint} failed: ${response.status} ${JSON.stringify(payload)}`);
   }
   return payload;
+}
+
+function cacheableKind(name = "") {
+  const lower = name.toLowerCase();
+  if (/\.(jpg|jpeg|png|webp|gif|tif|tiff|heic|avif)$/i.test(lower)) return "image";
+  if (/\.(mp4|mov|m4v|avi|webm|mkv)$/i.test(lower)) return "video";
+  return null;
+}
+
+async function warmThumbnailEntry(token, entry, bucket) {
+  const kind = cacheableKind(entry?.name || "");
+  const path = entry?.path_display || entry?.path_lower || "";
+  if (!kind || !path) return { skipped: 1, cached: 0, warmed: 0, failed: 0 };
+
+  const key = thumbnailCacheKey(path);
+  const cached = await getCachedThumbnail(bucket, key);
+  if (cached) return { skipped: 0, cached: 1, warmed: 0, failed: 0 };
+
+  try {
+    const bytes = await fetchDropboxThumbnailBytes(token, path);
+    await putCachedThumbnail(bucket, key, bytes);
+    return { skipped: 0, cached: 0, warmed: 1, failed: 0 };
+  } catch (error) {
+    console.warn("[thumbnail-prewarm] failed", path, error instanceof Error ? error.message : error);
+    return { skipped: 0, cached: 0, warmed: 0, failed: 1 };
+  }
+}
+
+async function prewarmThumbnails(token, event, startedAt) {
+  const bucket = process.env.THUMBNAIL_BUCKET || "";
+  if (!bucket) throw new Error("THUMBNAIL_BUCKET is not configured");
+
+  let cursor = event?.cursor || null;
+  let pagesProcessed = 0;
+  let filesSeen = 0;
+  let cached = 0;
+  let warmed = 0;
+  let failed = 0;
+  let skipped = 0;
+  let hasMore = true;
+
+  while (hasMore && Date.now() - startedAt < MAX_RUNTIME_MS) {
+    const listing = await dropboxList(token, cursor, 12);
+    pagesProcessed += 1;
+
+    const files = (listing.entries || []).filter((entry) => entry[".tag"] === "file");
+    filesSeen += files.length;
+
+    for (let i = 0; i < files.length; i += 3) {
+      const results = await Promise.all(
+        files.slice(i, i + 3).map((entry) => warmThumbnailEntry(token, entry, bucket))
+      );
+      for (const result of results) {
+        cached += result.cached;
+        warmed += result.warmed;
+        failed += result.failed;
+        skipped += result.skipped;
+      }
+
+      if (Date.now() - startedAt >= MAX_RUNTIME_MS) break;
+    }
+
+    cursor = listing.cursor || null;
+    hasMore = Boolean(listing.has_more);
+    if (!hasMore || Date.now() - startedAt >= MAX_RUNTIME_MS) break;
+  }
+
+  return json(200, {
+    ok: true,
+    message: hasMore
+      ? "Thumbnail prewarm paused before timeout; run again with returned cursor"
+      : "Thumbnail prewarm completed",
+    pagesProcessed,
+    filesSeen,
+    cached,
+    warmed,
+    failed,
+    skipped,
+    hasMore,
+    cursor
+  });
 }
 
 async function invokeWriter(entries, listing) {
@@ -239,6 +320,10 @@ export const handler = async (event = {}) => {
         "";
       const kind = event?.queryStringParameters?.kind || "image";
       return await dropboxThumbnail(token, sourcePath, kind);
+    }
+
+    if (event?.action === "prewarm-thumbnails") {
+      return await prewarmThumbnails(token, event, startedAt);
     }
 
     let cursor = event.cursor || null;
