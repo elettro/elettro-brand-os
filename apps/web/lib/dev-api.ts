@@ -46,6 +46,7 @@ export type ApiAsset = {
   topic?: string | null;
   creativeFamily?: string | null;
   creativeNotes?: string | null;
+  tags?: string[];
   title?: string | null;
   aiDescription?: string | null;
   aspectRatioLabel?: string | null;
@@ -116,6 +117,7 @@ export type BulkAssetMetadata = {
   allowedDestinations?: string[];
   excludedDestinations?: string[];
   creativeNotes?: string | null;
+  tags?: string[];
 };
 
 export async function bulkUpdateAssets(input: {
