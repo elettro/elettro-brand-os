@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import type { ApiAsset } from "@/lib/dev-api";
+import { getAssetThumbnailUrl, type ApiAsset } from "@/lib/dev-api";
 
 function formatBytes(value: ApiAsset["fileSizeBytes"]) {
   const bytes = Number(value || 0);
@@ -88,8 +88,20 @@ export function AssetLibraryClient({ assets }: { assets: ApiAsset[] }) {
         {filtered.map((asset) => (
           <Link href={`/assets/${asset.id}`} className="asset-tile" key={asset.id}>
             <div className={`asset-preview asset-preview-${asset.kind}`}>
-              <span className="asset-preview-glyph">{kindGlyph(asset.kind)}</span>
-              <span>{asset.kind}</span>
+              {asset.sourceType === "dropbox" && asset.sourcePath ? (
+                <img
+                  className="asset-thumbnail"
+                  src={getAssetThumbnailUrl(asset.sourcePath) || undefined}
+                  alt={asset.filename}
+                  loading="lazy"
+                />
+              ) : (
+                <>
+                  <span className="asset-preview-glyph">{kindGlyph(asset.kind)}</span>
+                  <span>{asset.kind}</span>
+                </>
+              )}
+              {asset.kind === "video" && <span className="asset-video-badge">▶</span>}
             </div>
             <div className="asset-tile-body">
               <div className="asset-filename" title={asset.filename}>{asset.filename}</div>
