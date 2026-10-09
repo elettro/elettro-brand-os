@@ -37,7 +37,10 @@ export type ApiAsset = {
   filename: string;
   kind: string;
   sourceType?: string;
+  sourcePath?: string | null;
+  fileSizeBytes?: string | number | null;
   ingestStatus?: string;
+  enrichmentStatus?: string;
   approvalStatus?: string;
   contentGroup?: string | null;
   topic?: string | null;
@@ -46,6 +49,7 @@ export type ApiAsset = {
   priority?: string;
   brandSlug: string;
   brandName: string;
+  createdAt?: string;
 };
 
 export async function getBrands() {
