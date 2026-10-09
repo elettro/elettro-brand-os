@@ -126,6 +126,60 @@ function AssetThumbnail({
   );
 }
 
+
+function relativeDropboxPath(sourcePath?: string | null) {
+  if (!sourcePath) return "";
+  const normalized = sourcePath.replace(/\\/g, "/");
+  const marker = "/1---elettro-brand-os/";
+  const index = normalized.toLowerCase().indexOf(marker);
+  if (index >= 0) return normalized.slice(index + marker.length);
+  return normalized.replace(/^\/+/, "");
+}
+
+function assetFolderPath(asset: ApiAsset) {
+  const relative = relativeDropboxPath(asset.sourcePath);
+  const parts = relative.split("/").filter(Boolean);
+  parts.pop();
+  return parts.join("/");
+}
+
+function directChildren(assets: ApiAsset[], currentFolder: string) {
+  const prefix = currentFolder ? `${currentFolder}/` : "";
+  const folders = new Map<string, number>();
+  const files: ApiAsset[] = [];
+
+  for (const asset of assets) {
+    const folder = assetFolderPath(asset);
+
+    if (currentFolder) {
+      if (folder !== currentFolder && !folder.startsWith(prefix)) continue;
+    }
+
+    if (folder === currentFolder) {
+      files.push(asset);
+      continue;
+    }
+
+    const remainder = currentFolder ? folder.slice(prefix.length) : folder;
+    const nextSegment = remainder.split("/").filter(Boolean)[0];
+    if (!nextSegment) continue;
+
+    const nextPath = currentFolder ? `${currentFolder}/${nextSegment}` : nextSegment;
+    folders.set(nextPath, (folders.get(nextPath) || 0) + 1);
+  }
+
+  return {
+    folders: Array.from(folders.entries())
+      .map(([path, count]) => ({
+        path,
+        name: path.split("/").pop() || path,
+        count
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name)),
+    files
+  };
+}
+
 function formatBytes(value: ApiAsset["fileSizeBytes"]) {
   const bytes = Number(value || 0);
   if (!bytes) return "—";
@@ -144,6 +198,8 @@ export function AssetLibraryClient({ assets }: { assets: ApiAsset[] }) {
   const [brand, setBrand] = useState("all");
   const [kind, setKind] = useState("all");
   const [status, setStatus] = useState("all");
+  const [viewMode, setViewMode] = useState<"grid" | "folders">("grid");
+  const [currentFolder, setCurrentFolder] = useState("");
 
   const brands = useMemo(
     () => Array.from(new Map(assets.map((asset) => [asset.brandSlug, asset.brandName])).entries()),
@@ -169,6 +225,13 @@ export function AssetLibraryClient({ assets }: { assets: ApiAsset[] }) {
   const imageCount = assets.filter((asset) => asset.kind === "image").length;
   const videoCount = assets.filter((asset) => asset.kind === "video").length;
   const rawCount = assets.filter((asset) => asset.ingestStatus === "raw").length;
+
+  const folderView = useMemo(
+    () => directChildren(filtered, currentFolder),
+    [filtered, currentFolder]
+  );
+
+  const breadcrumbParts = currentFolder.split("/").filter(Boolean);
 
   return (
     <>
@@ -203,11 +266,65 @@ export function AssetLibraryClient({ assets }: { assets: ApiAsset[] }) {
           <option value="needs_metadata">Needs metadata</option>
           <option value="failed">Failed</option>
         </select>
+        <div className="asset-view-switch" aria-label="Asset view">
+          <button
+            type="button"
+            className={viewMode === "grid" ? "active" : ""}
+            onClick={() => setViewMode("grid")}
+          >
+            Grid
+          </button>
+          <button
+            type="button"
+            className={viewMode === "folders" ? "active" : ""}
+            onClick={() => setViewMode("folders")}
+          >
+            Folders
+          </button>
+        </div>
         <div className="muted asset-result-count">{filtered.length} shown</div>
       </div>
 
+      {viewMode === "folders" && (
+        <div className="card asset-folder-browser">
+          <div className="asset-breadcrumbs">
+            <button type="button" onClick={() => setCurrentFolder("")}>Dropbox</button>
+            {breadcrumbParts.map((part, index) => {
+              const path = breadcrumbParts.slice(0, index + 1).join("/");
+              return (
+                <span key={path}>
+                  <span className="asset-breadcrumb-separator">/</span>
+                  <button type="button" onClick={() => setCurrentFolder(path)}>{part}</button>
+                </span>
+              );
+            })}
+          </div>
+
+          {folderView.folders.length > 0 && (
+            <div className="asset-folder-grid">
+              {folderView.folders.map((folder) => (
+                <button
+                  type="button"
+                  className="asset-folder-card"
+                  key={folder.path}
+                  onClick={() => setCurrentFolder(folder.path)}
+                >
+                  <span className="asset-folder-icon">📁</span>
+                  <span className="asset-folder-name">{folder.name}</span>
+                  <span className="asset-folder-count">{folder.count} assets</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {folderView.folders.length === 0 && folderView.files.length === 0 && (
+            <div className="muted">No assets in this folder with the current filters.</div>
+          )}
+        </div>
+      )}
+
       <div className="asset-grid">
-        {filtered.map((asset) => (
+        {(viewMode === "folders" ? folderView.files : filtered).map((asset) => (
           <Link href={`/assets/${asset.id}`} className="asset-tile" key={asset.id}>
             <div className={`asset-preview asset-preview-${asset.kind}`}>
               {asset.sourceType === "dropbox" && asset.sourcePath ? (
@@ -241,7 +358,7 @@ export function AssetLibraryClient({ assets }: { assets: ApiAsset[] }) {
         ))}
       </div>
 
-      {filtered.length === 0 && (
+      {viewMode === "grid" && filtered.length === 0 && (
         <div className="card" style={{ marginTop: 16 }}>
           <strong>No assets match those filters.</strong>
           <p className="muted">Clear a filter or search term to see the indexed library.</p>
