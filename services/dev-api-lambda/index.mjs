@@ -170,6 +170,22 @@ function normalizeBulkMetadata(input = {}) {
 
   ["topic", "contentGroup", "creativeFamily", "priority", "eligibilityType", "creativeNotes"].forEach(copy);
 
+  if (Object.prototype.hasOwnProperty.call(input, "tags")) {
+    const seen = new Set();
+    clean.tags = Array.isArray(input.tags)
+      ? input.tags
+          .filter((value) => typeof value === "string")
+          .map((value) => value.trim())
+          .filter(Boolean)
+          .filter((value) => {
+            const key = value.toLowerCase();
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          })
+      : [];
+  }
+
   if (Object.prototype.hasOwnProperty.call(input, "containsSpecificPricing")) {
     clean.containsSpecificPricing = Boolean(input.containsSpecificPricing);
     if (clean.containsSpecificPricing) clean.eligibilityType = "one_time";
@@ -243,6 +259,7 @@ async function bulkUpdateAssets(event) {
     if (Object.prototype.hasOwnProperty.call(metadata, "annualFromMmdd")) addSet("annualFromMmdd", metadata.annualFromMmdd);
     if (Object.prototype.hasOwnProperty.call(metadata, "annualUntilMmdd")) addSet("annualUntilMmdd", metadata.annualUntilMmdd);
     if (Object.prototype.hasOwnProperty.call(metadata, "creativeNotes")) addSet("creativeNotes", metadata.creativeNotes);
+    if (Object.prototype.hasOwnProperty.call(metadata, "tags")) addSet("tags", metadata.tags);
     if (Object.prototype.hasOwnProperty.call(metadata, "containsSpecificPricing")) addSet("containsSpecificPricing", metadata.containsSpecificPricing);
     if (Object.prototype.hasOwnProperty.call(metadata, "allowedDestinations")) addSet("allowedDestinations", metadata.allowedDestinations);
     if (Object.prototype.hasOwnProperty.call(metadata, "excludedDestinations")) addSet("excludedDestinations", metadata.excludedDestinations);
@@ -489,6 +506,27 @@ export const handler = async (event = {}) => {
   if (event?.action === "backfill-folder-hints") {
     return backfillFolderHints(event);
   }
+
+  if (event?.action === "migrate-asset-tags") {
+    let client;
+    try {
+      client = await connectDatabase();
+      await client.query('ALTER TABLE "Asset" ADD COLUMN IF NOT EXISTS "tags" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[]');
+      return json(200, { ok: true, message: "Asset tags column is ready" });
+    } catch (error) {
+      console.error("[asset-tags-migration] failed", error);
+      return json(500, {
+        ok: false,
+        error: error instanceof Error ? error.message : "Unknown asset tags migration error"
+      });
+    } finally {
+      if (client) {
+        try { await client.end(); } catch {}
+      }
+    }
+  }
+
+
 
   if (
     event?.action === "bulk-update-assets" ||
