@@ -420,17 +420,21 @@ export const handler = async (event = {}) => {
           a."filename",
           a."kind",
           a."sourceType",
+          a."sourcePath",
+          a."fileSizeBytes",
           a."ingestStatus",
+          a."enrichmentStatus",
           a."approvalStatus",
           a."contentGroup",
           a."topic",
           a."aspectRatioLabel",
+          a."createdAt",
           b."slug" AS "brandSlug",
           b."name" AS "brandName"
         FROM "Asset" a
         JOIN "Brand" b ON b."id" = a."brandId"
         ORDER BY a."createdAt" DESC
-        LIMIT 100
+        LIMIT 500
       `);
       return json(200, { ok: true, assets: result.rows });
     }
