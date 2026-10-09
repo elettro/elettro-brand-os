@@ -22,6 +22,50 @@ async function getDropboxToken() {
   return config.accessToken;
 }
 
+async function dropboxThumbnail(token, path) {
+  if (!path || typeof path !== "string" || !path.toLowerCase().startsWith(DROPBOX_ROOT)) {
+    return {
+      statusCode: 400,
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ok: false, error: "Invalid Dropbox asset path" })
+    };
+  }
+
+  const response = await fetch("https://content.dropboxapi.com/2/files/get_thumbnail_v2", {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "dropbox-api-arg": JSON.stringify({
+        resource: { ".tag": "path", path },
+        format: { ".tag": "jpeg" },
+        size: { ".tag": "w640h480" },
+        mode: { ".tag": "bestfit" },
+        quality: 80
+      })
+    }
+  });
+
+  if (!response.ok) {
+    const detail = await response.text();
+    return {
+      statusCode: response.status === 409 ? 404 : response.status,
+      headers: { "content-type": "application/json", "cache-control": "no-store" },
+      body: JSON.stringify({ ok: false, error: "Thumbnail unavailable", detail })
+    };
+  }
+
+  const bytes = Buffer.from(await response.arrayBuffer());
+  return {
+    statusCode: 200,
+    headers: {
+      "content-type": "image/jpeg",
+      "cache-control": "private, max-age=300"
+    },
+    isBase64Encoded: true,
+    body: bytes.toString("base64")
+  };
+}
+
 async function dropboxList(token, cursor) {
   const endpoint = cursor ? "files/list_folder/continue" : "files/list_folder";
   const body = cursor
@@ -94,6 +138,20 @@ export const handler = async (event = {}) => {
 
   try {
     const token = await getDropboxToken();
+
+    const requestPath =
+      event?.rawPath ||
+      event?.requestContext?.http?.path ||
+      event?.path ||
+      "";
+
+    if (requestPath === "/dropbox/thumbnail") {
+      const sourcePath =
+        event?.queryStringParameters?.path ||
+        event?.queryStringParameters?.sourcePath ||
+        "";
+      return await dropboxThumbnail(token, sourcePath);
+    }
 
     let cursor = event.cursor || null;
     let pagesProcessed = 0;
