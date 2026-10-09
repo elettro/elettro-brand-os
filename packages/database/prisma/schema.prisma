@@ -320,6 +320,7 @@ model Asset {
   creatorNote             String?
   creativeNotes           String?
   tags                    String[]           @default([])
+  commerceLinks           String[]           @default([])
   folderSuggestions       Json               @default("{}")
   aiSuggestions           Json               @default("{}")
   eligibilityType         EligibilityType    @default(evergreen)

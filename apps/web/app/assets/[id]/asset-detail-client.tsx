@@ -33,6 +33,9 @@ export function AssetDetailClient({ asset }: { asset: ApiAsset }) {
   const [creativeNotes, setCreativeNotes] = useState(asset.creativeNotes || "");
   const [tags, setTags] = useState<string[]>(asset.tags || []);
   const [tagInput, setTagInput] = useState("");
+  const [commerceLinks, setCommerceLinks] = useState<string[]>(
+    asset.commerceLinks?.length ? asset.commerceLinks : [""]
+  );
   const [priority, setPriority] = useState(asset.priority || "normal");
   const [eligibilityType, setEligibilityType] = useState<"evergreen" | "annual" | "one_time">(
     (asset.eligibilityType as "evergreen" | "annual" | "one_time") || "evergreen"
@@ -172,6 +175,23 @@ export function AssetDetailClient({ asset }: { asset: ApiAsset }) {
     }
   };
 
+  const updateCommerceLink = (index: number, value: string) => {
+    setCommerceLinks((current) =>
+      current.map((item, itemIndex) => (itemIndex === index ? value : item))
+    );
+  };
+
+  const addCommerceLink = () => {
+    setCommerceLinks((current) => [...current, ""]);
+  };
+
+  const removeCommerceLink = (index: number) => {
+    setCommerceLinks((current) => {
+      const next = current.filter((_, itemIndex) => itemIndex !== index);
+      return next.length ? next : [""];
+    });
+  };
+
   const save = async (markReady = false) => {
     setBusy(true);
     setMessage("");
@@ -184,6 +204,7 @@ export function AssetDetailClient({ asset }: { asset: ApiAsset }) {
         creativeFamily: creativeFamily || null,
         creativeNotes: creativeNotes || null,
         tags,
+        commerceLinks: commerceLinks.map((value) => value.trim()).filter(Boolean),
         priority,
         eligibilityType: containsSpecificPricing ? "one_time" : eligibilityType,
         containsSpecificPricing,
@@ -569,6 +590,73 @@ export function AssetDetailClient({ asset }: { asset: ApiAsset }) {
               </label>
             </div>
           )}
+
+          <div style={{ marginTop: 20 }}>
+            <div className="metric" style={{ marginBottom: 4 }}>Product / Commerce Links</div>
+            <div className="muted" style={{ fontSize: 12, marginBottom: 10 }}>
+              Associate this asset with product, collection, search-result, or other commerce URLs.
+            </div>
+
+            <div style={{ display: "grid", gap: 8 }}>
+              {commerceLinks.map((link, index) => (
+                <div
+                  key={index}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "minmax(0,1fr) auto",
+                    gap: 8,
+                    alignItems: "center"
+                  }}
+                >
+                  <input
+                    type="url"
+                    value={link}
+                    onChange={(event) => updateCommerceLink(index, event.target.value)}
+                    placeholder={index === 0 ? "Paste first product / collection / search URL" : "Paste another commerce URL"}
+                    style={{
+                      width: "100%",
+                      boxSizing: "border-box"
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeCommerceLink(index)}
+                    aria-label={`Remove commerce link ${index + 1}`}
+                    title="Remove link"
+                    style={{
+                      border: "1px solid var(--line)",
+                      background: "white",
+                      borderRadius: 8,
+                      minWidth: 38,
+                      height: 38,
+                      cursor: "pointer",
+                      fontWeight: 900,
+                      fontSize: 16
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={addCommerceLink}
+              style={{
+                marginTop: 9,
+                border: 0,
+                padding: 0,
+                background: "transparent",
+                color: "var(--accent)",
+                cursor: "pointer",
+                fontWeight: 800,
+                fontSize: 13
+              }}
+            >
+              + Add another link
+            </button>
+          </div>
 
           <div style={{ marginTop: 18 }}>
             <div className="metric" style={{ marginBottom: 8 }}>Destination rules</div>
