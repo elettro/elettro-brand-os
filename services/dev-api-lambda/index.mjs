@@ -168,7 +168,24 @@ function normalizeBulkMetadata(input = {}) {
     }
   };
 
-  ["topic", "contentGroup", "creativeFamily", "priority", "eligibilityType"].forEach(copy);
+  ["topic", "contentGroup", "creativeFamily", "priority", "eligibilityType", "creativeNotes"].forEach(copy);
+
+  if (Object.prototype.hasOwnProperty.call(input, "containsSpecificPricing")) {
+    clean.containsSpecificPricing = Boolean(input.containsSpecificPricing);
+    if (clean.containsSpecificPricing) clean.eligibilityType = "one_time";
+  }
+
+  if (Object.prototype.hasOwnProperty.call(input, "allowedDestinations")) {
+    clean.allowedDestinations = Array.isArray(input.allowedDestinations)
+      ? input.allowedDestinations.filter((value) => typeof value === "string" && value.trim()).map((value) => value.trim())
+      : [];
+  }
+
+  if (Object.prototype.hasOwnProperty.call(input, "excludedDestinations")) {
+    clean.excludedDestinations = Array.isArray(input.excludedDestinations)
+      ? input.excludedDestinations.filter((value) => typeof value === "string" && value.trim()).map((value) => value.trim())
+      : [];
+  }
 
   if (Object.prototype.hasOwnProperty.call(input, "eligibleFrom")) {
     clean.eligibleFrom = input.eligibleFrom || null;
@@ -225,6 +242,10 @@ async function bulkUpdateAssets(event) {
     if (Object.prototype.hasOwnProperty.call(metadata, "eligibleUntil")) addSet("eligibleUntil", metadata.eligibleUntil, "::date");
     if (Object.prototype.hasOwnProperty.call(metadata, "annualFromMmdd")) addSet("annualFromMmdd", metadata.annualFromMmdd);
     if (Object.prototype.hasOwnProperty.call(metadata, "annualUntilMmdd")) addSet("annualUntilMmdd", metadata.annualUntilMmdd);
+    if (Object.prototype.hasOwnProperty.call(metadata, "creativeNotes")) addSet("creativeNotes", metadata.creativeNotes);
+    if (Object.prototype.hasOwnProperty.call(metadata, "containsSpecificPricing")) addSet("containsSpecificPricing", metadata.containsSpecificPricing);
+    if (Object.prototype.hasOwnProperty.call(metadata, "allowedDestinations")) addSet("allowedDestinations", metadata.allowedDestinations);
+    if (Object.prototype.hasOwnProperty.call(metadata, "excludedDestinations")) addSet("excludedDestinations", metadata.excludedDestinations);
 
     sets.push('"enrichmentStatus" = \'reviewed\'::"EnrichmentStatus"');
 
