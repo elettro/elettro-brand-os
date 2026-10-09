@@ -61,7 +61,8 @@ async function getCachedThumbnail(bucket, key) {
     const bytes = Buffer.from(await result.Body.transformToByteArray());
     return bytes;
   } catch (error) {
-    if (error?.name === "NoSuchKey" || error?.$metadata?.httpStatusCode === 404) return null;
+    const status = error?.$metadata?.httpStatusCode;
+    if (error?.name === "NoSuchKey" || status === 404 || status === 403) return null;
     throw error;
   }
 }
