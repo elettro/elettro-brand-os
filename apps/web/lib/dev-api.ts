@@ -67,3 +67,9 @@ export async function getAssets() {
 export async function getContentPool() {
   return fetchJson<{ ok: boolean; assets: ApiAsset[] }>("/content-pool");
 }
+
+
+export function getAssetThumbnailUrl(sourcePath?: string | null) {
+  if (!sourcePath) return null;
+  return `${apiBaseUrl}/dropbox/thumbnail?path=${encodeURIComponent(sourcePath)}`;
+}
