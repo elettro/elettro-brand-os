@@ -228,7 +228,7 @@ async function bulkUpdateAssets(event) {
     let param = 2;
 
     const addSet = (column, value, cast = "") => {
-      sets.push('"' + column + '" = 
+      sets.push('"' + column + '" = ' + String.fromCharCode(36) + param + cast);
       values.push(value);
       param += 1;
     };
