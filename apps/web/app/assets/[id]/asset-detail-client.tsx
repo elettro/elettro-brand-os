@@ -259,9 +259,111 @@ export function AssetDetailClient({ asset }: { asset: ApiAsset }) {
             </button>
           )}
 
-          <p className="muted" style={{ marginBottom: 4 }}>
-            {asset.brandName} · {asset.kind} · {asset.aspectRatioLabel || asset.folderSuggestions?.aspectRatioLabel || "ratio unknown"}
-          </p>
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 10,
+              marginTop: 14,
+              marginBottom: 8
+            }}
+          >
+            <div
+              title="Brand"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 9,
+                minHeight: 42,
+                padding: "7px 12px",
+                borderRadius: 12,
+                border: "1px solid var(--line)",
+                background: "var(--panel-soft)",
+                boxShadow: "0 1px 2px rgba(0,0,0,.05)"
+              }}
+            >
+              <span
+                aria-hidden="true"
+                style={{
+                  display: "grid",
+                  placeItems: "center",
+                  width: 27,
+                  height: 27,
+                  borderRadius: 8,
+                  background: "var(--accent)",
+                  color: "white",
+                  fontWeight: 900,
+                  fontSize: 12
+                }}
+              >
+                {asset.brandName?.slice(0, 1).toUpperCase() || "B"}
+              </span>
+              <span style={{ display: "grid", lineHeight: 1.05 }}>
+                <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: ".09em", textTransform: "uppercase", color: "var(--muted)" }}>
+                  Brand
+                </span>
+                <strong style={{ fontSize: 14 }}>{asset.brandName}</strong>
+              </span>
+            </div>
+
+            <div
+              title="Media type"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                minHeight: 42,
+                padding: "7px 12px",
+                borderRadius: 12,
+                border: "1px solid var(--line)",
+                background: "white",
+                boxShadow: "0 1px 2px rgba(0,0,0,.05)"
+              }}
+            >
+              <span style={{ fontSize: 16 }}>{asset.kind === "video" ? "▶" : asset.kind === "image" ? "▣" : "▦"}</span>
+              <span style={{ display: "grid", lineHeight: 1.05 }}>
+                <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: ".09em", textTransform: "uppercase", color: "var(--muted)" }}>
+                  Media
+                </span>
+                <strong style={{ fontSize: 14, textTransform: "capitalize" }}>{asset.kind}</strong>
+              </span>
+            </div>
+
+            <div
+              title="Aspect ratio"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                minHeight: 42,
+                padding: "7px 12px",
+                borderRadius: 12,
+                border: "1px solid var(--line)",
+                background: "white",
+                boxShadow: "0 1px 2px rgba(0,0,0,.05)"
+              }}
+            >
+              <span
+                aria-hidden="true"
+                style={{
+                  width: 16,
+                  height: 22,
+                  borderRadius: 3,
+                  border: "2px solid currentColor",
+                  opacity: .7
+                }}
+              />
+              <span style={{ display: "grid", lineHeight: 1.05 }}>
+                <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: ".09em", textTransform: "uppercase", color: "var(--muted)" }}>
+                  Format
+                </span>
+                <strong style={{ fontSize: 14 }}>
+                  {asset.aspectRatioLabel || asset.folderSuggestions?.aspectRatioLabel || "Unknown"}
+                </strong>
+              </span>
+            </div>
+          </div>
+
           <p className="muted" style={{ marginTop: 0, overflowWrap: "anywhere", fontSize: 12 }}>
             Original file: {asset.filename}
           </p>
