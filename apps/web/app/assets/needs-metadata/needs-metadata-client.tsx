@@ -1,8 +1,162 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { bulkUpdateAssets, type ApiAsset, type BulkAssetMetadata } from "@/lib/dev-api";
+import { bulkUpdateAssets, getAssetThumbnailUrl, type ApiAsset, type BulkAssetMetadata } from "@/lib/dev-api";
+
+
+const MAX_METADATA_THUMBNAIL_LOADS = 6;
+let activeMetadataThumbnailLoads = 0;
+const metadataThumbnailQueue: Array<() => void> = [];
+
+function pumpMetadataThumbnailQueue() {
+  while (activeMetadataThumbnailLoads < MAX_METADATA_THUMBNAIL_LOADS && metadataThumbnailQueue.length) {
+    const next = metadataThumbnailQueue.shift();
+    if (!next) break;
+    activeMetadataThumbnailLoads += 1;
+    next();
+  }
+}
+
+function queueMetadataThumbnailLoad(task: (release: () => void) => void) {
+  let cancelled = false;
+
+  metadataThumbnailQueue.push(() => {
+    if (cancelled) {
+      activeMetadataThumbnailLoads = Math.max(0, activeMetadataThumbnailLoads - 1);
+      pumpMetadataThumbnailQueue();
+      return;
+    }
+
+    let released = false;
+    const release = () => {
+      if (released) return;
+      released = true;
+      activeMetadataThumbnailLoads = Math.max(0, activeMetadataThumbnailLoads - 1);
+      pumpMetadataThumbnailQueue();
+    };
+
+    task(release);
+  });
+
+  pumpMetadataThumbnailQueue();
+
+  return () => {
+    cancelled = true;
+  };
+}
+
+function MetadataThumbnail({ asset }: { asset: ApiAsset }) {
+  const baseUrl = getAssetThumbnailUrl(asset.sourcePath, asset.kind);
+  const [src, setSrc] = useState<string>();
+  const attemptRef = useRef(0);
+  const releaseRef = useRef<(() => void) | null>(null);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!baseUrl) return;
+
+    let disposed = false;
+    let cancelQueued = () => {};
+
+    const schedule = (delay = 0) => {
+      retryTimerRef.current = setTimeout(() => {
+        cancelQueued = queueMetadataThumbnailLoad((release) => {
+          if (disposed) {
+            release();
+            return;
+          }
+
+          releaseRef.current = release;
+          const separator = baseUrl.includes("?") ? "&" : "?";
+          setSrc(`${baseUrl}${separator}attempt=${attemptRef.current}`);
+        });
+      }, delay);
+    };
+
+    schedule();
+
+    return () => {
+      disposed = true;
+      cancelQueued();
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+      releaseRef.current?.();
+      releaseRef.current = null;
+    };
+  }, [baseUrl]);
+
+  const releaseSlot = () => {
+    releaseRef.current?.();
+    releaseRef.current = null;
+  };
+
+  const handleError = () => {
+    releaseSlot();
+    if (attemptRef.current >= 3 || !baseUrl) return;
+
+    attemptRef.current += 1;
+    retryTimerRef.current = setTimeout(() => {
+      queueMetadataThumbnailLoad((release) => {
+        releaseRef.current = release;
+        const separator = baseUrl.includes("?") ? "&" : "?";
+        setSrc(`${baseUrl}${separator}attempt=${attemptRef.current}`);
+      });
+    }, 700 * attemptRef.current);
+  };
+
+  if (!baseUrl) {
+    return (
+      <div style={{
+        width: 128,
+        height: 96,
+        borderRadius: 10,
+        background: "var(--panel-soft)",
+        display: "grid",
+        placeItems: "center",
+        fontSize: 12,
+        color: "var(--muted)"
+      }}>
+        No preview
+      </div>
+    );
+  }
+
+  if (!src) {
+    return (
+      <div style={{
+        width: 128,
+        height: 96,
+        borderRadius: 10,
+        background: "var(--panel-soft)",
+        display: "grid",
+        placeItems: "center",
+        fontSize: 12,
+        color: "var(--muted)"
+      }}>
+        Loading…
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={src}
+      alt={asset.filename}
+      decoding="async"
+      loading="lazy"
+      onLoad={releaseSlot}
+      onError={handleError}
+      style={{
+        width: 128,
+        height: 96,
+        objectFit: "cover",
+        borderRadius: 10,
+        display: "block",
+        background: "var(--panel-soft)"
+      }}
+    />
+  );
+}
 
 export function NeedsMetadataClient({ assets }: { assets: ApiAsset[] }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -151,7 +305,7 @@ export function NeedsMetadataClient({ assets }: { assets: ApiAsset[] }) {
               <th style={{ padding: 8, textAlign: "left" }}>
                 <input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="Select all" />
               </th>
-              {["File", "Brand", "Folder", "Topic hint", "Ratio", "Approval", "State"].map((label) => (
+              {["Preview", "File", "Brand", "Folder", "Topic hint", "Ratio", "Approval", "State"].map((label) => (
                 <th
                   key={label}
                   style={{
@@ -180,7 +334,10 @@ export function NeedsMetadataClient({ assets }: { assets: ApiAsset[] }) {
                       aria-label={`Select ${asset.filename}`}
                     />
                   </td>
-                  <td style={{ padding: "10px 8px", borderBottom: "1px solid var(--line)", maxWidth: 360 }}>
+                  <td style={{ padding: "10px 8px", borderBottom: "1px solid var(--line)", verticalAlign: "middle" }}>
+                    <MetadataThumbnail asset={asset} />
+                  </td>
+                  <td style={{ padding: "10px 8px", borderBottom: "1px solid var(--line)", maxWidth: 360, verticalAlign: "middle" }}>
                     <Link href={`/assets/${asset.id}`} style={{ overflowWrap: "anywhere" }}>{asset.filename}</Link>
                   </td>
                   <td style={{ padding: "10px 8px", borderBottom: "1px solid var(--line)" }}>{asset.brandName}</td>
