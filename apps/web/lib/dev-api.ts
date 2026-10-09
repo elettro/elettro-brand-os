@@ -45,6 +45,13 @@ export type ApiAsset = {
   contentGroup?: string | null;
   topic?: string | null;
   aspectRatioLabel?: string | null;
+  folderSuggestions?: {
+    folderPath?: string | null;
+    typeHint?: string | null;
+    topicHint?: string | null;
+    aspectRatioLabel?: string | null;
+    filename?: string | null;
+  } | null;
   eligibilityType?: string;
   priority?: string;
   brandSlug: string;

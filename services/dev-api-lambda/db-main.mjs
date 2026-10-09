@@ -428,6 +428,7 @@ export const handler = async (event = {}) => {
           a."contentGroup",
           a."topic",
           a."aspectRatioLabel",
+          a."folderSuggestions",
           a."createdAt",
           b."slug" AS "brandSlug",
           b."name" AS "brandName"
