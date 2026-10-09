@@ -319,15 +319,25 @@ export function AssetDetailClient({ asset }: { asset: ApiAsset }) {
             </div>
           </div>
 
-          <label className="intake-control" style={{ marginTop: 18 }}>
-            <span className="metric">Creative notes / intent</span>
-            <textarea
-              value={creativeNotes}
-              onChange={(e) => setCreativeNotes(e.target.value)}
-              rows={5}
-              placeholder="Anything the publishing engine should know about this specific asset."
-            />
-          </label>
+          <div style={{ marginTop: 20 }}>
+            <label className="intake-control" style={{ display: "grid", gap: 8 }}>
+              <span className="metric" style={{ display: "block" }}>Creative notes / intent</span>
+              <textarea
+                value={creativeNotes}
+                onChange={(e) => setCreativeNotes(e.target.value)}
+                rows={7}
+                placeholder="Anything the publishing engine should know about this specific asset."
+                style={{
+                  width: "100%",
+                  minHeight: 170,
+                  resize: "vertical",
+                  boxSizing: "border-box",
+                  padding: 12,
+                  lineHeight: 1.4
+                }}
+              />
+            </label>
+          </div>
 
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginTop: 18 }}>
             <button
