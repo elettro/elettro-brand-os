@@ -46,6 +46,38 @@ function queueMetadataThumbnailLoad(task: (release: () => void) => void) {
   };
 }
 
+
+function thumbnailFrameForAsset(asset: ApiAsset) {
+  const ratioLabel =
+    asset.folderSuggestions?.aspectRatioLabel ||
+    asset.aspectRatioLabel ||
+    "";
+
+  const match = String(ratioLabel).match(/(\d+(?:\.\d+)?)\s*[x:]\s*(\d+(?:\.\d+)?)/i);
+
+  if (!match) {
+    return { width: 128, height: 96 };
+  }
+
+  const w = Number(match[1]);
+  const h = Number(match[2]);
+  if (!w || !h) return { width: 128, height: 96 };
+
+  const ratio = w / h;
+
+  if (ratio < 0.8) {
+    const height = 136;
+    return { width: Math.max(68, Math.round(height * ratio)), height };
+  }
+
+  if (ratio > 1.25) {
+    const width = 154;
+    return { width, height: Math.max(76, Math.round(width / ratio)) };
+  }
+
+  return { width: 112, height: 112 };
+}
+
 function MetadataThumbnail({
   asset,
   onPreview
@@ -54,6 +86,7 @@ function MetadataThumbnail({
   onPreview: (asset: ApiAsset) => void;
 }) {
   const baseUrl = getAssetThumbnailUrl(asset.sourcePath, asset.kind);
+  const frame = thumbnailFrameForAsset(asset);
   const [src, setSrc] = useState<string>();
   const attemptRef = useRef(0);
   const releaseRef = useRef<(() => void) | null>(null);
@@ -150,8 +183,8 @@ function MetadataThumbnail({
       onClick={() => onPreview(asset)}
       aria-label={`Open preview for ${asset.filename}`}
       style={{
-        width: 112,
-        height: 112,
+        width: frame.width,
+        height: frame.height,
         display: "grid",
         placeItems: "center",
         borderRadius: 10,
@@ -170,10 +203,8 @@ function MetadataThumbnail({
         onLoad={releaseSlot}
         onError={handleError}
         style={{
-          maxWidth: "100%",
-          maxHeight: "100%",
-          width: "auto",
-          height: "auto",
+          width: "100%",
+          height: "100%",
           objectFit: "contain",
           display: "block"
         }}
