@@ -186,6 +186,22 @@ function normalizeBulkMetadata(input = {}) {
       : [];
   }
 
+  if (Object.prototype.hasOwnProperty.call(input, "commerceLinks")) {
+    const seenLinks = new Set();
+    clean.commerceLinks = Array.isArray(input.commerceLinks)
+      ? input.commerceLinks
+          .filter((value) => typeof value === "string")
+          .map((value) => value.trim())
+          .filter(Boolean)
+          .filter((value) => {
+            const key = value.toLowerCase();
+            if (seenLinks.has(key)) return false;
+            seenLinks.add(key);
+            return true;
+          })
+      : [];
+  }
+
   if (Object.prototype.hasOwnProperty.call(input, "containsSpecificPricing")) {
     clean.containsSpecificPricing = Boolean(input.containsSpecificPricing);
     if (clean.containsSpecificPricing) clean.eligibilityType = "one_time";
@@ -261,6 +277,7 @@ async function bulkUpdateAssets(event) {
     if (Object.prototype.hasOwnProperty.call(metadata, "annualUntilMmdd")) addSet("annualUntilMmdd", metadata.annualUntilMmdd);
     if (Object.prototype.hasOwnProperty.call(metadata, "creativeNotes")) addSet("creativeNotes", metadata.creativeNotes);
     if (Object.prototype.hasOwnProperty.call(metadata, "tags")) addSet("tags", metadata.tags);
+    if (Object.prototype.hasOwnProperty.call(metadata, "commerceLinks")) addSet("commerceLinks", metadata.commerceLinks);
     if (Object.prototype.hasOwnProperty.call(metadata, "containsSpecificPricing")) addSet("containsSpecificPricing", metadata.containsSpecificPricing);
     if (Object.prototype.hasOwnProperty.call(metadata, "allowedDestinations")) addSet("allowedDestinations", metadata.allowedDestinations);
     if (Object.prototype.hasOwnProperty.call(metadata, "excludedDestinations")) addSet("excludedDestinations", metadata.excludedDestinations);
@@ -506,6 +523,25 @@ export const handler = async (event = {}) => {
 
   if (event?.action === "backfill-folder-hints") {
     return backfillFolderHints(event);
+  }
+
+  if (event?.action === "migrate-asset-commerce-links") {
+    let client;
+    try {
+      client = await connectDatabase();
+      await client.query('ALTER TABLE "Asset" ADD COLUMN IF NOT EXISTS "commerceLinks" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[]');
+      return json(200, { ok: true, message: "Asset commerce links column is ready" });
+    } catch (error) {
+      console.error("[asset-commerce-links-migration] failed", error);
+      return json(500, {
+        ok: false,
+        error: error instanceof Error ? error.message : "Unknown asset commerce links migration error"
+      });
+    } finally {
+      if (client) {
+        try { await client.end(); } catch {}
+      }
+    }
   }
 
   if (event?.action === "migrate-asset-tags") {
