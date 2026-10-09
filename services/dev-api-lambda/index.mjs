@@ -5,6 +5,93 @@ import pg from "pg";
 const { Client } = pg;
 const secrets = new SecretsManagerClient({});
 
+const DROPBOX_ROOT = "/1---elettro-brand-os";
+const DROPBOX_SECRET_DEFAULT = "elettro-brand-os-dev/dropbox";
+
+const DROPBOX_BRAND_ROOTS = [
+  ["solarmeister", "/1---elettro-brand-os/solarmeister"],
+  ["stashbox", "/1---elettro-brand-os/stashbox"],
+  ["weightlossdavie", "/1---elettro-brand-os/weightlossdavie"],
+  ["neckermann-strom", "/1---elettro-brand-os/neckermann-strom"],
+  ["therasbox", "/1---elettro-brand-os/therasbox"],
+  ["elettro", "/1---elettro-brand-os/elettro"]
+];
+
+function assetKindFromName(name = "") {
+  const lower = name.toLowerCase();
+  if (/\.(mp4|mov|m4v|avi|webm|mkv)$/i.test(lower)) return "video";
+  if (/\.(jpg|jpeg|png|webp|gif|tif|tiff|heic|avif)$/i.test(lower)) return "image";
+  return null;
+}
+
+async function getJsonSecret(secretId) {
+  const response = await secrets.send(
+    new GetSecretValueCommand({ SecretId: secretId })
+  );
+  if (!response.SecretString) {
+    throw new Error(`Secret ${secretId} has no SecretString value`);
+  }
+  return JSON.parse(response.SecretString);
+}
+
+async function getDropboxAccessToken(config) {
+  if (config.accessToken) return config.accessToken;
+
+  if (!config.appKey || !config.appSecret || !config.refreshToken) {
+    throw new Error(
+      "Dropbox secret must include accessToken or appKey/appSecret/refreshToken"
+    );
+  }
+
+  const body = new URLSearchParams({
+    grant_type: "refresh_token",
+    refresh_token: config.refreshToken,
+    client_id: config.appKey,
+    client_secret: config.appSecret
+  });
+
+  const response = await fetch("https://api.dropboxapi.com/oauth2/token", {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Dropbox token refresh failed: ${response.status} ${text}`);
+  }
+
+  const token = await response.json();
+  return token.access_token;
+}
+
+async function dropboxApi(path, token, body) {
+  const response = await fetch(`https://api.dropboxapi.com/2/${path}`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json"
+    },
+    body: JSON.stringify(body)
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Dropbox API ${path} failed: ${response.status} ${text}`);
+  }
+
+  return response.json();
+}
+
+function brandSlugForDropboxPath(pathLower = "") {
+  const normalized = pathLower.toLowerCase();
+  const match = [...DROPBOX_BRAND_ROOTS]
+    .sort((a, b) => b[1].length - a[1].length)
+    .find(([, root]) => normalized === root || normalized.startsWith(`${root}/`));
+  return match?.[0] ?? null;
+}
+
+
 function json(statusCode, body) {
   return {
     statusCode,
@@ -74,7 +161,233 @@ export const handler = async (event = {}) => {
       (requestPath === "/brands" ? "brands" : null) ||
       (requestPath === "/dashboard" ? "dashboard" : null) ||
       (requestPath === "/assets" ? "assets" : null) ||
-      (requestPath === "/content-pool" ? "content-pool" : null);
+      (requestPath === "/content-pool" ? "content-pool" : null) ||
+      (requestPath === "/dropbox/register" ? "register-dropbox" : null) ||
+      (requestPath === "/dropbox/sync" ? "dropbox-sync" : null);
+
+
+    if (requestAction === "register-dropbox") {
+      const organization = await client.query(
+        'SELECT "id" FROM "Organization" WHERE "slug" = $1 LIMIT 1',
+        ["elettro"]
+      );
+      if (!organization.rows[0]) {
+        throw new Error("Elettro organization not found");
+      }
+
+      const organizationId = organization.rows[0].id;
+      const secretRef = process.env.DROPBOX_SECRET_NAME || DROPBOX_SECRET_DEFAULT;
+
+      let connection = await client.query(
+        'SELECT "id" FROM "StorageConnection" WHERE "organizationId" = $1 AND "provider" = $2 LIMIT 1',
+        [organizationId, "dropbox"]
+      );
+
+      let storageConnectionId = connection.rows[0]?.id;
+      if (!storageConnectionId) {
+        const created = await client.query(
+          `INSERT INTO "StorageConnection"
+            ("organizationId","provider","accountRef","secretRef","status","updatedAt")
+           VALUES ($1,'dropbox','pending',$2,'pending',CURRENT_TIMESTAMP)
+           RETURNING "id"`,
+          [organizationId, secretRef]
+        );
+        storageConnectionId = created.rows[0].id;
+      }
+
+      for (const [slug, rootPath] of DROPBOX_BRAND_ROOTS) {
+        const brand = await client.query(
+          'SELECT "id" FROM "Brand" WHERE "organizationId" = $1 AND "slug" = $2 LIMIT 1',
+          [organizationId, slug]
+        );
+        if (!brand.rows[0]) continue;
+
+        await client.query(
+          `INSERT INTO "BrandStorageRoot"
+            ("brandId","storageConnectionId","rootPath","rootPathLower","status","updatedAt")
+           VALUES ($1,$2,$3,$4,'active',CURRENT_TIMESTAMP)
+           ON CONFLICT ("storageConnectionId","rootPathLower")
+           DO UPDATE SET "brandId" = EXCLUDED."brandId", "status" = 'active', "updatedAt" = CURRENT_TIMESTAMP`,
+          [brand.rows[0].id, storageConnectionId, rootPath, rootPath.toLowerCase()]
+        );
+      }
+
+      return json(200, {
+        ok: true,
+        message: "Dropbox connection shell and six brand roots registered",
+        storageConnectionId,
+        status: "pending"
+      });
+    }
+
+    if (requestAction === "dropbox-sync") {
+      const dropboxSecretId =
+        process.env.DROPBOX_SECRET_NAME || DROPBOX_SECRET_DEFAULT;
+      console.log("[dropbox] reading Dropbox secret");
+      const dropboxConfig = await getJsonSecret(dropboxSecretId);
+      const accessToken = await getDropboxAccessToken(dropboxConfig);
+      console.log("[dropbox] credentials ready");
+
+      const organization = await client.query(
+        'SELECT "id" FROM "Organization" WHERE "slug" = $1 LIMIT 1',
+        ["elettro"]
+      );
+      if (!organization.rows[0]) {
+        throw new Error("Elettro organization not found");
+      }
+      const organizationId = organization.rows[0].id;
+
+      let connection = await client.query(
+        'SELECT "id","syncCursor" FROM "StorageConnection" WHERE "organizationId" = $1 AND "provider" = $2 LIMIT 1',
+        [organizationId, "dropbox"]
+      );
+
+      if (!connection.rows[0]) {
+        throw new Error("Dropbox connection is not registered. Run register-dropbox first.");
+      }
+
+      const storageConnectionId = connection.rows[0].id;
+      const cursor = event?.cursor || connection.rows[0].syncCursor || null;
+
+      const listing = cursor
+        ? await dropboxApi("files/list_folder/continue", accessToken, { cursor })
+        : await dropboxApi("files/list_folder", accessToken, {
+            path: DROPBOX_ROOT,
+            recursive: true,
+            include_deleted: false,
+            include_non_downloadable_files: false,
+            limit: 500
+          });
+
+      const brandRows = await client.query(
+        'SELECT "id","slug" FROM "Brand" WHERE "organizationId" = $1',
+        [organizationId]
+      );
+      const brandIdBySlug = new Map(
+        brandRows.rows.map((row) => [row.slug, row.id])
+      );
+
+      const rootRows = await client.query(
+        'SELECT "id","brandId","rootPathLower" FROM "BrandStorageRoot" WHERE "storageConnectionId" = $1',
+        [storageConnectionId]
+      );
+      const rootByBrandId = new Map(
+        rootRows.rows.map((row) => [row.brandId, row])
+      );
+
+      let indexed = 0;
+      let skipped = 0;
+
+      for (const entry of listing.entries || []) {
+        if (entry[".tag"] !== "file") continue;
+        const kind = assetKindFromName(entry.name);
+        if (!kind) {
+          skipped += 1;
+          continue;
+        }
+
+        const pathLower = (entry.path_lower || "").toLowerCase();
+        const brandSlug = brandSlugForDropboxPath(pathLower);
+        const brandId = brandIdBySlug.get(brandSlug);
+        if (!brandId) {
+          skipped += 1;
+          continue;
+        }
+
+        const root = rootByBrandId.get(brandId);
+        const existing = await client.query(
+          `SELECT "id" FROM "Asset"
+           WHERE "brandId" = $1
+             AND "sourceType" = 'dropbox'
+             AND "sourceFileId" = $2
+           LIMIT 1`,
+          [brandId, entry.id]
+        );
+
+        if (existing.rows[0]) {
+          await client.query(
+            `UPDATE "Asset"
+             SET "storageRootId" = $2,
+                 "sourcePath" = $3,
+                 "sourcePathLower" = $4,
+                 "contentHash" = $5,
+                 "filename" = $6,
+                 "fileSizeBytes" = $7,
+                 "kind" = $8::"AssetKind",
+                 "sourceMetadata" = $9::jsonb,
+                 "updatedAt" = CURRENT_TIMESTAMP
+             WHERE "id" = $1`,
+            [
+              existing.rows[0].id,
+              root?.id ?? null,
+              entry.path_display || entry.path_lower,
+              pathLower,
+              entry.content_hash || null,
+              entry.name,
+              String(entry.size || 0),
+              kind,
+              JSON.stringify({
+                rev: entry.rev || null,
+                serverModified: entry.server_modified || null,
+                clientModified: entry.client_modified || null
+              })
+            ]
+          );
+        } else {
+          await client.query(
+            `INSERT INTO "Asset"
+              ("brandId","storageRootId","sourceType","sourceFileId","sourceMetadata",
+               "sourcePath","sourcePathLower","contentHash","filename","fileSizeBytes",
+               "kind","ingestStatus","enrichmentStatus","approvalStatus","updatedAt")
+             VALUES
+              ($1,$2,'dropbox',$3,$4::jsonb,$5,$6,$7,$8,$9,$10::"AssetKind",
+               'raw','pending','approved',CURRENT_TIMESTAMP)`,
+            [
+              brandId,
+              root?.id ?? null,
+              entry.id,
+              JSON.stringify({
+                rev: entry.rev || null,
+                serverModified: entry.server_modified || null,
+                clientModified: entry.client_modified || null
+              }),
+              entry.path_display || entry.path_lower,
+              pathLower,
+              entry.content_hash || null,
+              entry.name,
+              String(entry.size || 0),
+              kind
+            ]
+          );
+        }
+
+        indexed += 1;
+      }
+
+      await client.query(
+        `UPDATE "StorageConnection"
+         SET "accountRef" = $2,
+             "syncCursor" = $3,
+             "lastSyncedAt" = CURRENT_TIMESTAMP,
+             "status" = 'active',
+             "updatedAt" = CURRENT_TIMESTAMP
+         WHERE "id" = $1`,
+        [
+          storageConnectionId,
+          dropboxConfig.accountId || "dropbox",
+          listing.cursor || null
+        ]
+      );
+
+      return json(200, {
+        ok: true,
+        message: "Dropbox sync page completed",
+        indexed,
+        skipped,
+        hasMore: Boolean(listing.has_more),
+        cursor: listing.cursor || null
+      });
+    }
 
     if (requestAction === "brands") {
       const result = await client.query(
