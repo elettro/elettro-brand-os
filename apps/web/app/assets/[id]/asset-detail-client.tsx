@@ -55,6 +55,28 @@ export function AssetDetailClient({ asset }: { asset: ApiAsset }) {
 
   const thumbnail = getAssetThumbnailUrl(asset.sourcePath, asset.kind);
 
+  const allDestinationsAllowed = DESTINATIONS.every((destination) => allowedDestinations.includes(destination));
+  const allDestinationsExcluded = DESTINATIONS.every((destination) => excludedDestinations.includes(destination));
+
+  const toggleAllDestinations = (mode: "allow" | "exclude") => {
+    if (mode === "allow") {
+      if (allDestinationsAllowed) {
+        setAllowedDestinations([]);
+      } else {
+        setAllowedDestinations([...DESTINATIONS]);
+        setExcludedDestinations([]);
+      }
+      return;
+    }
+
+    if (allDestinationsExcluded) {
+      setExcludedDestinations([]);
+    } else {
+      setExcludedDestinations([...DESTINATIONS]);
+      setAllowedDestinations([]);
+    }
+  };
+
   const toggleDestination = (value: string, mode: "allow" | "exclude") => {
     if (mode === "allow") {
       setAllowedDestinations((current) =>
@@ -241,6 +263,37 @@ export function AssetDetailClient({ asset }: { asset: ApiAsset }) {
 
           <div style={{ marginTop: 18 }}>
             <div className="metric" style={{ marginBottom: 8 }}>Destination rules</div>
+
+            <div
+              style={{
+                display: "flex",
+                gap: 18,
+                alignItems: "center",
+                flexWrap: "wrap",
+                marginBottom: 10,
+                paddingBottom: 10,
+                borderBottom: "1px solid var(--line)"
+              }}
+            >
+              <strong style={{ minWidth: 140 }}>All destinations</strong>
+              <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <input
+                  type="checkbox"
+                  checked={allDestinationsAllowed}
+                  onChange={() => toggleAllDestinations("allow")}
+                />
+                Select / deselect all Allow
+              </label>
+              <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <input
+                  type="checkbox"
+                  checked={allDestinationsExcluded}
+                  onChange={() => toggleAllDestinations("exclude")}
+                />
+                Select / deselect all Exclude
+              </label>
+            </div>
+
             <div style={{ display: "grid", gap: 8 }}>
               {DESTINATIONS.map((destination) => (
                 <div key={destination} style={{ display: "grid", gridTemplateColumns: "140px 1fr 1fr", gap: 10, alignItems: "center" }}>
