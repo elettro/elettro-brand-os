@@ -133,8 +133,20 @@ export async function bulkUpdateAssets(input: {
   });
 
   const payload = await response.json();
+
   if (!response.ok) {
-    throw new Error(payload?.error || "Bulk asset update failed");
+    let message = payload?.error;
+
+    if (!message && typeof payload?.body === "string") {
+      try {
+        const nested = JSON.parse(payload.body);
+        message = nested?.error || nested?.message;
+      } catch {
+        message = payload.body;
+      }
+    }
+
+    throw new Error(message || `Bulk asset update failed (${response.status})`);
   }
 
   return payload as { ok: boolean; updated: number };
