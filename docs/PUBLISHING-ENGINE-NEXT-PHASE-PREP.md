@@ -57,6 +57,15 @@ This branch intentionally avoids touching live AWS infrastructure or the product
    - Handoff mode for destinations not ready for direct API publication
    - Every successful publish writes to the ledger
 
+8. Add AI-assisted intake in two stages
+   - AI Metadata Intake first: let ChatGPT / Claude update metadata for assets that already exist in Brand OS / Dropbox
+   - Use the same asset fields already supported by Asset Detail, including title, topic, content group, creative series, tags, eligibility, destination rules, notes and commerce links
+   - Keep the current Dropbox ingestion path read-only while this metadata API is proven
+   - AI Direct Intake second: accept a media file plus destination folder and metadata in one request
+   - Direct Intake should place the file into the correct Dropbox brand folder, create/update the Asset record, apply metadata and optionally mark the asset approved / ready
+   - Implement Direct Intake through a separate narrowly scoped Dropbox upload worker rather than expanding the existing read-only ingestion worker
+   - Target future connector/plugin workflows so ChatGPT / Claude can issue commands such as: send this asset to Stashbox, place it in a specific folder, apply metadata, associate commerce links and mark it ready
+
 ## Data-model prep
 
 ### SocialAccount
