@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   bulkUpdateAssets,
@@ -40,6 +40,18 @@ export function AssetDetailClient({ asset }: { asset: ApiAsset }) {
   const [excludedDestinations, setExcludedDestinations] = useState<string[]>(asset.excludedDestinations || []);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [previewOpen, setPreviewOpen] = useState(false);
+
+  useEffect(() => {
+    if (!previewOpen) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setPreviewOpen(false);
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [previewOpen]);
 
   const thumbnail = getAssetThumbnailUrl(asset.sourcePath, asset.kind);
 
@@ -115,11 +127,28 @@ export function AssetDetailClient({ asset }: { asset: ApiAsset }) {
         <div className="card">
           <div style={{ minHeight: 320, maxHeight: 560, display: "grid", placeItems: "center", background: "var(--panel-soft)", borderRadius: 12, overflow: "hidden" }}>
             {thumbnail ? (
-              <img
-                src={thumbnail}
-                alt={asset.filename}
-                style={{ maxWidth: "100%", maxHeight: 540, width: "auto", height: "auto", objectFit: "contain", display: "block" }}
-              />
+              <button
+                type="button"
+                onClick={() => setPreviewOpen(true)}
+                aria-label={`Open large preview for ${asset.filename}`}
+                style={{
+                  border: 0,
+                  padding: 0,
+                  margin: 0,
+                  background: "transparent",
+                  cursor: "zoom-in",
+                  display: "grid",
+                  placeItems: "center",
+                  width: "100%",
+                  height: "100%"
+                }}
+              >
+                <img
+                  src={thumbnail}
+                  alt={asset.filename}
+                  style={{ maxWidth: "100%", maxHeight: 540, width: "auto", height: "auto", objectFit: "contain", display: "block" }}
+                />
+              </button>
             ) : <span className="muted">No preview available</span>}
           </div>
 
@@ -268,6 +297,62 @@ export function AssetDetailClient({ asset }: { asset: ApiAsset }) {
           </div>
         </section>
       </section>
+
+      {previewOpen && thumbnail && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Large preview for ${asset.filename}`}
+          onClick={() => setPreviewOpen(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 9999,
+            display: "grid",
+            placeItems: "center",
+            padding: 24,
+            background: "rgba(0,0,0,0.82)",
+            cursor: "zoom-out"
+          }}
+        >
+          <div
+            style={{
+              maxWidth: "94vw",
+              maxHeight: "92vh",
+              display: "grid",
+              gap: 12,
+              justifyItems: "center"
+            }}
+          >
+            <img
+              src={thumbnail}
+              alt={asset.filename}
+              style={{
+                maxWidth: "94vw",
+                maxHeight: "84vh",
+                width: "auto",
+                height: "auto",
+                objectFit: "contain",
+                display: "block",
+                borderRadius: 12,
+                boxShadow: "0 24px 80px rgba(0,0,0,0.55)",
+                background: "#111"
+              }}
+            />
+            <div
+              style={{
+                color: "#fff",
+                fontSize: 13,
+                textAlign: "center",
+                maxWidth: "82vw",
+                overflowWrap: "anywhere"
+              }}
+            >
+              {asset.filename}
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
