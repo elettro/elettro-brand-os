@@ -89,22 +89,12 @@ export function AssetLibraryClient({ assets }: { assets: ApiAsset[] }) {
           <Link href={`/assets/${asset.id}`} className="asset-tile" key={asset.id}>
             <div className={`asset-preview asset-preview-${asset.kind}`}>
               {asset.sourceType === "dropbox" && asset.sourcePath ? (
-                asset.kind === "video" ? (
-                  <video
-                    className="asset-thumbnail"
-                    src={getAssetThumbnailUrl(asset.sourcePath, "video") || undefined}
-                    muted
-                    preload="metadata"
-                    playsInline
-                  />
-                ) : (
-                  <img
-                    className="asset-thumbnail"
-                    src={getAssetThumbnailUrl(asset.sourcePath, "image") || undefined}
-                    alt={asset.filename}
-                    loading="lazy"
-                  />
-                )
+                <img
+                  className="asset-thumbnail"
+                  src={getAssetThumbnailUrl(asset.sourcePath, asset.kind) || undefined}
+                  alt={asset.filename}
+                  loading="lazy"
+                />
               ) : (
                 <>
                   <span className="asset-preview-glyph">{kindGlyph(asset.kind)}</span>
