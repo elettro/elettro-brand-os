@@ -192,6 +192,12 @@ export function AssetDetailClient({ asset }: { asset: ApiAsset }) {
           {editingTitle ? (
             <input
               autoFocus
+              onFocus={(event) => {
+                requestAnimationFrame(() => {
+                  event.currentTarget.setSelectionRange(0, 0);
+                  event.currentTarget.scrollLeft = 0;
+                });
+              }}
               value={title}
               onChange={(event) => setTitle(event.target.value)}
               onBlur={() => setEditingTitle(false)}
