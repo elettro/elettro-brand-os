@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { bulkUpdateAssets, type ApiAsset } from "@/lib/dev-api";
+import { bulkUpdateAssets, type ApiAsset, type BulkAssetMetadata } from "@/lib/dev-api";
 
 export function NeedsMetadataClient({ assets }: { assets: ApiAsset[] }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -43,7 +43,7 @@ export function NeedsMetadataClient({ assets }: { assets: ApiAsset[] }) {
     setMessage("");
 
     try {
-      const metadata: Record<string, string> = {
+      const metadata: BulkAssetMetadata = {
         priority,
         eligibilityType
       };
