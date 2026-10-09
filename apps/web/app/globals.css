@@ -392,3 +392,16 @@ button:disabled {
   font-size: 13px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, .18);
 }
+
+
+.asset-thumbnail-loading {
+  width: 100%;
+  min-height: 150px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #eef1f5;
+  color: #8a93a3;
+  font-size: 11px;
+  font-weight: 700;
+}
