@@ -92,6 +92,18 @@ export async function getAsset(id: string) {
   return fetchJson<{ ok: boolean; asset: ApiAsset }>(`/assets?id=${encodeURIComponent(id)}`);
 }
 
+export type AssetMetadataOptions = {
+  topics: string[];
+  contentGroups: string[];
+  creativeFamilies: string[];
+};
+
+export async function getAssetMetadataOptions(brandSlug: string) {
+  return fetchJson<{ ok: boolean } & AssetMetadataOptions>(
+    `/assets?metadataOptions=1&brandSlug=${encodeURIComponent(brandSlug)}`
+  );
+}
+
 export async function getContentPool() {
   return fetchJson<{ ok: boolean; assets: ApiAsset[] }>("/content-pool");
 }

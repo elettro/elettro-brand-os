@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   bulkUpdateAssets,
+  getAssetMetadataOptions,
   getAssetThumbnailUrl,
   type ApiAsset,
   type BulkAssetMetadata
@@ -46,6 +47,32 @@ export function AssetDetailClient({ asset }: { asset: ApiAsset }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [metadataOptions, setMetadataOptions] = useState({
+    topics: [] as string[],
+    contentGroups: [] as string[],
+    creativeFamilies: [] as string[]
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+
+    getAssetMetadataOptions(asset.brandSlug)
+      .then((result) => {
+        if (cancelled) return;
+        setMetadataOptions({
+          topics: result.topics || [],
+          contentGroups: result.contentGroups || [],
+          creativeFamilies: result.creativeFamilies || []
+        });
+      })
+      .catch(() => {
+        // Keep the fields fully editable even if suggestions cannot load.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [asset.brandSlug]);
 
   useEffect(() => {
     if (!previewOpen) return;
@@ -188,6 +215,19 @@ export function AssetDetailClient({ asset }: { asset: ApiAsset }) {
       <div className="topbar">
         <div style={{ minWidth: 0, flex: 1 }}>
           <div className="eyebrow">Asset Review</div>
+          <div
+            style={{
+              marginTop: 8,
+              marginBottom: 5,
+              fontSize: 11,
+              fontWeight: 900,
+              letterSpacing: ".11em",
+              textTransform: "uppercase",
+              color: "var(--muted)"
+            }}
+          >
+            Title
+          </div>
 
           {editingTitle ? (
             <input
@@ -429,17 +469,47 @@ export function AssetDetailClient({ asset }: { asset: ApiAsset }) {
           <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", marginTop: 14 }}>
             <label className="intake-control">
               <span className="metric">Topic / subject</span>
-              <input value={topic} onChange={(e) => setTopic(e.target.value)} />
+              <input
+                list="asset-topic-options"
+                value={topic}
+                onChange={(e) => setTopic(e.target.value)}
+                placeholder="Choose existing or type a new topic"
+              />
+              <datalist id="asset-topic-options">
+                {metadataOptions.topics.map((value) => (
+                  <option key={value} value={value} />
+                ))}
+              </datalist>
             </label>
 
             <label className="intake-control">
               <span className="metric">Content group</span>
-              <input value={contentGroup} onChange={(e) => setContentGroup(e.target.value)} />
+              <input
+                list="asset-content-group-options"
+                value={contentGroup}
+                onChange={(e) => setContentGroup(e.target.value)}
+                placeholder="Choose existing or type a new group"
+              />
+              <datalist id="asset-content-group-options">
+                {metadataOptions.contentGroups.map((value) => (
+                  <option key={value} value={value} />
+                ))}
+              </datalist>
             </label>
 
             <label className="intake-control">
-              <span className="metric">Creative family</span>
-              <input value={creativeFamily} onChange={(e) => setCreativeFamily(e.target.value)} />
+              <span className="metric">Creative series</span>
+              <input
+                list="asset-creative-series-options"
+                value={creativeFamily}
+                onChange={(e) => setCreativeFamily(e.target.value)}
+                placeholder="Choose existing or type a new series"
+              />
+              <datalist id="asset-creative-series-options">
+                {metadataOptions.creativeFamilies.map((value) => (
+                  <option key={value} value={value} />
+                ))}
+              </datalist>
             </label>
 
             <label className="intake-control">
