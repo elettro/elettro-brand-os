@@ -192,6 +192,10 @@ export function NeedsMetadataClient({ assets }: { assets: ApiAsset[] }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [previewAsset, setPreviewAsset] = useState<ApiAsset | null>(null);
+  const [mediaFilter, setMediaFilter] = useState<"all" | "image" | "video">("all");
+  const [sizeFilter, setSizeFilter] = useState("all");
+  const [sortMode, setSortMode] = useState<"uploaded-desc" | "uploaded-asc" | "alpha-asc" | "alpha-desc" | "last-used">("uploaded-desc");
+  const [viewMode, setViewMode] = useState<"table" | "cards">("table");
 
   useEffect(() => {
     if (!previewAsset) return;
@@ -210,14 +214,67 @@ export function NeedsMetadataClient({ assets }: { assets: ApiAsset[] }) {
     setPreviewAsset(asset);
   };
 
-  const allSelected = assets.length > 0 && selected.size === assets.length;
+
+  const ratioForAsset = (asset: ApiAsset) =>
+    asset.folderSuggestions?.aspectRatioLabel ||
+    asset.aspectRatioLabel ||
+    "Unknown";
+
+  const ratioOptions = useMemo(() => {
+    const values = Array.from(
+      new Set(
+        assets
+          .map((asset) => ratioForAsset(asset))
+          .filter((value) => value && value !== "Unknown")
+      )
+    );
+    return values.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  }, [assets]);
+
+  const visibleAssets = useMemo(() => {
+    const filtered = assets.filter((asset) => {
+      if (mediaFilter !== "all" && asset.kind !== mediaFilter) return false;
+      if (sizeFilter !== "all" && ratioForAsset(asset) !== sizeFilter) return false;
+      return true;
+    });
+
+    return [...filtered].sort((a, b) => {
+      if (sortMode === "alpha-asc") return a.filename.localeCompare(b.filename);
+      if (sortMode === "alpha-desc") return b.filename.localeCompare(a.filename);
+
+      if (sortMode === "last-used") {
+        const aLast = (a as ApiAsset & { lastUsedAt?: string | null }).lastUsedAt;
+        const bLast = (b as ApiAsset & { lastUsedAt?: string | null }).lastUsedAt;
+        if (aLast && bLast) return new Date(bLast).getTime() - new Date(aLast).getTime();
+        if (aLast) return -1;
+        if (bLast) return 1;
+      }
+
+      const aCreated = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const bCreated = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return sortMode === "uploaded-asc" ? aCreated - bCreated : bCreated - aCreated;
+    });
+  }, [assets, mediaFilter, sizeFilter, sortMode]);
+
+  const visibleIds = useMemo(() => new Set(visibleAssets.map((asset) => asset.id)), [visibleAssets]);
+  const allSelected =
+    visibleAssets.length > 0 && visibleAssets.every((asset) => selected.has(asset.id));
+
   const selectedAssets = useMemo(
     () => assets.filter((asset) => selected.has(asset.id)),
     [assets, selected]
   );
 
   const toggleAll = () => {
-    setSelected(allSelected ? new Set() : new Set(assets.map((asset) => asset.id)));
+    setSelected((current) => {
+      const next = new Set(current);
+      if (allSelected) {
+        visibleIds.forEach((id) => next.delete(id));
+      } else {
+        visibleIds.forEach((id) => next.add(id));
+      }
+      return next;
+    });
   };
 
   const toggleOne = (id: string) => {
@@ -340,74 +397,242 @@ export function NeedsMetadataClient({ assets }: { assets: ApiAsset[] }) {
         </div>
       </section>
 
-      <section className="card" style={{ marginTop: 16, overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr>
-              <th style={{ padding: 8, textAlign: "left" }}>
-                <input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="Select all" />
-              </th>
-              {["Preview", "File", "Brand", "Folder", "Topic hint", "Ratio", "Approval", "State"].map((label) => (
-                <th
-                  key={label}
+
+      <section className="card" style={{ marginTop: 16 }}>
+        <div style={{ display: "flex", gap: 10, alignItems: "end", flexWrap: "wrap", justifyContent: "space-between", marginBottom: 14 }}>
+          <div style={{ display: "flex", gap: 10, alignItems: "end", flexWrap: "wrap" }}>
+            <label className="intake-control" style={{ minWidth: 150 }}>
+              <span className="metric">Media</span>
+              <select value={mediaFilter} onChange={(e) => setMediaFilter(e.target.value as "all" | "image" | "video")}>
+                <option value="all">Videos & Images</option>
+                <option value="video">Videos only</option>
+                <option value="image">Images only</option>
+              </select>
+            </label>
+
+            <label className="intake-control" style={{ minWidth: 130 }}>
+              <span className="metric">Size</span>
+              <select value={sizeFilter} onChange={(e) => setSizeFilter(e.target.value)}>
+                <option value="all">All sizes</option>
+                {ratioOptions.map((ratio) => (
+                  <option key={ratio} value={ratio}>{ratio}</option>
+                ))}
+              </select>
+            </label>
+
+            <label className="intake-control" style={{ minWidth: 190 }}>
+              <span className="metric">Sort</span>
+              <select value={sortMode} onChange={(e) => setSortMode(e.target.value as typeof sortMode)}>
+                <option value="uploaded-desc">Uploaded date · newest</option>
+                <option value="uploaded-asc">Uploaded date · oldest</option>
+                <option value="last-used">Last used date</option>
+                <option value="alpha-asc">Alphabetical · A–Z</option>
+                <option value="alpha-desc">Alphabetical · Z–A</option>
+              </select>
+            </label>
+
+            <button
+              type="button"
+              onClick={toggleAll}
+              style={{ border: "1px solid var(--line)", background: "white", borderRadius: 9, padding: "10px 13px", fontWeight: 800, cursor: "pointer" }}
+            >
+              {allSelected ? "Unselect filtered" : `Select filtered (${visibleAssets.length})`}
+            </button>
+          </div>
+
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              type="button"
+              onClick={() => setViewMode("table")}
+              style={{
+                border: "1px solid var(--line)",
+                background: viewMode === "table" ? "var(--accent)" : "white",
+                color: viewMode === "table" ? "white" : "inherit",
+                borderRadius: 9,
+                padding: "9px 12px",
+                fontWeight: 800,
+                cursor: "pointer"
+              }}
+            >
+              List
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("cards")}
+              style={{
+                border: "1px solid var(--line)",
+                background: viewMode === "cards" ? "var(--accent)" : "white",
+                color: viewMode === "cards" ? "white" : "inherit",
+                borderRadius: 9,
+                padding: "9px 12px",
+                fontWeight: 800,
+                cursor: "pointer"
+              }}
+            >
+              Cards
+            </button>
+          </div>
+        </div>
+
+        <div className="muted" style={{ marginBottom: 12 }}>
+          Showing {visibleAssets.length} of {assets.length} assets
+          {sortMode === "last-used" ? " · unused assets fall back to upload date until publishing history is recorded" : ""}
+        </div>
+
+        {viewMode === "table" ? (
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr>
+                  <th style={{ padding: 8, textAlign: "left" }}>
+                    <input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="Select all filtered" />
+                  </th>
+                  {["Preview", "File", "Brand", "Folder", "Topic hint", "Ratio", "Approval", "State"].map((label) => (
+                    <th
+                      key={label}
+                      style={{
+                        textAlign: "left",
+                        padding: "10px 8px",
+                        borderBottom: "1px solid var(--line)",
+                        fontSize: 12,
+                        color: "var(--muted)"
+                      }}
+                    >
+                      {label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {visibleAssets.map((asset) => {
+                  const hints = asset.folderSuggestions || {};
+                  return (
+                    <tr key={asset.id}>
+                      <td style={{ padding: 8, borderBottom: "1px solid var(--line)" }}>
+                        <input
+                          type="checkbox"
+                          checked={selected.has(asset.id)}
+                          onChange={() => toggleOne(asset.id)}
+                          aria-label={`Select ${asset.filename}`}
+                        />
+                      </td>
+                      <td style={{ padding: "10px 8px", borderBottom: "1px solid var(--line)", verticalAlign: "middle" }}>
+                        <MetadataThumbnail asset={asset} onPreview={openPreview} />
+                      </td>
+                      <td style={{ padding: "10px 8px", borderBottom: "1px solid var(--line)", maxWidth: 360, verticalAlign: "middle" }}>
+                        <Link href={`/assets/${asset.id}`} style={{ overflowWrap: "anywhere" }}>{asset.filename}</Link>
+                      </td>
+                      <td style={{ padding: "10px 8px", borderBottom: "1px solid var(--line)" }}>{asset.brandName}</td>
+                      <td style={{ padding: "10px 8px", borderBottom: "1px solid var(--line)" }}>{hints.folderPath || asset.sourcePath || "—"}</td>
+                      <td style={{ padding: "10px 8px", borderBottom: "1px solid var(--line)" }}>{hints.topicHint || "—"}</td>
+                      <td style={{ padding: "10px 8px", borderBottom: "1px solid var(--line)" }}>{ratioForAsset(asset)}</td>
+                      <td style={{ padding: "10px 8px", borderBottom: "1px solid var(--line)" }}>
+                        <span className="status-chip">{asset.approvalStatus || "—"}</span>
+                      </td>
+                      <td style={{ padding: "10px 8px", borderBottom: "1px solid var(--line)" }}>
+                        <span className="asset-small-chip">{asset.enrichmentStatus || asset.ingestStatus || "—"}</span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))",
+              gap: 16
+            }}
+          >
+            {visibleAssets.map((asset) => {
+              const hints = asset.folderSuggestions || {};
+              const thumb = getAssetThumbnailUrl(asset.sourcePath, asset.kind);
+              return (
+                <article
+                  key={asset.id}
                   style={{
-                    textAlign: "left",
-                    padding: "10px 8px",
-                    borderBottom: "1px solid var(--line)",
-                    fontSize: 12,
-                    color: "var(--muted)"
+                    border: "1px solid var(--line)",
+                    borderRadius: 14,
+                    padding: 12,
+                    background: "var(--panel-soft)",
+                    display: "grid",
+                    gap: 10,
+                    alignContent: "start"
                   }}
                 >
-                  {label}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {assets.map((asset) => {
-              const hints = asset.folderSuggestions || {};
-              return (
-                <tr key={asset.id}>
-                  <td style={{ padding: 8, borderBottom: "1px solid var(--line)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
                     <input
                       type="checkbox"
                       checked={selected.has(asset.id)}
                       onChange={() => toggleOne(asset.id)}
                       aria-label={`Select ${asset.filename}`}
                     />
-                  </td>
-                  <td style={{ padding: "10px 8px", borderBottom: "1px solid var(--line)", verticalAlign: "middle" }}>
-                    <MetadataThumbnail
-                      asset={asset}
-                      onPreview={openPreview}
-                    />
-                  </td>
-                  <td style={{ padding: "10px 8px", borderBottom: "1px solid var(--line)", maxWidth: 360, verticalAlign: "middle" }}>
-                    <Link href={`/assets/${asset.id}`} style={{ overflowWrap: "anywhere" }}>{asset.filename}</Link>
-                  </td>
-                  <td style={{ padding: "10px 8px", borderBottom: "1px solid var(--line)" }}>{asset.brandName}</td>
-                  <td style={{ padding: "10px 8px", borderBottom: "1px solid var(--line)" }}>
-                    {hints.folderPath || asset.sourcePath || "—"}
-                  </td>
-                  <td style={{ padding: "10px 8px", borderBottom: "1px solid var(--line)" }}>{hints.topicHint || "—"}</td>
-                  <td style={{ padding: "10px 8px", borderBottom: "1px solid var(--line)" }}>
-                    {hints.aspectRatioLabel || asset.aspectRatioLabel || "—"}
-                  </td>
-                  <td style={{ padding: "10px 8px", borderBottom: "1px solid var(--line)" }}>
-                    <span className="status-chip">{asset.approvalStatus || "—"}</span>
-                  </td>
-                  <td style={{ padding: "10px 8px", borderBottom: "1px solid var(--line)" }}>
-                    <span className="asset-small-chip">{asset.enrichmentStatus || asset.ingestStatus || "—"}</span>
-                  </td>
-                </tr>
+                    <span className="asset-small-chip">{asset.kind}</span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => openPreview(asset)}
+                    style={{
+                      border: 0,
+                      padding: 0,
+                      margin: 0,
+                      background: "transparent",
+                      cursor: "zoom-in",
+                      width: "100%",
+                      height: 260,
+                      display: "grid",
+                      placeItems: "center"
+                    }}
+                  >
+                    {thumb ? (
+                      <img
+                        src={thumb}
+                        alt={asset.filename}
+                        loading="lazy"
+                        decoding="async"
+                        style={{
+                          maxWidth: "100%",
+                          maxHeight: "100%",
+                          width: "auto",
+                          height: "auto",
+                          objectFit: "contain",
+                          display: "block",
+                          borderRadius: 10
+                        }}
+                      />
+                    ) : (
+                      <div className="muted">No preview</div>
+                    )}
+                  </button>
+
+                  <Link
+                    href={`/assets/${asset.id}`}
+                    style={{
+                      fontWeight: 800,
+                      overflowWrap: "anywhere",
+                      lineHeight: 1.35
+                    }}
+                  >
+                    {asset.filename}
+                  </Link>
+
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    <span className="status-chip">{asset.brandName}</span>
+                    <span className="asset-small-chip">{ratioForAsset(asset)}</span>
+                    {hints.topicHint && <span className="asset-small-chip">{hints.topicHint}</span>}
+                  </div>
+                </article>
               );
             })}
-          </tbody>
-        </table>
+          </div>
+        )}
 
-        {assets.length === 0 && (
+        {visibleAssets.length === 0 && (
           <div style={{ padding: "24px 0" }}>
-            <strong>No assets are currently waiting for metadata.</strong>
+            <strong>No assets match these filters.</strong>
           </div>
         )}
       </section>
