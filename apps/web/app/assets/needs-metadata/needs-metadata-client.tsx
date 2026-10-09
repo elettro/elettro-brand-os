@@ -549,80 +549,152 @@ export function NeedsMetadataClient({ assets }: { assets: ApiAsset[] }) {
             {visibleAssets.map((asset) => {
               const hints = asset.folderSuggestions || {};
               const thumb = getAssetThumbnailUrl(asset.sourcePath, asset.kind);
+              const ratio = ratioForAsset(asset);
+              const topicChip = hints.topicHint && hints.topicHint !== ratio ? hints.topicHint : null;
+              const isSelected = selected.has(asset.id);
+
               return (
                 <article
                   key={asset.id}
                   style={{
-                    border: "1px solid var(--line)",
+                    border: isSelected ? "2px solid var(--accent)" : "1px solid var(--line)",
                     borderRadius: 14,
                     padding: 12,
-                    background: "var(--panel-soft)",
+                    background: isSelected ? "rgba(249, 115, 22, 0.06)" : "var(--panel-soft)",
                     display: "grid",
                     gap: 10,
-                    alignContent: "start"
+                    alignContent: "start",
+                    boxShadow: isSelected ? "0 8px 24px rgba(0,0,0,0.08)" : "none",
+                    transition: "box-shadow 140ms ease, transform 140ms ease, border-color 140ms ease"
                   }}
                 >
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-                    <input
-                      type="checkbox"
-                      checked={selected.has(asset.id)}
-                      onChange={() => toggleOne(asset.id)}
-                      aria-label={`Select ${asset.filename}`}
-                    />
-                    <span className="asset-small-chip">{asset.kind}</span>
+                  <div
+                    style={{
+                      position: "relative",
+                      width: "100%",
+                      height: 300,
+                      display: "grid",
+                      placeItems: "center",
+                      borderRadius: 12,
+                      overflow: "hidden",
+                      background: "#111"
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => openPreview(asset)}
+                      aria-label={`Open preview for ${asset.filename}`}
+                      style={{
+                        position: "absolute",
+                        inset: 0,
+                        border: 0,
+                        padding: 0,
+                        margin: 0,
+                        background: "transparent",
+                        cursor: "zoom-in",
+                        display: "grid",
+                        placeItems: "center"
+                      }}
+                    >
+                      {thumb ? (
+                        <img
+                          src={thumb}
+                          alt={asset.filename}
+                          loading="lazy"
+                          decoding="async"
+                          style={{
+                            maxWidth: "100%",
+                            maxHeight: "100%",
+                            width: "auto",
+                            height: "auto",
+                            objectFit: "contain",
+                            display: "block"
+                          }}
+                        />
+                      ) : (
+                        <div className="muted">No preview</div>
+                      )}
+                    </button>
+
+                    <label
+                      style={{
+                        position: "absolute",
+                        top: 9,
+                        left: 9,
+                        zIndex: 3,
+                        width: 28,
+                        height: 28,
+                        display: "grid",
+                        placeItems: "center",
+                        borderRadius: 8,
+                        background: "rgba(255,255,255,0.92)",
+                        boxShadow: "0 2px 10px rgba(0,0,0,0.18)",
+                        cursor: "pointer"
+                      }}
+                      title={isSelected ? "Unselect asset" : "Select asset"}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleOne(asset.id)}
+                        aria-label={`Select ${asset.filename}`}
+                      />
+                    </label>
+
+                    <span
+                      className="asset-small-chip"
+                      style={{
+                        position: "absolute",
+                        top: 9,
+                        right: 9,
+                        zIndex: 3,
+                        background: "rgba(255,255,255,0.92)",
+                        textTransform: "lowercase"
+                      }}
+                    >
+                      {asset.kind}
+                    </span>
+
+                    <div
+                      style={{
+                        position: "absolute",
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        zIndex: 2,
+                        padding: "42px 11px 11px",
+                        background: "linear-gradient(to top, rgba(0,0,0,0.78) 0%, rgba(0,0,0,0.56) 48%, rgba(0,0,0,0) 100%)",
+                        pointerEvents: "none"
+                      }}
+                    >
+                      <Link
+                        href={`/assets/${asset.id}`}
+                        onClick={(event) => event.stopPropagation()}
+                        style={{
+                          color: "#fff",
+                          fontSize: 12,
+                          lineHeight: 1.25,
+                          fontWeight: 700,
+                          textDecoration: "none",
+                          overflowWrap: "anywhere",
+                          display: "-webkit-box",
+                          WebkitBoxOrient: "vertical",
+                          WebkitLineClamp: 5,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          textShadow: "0 1px 2px rgba(0,0,0,0.55)",
+                          pointerEvents: "auto"
+                        }}
+                      >
+                        {asset.filename}
+                      </Link>
+                    </div>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => openPreview(asset)}
-                    style={{
-                      border: 0,
-                      padding: 0,
-                      margin: 0,
-                      background: "transparent",
-                      cursor: "zoom-in",
-                      width: "100%",
-                      height: 260,
-                      display: "grid",
-                      placeItems: "center"
-                    }}
-                  >
-                    {thumb ? (
-                      <img
-                        src={thumb}
-                        alt={asset.filename}
-                        loading="lazy"
-                        decoding="async"
-                        style={{
-                          maxWidth: "100%",
-                          maxHeight: "100%",
-                          width: "auto",
-                          height: "auto",
-                          objectFit: "contain",
-                          display: "block",
-                          borderRadius: 10
-                        }}
-                      />
-                    ) : (
-                      <div className="muted">No preview</div>
-                    )}
-                  </button>
-
-                  <Link
-                    href={`/assets/${asset.id}`}
-                    style={{
-                      fontWeight: 800,
-                      overflowWrap: "anywhere",
-                      lineHeight: 1.35
-                    }}
-                  >
-                    {asset.filename}
-                  </Link>
-
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
                     <span className="status-chip">{asset.brandName}</span>
-                    <span className="asset-small-chip">{ratioForAsset(asset)}</span>
-                    {hints.topicHint && <span className="asset-small-chip">{hints.topicHint}</span>}
+                    <span className="asset-small-chip">{ratio}</span>
+                    {topicChip && <span className="asset-small-chip">{topicChip}</span>}
                   </div>
                 </article>
               );
