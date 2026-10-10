@@ -36,7 +36,7 @@ export default function SmartIntakePage(){
  const setPurpose=(id:string,purpose:Purpose)=>setItems(old=>old.map(x=>x.id!==id?x:{...x,purpose,folder:"",decision:"none",confidence:0}));
  const view=groups.filter(g=>filter==="all"||(filter==="needs"&&g.members.some(x=>!x.folder))||(filter==="ready"&&g.members.every(x=>!!x.folder)));
  return <main className="main" style={{maxWidth:1250,margin:"auto"}}>
-  <Link href="/assets" style={{color:"#e8590c"}}>← Asset Library</Link>
+  <Link href="/assets" style={{color:"#e8590c"}}>← Asset Library</Link> <span style={{margin:"0 12px"}}>·</span> <Link href="/assets/folder-learning-lab" style={{color:"#e8590c"}}>Test Folder Learning →</Link>
   <div className="eyebrow" style={{marginTop:18}}>Add Assets / Prototype</div><h1>Smart Batch Intake</h1>
   <p className="muted">Dropbox is the planned source of truth. This prototype analyzes local files and previews folder decisions. It does not access or upload to Dropbox.</p>
   <section className="card" style={{marginTop:18,display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(190px,1fr))",gap:12}}>
