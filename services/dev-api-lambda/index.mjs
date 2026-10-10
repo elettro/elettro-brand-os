@@ -1,9 +1,13 @@
 import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
+import { S3Client, PutObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { randomUUID } from "node:crypto";
 import pg from "pg";
 import { handler as existingHandler } from "./db-main.mjs";
 
 const { Client } = pg;
 const secrets = new SecretsManagerClient({});
+const s3 = new S3Client({});
 
 const DROPBOX_BRAND_ROOTS = [
   ["solarmeister", "/1---elettro-brand-os/solarmeister"],
@@ -1112,6 +1116,275 @@ async function configurePlannerAccount(event) {
   }
 }
 
+
+function safeUploadFilename(name = "asset") {
+  return String(name)
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 180) || "asset";
+}
+
+function slugifyName(value = "") {
+  return String(value)
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 120);
+}
+
+function uploadDestinationNames(values) {
+  const map = {
+    instagram: "instagram",
+    facebook: "facebook",
+    tiktok: "tiktok",
+    youtube: "youtube",
+    linkedin: "linkedin",
+    x: "x",
+    website: "website",
+    rss: "rss"
+  };
+  return (Array.isArray(values) ? values : [])
+    .map((value) => map[String(value).trim().toLowerCase()])
+    .filter(Boolean);
+}
+
+function mmddFromDateString(value) {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(String(value))) return null;
+  return Number(String(value).slice(5, 7) + String(value).slice(8, 10));
+}
+
+async function presignDirectUploads(event) {
+  try {
+    const bucket = process.env.ASSET_UPLOAD_BUCKET;
+    if (!bucket) {
+      return json(500, { ok: false, error: "ASSET_UPLOAD_BUCKET is not configured" });
+    }
+
+    const body = parseJsonBody(event);
+    const brandSlug = String(body.brandSlug || "").trim().toLowerCase();
+    const files = Array.isArray(body.files) ? body.files : [];
+
+    if (!brandSlug || !files.length) {
+      return json(400, { ok: false, error: "brandSlug and files are required" });
+    }
+
+    if (files.length > 100) {
+      return json(400, { ok: false, error: "Maximum 100 files per intake batch" });
+    }
+
+    const datePrefix = new Date().toISOString().slice(0, 10);
+    const uploads = [];
+
+    for (const file of files) {
+      const name = safeUploadFilename(file?.name);
+      const contentType = String(file?.type || "application/octet-stream");
+      const size = Number(file?.size || 0);
+
+      if (!name || !size) {
+        return json(400, { ok: false, error: "Each file requires name and size" });
+      }
+
+      const key = `direct/${brandSlug}/${datePrefix}/${randomUUID()}-${name}`;
+      const command = new PutObjectCommand({
+        Bucket: bucket,
+        Key: key,
+        ContentType: contentType,
+        Metadata: {
+          "brand-slug": brandSlug,
+          "original-name": name
+        }
+      });
+
+      const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 900 });
+      uploads.push({ key, uploadUrl, contentType, size, name: file.name });
+    }
+
+    return json(200, {
+      ok: true,
+      bucket,
+      expiresInSeconds: 900,
+      uploads
+    });
+  } catch (error) {
+    console.error("[direct-upload-presign] failed", error);
+    return json(500, {
+      ok: false,
+      error: error instanceof Error ? error.message : "Unknown direct upload presign error"
+    });
+  }
+}
+
+async function completeDirectUploads(event) {
+  let client;
+  try {
+    const bucket = process.env.ASSET_UPLOAD_BUCKET;
+    if (!bucket) {
+      return json(500, { ok: false, error: "ASSET_UPLOAD_BUCKET is not configured" });
+    }
+
+    const body = parseJsonBody(event);
+    const brandSlug = String(body.brandSlug || "").trim().toLowerCase();
+    const files = Array.isArray(body.files) ? body.files : [];
+    const metadata = body.metadata && typeof body.metadata === "object" ? body.metadata : {};
+    const mode = body.mode === "raw" ? "raw" : "ready";
+
+    if (!brandSlug || !files.length) {
+      return json(400, { ok: false, error: "brandSlug and files are required" });
+    }
+
+    client = await connectDatabase();
+
+    const brandResult = await client.query(
+      'SELECT "id" FROM "Brand" WHERE "slug" = $1 AND "status" = $2 LIMIT 1',
+      [brandSlug, "active"]
+    );
+    const brandId = brandResult.rows[0]?.id;
+    if (!brandId) return json(404, { ok: false, error: "Active brand not found" });
+
+    let collectionId = null;
+    if (String(metadata.collection || "").trim()) {
+      const name = String(metadata.collection).trim();
+      const slug = slugifyName(name);
+      const result = await client.query(
+        `INSERT INTO "Collection" ("brandId","name","slug","updatedAt")
+         VALUES ($1,$2,$3,CURRENT_TIMESTAMP)
+         ON CONFLICT ("brandId","slug")
+         DO UPDATE SET "name" = EXCLUDED."name", "updatedAt" = CURRENT_TIMESTAMP
+         RETURNING "id"`,
+        [brandId, name, slug]
+      );
+      collectionId = result.rows[0]?.id || null;
+    }
+
+    let campaignId = null;
+    if (String(metadata.campaign || "").trim()) {
+      const name = String(metadata.campaign).trim();
+      const slug = slugifyName(name);
+      const result = await client.query(
+        `INSERT INTO "Campaign" ("brandId","name","slug","updatedAt")
+         VALUES ($1,$2,$3,CURRENT_TIMESTAMP)
+         ON CONFLICT ("brandId","slug")
+         DO UPDATE SET "name" = EXCLUDED."name", "updatedAt" = CURRENT_TIMESTAMP
+         RETURNING "id"`,
+        [brandId, name, slug]
+      );
+      campaignId = result.rows[0]?.id || null;
+    }
+
+    const allowedDestinations = uploadDestinationNames(metadata.allowedDestinations);
+    const approvalStatus = metadata.sendToApprovalQueue ? "needs_review" : "approved";
+    const eligibilityMode = metadata.eligibilityMode === "window" ? "window" : "evergreen";
+    const repeatAnnually = Boolean(metadata.repeatAnnually);
+
+    let eligibilityType = "evergreen";
+    let eligibleFrom = null;
+    let eligibleUntil = null;
+    let annualFromMmdd = null;
+    let annualUntilMmdd = null;
+
+    if (eligibilityMode === "window" && repeatAnnually) {
+      eligibilityType = "annual";
+      annualFromMmdd = mmddFromDateString(metadata.windowStart);
+      annualUntilMmdd = mmddFromDateString(metadata.windowEnd);
+    } else if (eligibilityMode === "window") {
+      eligibilityType = "one_time";
+      eligibleFrom = metadata.windowStart || null;
+      eligibleUntil = metadata.windowEnd || null;
+    }
+
+    const inserted = [];
+
+    for (const file of files) {
+      const key = String(file?.key || "");
+      const filename = String(file?.name || "").trim();
+      const contentType = String(file?.type || "application/octet-stream");
+      const size = Number(file?.size || 0);
+      const kind = assetKindFromName(filename);
+
+      if (!key.startsWith(`direct/${brandSlug}/`) || !filename || !kind) {
+        return json(400, { ok: false, error: `Invalid completed upload: ${filename || key}` });
+      }
+
+      await s3.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
+
+      const sourceMetadata = JSON.stringify({
+        bucket,
+        key,
+        contentType,
+        directUpload: true
+      });
+
+      const result = await client.query(
+        `INSERT INTO "Asset" (
+           "brandId","collectionId","campaignId","sourceType","sourceExternalId","sourceUrl","sourceMetadata",
+           "filename","mimeType","fileSizeBytes","kind","ingestStatus","enrichmentStatus","approvalStatus",
+           "topic","creativeFamily","creatorNote","priority","eligibilityType","eligibleFrom","eligibleUntil",
+           "annualFromMmdd","annualUntilMmdd","allowedDestinations","firstApprovedAt","updatedAt"
+         )
+         VALUES (
+           $1,$2,$3,'direct_upload',$4,$5,$6::jsonb,
+           $7,$8,$9,$10::"AssetKind",$11::"IngestStatus",$12::"EnrichmentStatus",$13::"ApprovalStatus",
+           $14,$15,$16,$17,$18::"EligibilityType",$19::date,$20::date,
+           $21,$22,$23,
+           CASE WHEN $13 = 'approved' AND $11 = 'ready' THEN CURRENT_TIMESTAMP ELSE NULL END,
+           CURRENT_TIMESTAMP
+         )
+         ON CONFLICT DO NOTHING
+         RETURNING "id","filename","ingestStatus","approvalStatus"`,
+        [
+          brandId,
+          collectionId,
+          campaignId,
+          key,
+          `s3://${bucket}/${key}`,
+          sourceMetadata,
+          filename,
+          contentType,
+          String(size),
+          kind,
+          mode === "raw" ? "raw" : "ready",
+          mode === "raw" ? "pending" : "reviewed",
+          approvalStatus,
+          String(metadata.topic || "").trim() || null,
+          String(metadata.creativeFamily || "").trim() || null,
+          String(metadata.creatorNote || "").trim() || null,
+          String(metadata.priority || "normal"),
+          eligibilityType,
+          eligibleFrom,
+          eligibleUntil,
+          annualFromMmdd,
+          annualUntilMmdd,
+          allowedDestinations
+        ]
+      );
+
+      if (result.rows[0]) inserted.push(result.rows[0]);
+    }
+
+    return json(200, {
+      ok: true,
+      created: inserted.length,
+      mode,
+      assets: inserted,
+      message: mode === "raw"
+        ? "Direct uploads saved as raw assets"
+        : "Direct uploads ingested and marked ready"
+    });
+  } catch (error) {
+    console.error("[direct-upload-complete] failed", error);
+    return json(500, {
+      ok: false,
+      error: error instanceof Error ? error.message : "Unknown direct upload completion error"
+    });
+  } finally {
+    if (client) {
+      try { await client.end(); } catch {}
+    }
+  }
+}
+
 export const handler = async (event = {}) => {
   const requestPath =
     event?.rawPath ||
@@ -1282,6 +1555,20 @@ export const handler = async (event = {}) => {
   }
 
 
+
+  if (
+    event?.action === "direct-upload-presign" ||
+    (requestPath === "/assets/upload/presign" && event?.requestContext?.http?.method === "POST")
+  ) {
+    return presignDirectUploads(event);
+  }
+
+  if (
+    event?.action === "direct-upload-complete" ||
+    (requestPath === "/assets/upload/complete" && event?.requestContext?.http?.method === "POST")
+  ) {
+    return completeDirectUploads(event);
+  }
 
   if (event?.action === "configure-planner-account") {
     return configurePlannerAccount(event);
