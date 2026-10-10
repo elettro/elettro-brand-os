@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { mockAssets } from "@/lib/mock-assets";
 
 export default function AssetsPage() {
@@ -5,6 +6,7 @@ export default function AssetsPage() {
     <main className="main">
       <div className="eyebrow">Content</div>
       <h1>Asset Library</h1>
+      <p><Link href="/assets/add" style={{ color: "#e8590c", fontWeight: 700 }}>+ Add Assets · Smart Batch Intake</Link></p>
       <p className="muted">Files detected from configured Dropbox brand roots will appear here for review.</p>
 
       <div className="card" style={{ marginTop: 20, overflowX: "auto" }}>
