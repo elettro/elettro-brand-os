@@ -1,13 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   completeDirectUploads,
   presignDirectUploads,
-  type DirectUploadTicket
+  type DirectUploadTicket,
+  getAssets
 } from "@/lib/dev-api";
 
-type IntakeFileStatus = "queued" | "uploading" | "uploaded" | "saved" | "ready" | "error";
+type IntakeFileStatus = "queued" | "analyzing" | "analyzed" | "uploading" | "uploaded" | "saved" | "ready" | "error";
 
 type IntakeFile = {
   id: string;
@@ -18,6 +19,13 @@ type IntakeFile = {
   status: IntakeFileStatus;
   progress: number;
   error?: string;
+  width?: number;
+  height?: number;
+  durationSeconds?: number;
+  aspectRatioLabel?: string;
+  recommendedFolder?: string;
+  recommendationConfidence?: number;
+  recommendationReason?: string;
 };
 
 const networks = ["Instagram", "Facebook", "TikTok", "YouTube", "LinkedIn", "X"];
@@ -40,11 +48,119 @@ export function IntakeClient() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [messageTone, setMessageTone] = useState<"idle" | "success" | "error">("idle");
+  const [folderInventory, setFolderInventory] = useState<Array<{ path: string; count: number }>>([]);
 
   const totalSize = useMemo(
     () => files.reduce((sum, file) => sum + file.size, 0),
     [files]
   );
+
+  useEffect(() => {
+    let active = true;
+    getAssets()
+      .then((response) => {
+        if (!active) return;
+        const counts = new Map<string, number>();
+        for (const asset of response.assets || []) {
+          if (asset.brandSlug !== brand || !asset.sourcePath) continue;
+          const normalized = asset.sourcePath.replace(/\\/g, "/");
+          const lastSlash = normalized.lastIndexOf("/");
+          if (lastSlash <= 0) continue;
+          const folder = normalized.slice(0, lastSlash);
+          counts.set(folder, (counts.get(folder) || 0) + 1);
+        }
+        setFolderInventory(
+          [...counts.entries()]
+            .map(([path, count]) => ({ path, count }))
+            .sort((a, b) => b.count - a.count || a.path.localeCompare(b.path))
+        );
+      })
+      .catch(() => {
+        if (active) setFolderInventory([]);
+      });
+    return () => { active = false; };
+  }, [brand]);
+
+  function ratioLabel(width?: number, height?: number) {
+    if (!width || !height) return undefined;
+    const ratio = width / height;
+    if (Math.abs(ratio - 9 / 16) < 0.06) return "9:16";
+    if (Math.abs(ratio - 16 / 9) < 0.08) return "16:9";
+    if (Math.abs(ratio - 1) < 0.06) return "1:1";
+    if (Math.abs(ratio - 4 / 5) < 0.06) return "4:5";
+    if (Math.abs(ratio - 3 / 2) < 0.08) return "3:2";
+    return ratio > 1 ? "Landscape" : "Portrait";
+  }
+
+  function tokenize(value: string) {
+    return value
+      .toLowerCase()
+      .replace(/\.[a-z0-9]{2,5}$/i, "")
+      .split(/[^a-z0-9]+/)
+      .filter((token) => token.length >= 3 && !["the","and","with","from","final","copy","video","image"].includes(token));
+  }
+
+  function recommendFolder(item: IntakeFile) {
+    if (!folderInventory.length) return {} as Partial<IntakeFile>;
+    const terms = new Set([
+      ...tokenize(item.name),
+      ...tokenize(collection),
+      ...tokenize(campaign),
+      ...tokenize(topic),
+      ...tokenize(creativeFamily),
+      ...(item.aspectRatioLabel ? [item.aspectRatioLabel.toLowerCase().replace(":", "x")] : [])
+    ]);
+    let best: { path: string; count: number; score: number } | null = null;
+    for (const folder of folderInventory) {
+      const pathTerms = new Set(tokenize(folder.path.replace(/\//g, " ")));
+      let matched = 0;
+      for (const term of terms) if (pathTerms.has(term)) matched += 1;
+      const kindBonus = item.type.startsWith("video/") && /\/videos?\b/i.test(folder.path) ? 1.5 : item.type.startsWith("image/") && /\/images?\b/i.test(folder.path) ? 1.5 : 0;
+      const ratioBonus = item.aspectRatioLabel === "9:16" && /(9x16|9-16|vertical|shorts?|reels?)/i.test(folder.path) ? 2 : item.aspectRatioLabel === "16:9" && /(16x9|16-9|horizontal|youtube)/i.test(folder.path) ? 2 : 0;
+      const score = matched * 3 + kindBonus + ratioBonus + Math.min(2, Math.log10(folder.count + 1));
+      if (!best || score > best.score) best = { ...folder, score };
+    }
+    if (!best || best.score < 4) return {} as Partial<IntakeFile>;
+    return {
+      recommendedFolder: best.path,
+      recommendationConfidence: Math.min(96, Math.round(54 + best.score * 5)),
+      recommendationReason: "Based on " + best.count + " existing asset" + (best.count === 1 ? "" : "s") + " in this folder"
+    };
+  }
+
+  async function analyzeFile(item: IntakeFile) {
+    updateFile(item.id, { status: "analyzing", error: undefined });
+    try {
+      let width: number | undefined;
+      let height: number | undefined;
+      let durationSeconds: number | undefined;
+      const url = URL.createObjectURL(item.file);
+      try {
+        if (item.type.startsWith("video/")) {
+          const metadata = await new Promise<{ width: number; height: number; duration: number }>((resolve, reject) => {
+            const video = document.createElement("video");
+            video.preload = "metadata";
+            video.onloadedmetadata = () => resolve({ width: video.videoWidth, height: video.videoHeight, duration: Number.isFinite(video.duration) ? video.duration : 0 });
+            video.onerror = () => reject(new Error("Could not read video metadata"));
+            video.src = url;
+          });
+          width = metadata.width; height = metadata.height; durationSeconds = metadata.duration;
+        } else if (item.type.startsWith("image/")) {
+          const metadata = await new Promise<{ width: number; height: number }>((resolve, reject) => {
+            const image = new Image();
+            image.onload = () => resolve({ width: image.naturalWidth, height: image.naturalHeight });
+            image.onerror = () => reject(new Error("Could not read image metadata"));
+            image.src = url;
+          });
+          width = metadata.width; height = metadata.height;
+        }
+      } finally { URL.revokeObjectURL(url); }
+      const analyzed: IntakeFile = { ...item, width, height, durationSeconds, aspectRatioLabel: ratioLabel(width, height), status: "analyzed" };
+      updateFile(item.id, { ...analyzed, ...recommendFolder(analyzed) });
+    } catch (error) {
+      updateFile(item.id, { status: "analyzed", error: error instanceof Error ? error.message : "Quick analysis unavailable" });
+    }
+  }
 
   function addFiles(list: FileList | null) {
     if (!list) return;
@@ -58,9 +174,25 @@ export function IntakeClient() {
       progress: 0
     }));
     setFiles((current) => [...current, ...additions]);
+    for (const item of additions) void analyzeFile(item);
     setMessage("");
     setMessageTone("idle");
   }
+
+  useEffect(() => {
+    if (!files.length) return;
+    setFiles((current) => current.map((item) => {
+      if (item.status === "analyzing") return item;
+      const recommendation = recommendFolder(item);
+      return {
+        ...item,
+        recommendedFolder: recommendation.recommendedFolder,
+        recommendationConfidence: recommendation.recommendationConfidence,
+        recommendationReason: recommendation.recommendationReason
+      };
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [folderInventory, collection, campaign, topic, creativeFamily]);
 
   function toggleNetwork(name: string) {
     setSelectedNetworks((current) =>
@@ -241,7 +373,7 @@ export function IntakeClient() {
       >
         <h2 style={{ marginTop: 0 }}>Drop assets here</h2>
         <p className="muted">
-          Dump now, enrich later. Technical analysis happens automatically after ingest.
+          Files are staged first. Quick technical analysis starts immediately and can suggest where similar assets already live.
         </p>
         <label style={{ display: "inline-block", marginTop: 8, cursor: "pointer" }}>
           <span className="status-chip">Choose files</span>
@@ -392,7 +524,7 @@ export function IntakeClient() {
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr>
-                  {["File", "Detected type", "Size", "Status"].map((label) => (
+                  {["File", "Quick analysis", "Size", "Recommended folder", "Status"].map((label) => (
                     <th key={label} style={th}>{label}</th>
                   ))}
                 </tr>
@@ -427,11 +559,41 @@ export function IntakeClient() {
                         <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>{file.name}</span>
                       </div>
                     </td>
-                    <td style={td}>{file.type.startsWith("video/") ? "Video" : file.type.startsWith("image/") ? "Image" : file.type}</td>
+                    <td style={td}>
+                      <div style={{ fontWeight: 700 }}>{file.type.startsWith("video/") ? "Video" : file.type.startsWith("image/") ? "Image" : file.type}</div>
+                      {file.status === "analyzing" ? (
+                        <div className="muted" style={{ fontSize: 12, marginTop: 3 }}>Analyzing…</div>
+                      ) : (
+                        <div className="muted" style={{ fontSize: 12, marginTop: 3 }}>
+                          {file.width && file.height ? file.width + "×" + file.height : "Dimensions unavailable"}
+                          {file.aspectRatioLabel ? " · " + file.aspectRatioLabel : ""}
+                          {typeof file.durationSeconds === "number" && file.durationSeconds > 0
+                            ? " · " + Math.floor(file.durationSeconds / 60) + ":" + String(Math.round(file.durationSeconds % 60)).padStart(2, "0")
+                            : ""}
+                        </div>
+                      )}
+                    </td>
                     <td style={td}>{(file.size / 1024 / 1024).toFixed(1)} MB</td>
+                    <td style={{ ...td, minWidth: 240 }}>
+                      {file.status === "analyzing" ? (
+                        <span className="muted">Analyzing…</span>
+                      ) : file.recommendedFolder ? (
+                        <div>
+                          <div style={{ fontWeight: 700, overflowWrap: "anywhere" }}>{file.recommendedFolder}</div>
+                          <div className="muted" style={{ fontSize: 11, marginTop: 3 }}>
+                            {file.recommendationConfidence}% confidence
+                            {file.recommendationReason ? " · " + file.recommendationReason : ""}
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="muted">No confident recommendation</span>
+                      )}
+                    </td>
                     <td style={td}>
                       <span className="status-chip">
                         {file.status === "queued" ? "Queued" :
+                         file.status === "analyzing" ? "Analyzing" :
+                         file.status === "analyzed" ? "Suggestions Ready" :
                          file.status === "uploading" ? `Uploading ${file.progress}%` :
                          file.status === "uploaded" ? "Uploaded" :
                          file.status === "saved" ? "Raw · Saved" :
