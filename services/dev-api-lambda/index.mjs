@@ -507,6 +507,483 @@ async function ingestDropboxPage(event) {
   }
 }
 
+
+function parseJsonBody(event) {
+  let body = event?.body;
+  if (typeof body === "string") {
+    try { return body ? JSON.parse(body) : {}; } catch { return {}; }
+  }
+  return body && typeof body === "object" ? body : {};
+}
+
+function weekdayNameForYmd(ymd) {
+  const [year, month, day] = ymd.split("-").map(Number);
+  return new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    timeZone: "UTC"
+  }).format(new Date(Date.UTC(year, month - 1, day, 12, 0, 0)));
+}
+
+function addDaysToYmd(ymd, days) {
+  const [year, month, day] = ymd.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day + days, 12, 0, 0));
+  return [
+    date.getUTCFullYear(),
+    String(date.getUTCMonth() + 1).padStart(2, "0"),
+    String(date.getUTCDate()).padStart(2, "0")
+  ].join("-");
+}
+
+function ymdInTimeZone(date, timeZone) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return values.year + "-" + values.month + "-" + values.day;
+}
+
+function localDateTimeToUtc(ymd, hhmm, timeZone) {
+  const [year, month, day] = ymd.split("-").map(Number);
+  const [hour, minute] = String(hhmm || "12:00").split(":").map(Number);
+  let utcMillis = Date.UTC(year, month - 1, day, hour || 0, minute || 0, 0);
+
+  for (let i = 0; i < 2; i += 1) {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      hour12: false,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit"
+    }).formatToParts(new Date(utcMillis));
+    const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+    const rendered = Date.UTC(
+      Number(values.year),
+      Number(values.month) - 1,
+      Number(values.day),
+      Number(values.hour === "24" ? "0" : values.hour),
+      Number(values.minute),
+      0
+    );
+    const desired = Date.UTC(year, month - 1, day, hour || 0, minute || 0, 0);
+    utcMillis += desired - rendered;
+  }
+
+  return new Date(utcMillis);
+}
+
+function normalizePreferredDays(days) {
+  const aliases = {
+    sun: "Sun", sunday: "Sun",
+    mon: "Mon", monday: "Mon",
+    tue: "Tue", tues: "Tue", tuesday: "Tue",
+    wed: "Wed", wednesday: "Wed",
+    thu: "Thu", thur: "Thu", thurs: "Thu", thursday: "Thu",
+    fri: "Fri", friday: "Fri",
+    sat: "Sat", saturday: "Sat"
+  };
+  return (Array.isArray(days) ? days : [])
+    .map((value) => aliases[String(value).trim().toLowerCase()])
+    .filter(Boolean);
+}
+
+function dateInsideAssetEligibility(asset, slotDate) {
+  const ymd = slotDate.toISOString().slice(0, 10);
+
+  if (asset.eligibilityType === "one_time") {
+    const from = asset.eligibleFrom ? String(asset.eligibleFrom).slice(0, 10) : null;
+    const until = asset.eligibleUntil ? String(asset.eligibleUntil).slice(0, 10) : null;
+    if (from && ymd < from) return false;
+    if (until && ymd > until) return false;
+  }
+
+  if (asset.eligibilityType === "annual") {
+    const mmdd = Number(ymd.slice(5, 7) + ymd.slice(8, 10));
+    const from = Number(asset.annualFromMmdd || 0);
+    const until = Number(asset.annualUntilMmdd || 0);
+    if (from && until) {
+      if (from <= until) {
+        if (mmdd < from || mmdd > until) return false;
+      } else if (!(mmdd >= from || mmdd <= until)) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
+function destinationAllowed(asset, destination) {
+  const allowed = Array.isArray(asset.allowedDestinations) ? asset.allowedDestinations : [];
+  const excluded = Array.isArray(asset.excludedDestinations) ? asset.excludedDestinations : [];
+  if (excluded.includes(destination)) return false;
+  if (allowed.length > 0 && !allowed.includes(destination)) return false;
+  return true;
+}
+
+function placementCompatible(asset, destination, placement) {
+  const p = String(placement || "").toLowerCase();
+  const d = String(destination || "").toLowerCase();
+
+  if ((p.includes("short") || p.includes("reel")) && asset.kind !== "video") return false;
+  if (d === "youtube" && p.includes("short") && asset.kind !== "video") return false;
+
+  return true;
+}
+
+function priorityScore(priority) {
+  if (priority === "hero") return 40;
+  if (priority === "high") return 25;
+  if (priority === "low") return 0;
+  return 10;
+}
+
+function daysBetween(later, earlier) {
+  return Math.max(0, (later.getTime() - earlier.getTime()) / 86400000);
+}
+
+async function runPlannerV1(event) {
+  let client;
+  try {
+    client = await connectDatabase();
+    const body = parseJsonBody(event);
+    const brandSlug = String(body.brandSlug || event?.brandSlug || "").trim();
+    const horizonDays = Math.min(Math.max(Number(body.horizonDays || event?.horizonDays || 14), 1), 30);
+
+    if (!brandSlug) {
+      return json(400, { ok: false, error: "brandSlug is required" });
+    }
+
+    const brandResult = await client.query(
+      'SELECT "id","slug","name","timezone" FROM "Brand" WHERE "slug" = $1 AND "status" = $2 LIMIT 1',
+      [brandSlug, "active"]
+    );
+    const brand = brandResult.rows[0];
+    if (!brand) return json(404, { ok: false, error: "Active brand not found" });
+
+    const rulesResult = await client.query(
+      `SELECT
+         cr."id" AS "cadenceRuleId",
+         cr."placement",
+         cr."postsPerWeek",
+         cr."preferredDays",
+         cr."preferredStartTime",
+         cr."preferredEndTime",
+         sa."id" AS "socialAccountId",
+         sa."destination",
+         sa."accountName",
+         sa."publishingMode",
+         sa."timezone"
+       FROM "CadenceRule" cr
+       JOIN "SocialAccount" sa ON sa."id" = cr."socialAccountId"
+       WHERE sa."brandId" = $1
+         AND sa."status" = 'active'
+         AND cr."active" = TRUE
+         AND cr."postsPerWeek" > 0
+       ORDER BY sa."destination", cr."placement"`,
+      [brand.id]
+    );
+
+    if (!rulesResult.rowCount) {
+      return json(200, {
+        ok: true,
+        brand: brand.slug,
+        horizonDays,
+        planned: 0,
+        skippedExisting: 0,
+        gaps: [],
+        message: "No active cadence rules are configured for this brand"
+      });
+    }
+
+    const assetsResult = await client.query(
+      `SELECT
+         a."id",
+         a."filename",
+         a."kind",
+         a."sourcePath",
+         a."sourceUrl",
+         a."approvalStatus",
+         a."ingestStatus",
+         a."retiredAt",
+         a."eligibilityType",
+         a."eligibleFrom",
+         a."eligibleUntil",
+         a."annualFromMmdd",
+         a."annualUntilMmdd",
+         a."priority",
+         a."allowedDestinations",
+         a."excludedDestinations",
+         a."creativeFamily",
+         a."contentGroup",
+         a."topic",
+         a."campaignId",
+         a."shopifyProductId"
+       FROM "Asset" a
+       WHERE a."brandId" = $1
+         AND a."approvalStatus" = 'approved'
+         AND a."ingestStatus" = 'ready'
+         AND a."retiredAt" IS NULL
+         AND (a."sourcePath" IS NOT NULL OR a."sourceUrl" IS NOT NULL)`,
+      [brand.id]
+    );
+
+    const startYmd = ymdInTimeZone(new Date(), brand.timezone || "America/New_York");
+    const horizonEnd = localDateTimeToUtc(addDaysToYmd(startYmd, horizonDays), "00:00", brand.timezone || "America/New_York");
+
+    const historyResult = await client.query(
+      `SELECT
+         pl."socialAccountId",
+         pl."assetId",
+         pl."publishedAt",
+         pl."creativeFamilySnapshot",
+         pl."campaignSnapshot",
+         a."shopifyProductId"
+       FROM "PublicationLedger" pl
+       LEFT JOIN "Asset" a ON a."id" = pl."assetId"
+       WHERE pl."brandId" = $1
+         AND pl."publishedAt" >= CURRENT_TIMESTAMP - INTERVAL '90 days'
+       ORDER BY pl."publishedAt" DESC`,
+      [brand.id]
+    );
+
+    const plannedExistingResult = await client.query(
+      `SELECT
+         sp."id",
+         sp."socialAccountId",
+         sp."assetId",
+         sp."placement",
+         sp."scheduledFor",
+         a."creativeFamily",
+         a."campaignId",
+         a."shopifyProductId"
+       FROM "ScheduledPost" sp
+       JOIN "Asset" a ON a."id" = sp."assetId"
+       WHERE sp."brandId" = $1
+         AND sp."scheduledFor" >= CURRENT_TIMESTAMP
+         AND sp."scheduledFor" < $2
+         AND sp."status" IN ('planned','approved','queued')`,
+      [brand.id, horizonEnd]
+    );
+
+    const plannedInRun = [];
+    const gaps = [];
+    let planned = 0;
+    let skippedExisting = 0;
+
+    for (const rule of rulesResult.rows) {
+      const accountTimeZone = rule.timezone || brand.timezone || "America/New_York";
+      const preferredDays = normalizePreferredDays(rule.preferredDays);
+      const eligibleDays = [];
+
+      for (let offset = 0; offset < horizonDays; offset += 1) {
+        const ymd = addDaysToYmd(startYmd, offset);
+        const weekday = weekdayNameForYmd(ymd);
+        if (preferredDays.length && !preferredDays.includes(weekday)) continue;
+        eligibleDays.push(ymd);
+      }
+
+      const targetSlots = Math.max(1, Math.round(Number(rule.postsPerWeek) * horizonDays / 7));
+      const chosenDays = [];
+      if (eligibleDays.length <= targetSlots) {
+        chosenDays.push(...eligibleDays);
+      } else {
+        for (let i = 0; i < targetSlots; i += 1) {
+          const index = Math.min(
+            eligibleDays.length - 1,
+            Math.round(i * (eligibleDays.length - 1) / Math.max(targetSlots - 1, 1))
+          );
+          if (!chosenDays.includes(eligibleDays[index])) chosenDays.push(eligibleDays[index]);
+        }
+      }
+
+      for (const ymd of chosenDays) {
+        const scheduledFor = localDateTimeToUtc(
+          ymd,
+          rule.preferredStartTime || "12:00",
+          accountTimeZone
+        );
+
+        if (scheduledFor.getTime() <= Date.now()) continue;
+
+        const existingSlot = plannedExistingResult.rows.find((post) =>
+          post.socialAccountId === rule.socialAccountId &&
+          String(post.placement).toLowerCase() === String(rule.placement).toLowerCase() &&
+          Math.abs(new Date(post.scheduledFor).getTime() - scheduledFor.getTime()) < 30 * 60000
+        );
+
+        if (existingSlot) {
+          skippedExisting += 1;
+          continue;
+        }
+
+        const sameAccountLedger = historyResult.rows.filter(
+          (entry) => entry.socialAccountId === rule.socialAccountId
+        );
+        const sameAccountPlanned = [
+          ...plannedExistingResult.rows.filter((entry) => entry.socialAccountId === rule.socialAccountId),
+          ...plannedInRun.filter((entry) => entry.socialAccountId === rule.socialAccountId)
+        ];
+
+        const candidates = [];
+
+        for (const asset of assetsResult.rows) {
+          if (!dateInsideAssetEligibility(asset, scheduledFor)) continue;
+          if (!destinationAllowed(asset, rule.destination)) continue;
+          if (!placementCompatible(asset, rule.destination, rule.placement)) continue;
+
+          const ledgerUses = sameAccountLedger.filter((entry) => entry.assetId === asset.id);
+          const plannedUses = sameAccountPlanned.filter((entry) => entry.assetId === asset.id);
+
+          const recentExactLedger = ledgerUses.some(
+            (entry) => daysBetween(scheduledFor, new Date(entry.publishedAt)) < 45
+          );
+          const recentExactPlanned = plannedUses.some(
+            (entry) => Math.abs(daysBetween(scheduledFor, new Date(entry.scheduledFor))) < 45
+          );
+          if (recentExactLedger || recentExactPlanned) continue;
+
+          if (asset.creativeFamily) {
+            const recentFamilyLedger = sameAccountLedger.some((entry) =>
+              entry.creativeFamilySnapshot === asset.creativeFamily &&
+              daysBetween(scheduledFor, new Date(entry.publishedAt)) < 21
+            );
+            const recentFamilyPlanned = sameAccountPlanned.some((entry) =>
+              entry.creativeFamily === asset.creativeFamily &&
+              Math.abs(daysBetween(scheduledFor, new Date(entry.scheduledFor))) < 21
+            );
+            if (recentFamilyLedger || recentFamilyPlanned) continue;
+          }
+
+          if (asset.shopifyProductId) {
+            const recentProductLedger = sameAccountLedger.some((entry) =>
+              entry.shopifyProductId === asset.shopifyProductId &&
+              daysBetween(scheduledFor, new Date(entry.publishedAt)) < 5
+            );
+            const recentProductPlanned = sameAccountPlanned.some((entry) =>
+              entry.shopifyProductId === asset.shopifyProductId &&
+              Math.abs(daysBetween(scheduledFor, new Date(entry.scheduledFor))) < 5
+            );
+            if (recentProductLedger || recentProductPlanned) continue;
+          }
+
+          if (asset.campaignId && sameAccountPlanned.length) {
+            const prior = [...sameAccountPlanned]
+              .filter((entry) => new Date(entry.scheduledFor).getTime() < scheduledFor.getTime())
+              .sort((a, b) => new Date(b.scheduledFor) - new Date(a.scheduledFor))[0];
+            if (prior?.campaignId === asset.campaignId) continue;
+          }
+
+          const lastUse = ledgerUses[0]?.publishedAt ? new Date(ledgerUses[0].publishedAt) : null;
+          const lastUseScore = lastUse
+            ? Math.min(60, daysBetween(scheduledFor, lastUse))
+            : 60;
+          const priority = priorityScore(asset.priority);
+          const selectedSameGroup = plannedInRun.filter(
+            (entry) => entry.socialAccountId === rule.socialAccountId &&
+              entry.contentGroup &&
+              entry.contentGroup === asset.contentGroup
+          ).length;
+          const balance = Math.max(0, 15 - selectedSameGroup * 5);
+          const seasonal = asset.eligibilityType === "annual" ? 5 : 0;
+          const total = lastUseScore + priority + balance + seasonal;
+
+          candidates.push({
+            asset,
+            score: total,
+            breakdown: {
+              lastUse: Number(lastUseScore.toFixed(2)),
+              priority,
+              contentBalance: balance,
+              seasonal
+            },
+            lastUsedAt: lastUse ? lastUse.toISOString() : null
+          });
+        }
+
+        candidates.sort((a, b) =>
+          b.score - a.score ||
+          String(a.asset.filename).localeCompare(String(b.asset.filename))
+        );
+
+        const winner = candidates[0];
+
+        if (!winner) {
+          gaps.push({
+            socialAccountId: rule.socialAccountId,
+            destination: rule.destination,
+            placement: rule.placement,
+            scheduledFor: scheduledFor.toISOString(),
+            reason: "No asset passed hard filters and cooldowns"
+          });
+          continue;
+        }
+
+        const reason =
+          `Selected \${winner.asset.filename} with score \${winner.score.toFixed(2)}. ` +
+          `Last use: \${winner.lastUsedAt || "never"}; priority: \${winner.asset.priority || "normal"}.`;
+
+        const inserted = await client.query(
+          `INSERT INTO "ScheduledPost"
+            ("brandId","socialAccountId","assetId","placement","scheduledFor","status",
+             "selectionReason","scoreBreakdown","publishingMode","updatedAt")
+           VALUES ($1,$2,$3,$4,$5,'planned',$6,$7::jsonb,$8,CURRENT_TIMESTAMP)
+           RETURNING "id","scheduledFor"`,
+          [
+            brand.id,
+            rule.socialAccountId,
+            winner.asset.id,
+            rule.placement,
+            scheduledFor,
+            reason,
+            JSON.stringify(winner.breakdown),
+            rule.publishingMode || "handoff"
+          ]
+        );
+
+        planned += 1;
+        plannedInRun.push({
+          id: inserted.rows[0].id,
+          socialAccountId: rule.socialAccountId,
+          assetId: winner.asset.id,
+          placement: rule.placement,
+          scheduledFor: inserted.rows[0].scheduledFor,
+          creativeFamily: winner.asset.creativeFamily,
+          campaignId: winner.asset.campaignId,
+          shopifyProductId: winner.asset.shopifyProductId,
+          contentGroup: winner.asset.contentGroup
+        });
+      }
+    }
+
+    return json(200, {
+      ok: true,
+      brand: brand.slug,
+      horizonDays,
+      rules: rulesResult.rowCount,
+      eligibleAssets: assetsResult.rowCount,
+      planned,
+      skippedExisting,
+      gaps,
+      message: "Planner V1 run completed"
+    });
+  } catch (error) {
+    console.error("[planner-v1] failed", error);
+    return json(500, {
+      ok: false,
+      error: error instanceof Error ? error.message : "Unknown planner error"
+    });
+  } finally {
+    if (client) {
+      try { await client.end(); } catch {}
+    }
+  }
+}
+
 export const handler = async (event = {}) => {
   const requestPath =
     event?.rawPath ||
@@ -677,6 +1154,13 @@ export const handler = async (event = {}) => {
   }
 
 
+
+  if (
+    event?.action === "run-planner-v1" ||
+    (requestPath === "/planner/run" && event?.requestContext?.http?.method === "POST")
+  ) {
+    return runPlannerV1(event);
+  }
 
   if (
     event?.action === "bulk-update-assets" ||
