@@ -13,6 +13,7 @@ type IntakeFileStatus = "queued" | "analyzing" | "analyzed" | "uploading" | "upl
 type IntakeFile = {
   id: string;
   file: File;
+  sha256?: string;
   name: string;
   type: string;
   size: number;
@@ -162,20 +163,39 @@ export function IntakeClient() {
     }
   }
 
-  function addFiles(list: FileList | null) {
-    if (!list) return;
-    const additions = Array.from(list).map((file) => ({
+  async function sha256(file: File): Promise<string> {
+    const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
+    return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  }
+
+  async function addFiles(list: FileList | null) {
+    if (!list || busy) return;
+    const incoming = await Promise.all(Array.from(list).map(async (file) => ({
       id: crypto.randomUUID(),
       file,
+      sha256: await sha256(file),
       name: file.name,
       type: file.type || "application/octet-stream",
       size: file.size,
       status: "queued" as IntakeFileStatus,
       progress: 0
-    }));
-    setFiles((current) => [...current, ...additions]);
-    for (const item of additions) void analyzeFile(item);
-    setMessage("");
+    })));
+    const accepted: IntakeFile[] = [];
+    let skipped = 0;
+    // A repeated file in the current staging queue is never staged twice.
+    // The save handler repeats this check before requesting any upload tickets.
+    setFiles((current) => {
+      const seen = new Set(current.map((item) => item.sha256).filter(Boolean));
+      for (const item of incoming) {
+        if (seen.has(item.sha256)) { skipped++; continue; }
+        seen.add(item.sha256);
+        accepted.push(item);
+      }
+      return [...current, ...accepted];
+    });
+    // Analysis is asynchronous and updates staging rows as metadata arrives.
+    for (const item of accepted) void analyzeFile(item);
+    setMessage(skipped ? `${skipped} exact duplicate${skipped === 1 ? "" : "s"} skipped in this staging session. Existing library duplicates require server-side checking.` : "");
     setMessageTone("idle");
   }
 
@@ -292,21 +312,33 @@ export function IntakeClient() {
         }))
       );
 
+      // Second guard: do not issue upload tickets twice for identical bytes,
+      // even if files reached staging before their analysis finished.
+      const seenHashes = new Set<string>();
+      const uniqueFiles: IntakeFile[] = [];
+      for (const item of files) {
+        const hash = item.sha256 || await sha256(item.file);
+        if (seenHashes.has(hash)) continue;
+        seenHashes.add(hash);
+        uniqueFiles.push(item);
+      }
+      const skippedDuplicates = files.length - uniqueFiles.length;
+      if (!uniqueFiles.length) throw new Error("No new files to upload.");
       const presigned = await presignDirectUploads({
         brandSlug: brand,
-        files: files.map((item) => ({
+        files: uniqueFiles.map((item) => ({
           name: item.name,
           type: item.type,
           size: item.size
         }))
       });
 
-      if (presigned.uploads.length !== files.length) {
+      if (presigned.uploads.length !== uniqueFiles.length) {
         throw new Error("Upload ticket count did not match selected files.");
       }
 
       await uploadWithConcurrency(
-        files.map((item, index) => ({
+        uniqueFiles.map((item, index) => ({
           item,
           ticket: presigned.uploads[index]
         }))
@@ -317,9 +349,9 @@ export function IntakeClient() {
         mode,
         files: presigned.uploads.map((ticket, index) => ({
           key: ticket.key,
-          name: files[index].name,
-          type: files[index].type,
-          size: files[index].size
+          name: uniqueFiles[index].name,
+          type: uniqueFiles[index].type,
+          size: uniqueFiles[index].size
         })),
         metadata: {
           collection,
@@ -338,19 +370,14 @@ export function IntakeClient() {
       });
 
       const finalStatus: IntakeFileStatus = mode === "raw" ? "saved" : "ready";
-      setFiles((current) =>
-        current.map((item) => ({
-          ...item,
-          status: finalStatus,
-          progress: 100,
-          error: undefined
-        }))
-      );
+      const uploadedIds = new Set(uniqueFiles.map((item) => item.id));
+      setFiles((current) => current.map((item) => uploadedIds.has(item.id) ? { ...item, status: finalStatus, progress: 100, error: undefined } : item));
       setMessage(
         mode === "raw"
           ? `${completed.created} asset${completed.created === 1 ? "" : "s"} saved successfully.`
           : `${completed.created} asset${completed.created === 1 ? "" : "s"} saved and marked Ready.`
       );
+      if (skippedDuplicates) setMessage((current) => `${current} ${skippedDuplicates} duplicate${skippedDuplicates === 1 ? "" : "s"} skipped.`);
       setMessageTone("success");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Upload failed");
