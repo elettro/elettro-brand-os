@@ -52,6 +52,8 @@ export function IntakeClient() {
   const [busy, setBusy] = useState(false);
   const [dropboxTestBusy, setDropboxTestBusy] = useState(false);
   const [dropboxTestResult, setDropboxTestResult] = useState("");
+  const [uploadedDropboxPath, setUploadedDropboxPath] = useState<string | null>(null);
+  const [registeringDropbox, setRegisteringDropbox] = useState(false);
   const [message, setMessage] = useState("");
   const [messageTone, setMessageTone] = useState<"idle" | "success" | "error">("idle");
   const [folderInventory, setFolderInventory] = useState<Array<{ path: string; count: number }>>([]);
@@ -331,10 +333,33 @@ export function IntakeClient() {
       });
       const resultText = await uploaded.text();
       if (!uploaded.ok) throw new Error("Dropbox upload failed (" + uploaded.status + "): " + resultText.slice(0, 220));
-      setDropboxTestResult("Dropbox accepted the file at " + String(info.path) + ". Verify it in Dropbox. Brand OS database ingestion has not been completed.");
+      setUploadedDropboxPath(String(info.path));
+      setDropboxTestResult("Dropbox accepted the file at " + String(info.path) + ". Next, register it in Brand OS.");
     } catch (error) {
       setDropboxTestResult("Direct Dropbox test failed: " + (error instanceof Error ? error.message : "Unknown error"));
     } finally { setDropboxTestBusy(false); }
+  }
+
+  // Register only after a separately verified direct Dropbox upload; never send file contents through S3.
+  async function testDropboxRegistration() {
+    if (!uploadedDropboxPath || registeringDropbox) return;
+    setRegisteringDropbox(true);
+    try {
+      const response = await fetch("/api/assets/bulk-update", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "complete-dropbox-upload", brandSlug: brand, path: uploadedDropboxPath, mode: "ready", metadata: {
+          collection, campaign, topic, creativeFamily, eligibilityMode, windowStart, windowEnd,
+          repeatAnnually, sendToApprovalQueue, priority, creatorNote, allowedDestinations: selectedNetworks
+        }})
+      });
+      const data = await response.json();
+      if (!response.ok || data.ok === false) throw new Error(data.error || data.detail || "Registration failed");
+      setDropboxTestResult(data.alreadyRegistered
+        ? "This Dropbox file already exists in Brand OS (asset ID: " + data.asset?.id + "). No duplicate created."
+        : "Registered in Brand OS: asset ID " + data.asset?.id + " · " + data.asset?.ingestStatus + " · " + data.asset?.approvalStatus + ". Dropbox ID: " + data.dropboxFileId);
+      setUploadedDropboxPath(null);
+    } catch(error){setDropboxTestResult("Dropbox upload succeeded, but Brand OS registration failed: " + (error instanceof Error ? error.message : "Unknown error") + ". Do not upload this file again.");}
+    finally {setRegisteringDropbox(false);}
   }
 
   async function submitBatch(mode: "raw" | "ready") {
@@ -696,7 +721,7 @@ export function IntakeClient() {
           <strong>DEV test: Upload one image directly to Dropbox (no S3)</strong>
           <p className="muted" style={{margin:"6px 0 10px"}}>Choose exactly one small image (up to 10 MB) and select a Dropbox folder above. This is a storage-only test: it does not create a Brand OS asset record or make the file ready to publish. Use a disposable image with a unique filename to avoid duplicate-name conflicts.</p>
           <button type="button" disabled={busy||dropboxTestBusy||!plannedDropboxFolder||files.length!==1||!files[0]?.type.startsWith("image/")||files[0]?.size>10*1024*1024} onClick={()=>void testDirectDropboxUpload()} style={buttonPrimary}>{dropboxTestBusy?"Testing…":"Test direct Dropbox upload"}</button>
-          {dropboxTestResult&&<p aria-live="polite" style={{margin:"10px 0 0",fontSize:13,overflowWrap:"anywhere"}}>{dropboxTestResult}</p>}
+          {uploadedDropboxPath&&<button type="button" disabled={registeringDropbox||dropboxTestBusy} onClick={()=>void testDropboxRegistration()} style={{...buttonSecondary,marginLeft:8}}>{registeringDropbox?"Registering…":"Register uploaded image as Ready in Brand OS"}</button>}\n          {dropboxTestResult&&<p aria-live="polite" style={{margin:"10px 0 0",fontSize:13,overflowWrap:"anywhere"}}>{dropboxTestResult}</p>}
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap", marginTop: 18 }}>
           <div
