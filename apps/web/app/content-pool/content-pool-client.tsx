@@ -5,6 +5,19 @@ import { getAssetThumbnailUrl, type ApiAsset } from "@/lib/dev-api";
 
 type SortMode = "newest" | "oldest" | "alpha" | "last-used";
 
+function formatLastUsed(value?: string | null) {
+  if (!value) return "Never";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Never";
+  return date.toLocaleString([], {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  });
+}
+
 function ratioForAsset(asset: ApiAsset) {
   return asset.aspectRatioLabel || asset.folderSuggestions?.aspectRatioLabel || "Unknown";
 }
@@ -33,11 +46,12 @@ export function ContentPoolClient({ assets }: { assets: ApiAsset[] }) {
     return [...filtered].sort((a, b) => {
       if (sort === "alpha") return a.filename.localeCompare(b.filename);
       if (sort === "last-used") {
-        const aUsed = (a as ApiAsset & { lastUsedAt?: string | null }).lastUsedAt;
-        const bUsed = (b as ApiAsset & { lastUsedAt?: string | null }).lastUsedAt;
+        const aUsed = a.lastUsedAt;
+        const bUsed = b.lastUsedAt;
         if (aUsed && bUsed) return new Date(bUsed).getTime() - new Date(aUsed).getTime();
         if (aUsed) return -1;
         if (bUsed) return 1;
+        return a.filename.localeCompare(b.filename);
       }
 
       const aCreated = a.createdAt ? new Date(a.createdAt).getTime() : 0;
@@ -86,7 +100,7 @@ export function ContentPoolClient({ assets }: { assets: ApiAsset[] }) {
         </div>
 
         <p className="muted" style={{ marginBottom: 0 }}>
-          {visible.length} eligible assets. Last Used becomes authoritative when Publication Ledger is connected.
+          {visible.length} eligible assets. Last Used is derived from Publication Ledger.
         </p>
       </section>
 
@@ -116,6 +130,9 @@ export function ContentPoolClient({ assets }: { assets: ApiAsset[] }) {
                   <span className="asset-small-chip">{ratioForAsset(asset)}</span>
                   <span className="asset-small-chip">{asset.priority || "normal"}</span>
                 </div>
+                <div className="muted" style={{ fontSize: 12 }}>
+                  Last used: <strong>{formatLastUsed(asset.lastUsedAt)}</strong>
+                </div>
               </article>
             );
           })}
@@ -125,7 +142,7 @@ export function ContentPoolClient({ assets }: { assets: ApiAsset[] }) {
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr>
-                {["File", "Brand", "Type", "Ratio", "Group", "Priority", "Eligibility"].map((label) => (
+                {["File", "Brand", "Type", "Ratio", "Group", "Priority", "Eligibility", "Last Used"].map((label) => (
                   <th key={label} style={{ textAlign: "left", padding: 10, borderBottom: "1px solid var(--line)" }}>{label}</th>
                 ))}
               </tr>
@@ -140,6 +157,7 @@ export function ContentPoolClient({ assets }: { assets: ApiAsset[] }) {
                   <td style={{ padding: 10, borderBottom: "1px solid var(--line)" }}>{asset.contentGroup || "—"}</td>
                   <td style={{ padding: 10, borderBottom: "1px solid var(--line)" }}>{asset.priority || "normal"}</td>
                   <td style={{ padding: 10, borderBottom: "1px solid var(--line)" }}>{asset.eligibilityType || "evergreen"}</td>
+                  <td style={{ padding: 10, borderBottom: "1px solid var(--line)" }}>{formatLastUsed(asset.lastUsedAt)}</td>
                 </tr>
               ))}
             </tbody>
