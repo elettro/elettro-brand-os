@@ -21,7 +21,7 @@ export async function GET(request:NextRequest){
   const raw=await response.text();
   let data:Record<string,unknown>;
   try{data=JSON.parse(raw)}catch{return NextResponse.json({error:"DEV API returned a non-JSON response"},{status:502});}
-  if(!response.ok||data.ok===false)return NextResponse.json({error:String(data.error||"Dropbox folder listing failed")},{status:response.status});
+  if(!response.ok||data.ok===false)return NextResponse.json({error:String(data.error||"Dropbox folder listing failed"),details:typeof data.detail==="string"?data.detail:undefined},{status:response.status});
   return NextResponse.json(data,{headers:{"cache-control":"no-store"}});
  }catch(error){return NextResponse.json({error:"Unable to reach DEV API Gateway",details:error instanceof Error?error.message:"Network error"},{status:503});}
 }
