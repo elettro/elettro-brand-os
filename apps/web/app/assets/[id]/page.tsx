@@ -1,3 +1,5 @@
+import { publishingDestinations } from "@/lib/publishing-destinations";
+
 const fields = [
   "Product / Topic",
   "Campaign",
@@ -9,7 +11,6 @@ const fields = [
   "Annual Repeat",
   "Contains Specific Pricing",
   "Priority",
-  "Allowed Destinations",
   "Creative Notes"
 ];
 
@@ -28,6 +29,18 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
             <label key={field} style={{ display: "grid", gap: 6 }}>
               <span className="metric">{field}</span>
               <input disabled placeholder="Connect database to edit" style={{ padding: 10, border: "1px solid var(--line)", borderRadius: 8, background: "var(--panel-soft)" }} />
+            </label>
+          ))}
+        </div>
+      </section>
+      <section className="card" style={{ marginTop: 16 }}>
+        <h2>Allowed Destinations</h2>
+        <p className="muted">Social channels, websites and RSS feeds are eligible destination types. Specific brand accounts, sites and feeds require configuration before publishing. Controls will become editable when the asset database is connected.</p>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 12 }}>
+          {publishingDestinations.map((destination) => (
+            <label key={destination.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: 10, border: "1px solid var(--line)", borderRadius: 8 }}>
+              <input type="checkbox" disabled aria-label={destination.label} />
+              <span>{destination.label}</span><small className="muted">({destination.kind})</small>
             </label>
           ))}
         </div>
