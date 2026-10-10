@@ -1,4 +1,6 @@
-import { publishingDestinations } from "@/lib/publishing-destinations";
+import { destinationsForBrand } from "@/lib/brand-destinations";
+import { brandConfigs } from "@/lib/brand-config";
+import Link from "next/link";
 
 const fields = [
   "Product / Topic",
@@ -17,6 +19,8 @@ const fields = [
 export default async function AssetDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
+  const brandId = brandConfigs.some(b => b.id === id.split("--")[0]) ? id.split("--")[0] : "";
+  const destinations = brandId ? destinationsForBrand(brandId) : [];
   return (
     <main className="main">
       <div className="eyebrow">Asset Review</div>
@@ -35,12 +39,12 @@ export default async function AssetDetailPage({ params }: { params: Promise<{ id
       </section>
       <section className="card" style={{ marginTop: 16 }}>
         <h2>Allowed Destinations</h2>
-        <p className="muted">Social channels, websites and RSS feeds are eligible destination types. Specific brand accounts, sites and feeds require configuration before publishing. Controls will become editable when the asset database is connected.</p>
+        <p className="muted">Destinations are scoped to each brand, including websites and RSS. {brandId ? `Previewing ${brandId} destinations.` : "Brand association is unavailable for this asset placeholder."} <Link href="/settings/destinations">View brand destination configuration</Link></p>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 12 }}>
-          {publishingDestinations.map((destination) => (
+          {destinations.map((destination) => (
             <label key={destination.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: 10, border: "1px solid var(--line)", borderRadius: 8 }}>
               <input type="checkbox" disabled aria-label={destination.label} />
-              <span>{destination.label}</span><small className="muted">({destination.kind})</small>
+              <span>{destination.label}</span><small className="muted">({destination.connectionStatus})</small>
             </label>
           ))}
         </div>
