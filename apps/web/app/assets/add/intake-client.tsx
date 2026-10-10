@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   completeDirectUploads,
   presignDirectUploads,
@@ -33,6 +33,7 @@ const networks = ["Instagram", "Facebook", "TikTok", "YouTube", "LinkedIn", "X"]
 
 export function IntakeClient() {
   const [files, setFiles] = useState<IntakeFile[]>([]);
+  const stagedHashes = useRef(new Set<string>());
   const [brand, setBrand] = useState("stashbox");
   const [collection, setCollection] = useState("");
   const [campaign, setCampaign] = useState("");
@@ -182,18 +183,12 @@ export function IntakeClient() {
     })));
     const accepted: IntakeFile[] = [];
     let skipped = 0;
-    // A repeated file in the current staging queue is never staged twice.
-    // The save handler repeats this check before requesting any upload tickets.
-    setFiles((current) => {
-      const seen = new Set(current.map((item) => item.sha256).filter(Boolean));
-      for (const item of incoming) {
-        if (seen.has(item.sha256)) { skipped++; continue; }
-        seen.add(item.sha256);
-        accepted.push(item);
-      }
-      return [...current, ...accepted];
-    });
-    // Analysis is asynchronous and updates staging rows as metadata arrives.
+    for (const item of incoming) {
+      if (stagedHashes.current.has(item.sha256)) { skipped++; continue; }
+      stagedHashes.current.add(item.sha256);
+      accepted.push(item);
+    }
+    setFiles((current) => [...current, ...accepted]);
     for (const item of accepted) void analyzeFile(item);
     setMessage(skipped ? `${skipped} exact duplicate${skipped === 1 ? "" : "s"} skipped in this staging session. Existing library duplicates require server-side checking.` : "");
     setMessageTone("idle");
@@ -228,6 +223,8 @@ export function IntakeClient() {
 
   function removeFile(id: string) {
     if (busy) return;
+    const removed = files.find((item) => item.id === id);
+    if (removed?.sha256) stagedHashes.current.delete(removed.sha256);
     setFiles((current) => current.filter((item) => item.id !== id));
     setMessage("");
     setMessageTone("idle");
