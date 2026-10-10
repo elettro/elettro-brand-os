@@ -136,6 +136,73 @@ export type BulkAssetMetadata = {
   commerceLinks?: string[];
 };
 
+
+export type DirectUploadRequestFile = {
+  name: string;
+  type: string;
+  size: number;
+};
+
+export type DirectUploadTicket = {
+  key: string;
+  uploadUrl: string;
+  contentType: string;
+  size: number;
+  name: string;
+};
+
+async function postDevApiAction<T>(payload: Record<string, unknown>): Promise<T> {
+  const response = await fetch("/api/assets/bulk-update", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+
+  const result = await response.json();
+  if (!response.ok || result?.ok === false) {
+    throw new Error(result?.error || `DEV API action failed (${response.status})`);
+  }
+  return result as T;
+}
+
+export async function presignDirectUploads(input: {
+  brandSlug: string;
+  files: DirectUploadRequestFile[];
+}) {
+  return postDevApiAction<{
+    ok: boolean;
+    bucket: string;
+    expiresInSeconds: number;
+    uploads: DirectUploadTicket[];
+  }>({
+    action: "direct-upload-presign",
+    ...input
+  });
+}
+
+export async function completeDirectUploads(input: {
+  brandSlug: string;
+  mode: "raw" | "ready";
+  files: Array<{ key: string; name: string; type: string; size: number }>;
+  metadata: Record<string, unknown>;
+}) {
+  return postDevApiAction<{
+    ok: boolean;
+    created: number;
+    mode: string;
+    assets: Array<{
+      id: string;
+      filename: string;
+      ingestStatus: string;
+      approvalStatus: string;
+    }>;
+    message: string;
+  }>({
+    action: "direct-upload-complete",
+    ...input
+  });
+}
+
 export async function bulkUpdateAssets(input: {
   assetIds: string[];
   metadata?: BulkAssetMetadata;
