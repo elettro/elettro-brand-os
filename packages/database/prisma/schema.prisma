@@ -96,6 +96,9 @@ model Brand {
   metadataPresets   MetadataPreset[]
   intakeBatches     IntakeBatch[]
   shopifyStores     ShopifyStore[]
+  socialAccounts    SocialAccount[]
+  scheduledPosts    ScheduledPost[]
+  publicationLedger PublicationLedger[]
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
 
@@ -321,6 +324,8 @@ model Asset {
   creativeNotes           String?
   tags                    String[]           @default([])
   commerceLinks           String[]           @default([])
+  scheduledPosts           ScheduledPost[]
+  publicationLedger        PublicationLedger[]
   folderSuggestions       Json               @default("{}")
   aiSuggestions           Json               @default("{}")
   eligibilityType         EligibilityType    @default(evergreen)
@@ -347,3 +352,94 @@ model Asset {
   @@index([sourceType, sourceExternalId])
   @@index([shopifyStoreId, shopifyProductId])
 }
+
+model SocialAccount {
+  id                String              @id @default(uuid()) @db.Uuid
+  brandId           String              @db.Uuid
+  brand             Brand               @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  destination       String
+  accountName       String
+  externalAccountId String?
+  publishingMode    String              @default("handoff")
+  timezone          String              @default("America/New_York")
+  status            String              @default("active")
+  cadenceRules      CadenceRule[]
+  scheduledPosts    ScheduledPost[]
+  publicationLedger PublicationLedger[]
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  @@index([brandId, destination, status])
+}
+
+model CadenceRule {
+  id                 String        @id @default(uuid()) @db.Uuid
+  socialAccountId    String        @db.Uuid
+  socialAccount      SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+  placement          String
+  postsPerWeek       Int           @default(0)
+  preferredDays      String[]      @default([])
+  preferredStartTime String?
+  preferredEndTime   String?
+  active             Boolean       @default(true)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  @@index([socialAccountId, active])
+}
+
+model ScheduledPost {
+  id                 String             @id @default(uuid()) @db.Uuid
+  brandId            String             @db.Uuid
+  brand              Brand              @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  socialAccountId    String             @db.Uuid
+  socialAccount      SocialAccount      @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+  assetId            String             @db.Uuid
+  asset              Asset              @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  placement          String
+  scheduledFor       DateTime
+  status             String             @default("planned")
+  generatedTitle     String?
+  generatedCaption   String?
+  generatedHashtags  String[]           @default([])
+  selectionReason    String?
+  scoreBreakdown     Json               @default("{}")
+  publishingMode     String             @default("handoff")
+  publicationLedger  PublicationLedger[]
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  @@index([brandId, scheduledFor, status])
+  @@index([socialAccountId, scheduledFor])
+  @@index([assetId, scheduledFor])
+}
+
+model PublicationLedger {
+  id                      String         @id @default(uuid()) @db.Uuid
+  brandId                 String         @db.Uuid
+  brand                   Brand          @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  socialAccountId         String         @db.Uuid
+  socialAccount           SocialAccount  @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+  assetId                 String         @db.Uuid
+  asset                    Asset          @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  scheduledPostId         String?        @db.Uuid
+  scheduledPost           ScheduledPost? @relation(fields: [scheduledPostId], references: [id], onDelete: SetNull)
+  destination             String
+  placement               String
+  publishedAt             DateTime
+  method                  String
+  externalPostId          String?
+  externalUrl             String?
+  assetFilenameSnapshot   String
+  contentGroupSnapshot    String?
+  creativeFamilySnapshot  String?
+  campaignSnapshot        String?
+  topicSnapshot           String?
+  createdAt               DateTime       @default(now())
+
+  @@index([assetId, publishedAt])
+  @@index([brandId, publishedAt])
+  @@index([socialAccountId, publishedAt])
+  @@index([destination, publishedAt])
+}
+
