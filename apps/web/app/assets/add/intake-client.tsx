@@ -379,6 +379,25 @@ export function IntakeClient() {
         count++;
       }
       setUploadedDropboxPath(null);
+      // Reset the intake only after every attempted asset reached Ready.
+      // Raw saves remain staged for future edits; partial failures remain recoverable.
+      if (mode === "ready" && count === unsaved.length) {
+        setFiles([]);
+        stagedHashes.current.clear();
+        setCollection("");
+        setCampaign("");
+        setTopic("");
+        setCreativeFamily("");
+        setEligibilityMode("evergreen");
+        setWindowStart("");
+        setWindowEnd("");
+        setRepeatAnnually(false);
+        setSendToApprovalQueue(false);
+        setPriority("normal");
+        setCreatorNote("");
+        setSelectedNetworks(networks);
+        setDropboxTestResult("");
+      }
       setMessage(count + " asset" + (count===1?"":"s") + (mode==="ready"?" uploaded to Dropbox and registered Ready.":" uploaded to Dropbox and saved Raw.") + " No S3 transfer.");
       setMessageTone("success");
     } catch(error) {
