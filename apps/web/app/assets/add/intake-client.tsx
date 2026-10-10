@@ -74,6 +74,13 @@ export function IntakeClient() {
     );
   }
 
+  function removeFile(id: string) {
+    if (busy) return;
+    setFiles((current) => current.filter((item) => item.id !== id));
+    setMessage("");
+    setMessageTone("idle");
+  }
+
   function uploadFileToS3(item: IntakeFile, ticket: DirectUploadTicket) {
     return new Promise<void>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
@@ -385,8 +392,8 @@ export function IntakeClient() {
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr>
-                  {["File", "Detected type", "Size", "Status"].map((label) => (
-                    <th key={label} style={th}>{label}</th>
+                  {["File", "Detected type", "Size", "Status", ""].map((label, index) => (
+                    <th key={`${label}-${index}`} style={th}>{label}</th>
                   ))}
                 </tr>
               </thead>
@@ -407,6 +414,28 @@ export function IntakeClient() {
                       {file.error && (
                         <div style={{ marginTop: 4, fontSize: 11, color: "#b42318" }}>{file.error}</div>
                       )}
+                    </td>
+                    <td style={{ ...td, width: 44, textAlign: "right" }}>
+                      <button
+                        type="button"
+                        aria-label={`Remove ${file.name}`}
+                        title="Remove from this batch"
+                        disabled={busy}
+                        onClick={() => removeFile(file.id)}
+                        style={{
+                          border: "1px solid var(--line)",
+                          background: "white",
+                          color: "var(--muted)",
+                          borderRadius: 999,
+                          width: 28,
+                          height: 28,
+                          lineHeight: "24px",
+                          fontSize: 18,
+                          cursor: busy ? "not-allowed" : "pointer"
+                        }}
+                      >
+                        ×
+                      </button>
                     </td>
                   </tr>
                 ))}
