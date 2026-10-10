@@ -1,12 +1,23 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import {
+  completeDirectUploads,
+  presignDirectUploads,
+  type DirectUploadTicket
+} from "@/lib/dev-api";
+
+type IntakeFileStatus = "queued" | "uploading" | "uploaded" | "saved" | "ready" | "error";
 
 type IntakeFile = {
   id: string;
+  file: File;
   name: string;
   type: string;
   size: number;
+  status: IntakeFileStatus;
+  progress: number;
+  error?: string;
 };
 
 const networks = ["Instagram", "Facebook", "TikTok", "YouTube", "LinkedIn", "X"];
@@ -26,6 +37,8 @@ export function IntakeClient() {
   const [priority, setPriority] = useState("normal");
   const [creatorNote, setCreatorNote] = useState("");
   const [selectedNetworks, setSelectedNetworks] = useState(networks);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
 
   const totalSize = useMemo(
     () => files.reduce((sum, file) => sum + file.size, 0),
@@ -36,9 +49,12 @@ export function IntakeClient() {
     if (!list) return;
     const additions = Array.from(list).map((file) => ({
       id: crypto.randomUUID(),
+      file,
       name: file.name,
-      type: file.type || "unknown",
-      size: file.size
+      type: file.type || "application/octet-stream",
+      size: file.size,
+      status: "queued" as IntakeFileStatus,
+      progress: 0
     }));
     setFiles((current) => [...current, ...additions]);
   }
@@ -47,6 +63,155 @@ export function IntakeClient() {
     setSelectedNetworks((current) =>
       current.includes(name) ? current.filter((item) => item !== name) : [...current, name]
     );
+  }
+
+  function updateFile(id: string, patch: Partial<IntakeFile>) {
+    setFiles((current) =>
+      current.map((item) => (item.id === id ? { ...item, ...patch } : item))
+    );
+  }
+
+  function uploadFileToS3(item: IntakeFile, ticket: DirectUploadTicket) {
+    return new Promise<void>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("PUT", ticket.uploadUrl);
+      xhr.setRequestHeader("Content-Type", ticket.contentType || "application/octet-stream");
+
+      xhr.upload.onprogress = (event) => {
+        if (!event.lengthComputable) return;
+        updateFile(item.id, {
+          status: "uploading",
+          progress: Math.round((event.loaded / event.total) * 100)
+        });
+      };
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          updateFile(item.id, { status: "uploaded", progress: 100, error: undefined });
+          resolve();
+        } else {
+          reject(new Error(`S3 upload failed (${xhr.status})`));
+        }
+      };
+
+      xhr.onerror = () => reject(new Error("S3 upload failed"));
+      xhr.send(item.file);
+    });
+  }
+
+  async function uploadWithConcurrency(
+    items: Array<{ item: IntakeFile; ticket: DirectUploadTicket }>,
+    limit = 3
+  ) {
+    let cursor = 0;
+
+    async function worker() {
+      while (cursor < items.length) {
+        const index = cursor;
+        cursor += 1;
+        const current = items[index];
+        try {
+          await uploadFileToS3(current.item, current.ticket);
+        } catch (error) {
+          updateFile(current.item.id, {
+            status: "error",
+            error: error instanceof Error ? error.message : "Upload failed"
+          });
+          throw error;
+        }
+      }
+    }
+
+    await Promise.all(
+      Array.from({ length: Math.min(limit, items.length) }, () => worker())
+    );
+  }
+
+  async function submitBatch(mode: "raw" | "ready") {
+    if (!files.length || busy) return;
+
+    if (eligibilityMode === "window" && (!windowStart || !windowEnd)) {
+      setMessage("Choose both a start and stop date for a publishing window.");
+      return;
+    }
+
+    setBusy(true);
+    setMessage("");
+
+    try {
+      setFiles((current) =>
+        current.map((item) => ({
+          ...item,
+          status: "queued",
+          progress: 0,
+          error: undefined
+        }))
+      );
+
+      const presigned = await presignDirectUploads({
+        brandSlug: brand,
+        files: files.map((item) => ({
+          name: item.name,
+          type: item.type,
+          size: item.size
+        }))
+      });
+
+      if (presigned.uploads.length !== files.length) {
+        throw new Error("Upload ticket count did not match selected files.");
+      }
+
+      await uploadWithConcurrency(
+        files.map((item, index) => ({
+          item,
+          ticket: presigned.uploads[index]
+        }))
+      );
+
+      const completed = await completeDirectUploads({
+        brandSlug: brand,
+        mode,
+        files: presigned.uploads.map((ticket, index) => ({
+          key: ticket.key,
+          name: files[index].name,
+          type: files[index].type,
+          size: files[index].size
+        })),
+        metadata: {
+          collection,
+          campaign,
+          topic,
+          creativeFamily,
+          eligibilityMode,
+          windowStart,
+          windowEnd,
+          repeatAnnually,
+          sendToApprovalQueue,
+          priority,
+          creatorNote,
+          allowedDestinations: selectedNetworks
+        }
+      });
+
+      const finalStatus: IntakeFileStatus = mode === "raw" ? "saved" : "ready";
+      setFiles((current) =>
+        current.map((item) => ({
+          ...item,
+          status: finalStatus,
+          progress: 100,
+          error: undefined
+        }))
+      );
+      setMessage(
+        mode === "raw"
+          ? `Saved ${completed.created} assets as Raw.`
+          : `Ingested ${completed.created} assets and marked them Ready.`
+      );
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Upload failed");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -224,7 +389,18 @@ export function IntakeClient() {
                     <td style={td}>{file.name}</td>
                     <td style={td}>{file.type.startsWith("video/") ? "Video" : file.type.startsWith("image/") ? "Image" : file.type}</td>
                     <td style={td}>{(file.size / 1024 / 1024).toFixed(1)} MB</td>
-                    <td style={td}><span className="status-chip">Raw</span></td>
+                    <td style={td}>
+                      <span className="status-chip">
+                        {file.status === "queued" ? "Queued" :
+                         file.status === "uploading" ? `Uploading ${file.progress}%` :
+                         file.status === "uploaded" ? "Uploaded" :
+                         file.status === "saved" ? "Raw · Saved" :
+                         file.status === "ready" ? "Ready" : "Error"}
+                      </span>
+                      {file.error && (
+                        <div style={{ marginTop: 4, fontSize: 11, color: "#b42318" }}>{file.error}</div>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -232,9 +408,28 @@ export function IntakeClient() {
           </div>
         )}
 
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 18 }}>
-          <button type="button" disabled={!files.length} style={buttonSecondary}>Save Raw</button>
-          <button type="button" disabled={!files.length} style={buttonPrimary}>Ingest & Analyze</button>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap", marginTop: 18 }}>
+          <div className="muted" style={{ fontSize: 13 }}>
+            {message || (busy ? "Uploading directly to Brand OS storage…" : "Files upload directly to S3; large videos do not pass through Lambda.")}
+          </div>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+            <button
+              type="button"
+              disabled={!files.length || busy}
+              onClick={() => submitBatch("raw")}
+              style={buttonSecondary}
+            >
+              {busy ? "Uploading…" : "Save Raw"}
+            </button>
+            <button
+              type="button"
+              disabled={!files.length || busy}
+              onClick={() => submitBatch("ready")}
+              style={buttonPrimary}
+            >
+              {busy ? "Uploading…" : "Ingest & Ready"}
+            </button>
+          </div>
         </div>
       </section>
     </div>
