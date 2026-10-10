@@ -164,6 +164,18 @@ export function IntakeClient() {
     }
   }
 
+  // Temporary same-browser persistent duplicate ledger. Backend canonical hash enforcement is still required.
+  function savedFingerprintKey(brandSlug: string) { return `elettro:saved-sha256:v1:${brandSlug}`; }
+  function getSavedFingerprints(brandSlug: string): Set<string> {
+    try { return new Set(JSON.parse(localStorage.getItem(savedFingerprintKey(brandSlug)) || "[]") as string[]); }
+    catch { return new Set<string>(); }
+  }
+  function rememberSavedFingerprints(brandSlug: string, hashes: string[]) {
+    const stored = getSavedFingerprints(brandSlug);
+    hashes.forEach(hash => stored.add(hash));
+    try { localStorage.setItem(savedFingerprintKey(brandSlug), JSON.stringify([...stored])); }
+    catch { /* Browser storage unavailable. Server-side protection remains required. */ }
+  }
   async function sha256(file: File): Promise<string> {
     const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
     return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -183,14 +195,17 @@ export function IntakeClient() {
     })));
     const accepted: IntakeFile[] = [];
     let skipped = 0;
+    const previouslySaved = getSavedFingerprints(brand);
+    let alreadySaved = 0;
     for (const item of incoming) {
+      if (previouslySaved.has(item.sha256)) { skipped++; alreadySaved++; continue; }
       if (stagedHashes.current.has(item.sha256)) { skipped++; continue; }
       stagedHashes.current.add(item.sha256);
       accepted.push(item);
     }
     setFiles((current) => [...current, ...accepted]);
     for (const item of accepted) void analyzeFile(item);
-    setMessage(skipped ? `${skipped} exact duplicate${skipped === 1 ? "" : "s"} skipped in this staging session. Existing library duplicates require server-side checking.` : "");
+    setMessage(skipped ? `${skipped} exact duplicate${skipped === 1 ? "" : "s"} skipped (${alreadySaved} previously saved in this browser). Full library protection across devices is pending.` : "");
     setMessageTone("idle");
   }
 
@@ -313,9 +328,11 @@ export function IntakeClient() {
       // even if files reached staging before their analysis finished.
       const seenHashes = new Set<string>();
       const uniqueFiles: IntakeFile[] = [];
+      const previouslySaved = getSavedFingerprints(brand);
       for (const item of files) {
+        if (item.status === "saved" || item.status === "ready") continue;
         const hash = item.sha256 || await sha256(item.file);
-        if (seenHashes.has(hash)) continue;
+        if (seenHashes.has(hash) || previouslySaved.has(hash)) continue;
         seenHashes.add(hash);
         uniqueFiles.push(item);
       }
@@ -366,6 +383,7 @@ export function IntakeClient() {
         }
       });
 
+      if (completed.created === uniqueFiles.length) rememberSavedFingerprints(brand, uniqueFiles.map(item => item.sha256!).filter(Boolean));
       const finalStatus: IntakeFileStatus = mode === "raw" ? "saved" : "ready";
       const uploadedIds = new Set(uniqueFiles.map((item) => item.id));
       setFiles((current) => current.map((item) => uploadedIds.has(item.id) ? { ...item, status: finalStatus, progress: 100, error: undefined } : item));
