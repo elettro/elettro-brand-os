@@ -1190,11 +1190,7 @@ async function presignDirectUploads(event) {
       const command = new PutObjectCommand({
         Bucket: bucket,
         Key: key,
-        ContentType: contentType,
-        Metadata: {
-          "brand-slug": brandSlug,
-          "original-name": name
-        }
+        ContentType: contentType
       });
 
       const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 900 });
@@ -1308,6 +1304,20 @@ async function completeDirectUploads(event) {
       }
 
       await s3.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
+
+      const existingAsset = await client.query(
+        `SELECT "id","filename","ingestStatus","approvalStatus"
+         FROM "Asset"
+         WHERE "brandId" = $1
+           AND "sourceType" = 'direct_upload'
+           AND "sourceExternalId" = $2
+         LIMIT 1`,
+        [brandId, key]
+      );
+      if (existingAsset.rows[0]) {
+        inserted.push(existingAsset.rows[0]);
+        continue;
+      }
 
       const sourceMetadata = JSON.stringify({
         bucket,
@@ -1556,8 +1566,12 @@ export const handler = async (event = {}) => {
 
 
 
+  const routedBody = requestPath === "/assets/bulk-update" ? parseJsonBody(event) : {};
+
   if (
     event?.action === "direct-upload-presign" ||
+    (requestPath === "/assets/bulk-update" && routedBody?.action === "direct-upload-presign") ||
+
     (requestPath === "/assets/upload/presign" && event?.requestContext?.http?.method === "POST")
   ) {
     return presignDirectUploads(event);
@@ -1565,6 +1579,7 @@ export const handler = async (event = {}) => {
 
   if (
     event?.action === "direct-upload-complete" ||
+    (requestPath === "/assets/bulk-update" && routedBody?.action === "direct-upload-complete") ||
     (requestPath === "/assets/upload/complete" && event?.requestContext?.http?.method === "POST")
   ) {
     return completeDirectUploads(event);
