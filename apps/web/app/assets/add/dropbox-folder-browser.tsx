@@ -45,12 +45,12 @@ export function DropboxFolderBrowser({brand,fileTypes=[],onSelect}:{brand:string
  const parent=path&&root&&path.length>root.length?path.slice(0,path.lastIndexOf("/")):root;
  return <section className="card" style={{marginTop:14}}>
   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
-   <div><div className="eyebrow">Dropbox destination · Step 1</div><h3 style={{margin:"6px 0"}}>Browse real brand folders</h3><p className="muted" style={{margin:0}}>Read-only test. Browsing does not change your files or alter the current S3 Save Raw destination.</p></div>
+   <div><div className="eyebrow">Dropbox destination · Step 1</div><h3 style={{margin:"6px 0"}}>Browse real brand folders</h3><p className="muted" style={{margin:0}}>Browse or create Dropbox folders. The selected folder is used for direct image uploads in DEV.</p></div>
    <button type="button" onClick={()=>{if(!open){setOpen(true);void load();}else setOpen(false);}}>{open?"Close browser":"Browse Dropbox"}</button>
   </div>
   <div style={{marginTop:12,padding:12,fontSize:13,border:"1px solid var(--line)",borderRadius:8,background:"var(--panel-soft)"}}>
    <strong>Planned Dropbox destination:</strong> <span style={{overflowWrap:"anywhere"}}>{selected||"Not selected yet"}</span>
-   <p className="muted" style={{margin:"6px 0 0"}}>Selection is a preview only. Save Raw and Ingest & Ready still use current Brand OS/S3 storage; no file is written to Dropbox.</p>
+   <p className="muted" style={{margin:"6px 0 0"}}>Selected destination applies to Save Raw and Ingest & Ready for images up to 10 MB. Larger assets and videos are blocked until direct upload sessions are implemented; S3 is not used.</p>
    {selected&&<button type="button" onClick={()=>{setSelected(null);onSelect?.(null);}} style={{marginTop:8}}>Clear selection</button>}
   </div>
   {open&&<div style={{marginTop:12,padding:12,background:"var(--panel-soft)",borderRadius:10}}>
