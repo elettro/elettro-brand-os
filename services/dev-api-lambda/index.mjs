@@ -525,6 +525,119 @@ export const handler = async (event = {}) => {
     return backfillFolderHints(event);
   }
 
+  if (event?.action === "migrate-publication-foundation") {
+    let client;
+    try {
+      client = await connectDatabase();
+      await client.query("BEGIN");
+      try {
+        await client.query('CREATE EXTENSION IF NOT EXISTS pgcrypto');
+
+        await client.query(`
+          CREATE TABLE IF NOT EXISTS "SocialAccount" (
+            "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            "brandId" UUID NOT NULL REFERENCES "Brand"("id") ON DELETE CASCADE,
+            "destination" TEXT NOT NULL,
+            "accountName" TEXT NOT NULL,
+            "externalAccountId" TEXT,
+            "publishingMode" TEXT NOT NULL DEFAULT 'handoff',
+            "timezone" TEXT NOT NULL DEFAULT 'America/New_York',
+            "status" TEXT NOT NULL DEFAULT 'active',
+            "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+          )
+        `);
+        await client.query('CREATE INDEX IF NOT EXISTS "SocialAccount_brandId_destination_status_idx" ON "SocialAccount"("brandId","destination","status")');
+
+        await client.query(`
+          CREATE TABLE IF NOT EXISTS "CadenceRule" (
+            "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            "socialAccountId" UUID NOT NULL REFERENCES "SocialAccount"("id") ON DELETE CASCADE,
+            "placement" TEXT NOT NULL,
+            "postsPerWeek" INTEGER NOT NULL DEFAULT 0,
+            "preferredDays" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+            "preferredStartTime" TEXT,
+            "preferredEndTime" TEXT,
+            "active" BOOLEAN NOT NULL DEFAULT TRUE,
+            "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+          )
+        `);
+        await client.query('CREATE INDEX IF NOT EXISTS "CadenceRule_socialAccountId_active_idx" ON "CadenceRule"("socialAccountId","active")');
+
+        await client.query(`
+          CREATE TABLE IF NOT EXISTS "ScheduledPost" (
+            "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            "brandId" UUID NOT NULL REFERENCES "Brand"("id") ON DELETE CASCADE,
+            "socialAccountId" UUID NOT NULL REFERENCES "SocialAccount"("id") ON DELETE CASCADE,
+            "assetId" UUID NOT NULL REFERENCES "Asset"("id") ON DELETE CASCADE,
+            "placement" TEXT NOT NULL,
+            "scheduledFor" TIMESTAMP(3) NOT NULL,
+            "status" TEXT NOT NULL DEFAULT 'planned',
+            "generatedTitle" TEXT,
+            "generatedCaption" TEXT,
+            "generatedHashtags" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+            "selectionReason" TEXT,
+            "scoreBreakdown" JSONB NOT NULL DEFAULT '{}'::JSONB,
+            "publishingMode" TEXT NOT NULL DEFAULT 'handoff',
+            "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+          )
+        `);
+        await client.query('CREATE INDEX IF NOT EXISTS "ScheduledPost_brandId_scheduledFor_status_idx" ON "ScheduledPost"("brandId","scheduledFor","status")');
+        await client.query('CREATE INDEX IF NOT EXISTS "ScheduledPost_socialAccountId_scheduledFor_idx" ON "ScheduledPost"("socialAccountId","scheduledFor")');
+        await client.query('CREATE INDEX IF NOT EXISTS "ScheduledPost_assetId_scheduledFor_idx" ON "ScheduledPost"("assetId","scheduledFor")');
+
+        await client.query(`
+          CREATE TABLE IF NOT EXISTS "PublicationLedger" (
+            "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            "brandId" UUID NOT NULL REFERENCES "Brand"("id") ON DELETE CASCADE,
+            "socialAccountId" UUID NOT NULL REFERENCES "SocialAccount"("id") ON DELETE CASCADE,
+            "assetId" UUID NOT NULL REFERENCES "Asset"("id") ON DELETE RESTRICT,
+            "scheduledPostId" UUID REFERENCES "ScheduledPost"("id") ON DELETE SET NULL,
+            "destination" TEXT NOT NULL,
+            "placement" TEXT NOT NULL,
+            "publishedAt" TIMESTAMP(3) NOT NULL,
+            "method" TEXT NOT NULL,
+            "externalPostId" TEXT,
+            "externalUrl" TEXT,
+            "assetFilenameSnapshot" TEXT NOT NULL,
+            "contentGroupSnapshot" TEXT,
+            "creativeFamilySnapshot" TEXT,
+            "campaignSnapshot" TEXT,
+            "topicSnapshot" TEXT,
+            "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+          )
+        `);
+        await client.query('CREATE INDEX IF NOT EXISTS "PublicationLedger_assetId_publishedAt_idx" ON "PublicationLedger"("assetId","publishedAt")');
+        await client.query('CREATE INDEX IF NOT EXISTS "PublicationLedger_brandId_publishedAt_idx" ON "PublicationLedger"("brandId","publishedAt")');
+        await client.query('CREATE INDEX IF NOT EXISTS "PublicationLedger_socialAccountId_publishedAt_idx" ON "PublicationLedger"("socialAccountId","publishedAt")');
+        await client.query('CREATE INDEX IF NOT EXISTS "PublicationLedger_destination_publishedAt_idx" ON "PublicationLedger"("destination","publishedAt")');
+
+        await client.query("COMMIT");
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      }
+
+      return json(200, {
+        ok: true,
+        message: "Publication history foundation is ready",
+        tables: ["SocialAccount", "CadenceRule", "ScheduledPost", "PublicationLedger"]
+      });
+    } catch (error) {
+      console.error("[publication-foundation-migration] failed", error);
+      return json(500, {
+        ok: false,
+        error: error instanceof Error ? error.message : "Unknown publication foundation migration error"
+      });
+    } finally {
+      if (client) {
+        try { await client.end(); } catch {}
+      }
+    }
+  }
+
   if (event?.action === "migrate-asset-commerce-links") {
     let client;
     try {
