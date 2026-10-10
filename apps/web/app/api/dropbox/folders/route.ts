@@ -25,3 +25,20 @@ export async function GET(request:NextRequest){
   return NextResponse.json(data,{headers:{"cache-control":"no-store"}});
  }catch(error){return NextResponse.json({error:"Unable to reach DEV API Gateway",details:error instanceof Error?error.message:"Network error"},{status:503});}
 }
+
+// DEV-only folder creation; brand-root validated server-side as well as by Lambda.
+export async function POST(request:NextRequest){
+ const body=await request.json().catch(()=>({})) as Record<string,unknown>;
+ const brand=String(body.brand||"");
+ const config=brandConfigs.find(item=>item.id===brand);
+ if(!config)return NextResponse.json({error:"Unknown brand"},{status:400});
+ const path=String(body.path||config.dropboxRoot).replace(/\\\\/g,"/").replace(/\\/+$/,"");
+ if(path.toLowerCase()!==config.dropboxRoot.toLowerCase()&&!path.toLowerCase().startsWith(config.dropboxRoot.toLowerCase()+"/"))return NextResponse.json({error:"Outside brand root"},{status:403});
+ const name=String(body.name||"").trim();
+ if(!name||name.length>180||/[\\\\/\\x00-\\x1f]/.test(name)||name==="."||name==="..")return NextResponse.json({error:"Invalid folder name"},{status:400});
+ try{
+  const response=await fetch(`${API_BASE}/assets/bulk-update`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action:"create-brand-folder",brand,path,name}),cache:"no-store"});
+  const data=await response.json();
+  return NextResponse.json(data,{status:response.status});
+ }catch(error){return NextResponse.json({error:"Unable to create Dropbox folder",details:error instanceof Error?error.message:"Network error"},{status:503});}
+}
