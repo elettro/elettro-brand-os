@@ -50,6 +50,8 @@ export function IntakeClient() {
   const [creatorNote, setCreatorNote] = useState("");
   const [selectedNetworks, setSelectedNetworks] = useState(networks);
   const [busy, setBusy] = useState(false);
+  const [dropboxTestBusy, setDropboxTestBusy] = useState(false);
+  const [dropboxTestResult, setDropboxTestResult] = useState("");
   const [message, setMessage] = useState("");
   const [messageTone, setMessageTone] = useState<"idle" | "success" | "error">("idle");
   const [folderInventory, setFolderInventory] = useState<Array<{ path: string; count: number }>>([]);
@@ -301,6 +303,38 @@ export function IntakeClient() {
     await Promise.all(
       Array.from({ length: Math.min(limit, items.length) }, () => worker())
     );
+  }
+
+
+  // DEV-only test: upload exactly one small image directly to a one-time Dropbox URL.
+  // This intentionally does NOT mark an asset ingested/ready or touch S3.
+  async function testDirectDropboxUpload() {
+    if (!plannedDropboxFolder || files.length !== 1 || !files[0].type.startsWith("image/") || files[0].size > 10 * 1024 * 1024) {
+      setDropboxTestResult("Select one image under 10 MB and a Dropbox destination first.");
+      return;
+    }
+    setDropboxTestBusy(true);
+    setDropboxTestResult("Requesting secure Dropbox upload link…");
+    try {
+      const item = files[0];
+      const response = await fetch("/api/dropbox/upload-link", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ brand, path: plannedDropboxFolder, filename: item.name })
+      });
+      const info = await response.json();
+      if (!response.ok || info.ok === false || !info.uploadUrl) {
+        throw new Error(info.detail || info.error || "Unable to create Dropbox upload link");
+      }
+      setDropboxTestResult("Uploading image directly to Dropbox…");
+      const uploaded = await fetch(info.uploadUrl, {
+        method: "POST", headers: { "content-type": "application/octet-stream" }, body: item.file
+      });
+      const resultText = await uploaded.text();
+      if (!uploaded.ok) throw new Error("Dropbox upload failed (" + uploaded.status + "): " + resultText.slice(0, 220));
+      setDropboxTestResult("Dropbox accepted the file at " + String(info.path) + ". Verify it in Dropbox. Brand OS database ingestion has not been completed.");
+    } catch (error) {
+      setDropboxTestResult("Direct Dropbox test failed: " + (error instanceof Error ? error.message : "Unknown error"));
+    } finally { setDropboxTestBusy(false); }
   }
 
   async function submitBatch(mode: "raw" | "ready") {
@@ -658,6 +692,12 @@ export function IntakeClient() {
           </div>
         )}
 
+        <div style={{marginTop:18,padding:14,border:"1px solid var(--line)",borderRadius:10,background:"var(--panel-soft)"}}>
+          <strong>DEV test: Upload one image directly to Dropbox (no S3)</strong>
+          <p className="muted" style={{margin:"6px 0 10px"}}>Choose exactly one small image (up to 10 MB) and select a Dropbox folder above. This is a storage-only test: it does not create a Brand OS asset record or make the file ready to publish. Use a disposable image with a unique filename to avoid duplicate-name conflicts.</p>
+          <button type="button" disabled={busy||dropboxTestBusy||!plannedDropboxFolder||files.length!==1||!files[0]?.type.startsWith("image/")||files[0]?.size>10*1024*1024} onClick={()=>void testDirectDropboxUpload()} style={buttonPrimary}>{dropboxTestBusy?"Testing…":"Test direct Dropbox upload"}</button>
+          {dropboxTestResult&&<p aria-live="polite" style={{margin:"10px 0 0",fontSize:13,overflowWrap:"anywhere"}}>{dropboxTestResult}</p>}
+        </div>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap", marginTop: 18 }}>
           <div
             aria-live="polite"
