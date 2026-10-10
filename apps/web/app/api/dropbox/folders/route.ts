@@ -12,7 +12,7 @@ export async function GET(request:NextRequest){
  if(normalized.toLowerCase()!==root.toLowerCase()&&!normalized.toLowerCase().startsWith(root.toLowerCase()+"/"))
   return NextResponse.json({error:"Outside brand root"},{status:403});
  try{
-  const response=await fetch(`${API_BASE.replace(/\\/+$/, "")}/assets/bulk-update`,{
+  const response=await fetch(`${API_BASE}/assets/bulk-update`,{
    method:"POST",
    headers:{"content-type":"application/json"},
    body:JSON.stringify({action:"dropbox-list-folders",brand,path:normalized}),
