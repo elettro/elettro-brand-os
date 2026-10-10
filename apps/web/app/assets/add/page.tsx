@@ -26,7 +26,7 @@ export default function SmartIntakePage(){
  const created:Item[]=batch.map((file,i)=>({id:ids[i],file,name:file.name,purpose:infer(file),shape:"Unknown",campaign:slug(campaign)||"uncategorized",status:"Analyzing",folder:"",decision:"none",confidence:0}));
  // SHA-256 detects byte-for-byte duplicates inside this browser staging session.
  // Production deduplication must also query the persisted asset index before upload.
- const fingerprints=await Promise.all(fresh.map(async x=>({id:x.id,hash:Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",await x.file.arrayBuffer()))).map(b=>b.toString(16).padStart(2,"0")).join("")})));
+ const fingerprints=await Promise.all(created.map(async x=>({id:x.id,hash:Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",await x.file.arrayBuffer()))).map(b=>b.toString(16).padStart(2,"0")).join("")})));
  const seen=new Map(items.filter(x=>x.hash).map(x=>[x.hash!,x.name]));
  const fresh:Item[]=[];const duplicates:string[]=[];
  for(const entry of created){const hash=fingerprints.find(h=>h.id===entry.id)!.hash;
