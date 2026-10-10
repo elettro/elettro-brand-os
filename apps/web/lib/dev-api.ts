@@ -72,6 +72,7 @@ export type ApiAsset = {
   durationMs?: number | null;
   hasAudio?: boolean | null;
   updatedAt?: string;
+  lastUsedAt?: string | null;
   brandSlug: string;
   brandName: string;
   createdAt?: string;
