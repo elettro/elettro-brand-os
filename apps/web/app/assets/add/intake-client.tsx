@@ -39,6 +39,7 @@ export function IntakeClient() {
   const [selectedNetworks, setSelectedNetworks] = useState(networks);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [messageTone, setMessageTone] = useState<"idle" | "success" | "error">("idle");
 
   const totalSize = useMemo(
     () => files.reduce((sum, file) => sum + file.size, 0),
@@ -57,6 +58,8 @@ export function IntakeClient() {
       progress: 0
     }));
     setFiles((current) => [...current, ...additions]);
+    setMessage("");
+    setMessageTone("idle");
   }
 
   function toggleNetwork(name: string) {
@@ -132,11 +135,13 @@ export function IntakeClient() {
 
     if (eligibilityMode === "window" && (!windowStart || !windowEnd)) {
       setMessage("Choose both a start and stop date for a publishing window.");
+      setMessageTone("error");
       return;
     }
 
     setBusy(true);
     setMessage("");
+    setMessageTone("idle");
 
     try {
       setFiles((current) =>
@@ -204,11 +209,13 @@ export function IntakeClient() {
       );
       setMessage(
         mode === "raw"
-          ? `Saved ${completed.created} assets as Raw.`
-          : `Ingested ${completed.created} assets and marked them Ready.`
+          ? `${completed.created} asset${completed.created === 1 ? "" : "s"} saved successfully.`
+          : `${completed.created} asset${completed.created === 1 ? "" : "s"} saved and marked Ready.`
       );
+      setMessageTone("success");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Upload failed");
+      setMessageTone("error");
     } finally {
       setBusy(false);
     }
@@ -409,8 +416,28 @@ export function IntakeClient() {
         )}
 
         <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap", marginTop: 18 }}>
-          <div className="muted" style={{ fontSize: 13 }}>
-            {message || (busy ? "Uploading directly to Brand OS storage…" : "Files upload directly to S3; large videos do not pass through Lambda.")}
+          <div
+            aria-live="polite"
+            style={{
+              fontSize: 13,
+              fontWeight: messageTone === "success" ? 700 : 500,
+              color:
+                messageTone === "success"
+                  ? "#067647"
+                  : messageTone === "error"
+                    ? "#b42318"
+                    : "var(--muted)"
+            }}
+          >
+            {message
+              ? messageTone === "success"
+                ? `✓ ${message}`
+                : message
+              : busy
+                ? "Uploading directly to Brand OS storage…"
+                : files.length
+                  ? `${files.length} asset${files.length === 1 ? "" : "s"} selected · not saved yet`
+                  : "Select files to stage them here before saving."}
           </div>
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
             <button
