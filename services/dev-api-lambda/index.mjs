@@ -1019,9 +1019,9 @@ async function configurePlannerAccount(event) {
     await client.query("BEGIN");
     try {
       let accountResult = await client.query(
-        \`SELECT "id" FROM "SocialAccount"
+        `SELECT "id" FROM "SocialAccount"
          WHERE "brandId" = $1 AND "destination" = $2 AND "accountName" = $3
-         LIMIT 1\`,
+         LIMIT 1`,
         [brand.id, destination, accountName]
       );
 
@@ -1029,29 +1029,29 @@ async function configurePlannerAccount(event) {
 
       if (!socialAccountId) {
         accountResult = await client.query(
-          \`INSERT INTO "SocialAccount"
+          `INSERT INTO "SocialAccount"
             ("brandId","destination","accountName","publishingMode","timezone","status","updatedAt")
            VALUES ($1,$2,$3,$4,$5,'active',CURRENT_TIMESTAMP)
-           RETURNING "id"\`,
+           RETURNING "id"`,
           [brand.id, destination, accountName, publishingMode, brand.timezone || "America/New_York"]
         );
         socialAccountId = accountResult.rows[0].id;
       } else {
         await client.query(
-          \`UPDATE "SocialAccount"
+          `UPDATE "SocialAccount"
            SET "publishingMode" = $2,
                "timezone" = $3,
                "status" = 'active',
                "updatedAt" = CURRENT_TIMESTAMP
-           WHERE "id" = $1\`,
+           WHERE "id" = $1`,
           [socialAccountId, publishingMode, brand.timezone || "America/New_York"]
         );
       }
 
       let cadenceResult = await client.query(
-        \`SELECT "id" FROM "CadenceRule"
+        `SELECT "id" FROM "CadenceRule"
          WHERE "socialAccountId" = $1 AND "placement" = $2
-         LIMIT 1\`,
+         LIMIT 1`,
         [socialAccountId, placement]
       );
 
@@ -1059,22 +1059,22 @@ async function configurePlannerAccount(event) {
 
       if (!cadenceRuleId) {
         cadenceResult = await client.query(
-          \`INSERT INTO "CadenceRule"
+          `INSERT INTO "CadenceRule"
             ("socialAccountId","placement","postsPerWeek","preferredDays","preferredStartTime","active","updatedAt")
            VALUES ($1,$2,$3,$4,$5,TRUE,CURRENT_TIMESTAMP)
-           RETURNING "id"\`,
+           RETURNING "id"`,
           [socialAccountId, placement, postsPerWeek, preferredDays, preferredStartTime]
         );
         cadenceRuleId = cadenceResult.rows[0].id;
       } else {
         await client.query(
-          \`UPDATE "CadenceRule"
+          `UPDATE "CadenceRule"
            SET "postsPerWeek" = $2,
                "preferredDays" = $3,
                "preferredStartTime" = $4,
                "active" = TRUE,
                "updatedAt" = CURRENT_TIMESTAMP
-           WHERE "id" = $1\`,
+           WHERE "id" = $1`,
           [cadenceRuleId, postsPerWeek, preferredDays, preferredStartTime]
         );
       }
