@@ -4,7 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 
 type Purpose = "source-images" | "social-graphics" | "source-footage" | "finished-video" | "other";
-type Item = { id:string; file:File; name:string; purpose:Purpose; shape:string; width?:number; height?:number; duration?:number; campaign:string; status:"Analyzing"|"Suggestions Ready"; folder:string; decision:"suggested"|"manual"|"none"; confidence:number };
+type Item = { hash?:string; duplicateOf?:string; id:string; file:File; name:string; purpose:Purpose; shape:string; width?:number; height?:number; duration?:number; campaign:string; status:"Analyzing"|"Suggestions Ready"; folder:string; decision:"suggested"|"manual"|"none"; confidence:number };
 const LABELS:Record<Purpose,string> = {"source-images":"Source images","social-graphics":"Social graphics","source-footage":"Source footage","finished-video":"Finished video",other:"Other files"};
 const slug=(v:string)=>v.toLowerCase().replace(/\.[^.]+$/,"").replace(/(?:[_\s-]+(?:final|v\d+|clip|take|render|export|edit|source|raw|vertical|horizontal|portrait|landscape|\d+))+$/gi,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
 const ratio=(w:number,h:number)=>{if(!w||!h)return "Unknown";const r=w/h; if(Math.abs(r-9/16)<.06)return "9x16";if(Math.abs(r-16/9)<.09)return "16x9";if(Math.abs(r-1)<.08)return "1x1";if(Math.abs(r-4/5)<.07)return "4x5";return w>h?"Landscape": "Portrait";};
@@ -24,7 +24,18 @@ export default function SmartIntakePage(){
  const input=useRef<HTMLInputElement>(null);const [message,setMessage]=useState("");
  const add=async(files:FileList|null)=>{if(!files?.length)return;setMessage("");const batch=Array.from(files);const ids=batch.map((_,i)=>`${Date.now()}-${i}-${Math.random().toString(36).slice(2)}`);
  const created:Item[]=batch.map((file,i)=>({id:ids[i],file,name:file.name,purpose:infer(file),shape:"Unknown",campaign:slug(campaign)||"uncategorized",status:"Analyzing",folder:"",decision:"none",confidence:0}));
- setItems(old=>[...old,...created]);
+ // SHA-256 detects byte-for-byte duplicates inside this browser staging session.
+ // Production deduplication must also query the persisted asset index before upload.
+ const fingerprints=await Promise.all(fresh.map(async x=>({id:x.id,hash:Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",await x.file.arrayBuffer()))).map(b=>b.toString(16).padStart(2,"0")).join("")})));
+ const seen=new Map(items.filter(x=>x.hash).map(x=>[x.hash!,x.name]));
+ const fresh:Item[]=[];const duplicates:string[]=[];
+ for(const entry of created){const hash=fingerprints.find(h=>h.id===entry.id)!.hash;
+   if(seen.has(hash)){duplicates.push(entry.name+" matches "+seen.get(hash));continue;}
+   seen.set(hash,entry.name);fresh.push({...entry,hash});
+ }
+ if(duplicates.length)setMessage(`${duplicates.length} exact duplicate(s) skipped in current staging batch: ${duplicates.slice(0,5).join("; ")}${duplicates.length>5?" …":""}. Library-wide checking requires the server index.`);
+ if(!fresh.length)return;
+ setItems(old=>[...old,...fresh]);
  await Promise.all(created.map(async x=>{const m=await readMedia(x.file);const shape=ratio(m.width||0,m.height||0);const confident=x.campaign!=="uncategorized"&&shape!=="Unknown";
  const dest=confident?suggestedPath(brand,x.campaign,x.purpose,shape):"";
  setItems(old=>old.map(row=>row.id===x.id?{...row,...m,shape,status:"Suggestions Ready",folder:auto?dest:"",decision:auto&&confident?"suggested":"none",confidence:confident?80:0}:row));}));
@@ -51,7 +62,7 @@ export default function SmartIntakePage(){
   </section>
   {items.length>0&&<>
    <section className="card" style={{marginTop:14,display:"flex",gap:18,flexWrap:"wrap",alignItems:"center",justifyContent:"space-between"}}>
-    <div><strong>{items.length} selected · {chosen} destinations selected · {unresolved} need review</strong><p className="muted" style={{margin:"4px 0 0"}}>No files saved. Recommendations are proposals based on campaign, file type and dimensions, not historical Dropbox matches.</p></div>
+    <div><strong>{items.length} selected · {chosen} destinations selected · {unresolved} need review</strong><p className="muted" style={{margin:"4px 0 0"}}>Exact duplicates within this staging session are skipped. Existing Dropbox library duplicates are not yet checked. No files saved. Recommendations are proposals based on campaign, file type and dimensions, not historical Dropbox matches.</p></div>
     <div style={{display:"flex",gap:8}}><button onClick={reset}>Reset recommendations</button><button onClick={()=>{setItems([]);setMessage("");}}>Clear batch</button></div>
    </section>
    <div style={{display:"flex",gap:10,marginTop:16}}>{[["all","All groups"],["needs","Needs folder"],["ready","Assigned"]].map(([v,l])=><button key={v} onClick={()=>setFilter(v)} style={{borderRadius:8,padding:"8px 12px",border:"1px solid #ddd",background:filter===v?"#fff1e8":"white"}}>{l}</button>)}</div>
