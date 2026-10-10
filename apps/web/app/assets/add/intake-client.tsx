@@ -36,6 +36,7 @@ export function IntakeClient() {
   const [files, setFiles] = useState<IntakeFile[]>([]);
   const stagedHashes = useRef(new Set<string>());
   const [brand, setBrand] = useState("stashbox");
+  const [plannedDropboxFolder, setPlannedDropboxFolder] = useState<string | null>(null);
   const [collection, setCollection] = useState("");
   const [campaign, setCampaign] = useState("");
   const [topic, setTopic] = useState("");
@@ -430,7 +431,7 @@ export function IntakeClient() {
         </label>
       </section>
 
-      <DropboxFolderBrowser brand={brand} />
+      <DropboxFolderBrowser brand={brand} fileTypes={files.map(file => file.type)} onSelect={setPlannedDropboxFolder} />
 
       <section className="card">
         <div className="topbar" style={{ marginBottom: 12 }}>
@@ -443,7 +444,7 @@ export function IntakeClient() {
 
         <div className="grid" style={{ gridTemplateColumns: "repeat(2, minmax(0,1fr))" }}>
           <Field label="Brand">
-            <select value={brand} onChange={(e) => setBrand(e.target.value)}>
+            <select value={brand} onChange={(e) => {setBrand(e.target.value);setPlannedDropboxFolder(null);}}>
               <option value="stashbox">Stashbox</option>
               <option value="solarmeister">SolarMeister</option>
               <option value="weightlossdavie">WeightLossDavie</option>
@@ -555,6 +556,7 @@ export function IntakeClient() {
       </section>
 
       <section className="card">
+        {plannedDropboxFolder && <p style={{padding:12,background:"var(--panel-soft)",borderRadius:8,fontSize:13,overflowWrap:"anywhere"}}><strong>Planned Dropbox folder:</strong> {plannedDropboxFolder}. Dropbox saving is not active yet; the buttons below currently save to Brand OS/S3.</p>}
         <div className="topbar" style={{ marginBottom: 12 }}>
           <div>
             <div className="eyebrow">Files</div>
