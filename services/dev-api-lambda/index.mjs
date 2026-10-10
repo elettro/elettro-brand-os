@@ -984,6 +984,134 @@ async function runPlannerV1(event) {
   }
 }
 
+
+async function configurePlannerAccount(event) {
+  let client;
+  try {
+    client = await connectDatabase();
+    const body = parseJsonBody(event);
+
+    const brandSlug = String(body.brandSlug || event?.brandSlug || "").trim();
+    const destination = String(body.destination || event?.destination || "").trim().toLowerCase();
+    const accountName = String(body.accountName || event?.accountName || "").trim();
+    const placement = String(body.placement || event?.placement || "").trim();
+    const publishingMode = String(body.publishingMode || event?.publishingMode || "handoff").trim();
+    const postsPerWeek = Math.max(0, Number(body.postsPerWeek ?? event?.postsPerWeek ?? 3));
+    const preferredDays = Array.isArray(body.preferredDays || event?.preferredDays)
+      ? (body.preferredDays || event.preferredDays)
+      : [];
+    const preferredStartTime = String(body.preferredStartTime || event?.preferredStartTime || "12:00").trim();
+
+    if (!brandSlug || !destination || !accountName || !placement) {
+      return json(400, {
+        ok: false,
+        error: "brandSlug, destination, accountName, and placement are required"
+      });
+    }
+
+    const brandResult = await client.query(
+      'SELECT "id","timezone" FROM "Brand" WHERE "slug" = $1 AND "status" = $2 LIMIT 1',
+      [brandSlug, "active"]
+    );
+    const brand = brandResult.rows[0];
+    if (!brand) return json(404, { ok: false, error: "Active brand not found" });
+
+    await client.query("BEGIN");
+    try {
+      let accountResult = await client.query(
+        \`SELECT "id" FROM "SocialAccount"
+         WHERE "brandId" = $1 AND "destination" = $2 AND "accountName" = $3
+         LIMIT 1\`,
+        [brand.id, destination, accountName]
+      );
+
+      let socialAccountId = accountResult.rows[0]?.id;
+
+      if (!socialAccountId) {
+        accountResult = await client.query(
+          \`INSERT INTO "SocialAccount"
+            ("brandId","destination","accountName","publishingMode","timezone","status","updatedAt")
+           VALUES ($1,$2,$3,$4,$5,'active',CURRENT_TIMESTAMP)
+           RETURNING "id"\`,
+          [brand.id, destination, accountName, publishingMode, brand.timezone || "America/New_York"]
+        );
+        socialAccountId = accountResult.rows[0].id;
+      } else {
+        await client.query(
+          \`UPDATE "SocialAccount"
+           SET "publishingMode" = $2,
+               "timezone" = $3,
+               "status" = 'active',
+               "updatedAt" = CURRENT_TIMESTAMP
+           WHERE "id" = $1\`,
+          [socialAccountId, publishingMode, brand.timezone || "America/New_York"]
+        );
+      }
+
+      let cadenceResult = await client.query(
+        \`SELECT "id" FROM "CadenceRule"
+         WHERE "socialAccountId" = $1 AND "placement" = $2
+         LIMIT 1\`,
+        [socialAccountId, placement]
+      );
+
+      let cadenceRuleId = cadenceResult.rows[0]?.id;
+
+      if (!cadenceRuleId) {
+        cadenceResult = await client.query(
+          \`INSERT INTO "CadenceRule"
+            ("socialAccountId","placement","postsPerWeek","preferredDays","preferredStartTime","active","updatedAt")
+           VALUES ($1,$2,$3,$4,$5,TRUE,CURRENT_TIMESTAMP)
+           RETURNING "id"\`,
+          [socialAccountId, placement, postsPerWeek, preferredDays, preferredStartTime]
+        );
+        cadenceRuleId = cadenceResult.rows[0].id;
+      } else {
+        await client.query(
+          \`UPDATE "CadenceRule"
+           SET "postsPerWeek" = $2,
+               "preferredDays" = $3,
+               "preferredStartTime" = $4,
+               "active" = TRUE,
+               "updatedAt" = CURRENT_TIMESTAMP
+           WHERE "id" = $1\`,
+          [cadenceRuleId, postsPerWeek, preferredDays, preferredStartTime]
+        );
+      }
+
+      await client.query("COMMIT");
+
+      return json(200, {
+        ok: true,
+        message: "Planner social account and cadence rule are ready",
+        brandSlug,
+        socialAccountId,
+        cadenceRuleId,
+        destination,
+        accountName,
+        placement,
+        publishingMode,
+        postsPerWeek,
+        preferredDays,
+        preferredStartTime
+      });
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    }
+  } catch (error) {
+    console.error("[planner-account-config] failed", error);
+    return json(500, {
+      ok: false,
+      error: error instanceof Error ? error.message : "Unknown planner account configuration error"
+    });
+  } finally {
+    if (client) {
+      try { await client.end(); } catch {}
+    }
+  }
+}
+
 export const handler = async (event = {}) => {
   const requestPath =
     event?.rawPath ||
@@ -1154,6 +1282,10 @@ export const handler = async (event = {}) => {
   }
 
 
+
+  if (event?.action === "configure-planner-account") {
+    return configurePlannerAccount(event);
+  }
 
   if (
     event?.action === "run-planner-v1" ||
