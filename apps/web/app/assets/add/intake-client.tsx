@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { DropboxFolderBrowser } from "./dropbox-folder-browser";
 import {
   completeDirectUploads,
   presignDirectUploads,
@@ -428,6 +429,8 @@ export function IntakeClient() {
           />
         </label>
       </section>
+
+      <DropboxFolderBrowser brand={brand} />
 
       <section className="card">
         <div className="topbar" style={{ marginBottom: 12 }}>
