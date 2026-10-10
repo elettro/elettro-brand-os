@@ -666,7 +666,7 @@ async function runPlannerV1(event) {
     if (!brand) return json(404, { ok: false, error: "Active brand not found" });
 
     const rulesResult = await client.query(
-      \`SELECT
+      `SELECT
          cr."id" AS "cadenceRuleId",
          cr."placement",
          cr."postsPerWeek",
@@ -684,7 +684,7 @@ async function runPlannerV1(event) {
          AND sa."status" = 'active'
          AND cr."active" = TRUE
          AND cr."postsPerWeek" > 0
-       ORDER BY sa."destination", cr."placement"\`,
+       ORDER BY sa."destination", cr."placement"`,
       [brand.id]
     );
 
@@ -701,7 +701,7 @@ async function runPlannerV1(event) {
     }
 
     const assetsResult = await client.query(
-      \`SELECT
+      `SELECT
          a."id",
          a."filename",
          a."kind",
@@ -728,7 +728,7 @@ async function runPlannerV1(event) {
          AND a."approvalStatus" = 'approved'
          AND a."ingestStatus" = 'ready'
          AND a."retiredAt" IS NULL
-         AND (a."sourcePath" IS NOT NULL OR a."sourceUrl" IS NOT NULL)\`,
+         AND (a."sourcePath" IS NOT NULL OR a."sourceUrl" IS NOT NULL)`,
       [brand.id]
     );
 
@@ -736,7 +736,7 @@ async function runPlannerV1(event) {
     const horizonEnd = localDateTimeToUtc(addDaysToYmd(startYmd, horizonDays), "00:00", brand.timezone || "America/New_York");
 
     const historyResult = await client.query(
-      \`SELECT
+      `SELECT
          pl."socialAccountId",
          pl."assetId",
          pl."publishedAt",
@@ -747,12 +747,12 @@ async function runPlannerV1(event) {
        LEFT JOIN "Asset" a ON a."id" = pl."assetId"
        WHERE pl."brandId" = $1
          AND pl."publishedAt" >= CURRENT_TIMESTAMP - INTERVAL '90 days'
-       ORDER BY pl."publishedAt" DESC\`,
+       ORDER BY pl."publishedAt" DESC`,
       [brand.id]
     );
 
     const plannedExistingResult = await client.query(
-      \`SELECT
+      `SELECT
          sp."id",
          sp."socialAccountId",
          sp."assetId",
@@ -766,7 +766,7 @@ async function runPlannerV1(event) {
        WHERE sp."brandId" = $1
          AND sp."scheduledFor" >= CURRENT_TIMESTAMP
          AND sp."scheduledFor" < $2
-         AND sp."status" IN ('planned','approved','queued')\`,
+         AND sp."status" IN ('planned','approved','queued')`,
       [brand.id, horizonEnd]
     );
 
@@ -924,15 +924,15 @@ async function runPlannerV1(event) {
         }
 
         const reason =
-          \`Selected \${winner.asset.filename} with score \${winner.score.toFixed(2)}. \` +
-          \`Last use: \${winner.lastUsedAt || "never"}; priority: \${winner.asset.priority || "normal"}.\`;
+          `Selected \${winner.asset.filename} with score \${winner.score.toFixed(2)}. ` +
+          `Last use: \${winner.lastUsedAt || "never"}; priority: \${winner.asset.priority || "normal"}.`;
 
         const inserted = await client.query(
-          \`INSERT INTO "ScheduledPost"
+          `INSERT INTO "ScheduledPost"
             ("brandId","socialAccountId","assetId","placement","scheduledFor","status",
              "selectionReason","scoreBreakdown","publishingMode","updatedAt")
            VALUES ($1,$2,$3,$4,$5,'planned',$6,$7::jsonb,$8,CURRENT_TIMESTAMP)
-           RETURNING "id","scheduledFor"\`,
+           RETURNING "id","scheduledFor"`,
           [
             brand.id,
             rule.socialAccountId,
