@@ -480,6 +480,7 @@ export const handler = async (event = {}) => {
             a."hasAudio",
             a."createdAt",
             a."updatedAt",
+            (SELECT MAX(pl."publishedAt") FROM "PublicationLedger" pl WHERE pl."assetId" = a."id") AS "lastUsedAt",
             b."slug" AS "brandSlug",
             b."name" AS "brandName"
           FROM "Asset" a
@@ -512,6 +513,7 @@ export const handler = async (event = {}) => {
           a."eligibilityType",
           a."priority",
           a."createdAt",
+          (SELECT MAX(pl."publishedAt") FROM "PublicationLedger" pl WHERE pl."assetId" = a."id") AS "lastUsedAt",
           b."slug" AS "brandSlug",
           b."name" AS "brandName"
         FROM "Asset" a
@@ -532,6 +534,7 @@ export const handler = async (event = {}) => {
           a."aspectRatioLabel",
           a."folderSuggestions",
           a."createdAt",
+          (SELECT MAX(pl."publishedAt") FROM "PublicationLedger" pl WHERE pl."assetId" = a."id") AS "lastUsedAt",
           a."contentGroup",
           a."topic",
           a."tags",
