@@ -2,12 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DropboxFolderBrowser } from "./dropbox-folder-browser";
-import {
-  completeDirectUploads,
-  presignDirectUploads,
-  type DirectUploadTicket,
-  getAssets
-} from "@/lib/dev-api";
+import { getAssets } from "@/lib/dev-api";
 
 type IntakeFileStatus = "queued" | "analyzing" | "analyzed" | "uploading" | "uploaded" | "saved" | "ready" | "error";
 
@@ -21,6 +16,7 @@ type IntakeFile = {
   status: IntakeFileStatus;
   progress: number;
   error?: string;
+  dropboxUploadedPath?: string;
   width?: number;
   height?: number;
   durationSeconds?: number;
@@ -251,63 +247,6 @@ export function IntakeClient() {
     setMessageTone("idle");
   }
 
-  function uploadFileToS3(item: IntakeFile, ticket: DirectUploadTicket) {
-    return new Promise<void>((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open("PUT", ticket.uploadUrl);
-      xhr.setRequestHeader("Content-Type", ticket.contentType || "application/octet-stream");
-
-      xhr.upload.onprogress = (event) => {
-        if (!event.lengthComputable) return;
-        updateFile(item.id, {
-          status: "uploading",
-          progress: Math.round((event.loaded / event.total) * 100)
-        });
-      };
-
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          updateFile(item.id, { status: "uploaded", progress: 100, error: undefined });
-          resolve();
-        } else {
-          reject(new Error(`S3 upload failed (${xhr.status})`));
-        }
-      };
-
-      xhr.onerror = () => reject(new Error("S3 upload failed"));
-      xhr.send(item.file);
-    });
-  }
-
-  async function uploadWithConcurrency(
-    items: Array<{ item: IntakeFile; ticket: DirectUploadTicket }>,
-    limit = 3
-  ) {
-    let cursor = 0;
-
-    async function worker() {
-      while (cursor < items.length) {
-        const index = cursor;
-        cursor += 1;
-        const current = items[index];
-        try {
-          await uploadFileToS3(current.item, current.ticket);
-        } catch (error) {
-          updateFile(current.item.id, {
-            status: "error",
-            error: error instanceof Error ? error.message : "Upload failed"
-          });
-          throw error;
-        }
-      }
-    }
-
-    await Promise.all(
-      Array.from({ length: Math.min(limit, items.length) }, () => worker())
-    );
-  }
-
-
   // DEV-only test: upload exactly one small image directly to a one-time Dropbox URL.
   // This intentionally does NOT mark an asset ingested/ready or touch S3.
   async function testDirectDropboxUpload() {
@@ -357,110 +296,95 @@ export function IntakeClient() {
       setDropboxTestResult(data.alreadyRegistered
         ? "This Dropbox file already exists in Brand OS (asset ID: " + data.asset?.id + "). No duplicate created."
         : "Registered in Brand OS: asset ID " + data.asset?.id + " · " + data.asset?.ingestStatus + " · " + data.asset?.approvalStatus + ". Dropbox ID: " + data.dropboxFileId);
+      updateFile(files[0].id, {status:"ready", progress:100, error:undefined, dropboxUploadedPath: uploadedDropboxPath});
+      if(files[0].sha256)rememberSavedFingerprints(brand,[files[0].sha256]);
       setUploadedDropboxPath(null);
     } catch(error){setDropboxTestResult("Dropbox upload succeeded, but Brand OS registration failed: " + (error instanceof Error ? error.message : "Unknown error") + ". Do not upload this file again.");}
     finally {setRegisteringDropbox(false);}
   }
 
+  // DEV direct Dropbox intake. Unsupported large uploads STOP; there is no S3 fallback.
   async function submitBatch(mode: "raw" | "ready") {
-    if (!files.length || busy) return;
-
-    if (eligibilityMode === "window" && (!windowStart || !windowEnd)) {
-      setMessage("Choose both a start and stop date for a publishing window.");
+    if (busy || dropboxTestBusy || registeringDropbox || files.length === 0) return;
+    if (!plannedDropboxFolder) {
+      setMessage("Select a Dropbox destination folder before saving.");
       setMessageTone("error");
       return;
     }
-
-    setBusy(true);
-    setMessage("");
-    setMessageTone("idle");
-
-    try {
-      setFiles((current) =>
-        current.map((item) => ({
-          ...item,
-          status: "queued",
-          progress: 0,
-          error: undefined
-        }))
-      );
-
-      // Second guard: do not issue upload tickets twice for identical bytes,
-      // even if files reached staging before their analysis finished.
-      const seenHashes = new Set<string>();
-      const uniqueFiles: IntakeFile[] = [];
-      const previouslySaved = getSavedFingerprints(brand);
-      for (const item of files) {
-        if (item.status === "saved" || item.status === "ready") continue;
-        const hash = item.sha256 || await sha256(item.file);
-        if (seenHashes.has(hash) || previouslySaved.has(hash)) continue;
-        seenHashes.add(hash);
-        uniqueFiles.push(item);
-      }
-      const skippedDuplicates = files.length - uniqueFiles.length;
-      if (!uniqueFiles.length) throw new Error("No new files to upload.");
-      const presigned = await presignDirectUploads({
-        brandSlug: brand,
-        files: uniqueFiles.map((item) => ({
-          name: item.name,
-          type: item.type,
-          size: item.size
-        }))
-      });
-
-      if (presigned.uploads.length !== uniqueFiles.length) {
-        throw new Error("Upload ticket count did not match selected files.");
-      }
-
-      await uploadWithConcurrency(
-        uniqueFiles.map((item, index) => ({
-          item,
-          ticket: presigned.uploads[index]
-        }))
-      );
-
-      const completed = await completeDirectUploads({
-        brandSlug: brand,
-        mode,
-        files: presigned.uploads.map((ticket, index) => ({
-          key: ticket.key,
-          name: uniqueFiles[index].name,
-          type: uniqueFiles[index].type,
-          size: uniqueFiles[index].size
-        })),
-        metadata: {
-          collection,
-          campaign,
-          topic,
-          creativeFamily,
-          eligibilityMode,
-          windowStart,
-          windowEnd,
-          repeatAnnually,
-          sendToApprovalQueue,
-          priority,
-          creatorNote,
-          allowedDestinations: selectedNetworks
-        }
-      });
-
-      if (completed.created === uniqueFiles.length) rememberSavedFingerprints(brand, uniqueFiles.map(item => item.sha256!).filter(Boolean));
-      const finalStatus: IntakeFileStatus = mode === "raw" ? "saved" : "ready";
-      const uploadedIds = new Set(uniqueFiles.map((item) => item.id));
-      setFiles((current) => current.map((item) => uploadedIds.has(item.id) ? { ...item, status: finalStatus, progress: 100, error: undefined } : item));
-      setMessage(
-        mode === "raw"
-          ? `${completed.created} asset${completed.created === 1 ? "" : "s"} saved successfully.`
-          : `${completed.created} asset${completed.created === 1 ? "" : "s"} saved and marked Ready.`
-      );
-      if (skippedDuplicates) setMessage((current) => `${current} ${skippedDuplicates} duplicate${skippedDuplicates === 1 ? "" : "s"} skipped.`);
-      setMessageTone("success");
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Upload failed");
+    if (eligibilityMode === "window" && (!windowStart || !windowEnd)) {
+      setMessage("Choose both publishing window dates.");
       setMessageTone("error");
-    } finally {
-      setBusy(false);
+      return;
     }
+    const unsaved = files.filter(item => item.status !== "saved" && item.status !== "ready");
+    if (!unsaved.length) {
+      setMessage("These files are already registered; no files need saving.");
+      setMessageTone("idle");
+      return;
+    }
+    const unsupported = unsaved.find(item => !item.type.startsWith("image/") || item.size > 10 * 1024 * 1024);
+    if (unsupported) {
+      setMessage("Dropbox direct intake currently supports images up to 10 MB only. Large-file and video upload sessions are next. No S3 fallback was used.");
+      setMessageTone("error");
+      return;
+    }
+    setBusy(true);
+    setMessageTone("idle");
+    setMessage("Beginning direct Dropbox intake, without S3…");
+    let count = 0;
+    try {
+      const seen = new Set<string>();
+      for (const item of unsaved) {
+        const hash = item.sha256 || await sha256(item.file);
+        if (seen.has(hash)) continue;
+        seen.add(hash);
+        let uploadedPath = item.dropboxUploadedPath || (files.length === 1 ? uploadedDropboxPath : null);
+        if (!uploadedPath) {
+          if (getSavedFingerprints(brand).has(hash)) {
+            updateFile(item.id, { status: "error", error: "Previously saved in this browser; skipped to avoid a duplicate." });
+            continue;
+          }
+          updateFile(item.id, { status: "uploading", error: undefined, progress: 0 });
+          setMessage("Uploading " + item.name + " directly to Dropbox…");
+          const linkResponse = await fetch("/api/dropbox/upload-link", {
+            method: "POST", headers: { "content-type": "application/json" },
+            body: JSON.stringify({ brand, path: plannedDropboxFolder, filename: item.name })
+          });
+          const link = await linkResponse.json();
+          if (!linkResponse.ok || link.ok === false || !link.uploadUrl || !link.path) {
+            throw new Error("Upload link for " + item.name + ": " + (link.detail || link.error || "Unavailable"));
+          }
+          const transfer = await fetch(link.uploadUrl, { method: "POST",
+            headers: { "content-type": "application/octet-stream" }, body: item.file });
+          if (!transfer.ok) {
+            const detail = await transfer.text();
+            throw new Error("Dropbox rejected " + item.name + " (" + transfer.status + "): " + detail.slice(0, 180));
+          }
+          uploadedPath = String(link.path);
+          updateFile(item.id, { status: "uploaded", progress: 100, dropboxUploadedPath: uploadedPath });
+        }
+        setMessage("Verifying and registering " + item.name + " in Brand OS…");
+        const response = await fetch("/api/assets/bulk-update", {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ action: "complete-dropbox-upload", brandSlug: brand, path: uploadedPath, mode,
+            metadata: { collection, campaign, topic, creativeFamily, eligibilityMode, windowStart, windowEnd,
+              repeatAnnually, sendToApprovalQueue, priority, creatorNote, allowedDestinations: selectedNetworks } })
+        });
+        const result = await response.json();
+        if (!response.ok || result.ok === false || !result.asset?.id) {
+          throw new Error("Dropbox has " + item.name + ", but registration failed: " + (result.detail || result.error || "Unknown error") + ". Retry without uploading again.");
+        }
+        updateFile(item.id, { status: mode === "ready" ? "ready" : "saved", progress: 100, error: undefined, dropboxUploadedPath: uploadedPath });
+        rememberSavedFingerprints(brand, [hash]);
+        count++;
+      }
+      setUploadedDropboxPath(null);
+      setMessage(count + " asset" + (count===1?"":"s") + (mode==="ready"?" uploaded to Dropbox and registered Ready.":" uploaded to Dropbox and saved Raw.") + " No S3 transfer.");
+      setMessageTone("success");
+    } catch(error) {
+      setMessage((count ? count + " completed. " : "") + (error instanceof Error ? error.message : "Direct Dropbox intake failed") + " No S3 fallback.");
+      setMessageTone("error");
+    } finally { setBusy(false); }
   }
 
   return (
@@ -615,7 +539,7 @@ export function IntakeClient() {
       </section>
 
       <section className="card">
-        {plannedDropboxFolder && <p style={{padding:12,background:"var(--panel-soft)",borderRadius:8,fontSize:13,overflowWrap:"anywhere"}}><strong>Planned Dropbox folder:</strong> {plannedDropboxFolder}. Dropbox saving is not active yet; the buttons below currently save to Brand OS/S3.</p>}
+        {plannedDropboxFolder && <p style={{padding:12,background:"var(--panel-soft)",borderRadius:8,fontSize:13,overflowWrap:"anywhere"}}><strong>Planned Dropbox folder:</strong> {plannedDropboxFolder}. The buttons below use direct Dropbox for supported images; videos and large files are blocked until upload sessions are available.</p>}
         <div className="topbar" style={{ marginBottom: 12 }}>
           <div>
             <div className="eyebrow">Files</div>
@@ -721,7 +645,8 @@ export function IntakeClient() {
           <strong>DEV test: Upload one image directly to Dropbox (no S3)</strong>
           <p className="muted" style={{margin:"6px 0 10px"}}>Choose exactly one small image (up to 10 MB) and select a Dropbox folder above. This is a storage-only test: it does not create a Brand OS asset record or make the file ready to publish. Use a disposable image with a unique filename to avoid duplicate-name conflicts.</p>
           <button type="button" disabled={busy||dropboxTestBusy||!plannedDropboxFolder||files.length!==1||!files[0]?.type.startsWith("image/")||files[0]?.size>10*1024*1024} onClick={()=>void testDirectDropboxUpload()} style={buttonPrimary}>{dropboxTestBusy?"Testing…":"Test direct Dropbox upload"}</button>
-          {uploadedDropboxPath&&<button type="button" disabled={registeringDropbox||dropboxTestBusy} onClick={()=>void testDropboxRegistration()} style={{...buttonSecondary,marginLeft:8}}>{registeringDropbox?"Registering…":"Register uploaded image as Ready in Brand OS"}</button>}\n          {dropboxTestResult&&<p aria-live="polite" style={{margin:"10px 0 0",fontSize:13,overflowWrap:"anywhere"}}>{dropboxTestResult}</p>}
+          {uploadedDropboxPath&&<button type="button" disabled={registeringDropbox||dropboxTestBusy} onClick={()=>void testDropboxRegistration()} style={{...buttonSecondary,marginLeft:8}}>{registeringDropbox?"Registering…":"Register uploaded image as Ready in Brand OS"}</button>}
+          {dropboxTestResult&&<p aria-live="polite" style={{margin:"10px 0 0",fontSize:13,overflowWrap:"anywhere"}}>{dropboxTestResult}</p>}
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap", marginTop: 18 }}>
           <div
@@ -742,7 +667,7 @@ export function IntakeClient() {
                 ? `✓ ${message}`
                 : message
               : busy
-                ? "Uploading directly to Brand OS storage…"
+                ? "Uploading to Dropbox and registering in Brand OS…"
                 : files.length
                   ? `${files.length} asset${files.length === 1 ? "" : "s"} selected · not saved yet`
                   : "Select files to stage them here before saving."}
