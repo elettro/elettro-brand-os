@@ -392,15 +392,41 @@ export function IntakeClient() {
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr>
-                  {["File", "Detected type", "Size", "Status", ""].map((label, index) => (
-                    <th key={`${label}-${index}`} style={th}>{label}</th>
+                  {["File", "Detected type", "Size", "Status"].map((label) => (
+                    <th key={label} style={th}>{label}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {files.map((file) => (
                   <tr key={file.id}>
-                    <td style={td}>{file.name}</td>
+                    <td style={td}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+                        <button
+                          type="button"
+                          aria-label={`Remove ${file.name}`}
+                          title="Remove from this batch"
+                          disabled={busy}
+                          onClick={() => removeFile(file.id)}
+                          style={{
+                            flex: "0 0 auto",
+                            border: "1px solid var(--line)",
+                            background: "white",
+                            color: "#b42318",
+                            borderRadius: 999,
+                            width: 30,
+                            height: 30,
+                            lineHeight: "26px",
+                            fontSize: 19,
+                            fontWeight: 700,
+                            cursor: busy ? "not-allowed" : "pointer"
+                          }}
+                        >
+                          ×
+                        </button>
+                        <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>{file.name}</span>
+                      </div>
+                    </td>
                     <td style={td}>{file.type.startsWith("video/") ? "Video" : file.type.startsWith("image/") ? "Image" : file.type}</td>
                     <td style={td}>{(file.size / 1024 / 1024).toFixed(1)} MB</td>
                     <td style={td}>
@@ -415,28 +441,7 @@ export function IntakeClient() {
                         <div style={{ marginTop: 4, fontSize: 11, color: "#b42318" }}>{file.error}</div>
                       )}
                     </td>
-                    <td style={{ ...td, width: 44, textAlign: "right" }}>
-                      <button
-                        type="button"
-                        aria-label={`Remove ${file.name}`}
-                        title="Remove from this batch"
-                        disabled={busy}
-                        onClick={() => removeFile(file.id)}
-                        style={{
-                          border: "1px solid var(--line)",
-                          background: "white",
-                          color: "var(--muted)",
-                          borderRadius: 999,
-                          width: 28,
-                          height: 28,
-                          lineHeight: "24px",
-                          fontSize: 18,
-                          cursor: busy ? "not-allowed" : "pointer"
-                        }}
-                      >
-                        ×
-                      </button>
-                    </td>
+
                   </tr>
                 ))}
               </tbody>
