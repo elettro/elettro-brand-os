@@ -306,7 +306,7 @@ export function IntakeClient() {
   // 2 MiB binary chunks are base64 encoded for the API Gateway -> Lambda transport.
   // OAuth credentials stay on AWS; the browser never uploads video through S3.
   async function uploadLargeDropboxFile(item: IntakeFile): Promise<string> {
-    const CHUNK = 2 * 1024 * 1024;
+    const CHUNK = 512 * 1024;
     let sessionId = "";
     let offset = 0;
     let uploadedPath = "";
@@ -325,7 +325,13 @@ export function IntakeClient() {
         body: JSON.stringify({ action, brand, path: plannedDropboxFolder, filename: item.name,
           size: item.size, sessionId, offset, chunkBase64 })
       });
-      const result = await response.json();
+      const responseText = await response.text();
+      let result: { ok?: boolean; error?: string; detail?: string; sessionId?: string; complete?: boolean; path?: string; offset?: number };
+      try {
+        result = JSON.parse(responseText);
+      } catch {
+        throw new Error(`Dropbox chunk request returned HTTP ${response.status} ${response.statusText || ""} with ${responseText ? "non-JSON response: " + responseText.slice(0, 160) : "an empty response"}`);
+      }
       if (!response.ok || result.ok === false || !result.sessionId && !result.complete) {
         throw new Error(result.error || result.detail || "Dropbox chunk upload failed");
       }
