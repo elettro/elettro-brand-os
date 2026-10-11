@@ -26,7 +26,7 @@ type IntakeFile = {
   recommendationReason?: string;
 };
 
-const networks = ["Instagram", "Facebook", "TikTok", "YouTube", "LinkedIn", "X"];
+const networks = ["Instagram", "Facebook", "TikTok", "YouTube", "Threads", "X", "LinkedIn", "Feed"];
 
 export function IntakeClient() {
   const [files, setFiles] = useState<IntakeFile[]>([]);
