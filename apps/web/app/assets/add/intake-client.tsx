@@ -303,6 +303,42 @@ export function IntakeClient() {
     finally {setRegisteringDropbox(false);}
   }
 
+  // 2 MiB binary chunks are base64 encoded for the API Gateway -> Lambda transport.
+  // OAuth credentials stay on AWS; the browser never uploads video through S3.
+  async function uploadLargeDropboxFile(item: IntakeFile): Promise<string> {
+    const CHUNK = 2 * 1024 * 1024;
+    let sessionId = "";
+    let offset = 0;
+    let uploadedPath = "";
+    while (offset < item.size) {
+      const slice = item.file.slice(offset, Math.min(offset + CHUNK, item.size));
+      const bytes = new Uint8Array(await slice.arrayBuffer());
+      let binary = "";
+      for (let start = 0; start < bytes.length; start += 32768) {
+        binary += String.fromCharCode(...bytes.subarray(start, start + 32768));
+      }
+      const chunkBase64 = btoa(binary);
+      const action = offset === 0 ? "start-dropbox-upload-session" :
+        offset + bytes.length === item.size ? "finish-dropbox-upload-session" : "append-dropbox-upload-session";
+      const response = await fetch("/api/assets/bulk-update", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action, brand, path: plannedDropboxFolder, filename: item.name,
+          size: item.size, sessionId, offset, chunkBase64 })
+      });
+      const result = await response.json();
+      if (!response.ok || result.ok === false || !result.sessionId && !result.complete) {
+        throw new Error(result.error || result.detail || "Dropbox chunk upload failed");
+      }
+      sessionId = String(result.sessionId || sessionId);
+      uploadedPath = String(result.path || uploadedPath);
+      offset = Number(result.offset);
+      updateFile(item.id, { status: "uploading", progress: Math.round((offset / item.size) * 100) });
+      setMessage("Uploading " + item.name + " to Dropbox — " + Math.round((offset / item.size) * 100) + "%");
+    }
+    if (offset !== item.size || !uploadedPath) throw new Error("Dropbox upload did not complete");
+    return uploadedPath;
+  }
+
   // DEV direct Dropbox intake. Unsupported large uploads STOP; there is no S3 fallback.
   async function submitBatch(mode: "raw" | "ready") {
     if (busy || dropboxTestBusy || registeringDropbox || files.length === 0) return;
@@ -322,9 +358,9 @@ export function IntakeClient() {
       setMessageTone("idle");
       return;
     }
-    const unsupported = unsaved.find(item => !item.type.startsWith("image/") || item.size > 10 * 1024 * 1024);
+    const unsupported = unsaved.find(item => !item.type.startsWith("image/") && !item.type.startsWith("video/"));
     if (unsupported) {
-      setMessage("Dropbox direct intake currently supports images up to 10 MB only. Large-file and video upload sessions are next. No S3 fallback was used.");
+      setMessage("Only image and video files are supported by Dropbox direct intake.");
       setMessageTone("error");
       return;
     }
@@ -346,21 +382,25 @@ export function IntakeClient() {
           }
           updateFile(item.id, { status: "uploading", error: undefined, progress: 0 });
           setMessage("Uploading " + item.name + " directly to Dropbox…");
-          const linkResponse = await fetch("/api/dropbox/upload-link", {
-            method: "POST", headers: { "content-type": "application/json" },
-            body: JSON.stringify({ brand, path: plannedDropboxFolder, filename: item.name })
-          });
-          const link = await linkResponse.json();
-          if (!linkResponse.ok || link.ok === false || !link.uploadUrl || !link.path) {
-            throw new Error("Upload link for " + item.name + ": " + (link.detail || link.error || "Unavailable"));
+          if (item.type.startsWith("video/") || item.size > 10 * 1024 * 1024) {
+            uploadedPath = await uploadLargeDropboxFile(item);
+          } else {
+            const linkResponse = await fetch("/api/dropbox/upload-link", {
+              method: "POST", headers: { "content-type": "application/json" },
+              body: JSON.stringify({ brand, path: plannedDropboxFolder, filename: item.name })
+            });
+            const link = await linkResponse.json();
+            if (!linkResponse.ok || link.ok === false || !link.uploadUrl || !link.path) {
+              throw new Error("Upload link for " + item.name + ": " + (link.detail || link.error || "Unavailable"));
+            }
+            const transfer = await fetch(link.uploadUrl, { method: "POST",
+              headers: { "content-type": "application/octet-stream" }, body: item.file });
+            if (!transfer.ok) {
+              const detail = await transfer.text();
+              throw new Error("Dropbox rejected " + item.name + " (" + transfer.status + "): " + detail.slice(0, 180));
+            }
+            uploadedPath = String(link.path);
           }
-          const transfer = await fetch(link.uploadUrl, { method: "POST",
-            headers: { "content-type": "application/octet-stream" }, body: item.file });
-          if (!transfer.ok) {
-            const detail = await transfer.text();
-            throw new Error("Dropbox rejected " + item.name + " (" + transfer.status + "): " + detail.slice(0, 180));
-          }
-          uploadedPath = String(link.path);
           updateFile(item.id, { status: "uploaded", progress: 100, dropboxUploadedPath: uploadedPath });
         }
         setMessage("Verifying and registering " + item.name + " in Brand OS…");
