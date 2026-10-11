@@ -10,9 +10,17 @@ const apiBaseUrl =
 export async function POST(request: NextRequest) {
   const body = await request.text();
 
-  const response = await fetch(`${apiBaseUrl}/assets/bulk-update`, {
+  let action = "";
+  try { action = String(JSON.parse(body)?.action || ""); } catch { /* Existing API handles invalid JSON. */ }
+  const uploadSession = ["start-dropbox-upload-session", "append-dropbox-upload-session", "finish-dropbox-upload-session"].includes(action);
+  const uploadApi = process.env.DROPBOX_UPLOAD_API_URL;
+  const uploadKey = process.env.DROPBOX_UPLOAD_API_SHARED_SECRET;
+  if (uploadSession && (!uploadApi || !uploadKey)) {
+    return NextResponse.json({ ok: false, error: "Dedicated Dropbox upload API is not configured" }, { status: 503 });
+  }
+  const response = await fetch(uploadSession ? uploadApi! : `${apiBaseUrl}/assets/bulk-update`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...(uploadSession ? { "x-elettro-upload-key": uploadKey! } : {}) },
     body,
     cache: "no-store"
   });
