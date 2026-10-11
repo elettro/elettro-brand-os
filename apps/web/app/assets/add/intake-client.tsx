@@ -310,6 +310,7 @@ export function IntakeClient() {
     let sessionId = "";
     let offset = 0;
     let uploadedPath = "";
+    const uploadStartedAt = performance.now();
     while (offset < item.size) {
       const slice = item.file.slice(offset, Math.min(offset + CHUNK, item.size));
       const bytes = new Uint8Array(await slice.arrayBuffer());
@@ -339,7 +340,11 @@ export function IntakeClient() {
       uploadedPath = String(result.path || uploadedPath);
       offset = Number(result.offset);
       updateFile(item.id, { status: "uploading", progress: Math.round((offset / item.size) * 100) });
-      setMessage("Uploading " + item.name + " to Dropbox — " + Math.round((offset / item.size) * 100) + "%");
+      const elapsedSeconds = Math.max((performance.now() - uploadStartedAt) / 1000, 0.001);
+      const mbPerSecond = (offset / (1024 * 1024)) / elapsedSeconds;
+      const remainingSeconds = mbPerSecond > 0 ? Math.ceil(((item.size - offset) / (1024 * 1024)) / mbPerSecond) : 0;
+      const etaLabel = remainingSeconds >= 60 ? `${Math.ceil(remainingSeconds / 60)} min` : `${remainingSeconds} sec`;
+      setMessage(`Uploading ${item.name} to Dropbox — ${Math.round((offset / item.size) * 100)}% · ${mbPerSecond.toFixed(2)} MB/s · ~${etaLabel} remaining`);
     }
     if (offset !== item.size || !uploadedPath) throw new Error("Dropbox upload did not complete");
     return uploadedPath;
