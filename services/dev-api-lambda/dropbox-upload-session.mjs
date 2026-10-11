@@ -48,7 +48,8 @@ async function contentCall(endpoint, accessToken, arg, bytes) {
     const detail = await response.text();
     throw new Error("Dropbox " + endpoint + " failed (" + response.status + "): " + detail.slice(0, 400));
   }
-  return response.json();
+  const text = await response.text();
+  return text ? JSON.parse(text) : {};
 }
 export async function handleDropboxUploadSession(body) {
   try {
@@ -65,7 +66,7 @@ export async function handleDropboxUploadSession(body) {
     if (!bytes.length || bytes.length > MAX_CHUNK_BYTES || bytes.length + offset > size) return reply(400, { ok: false, error: "Chunk exceeds transfer bounds" });
     const isFinal = offset + bytes.length === size;
     if ((action === "finish-dropbox-upload-session") !== isFinal && action !== "start-dropbox-upload-session") return reply(400, { ok: false, error: "Incorrect final chunk action" });
-    if (action === "start-dropbox-upload-session" && offset !== 0) return reply(400, { ok: false, error: "Start offset must be zero" });
+    if (action === "start-dropbox-upload-session" && (offset !== 0 || isFinal)) return reply(400, { ok: false, error: "Start requires a non-final first chunk" });
     const accessToken = await token();
     if (action === "start-dropbox-upload-session") {
       // Even for one-chunk files the caller can use an upload session.
