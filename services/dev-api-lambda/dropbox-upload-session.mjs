@@ -21,9 +21,13 @@ async function token() {
     SecretId: process.env.DROPBOX_SECRET_NAME || "elettro-brand-os-dev/dropbox"
   }));
   const config = JSON.parse(secret.SecretString || "{}");
-  if (config.accessToken) return config.accessToken;
-  if (!config.appKey || !config.appSecret || !config.refreshToken) throw new Error("Dropbox OAuth credentials are not configured");
-  const body = new URLSearchParams({ grant_type: "refresh_token", refresh_token: config.refreshToken, client_id: config.appKey, client_secret: config.appSecret });
+  const accessToken = config.access_token || config.accessToken;
+  if (accessToken) return accessToken;
+  const refreshToken = config.refresh_token || config.refreshToken;
+  const appKey = config.app_key || config.appKey;
+  const appSecret = config.app_secret || config.appSecret;
+  if (!appKey || !appSecret || !refreshToken) throw new Error("Dropbox OAuth credentials are not configured");
+  const body = new URLSearchParams({ grant_type: "refresh_token", refresh_token: refreshToken, client_id: appKey, client_secret: appSecret });
   const result = await fetch("https://api.dropboxapi.com/oauth2/token", { method: "POST", body });
   if (!result.ok) throw new Error("Dropbox token refresh failed: " + result.status);
   return (await result.json()).access_token;
