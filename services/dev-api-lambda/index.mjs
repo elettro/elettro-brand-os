@@ -4,6 +4,7 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { randomUUID } from "node:crypto";
 import pg from "pg";
 import { handler as existingHandler } from "./db-main.mjs";
+import { handleDropboxUploadSession } from "./dropbox-upload-session.mjs";
 
 const { Client } = pg;
 const secrets = new SecretsManagerClient({});
@@ -1567,6 +1568,10 @@ export const handler = async (event = {}) => {
 
 
   const routedBody = requestPath === "/assets/bulk-update" ? parseJsonBody(event) : {};
+  if (requestPath === "/assets/bulk-update" && ["start-dropbox-upload-session", "append-dropbox-upload-session", "finish-dropbox-upload-session"].includes(routedBody?.action)) {
+    return handleDropboxUploadSession(routedBody);
+  }
+
 
   if (
     event?.action === "direct-upload-presign" ||
