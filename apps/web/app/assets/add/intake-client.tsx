@@ -306,7 +306,7 @@ export function IntakeClient() {
   // 2 MiB binary chunks are base64 encoded for the API Gateway -> Lambda transport.
   // OAuth credentials stay on AWS; the browser never uploads video through S3.
   async function uploadLargeDropboxFile(item: IntakeFile): Promise<string> {
-    const CHUNK = 1024 * 1024;
+    const CHUNK = 2 * 1024 * 1024;
     let sessionId = "";
     let offset = 0;
     let uploadedPath = "";
