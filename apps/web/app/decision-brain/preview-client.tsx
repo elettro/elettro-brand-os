@@ -1,10 +1,11 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { getAssets, type ApiAsset } from "@/lib/dev-api";
+import { stashboxStrategy } from "@/lib/stashbox-publishing-strategy";
 
-const platforms = ["Instagram","Facebook","TikTok","YouTube","Threads","X"] as const;
+const platforms = ["Instagram","Facebook","TikTok","YouTube","Threads","X","LinkedIn"] as const;
 type Platform = typeof platforms[number];
-const initialLimits:Record<Platform,number>={Instagram:2,Facebook:2,TikTok:2,YouTube:1,Threads:3,X:3};
+const initialLimits:Record<Platform,number>={Instagram:2,Facebook:2,TikTok:4,YouTube:3,Threads:5,X:8,LinkedIn:1};
 type Candidate={asset:ApiAsset;platform:Platform;day:number;score:number;reason:string;campaign:boolean};
 function eligible(asset:ApiAsset) {
   if(asset.brandSlug!=="stashbox") return false;
@@ -39,7 +40,7 @@ export function DecisionPreview(){
   const [limits,setLimits]=useState<Record<Platform,number>>(initialLimits);
   const [focus,setFocus]=useState("Dylan");
   const [days,setDays]=useState(7);
-  const [enabled,setEnabled]=useState<Platform[]>(["Instagram","Facebook","TikTok","YouTube","Threads","X"]);
+  const [enabled,setEnabled]=useState<Platform[]>(["Instagram","Facebook","TikTok","YouTube","Threads","X","LinkedIn"]);
   useEffect(()=>{getAssets().then(x=>setAssets(x.assets||[])).catch(e=>setError(e instanceof Error?e.message:"Unable to load assets")).finally(()=>setLoading(false));},[]);
   const ready=useMemo(()=>assets.filter(eligible),[assets]);
   const schedule=useMemo(()=>{
