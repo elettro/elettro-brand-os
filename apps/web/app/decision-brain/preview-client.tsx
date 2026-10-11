@@ -52,7 +52,9 @@ export function DecisionPreview(){
       for(const platform of enabled){
         const limit=limits[platform]||0;
         // Adaptive baseline is one recommendation on eligible days, never a forced quota.
-        const recommendationCount=Math.min(limit,1);
+        const weeklyTargets:Record<Platform,number>={Instagram:4,Facebook:10,TikTok:14,YouTube:14,Threads:21,X:21,LinkedIn:3};
+        const soFar=generated.filter(x=>x.platform===platform).length;
+        const recommendationCount=Math.min(limit,Math.ceil(Math.max(0,weeklyTargets[platform]-soFar)/(days-day)));
         for(let n=0;n<recommendationCount;n++){
           const pool=ready.filter(a=>worksOn(a,platform)&&!used.has(a.id+":"+platform));
           if(!pool.length)continue;
