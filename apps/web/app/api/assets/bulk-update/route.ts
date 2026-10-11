@@ -1,4 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
+import { GetParameterCommand, SSMClient } from "@aws-sdk/client-ssm";
+
+export const runtime = "nodejs";
+
+const ssm = new SSMClient({ region: "us-east-1" });
+const DEV_UPLOAD_PARAMETER = "/amplify/d2k28tehm1a8zw/develop-branch-b11b55647b/DROPBOX_UPLOAD_API_SHARED_SECRET";
+
+async function getUploadKey(): Promise<string | undefined> {
+  if (process.env.DROPBOX_UPLOAD_API_SHARED_SECRET) return process.env.DROPBOX_UPLOAD_API_SHARED_SECRET;
+  if (process.env.AWS_BRANCH && process.env.AWS_BRANCH !== "develop") return undefined;
+  const result = await ssm.send(new GetParameterCommand({ Name: DEV_UPLOAD_PARAMETER, WithDecryption: true }));
+  return result.Parameter?.Value;
+}
+
 
 const DEFAULT_DEV_API_BASE_URL = "https://zkjngy7rdd.execute-api.us-east-1.amazonaws.com";
 
@@ -14,7 +28,15 @@ export async function POST(request: NextRequest) {
   try { action = String(JSON.parse(body)?.action || ""); } catch { /* Existing API handles invalid JSON. */ }
   const uploadSession = ["start-dropbox-upload-session", "append-dropbox-upload-session", "finish-dropbox-upload-session"].includes(action);
   const uploadApi = process.env.DROPBOX_UPLOAD_API_URL;
-  const uploadKey = process.env.DROPBOX_UPLOAD_API_SHARED_SECRET;
+  let uploadKey: string | undefined;
+  if (uploadSession && uploadApi) {
+    try {
+      uploadKey = await getUploadKey();
+    } catch (error) {
+      console.error("Dropbox upload secret retrieval failed", error instanceof Error ? error.name : "UnknownError");
+      return NextResponse.json({ ok: false, error: "Dropbox upload server authentication is unavailable" }, { status: 503 });
+    }
+  }
   if (uploadSession && (!uploadApi || !uploadKey)) {
     return NextResponse.json({ ok: false, error: "Dedicated Dropbox upload API is not configured" }, { status: 503 });
   }
