@@ -3,9 +3,9 @@ import { useEffect, useMemo, useState } from "react";
 import { getAssets, type ApiAsset } from "@/lib/dev-api";
 import { stashboxStrategy } from "@/lib/stashbox-publishing-strategy";
 
-const platforms = ["Instagram","Facebook","TikTok","YouTube","Threads","X","LinkedIn","Feed"] as const;
+const platforms = ["Instagram","Facebook","TikTok","YouTube","Threads","X","LinkedIn","Pinterest","GMB","Feed"] as const;
 type Platform = typeof platforms[number];
-const initialLimits:Record<Platform,number>={Instagram:2,Facebook:2,TikTok:4,YouTube:3,Threads:5,X:8,LinkedIn:stashboxStrategy.LinkedIn.originalsPerWeek[1] > 0 ? 1 : 0,Feed:0};
+const initialLimits:Record<Platform,number>={Instagram:2,Facebook:2,TikTok:4,YouTube:3,Threads:5,X:8,LinkedIn:stashboxStrategy.LinkedIn.originalsPerWeek[1] > 0 ? 1 : 0,Pinterest:0,GMB:0,Feed:0};
 type Candidate={asset:ApiAsset;platform:Platform;day:number;score:number;reason:string;campaign:boolean};
 function eligible(asset:ApiAsset) {
   if(asset.brandSlug!=="stashbox") return false;
@@ -40,7 +40,7 @@ export function DecisionPreview(){
   const [limits,setLimits]=useState<Record<Platform,number>>(initialLimits);
   const [focus,setFocus]=useState("Dylan");
   const [days,setDays]=useState(7);
-  const [enabled,setEnabled]=useState<Platform[]>(["Instagram","Facebook","TikTok","YouTube","Threads","X","LinkedIn","Feed"]);
+  const [enabled,setEnabled]=useState<Platform[]>(["Instagram","Facebook","TikTok","YouTube","Threads","X","LinkedIn","Pinterest","GMB","Feed"]);
   useEffect(()=>{getAssets().then(x=>setAssets(x.assets||[])).catch(e=>setError(e instanceof Error?e.message:"Unable to load assets")).finally(()=>setLoading(false));},[]);
   const ready=useMemo(()=>assets.filter(eligible),[assets]);
   const schedule=useMemo(()=>{
@@ -52,7 +52,7 @@ export function DecisionPreview(){
       for(const platform of enabled){
         const limit=limits[platform]||0;
         // Adaptive baseline is one recommendation on eligible days, never a forced quota.
-        const weeklyTargets:Record<Platform,number>={Instagram:4,Facebook:10,TikTok:14,YouTube:14,Threads:21,X:21,LinkedIn:3,Feed:7};
+        const weeklyTargets:Record<Platform,number>={Instagram:4,Facebook:10,TikTok:14,YouTube:14,Threads:21,X:21,LinkedIn:3,Pinterest:0,GMB:0,Feed:7};
         const soFar=generated.filter(x=>x.platform===platform).length;
         const recommendationCount=Math.min(limit,Math.ceil(Math.max(0,weeklyTargets[platform]-soFar)/(days-day)));
         for(let n=0;n<recommendationCount;n++){
