@@ -382,7 +382,7 @@ export function IntakeClient() {
           }
           updateFile(item.id, { status: "uploading", error: undefined, progress: 0 });
           setMessage("Uploading " + item.name + " directly to Dropbox…");
-          if (item.type.startsWith("video/") || item.size > 10 * 1024 * 1024) {
+          if (item.size > 10 * 1024 * 1024) {
             uploadedPath = await uploadLargeDropboxFile(item);
           } else {
             const linkResponse = await fetch("/api/dropbox/upload-link", {
