@@ -40,17 +40,29 @@ export async function POST(request: NextRequest) {
   if (uploadSession && (!uploadApi || !uploadKey)) {
     return NextResponse.json({ ok: false, error: "Dedicated Dropbox upload API is not configured" }, { status: 503 });
   }
-  const response = await fetch(uploadSession ? uploadApi! : `${apiBaseUrl}/assets/bulk-update`, {
-    method: "POST",
-    headers: { "content-type": "application/json", ...(uploadSession ? { "x-elettro-upload-key": uploadKey! } : {}) },
-    body,
-    cache: "no-store"
-  });
+  try {
+    const response = await fetch(uploadSession ? uploadApi! : `${apiBaseUrl}/assets/bulk-update`, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...(uploadSession ? { "x-elettro-upload-key": uploadKey! } : {}) },
+      body,
+      cache: "no-store"
+    });
 
-  const text = await response.text();
-
-  return new NextResponse(text, {
-    status: response.status,
-    headers: { "content-type": response.headers.get("content-type") || "application/json" }
-  });
+    const text = await response.text();
+    if (uploadSession && !text.trim()) {
+      console.error("Dropbox upload upstream returned empty response", response.status);
+      return NextResponse.json({
+        ok: false,
+        error: `Dropbox upload service returned HTTP ${response.status} with an empty response`
+      }, { status: response.ok ? 502 : response.status });
+    }
+    return new NextResponse(text, {
+      status: response.status,
+      headers: { "content-type": response.headers.get("content-type") || "application/json" }
+    });
+  } catch (error) {
+    const cause = error instanceof Error ? error.name : "UnknownError";
+    console.error("Dropbox upload proxy outbound request failed", cause);
+    return NextResponse.json({ ok: false, error: "Dropbox upload proxy could not reach the upstream service", detail: cause }, { status: 502 });
+  }
 }
