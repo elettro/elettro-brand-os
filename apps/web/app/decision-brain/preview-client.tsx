@@ -5,7 +5,7 @@ import { stashboxStrategy } from "@/lib/stashbox-publishing-strategy";
 
 const platforms = ["Instagram","Facebook","TikTok","YouTube","Threads","X","LinkedIn"] as const;
 type Platform = typeof platforms[number];
-const initialLimits:Record<Platform,number>={Instagram:2,Facebook:2,TikTok:4,YouTube:3,Threads:5,X:8,LinkedIn:1};
+const initialLimits:Record<Platform,number>={Instagram:2,Facebook:2,TikTok:4,YouTube:3,Threads:5,X:8,LinkedIn:stashboxStrategy.LinkedIn.originalsPerWeek[1] > 0 ? 1 : 0};
 type Candidate={asset:ApiAsset;platform:Platform;day:number;score:number;reason:string;campaign:boolean};
 function eligible(asset:ApiAsset) {
   if(asset.brandSlug!=="stashbox") return false;
@@ -73,7 +73,7 @@ export function DecisionPreview(){
     <section className="card">
       <div className="eyebrow">Creative Director Mode · Simulation</div>
       <h2>Publishing guardrails</h2>
-      <p className="muted">Set the maximum daily posts for each network. Zero disables that network. These settings affect this preview only; they are not yet saved as live publishing policy.</p>
+      <p className="muted">Set the maximum daily posts for each network. Zero disables that network. Master strategy defaults are shown; edits here affect simulation only.</p>
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(165px,1fr))",gap:12}}>
         {platforms.map(platform=><label key={platform} style={{display:"grid",gap:6}}>
           <span style={{fontWeight:600}}>{platform}</span>
