@@ -6,7 +6,7 @@ export const dynamic="force-dynamic";
 const secrets = new SecretsManagerClient({region:"us-east-1"});
 export async function POST(request:NextRequest) {
   if (!(await authenticated())) return NextResponse.json({error:"Login required"},{status:401});
-  if (request.headers.get("origin") !== new URL(request.url).origin) return NextResponse.json({error:"Invalid origin"},{status:403});
+  if (request.headers.get("origin") !== "https://develop.d2k28tehm1a8zw.amplifyapp.com") return NextResponse.json({error:"Invalid origin"},{status:403});
   try {
     const result=await secrets.send(new GetSecretValueCommand({SecretId:"elettro-brand-os-dev/dropbox"}));
     const settings=JSON.parse(result.SecretString||"{}") as Record<string,string>;
