@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { authenticated } from "@/lib/cognito-auth";
+import { redirect } from "next/navigation";
 import { BrandSwitcher } from "@/components/brand-switcher";
 import { sprintOneBrands } from "@/lib/brands";
 import { getBrands, getDashboard } from "@/lib/dev-api";
@@ -12,6 +14,7 @@ const pipeline = [
 ];
 
 export default async function DashboardPage() {
+  if (!(await authenticated())) redirect("/api/auth/login");
   const [brandResponse, dashboardResponse] = await Promise.allSettled([
     getBrands(),
     getDashboard()
