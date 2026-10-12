@@ -508,7 +508,7 @@ export function IntakeClient() {
             updateFile(item.id,{status:"error",error:"Different file already uses this Dropbox filename. No overwrite or duplicate upload attempted."});
             continue;
           }
-          uploadedPath = existing.path || plannedDropboxFolder.replace(/\\/+$/,"") + "/" + item.name;
+          uploadedPath = existing.path || plannedDropboxFolder.replace(new RegExp("/+$"), "") + "/" + item.name;
           updateFile(item.id,{status:"uploaded",progress:100,dropboxUploadedPath:uploadedPath});
           setMessage("Exact Dropbox duplicate verified. Registering without uploading " + item.name + "…");
         }
