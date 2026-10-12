@@ -475,9 +475,19 @@ export function IntakeClient() {
             // Without it, use the existing working AWS uploader unchanged.
             const fastToken = typeof window !== "undefined"
               ? sessionStorage.getItem("elettro-fast-dropbox-access-token") : null;
-            uploadedPath = fastToken
-              ? await uploadDirectToDropbox(item, fastToken)
-              : await uploadLargeDropboxFile(item);
+            if (fastToken) {
+              try {
+                uploadedPath = await uploadDirectToDropbox(item, fastToken);
+              } catch (directError) {
+                // A 401 means the short-lived browser session expired. Its upload
+                // session was not committed; retry this file via the safe AWS relay.
+                if (!(directError instanceof Error) || !directError.message.includes("HTTP 401")) throw directError;
+                setMessage("Dropbox fast session expired. Continuing automatically with secure AWS upload for " + item.name + "…");
+                uploadedPath = await uploadLargeDropboxFile(item);
+              }
+            } else {
+              uploadedPath = await uploadLargeDropboxFile(item);
+            }
           } else {
             const linkResponse = await fetch("/api/dropbox/upload-link", {
               method: "POST", headers: { "content-type": "application/json" },
@@ -834,15 +844,6 @@ export function IntakeClient() {
           </div>
         )}
 
-        <div style={{marginTop:18,padding:14,border:"1px solid var(--line)",borderRadius:10,background:"var(--panel-soft)"}}>
-          <strong>Fast Dropbox video upload (DEV)</strong>
-          <p className="muted" style={{margin:"6px 0 8px"}}>
-            To activate the faster direct-to-Dropbox transfer for videos over 10 MB,
-            <a href="/assets/fast-upload" style={{marginLeft:4}}>connect Dropbox on the Fast Upload V2 page</a>,
-            then return here in the same browser tab. Your selected Dropbox folder and metadata remain controlled on this page.
-            Without a connected session, the proven AWS upload method remains available.
-          </p>
-        </div>
         <div style={{marginTop:18,padding:14,border:"1px solid var(--line)",borderRadius:10,background:"var(--panel-soft)"}}>
           <strong>DEV test: Upload one image directly to Dropbox (no S3)</strong>
           <p className="muted" style={{margin:"6px 0 10px"}}>Choose exactly one small image (up to 10 MB) and select a Dropbox folder above. This is a storage-only test: it does not create a Brand OS asset record or make the file ready to publish. Use a disposable image with a unique filename to avoid duplicate-name conflicts.</p>
