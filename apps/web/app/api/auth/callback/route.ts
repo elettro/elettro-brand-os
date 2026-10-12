@@ -43,6 +43,23 @@ export async function GET(request:NextRequest) {
     return destination;
   } catch(error) {
     console.error("Cognito callback error:",error instanceof Error?error.message:"unknown");
-    return NextResponse.redirect(DEV_ORIGIN+"/auth/error?reason="+encodeURIComponent(error instanceof Error ? error.message : "Authentication could not be completed"));
+    const message=error instanceof Error?error.message:"Unknown";
+    const safeReason=message==="Invalid OAuth state"?"state":
+      message==="Cognito rejected authentication"?"token_exchange":
+      message==="Account not authorized"?"owner_not_authorized":
+      message==="Cognito user pool is not configured"?"pool_config":
+      message==="Identity token invalid"?"identity_token":
+      message==="Identity signature invalid"?"identity_signature":
+      message==="Unknown Cognito signing key"?"jwks_key":
+      message==="Unable to load Cognito signing keys"?"jwks_fetch":
+      message==="Cognito client secret is not configured"?"client_secret":
+      message==="Missing authorization code"?"missing_code":
+      message==="Session signing key is too short"?"session_secret_short":
+      message.includes("ELETTRO_COGNITO_CLIENT_SECRET")?"client_secret_read":
+      message.includes("ELETTRO_AUTH_SESSION_SECRET")?"session_secret_read":
+      error instanceof Error && error.name==="ParameterNotFound"?"ssm_parameter_missing":
+      error instanceof Error && error.name==="AccessDeniedException"?"ssm_access_denied":
+      "callback_unexpected";
+    return NextResponse.redirect(DEV_ORIGIN+"/auth/error?reason="+safeReason);
   }
 }
