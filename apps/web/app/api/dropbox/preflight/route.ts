@@ -28,22 +28,22 @@ export async function POST(request:NextRequest) {
       body:new URLSearchParams({grant_type:"refresh_token",refresh_token:refresh,client_id:key,client_secret:secret}),cache:"no-store"});
     if(!tokenResponse.ok)throw Error("Dropbox token unavailable");
     const token=(await tokenResponse.json() as {access_token:string}).access_token;
-    const results: {name:string;exists:boolean;size?:number;contentHash?:string;path?:string}[]=[];
-    for(const name of names){
+    const checkName=async(name:string):Promise<{name:string;exists:boolean;size?:number;contentHash?:string;path?:string}>=>{
       const lookup=await fetch("https://api.dropboxapi.com/2/files/get_metadata",{method:"POST",
         headers:{"authorization":"Bearer "+token,"content-type":"application/json"},
         body:JSON.stringify({path:folder+"/"+name}),cache:"no-store"});
       if(lookup.status===409){
         const data=await lookup.json().catch(()=>({})) as {error?:{".tag"?:string;path?:{".tag"?:string}}};
-        if(data.error?.[".tag"]==="path"&&data.error.path?.[".tag"]==="not_found") {
-          results.push({name,exists:false});continue;
-        }
+        if(data.error?.[".tag"]==="path"&&data.error.path?.[".tag"]==="not_found")return {name,exists:false};
       }
-      if(!lookup.ok)throw Error("Dropbox metadata lookup failed for "+name+" (HTTP "+lookup.status+")");
+      if(!lookup.ok)throw Error("Dropbox metadata lookup failed (HTTP "+lookup.status+")");
       const data=await lookup.json() as {".tag":string;size?:number;content_hash?:string;path_display?:string};
-      if(data[".tag"]!=="file")throw Error("Destination is not a file: "+name);
-      results.push({name,exists:true,size:data.size,contentHash:data.content_hash,path:data.path_display});
-    }
+      if(data[".tag"]!=="file")throw Error("Destination is not a file");
+      return {name,exists:true,size:data.size,contentHash:data.content_hash,path:data.path_display};
+    };
+    const results:Awaited<ReturnType<typeof checkName>>[]=[];
+    // Bound concurrency to keep large batches fast without overwhelming Dropbox.
+    for(let i=0;i<names.length;i+=8)results.push(...await Promise.all(names.slice(i,i+8).map(checkName)));
     return NextResponse.json({results},{headers:{"cache-control":"no-store"}});
   }catch(error){
     console.error("Dropbox duplicate precheck failed:",error instanceof Error?error.name:"unknown");
