@@ -15,8 +15,9 @@ export async function GET() {
     return response;
   } catch (error) {
     const name = error instanceof Error ? error.name : "UnknownError";
-    console.error("Elettro DEV Cognito login setup failure", name);
-    const category = name === "AccessDeniedException" || name === "AccessDenied" ? "ssm_access_denied" : name === "ParameterNotFound" ? "ssm_parameter_not_found" : name === "CredentialsProviderError" ? "aws_credentials_unavailable" : name === "ValidationException" ? "ssm_parameter_invalid" : "auth_secret_unavailable";
+    const message = error instanceof Error ? error.message : "";
+    console.error("Elettro DEV Cognito login setup failure", name, message.replace(/[^a-zA-Z0-9 _-]/g,"").slice(0,120));
+    const category = name === "AccessDeniedException" || name === "AccessDenied" ? "ssm_access_denied" : name === "ParameterNotFound" ? "ssm_parameter_not_found" : name === "CredentialsProviderError" ? "aws_credentials_unavailable" : name === "ValidationException" ? "ssm_parameter_invalid" : message === "Session signing key is too short" ? "session_secret_too_short" : message.includes("unavailable to the server") ? "session_secret_empty" : message.includes("DEV only") ? "wrong_branch_environment" : "auth_secret_unavailable";
     return NextResponse.json({ error: "Login setup cannot access its server-side session key", diagnostic: category }, { status: 503 });
   }
 }
