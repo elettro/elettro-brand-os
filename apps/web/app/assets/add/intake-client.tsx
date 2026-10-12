@@ -309,7 +309,7 @@ export function IntakeClient() {
     if (!plannedDropboxFolder || !plannedDropboxFolder.startsWith("/1---elettro-brand-os/" + brand + "/")) {
       throw new Error("Select a valid Dropbox folder before uploading");
     }
-    const folder = plannedDropboxFolder.replace(/\\/+$/, "");
+    const folder = plannedDropboxFolder.replace(new RegExp("/+$"), "");
     const path = folder + "/" + item.name;
     const chunkSize = 8 * 1024 * 1024;
     const startedAt = performance.now();
