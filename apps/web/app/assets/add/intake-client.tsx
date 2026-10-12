@@ -30,6 +30,7 @@ const networks = ["Instagram", "Facebook", "TikTok", "YouTube", "Threads", "X", 
 
 export function IntakeClient() {
   const [files, setFiles] = useState<IntakeFile[]>([]);
+  const [dragActive, setDragActive] = useState(false);
   const stagedHashes = useRef(new Set<string>());
   const [brand, setBrand] = useState("stashbox");
   const [plannedDropboxFolder, setPlannedDropboxFolder] = useState<string | null>(null);
@@ -518,16 +519,18 @@ export function IntakeClient() {
     <div className="grid" style={{ gap: 18 }}>
       <section
         className="card"
-        onDragOver={(event) => event.preventDefault()}
+        onDragOver={(event) => { event.preventDefault(); setDragActive(true); }}
+        onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setDragActive(false); }}
         onDrop={(event) => {
           event.preventDefault();
+          setDragActive(false);
           addFiles(event.dataTransfer.files);
         }}
-        style={{ borderStyle: "dashed", padding: 30, textAlign: "center" }}
+        style={{ border: dragActive ? "3px dashed #1477d4" : "3px dashed #98a9bf", background: dragActive ? "#d8ecff" : "#f5f9ff", padding: 30, textAlign: "center", borderRadius: 14, boxShadow: dragActive ? "0 0 0 6px rgba(20,119,212,.20)" : "none", transition: "background .18s,border-color .18s,box-shadow .18s" }}
       >
         <h2 style={{ marginTop: 0 }}>Drop assets here</h2>
         <p className="muted">
-          Files are staged first. Quick technical analysis starts immediately and can suggest where similar assets already live.
+          Drop images or videos here to stage them for saving to your chosen Dropbox destination.
         </p>
         <label style={{ display: "inline-block", marginTop: 8, cursor: "pointer" }}>
           <span className="status-chip">Choose files</span>
@@ -750,7 +753,7 @@ export function IntakeClient() {
                       <span className="status-chip">
                         {file.status === "queued" ? "Queued" :
                          file.status === "analyzing" ? "Analyzing" :
-                         file.status === "analyzed" ? "Suggestions Ready" :
+                         file.status === "analyzed" ? "Ready to Save" :
                          file.status === "uploading" ? `Uploading ${file.progress}%` :
                          file.status === "uploaded" ? "Uploaded" :
                          file.status === "saved" ? "Raw · Saved" :
