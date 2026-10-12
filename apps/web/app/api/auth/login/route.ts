@@ -13,7 +13,10 @@ export async function GET() {
     const response = NextResponse.redirect(url);
     response.cookies.set(STATE_COOKIE, await seal(state), cookieSettings(600));
     return response;
-  } catch {
-    return NextResponse.json({ error: "Cognito authentication is not configured yet" }, { status: 503 });
+  } catch (error) {
+    const name = error instanceof Error ? error.name : "UnknownError";
+    console.error("Elettro DEV Cognito login setup failure", name);
+    const category = name === "AccessDeniedException" || name === "AccessDenied" ? "ssm_access_denied" : name === "ParameterNotFound" ? "ssm_parameter_not_found" : name === "CredentialsProviderError" ? "aws_credentials_unavailable" : name === "ValidationException" ? "ssm_parameter_invalid" : "auth_secret_unavailable";
+    return NextResponse.json({ error: "Login setup cannot access its server-side session key", diagnostic: category }, { status: 503 });
   }
 }
