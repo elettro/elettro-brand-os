@@ -39,6 +39,8 @@ export function IntakeClient() {
   const [topic, setTopic] = useState("");
   const [creativeFamily, setCreativeFamily] = useState("");
   const [genre, setGenre] = useState("");
+  const [sessionDateDigits, setSessionDateDigits] = useState("");
+  const [sessionType, setSessionType] = useState("");
   const [eligibilityMode, setEligibilityMode] = useState<"evergreen" | "window">("evergreen");
   const [windowStart, setWindowStart] = useState("");
   const [windowEnd, setWindowEnd] = useState("");
@@ -55,6 +57,23 @@ export function IntakeClient() {
   const [message, setMessage] = useState("");
   const [messageTone, setMessageTone] = useState<"idle" | "success" | "error">("idle");
   const [folderInventory, setFolderInventory] = useState<Array<{ path: string; count: number }>>([]);
+
+  const parsedSessionDate = (() => {
+    if (!sessionDateDigits) return null;
+    if (sessionDateDigits.length !== 6) return "";
+    const mm = Number(sessionDateDigits.slice(0, 2));
+    const dd = Number(sessionDateDigits.slice(2, 4));
+    const yyyy = 2000 + Number(sessionDateDigits.slice(4, 6));
+    const d = new Date(Date.UTC(yyyy, mm - 1, dd));
+    if (d.getUTCFullYear() !== yyyy || d.getUTCMonth() !== mm - 1 || d.getUTCDate() !== dd) return "";
+    return `${yyyy}-${String(mm).padStart(2, "0")}-${String(dd).padStart(2, "0")}`;
+  })();
+  const sessionDateInvalid = sessionDateDigits.length > 0 && !parsedSessionDate;
+  const sessionMetadata = brand === "stashbox" ? {
+    ...(genre.trim() ? { genre: genre.trim() } : {}),
+    ...(parsedSessionDate ? { sessionDate: parsedSessionDate } : {}),
+    ...(sessionType ? { sessionType } : {})
+  } : {};
 
   const totalSize = useMemo(
     () => files.reduce((sum, file) => sum + file.size, 0),
@@ -289,7 +308,7 @@ export function IntakeClient() {
       const response = await fetch("/api/assets/bulk-update", {
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({ action: "complete-dropbox-upload", brandSlug: brand, path: uploadedDropboxPath, mode: "ready", metadata: {
-          collection, campaign, topic, creativeFamily, ...(brand === "stashbox" && genre.trim() ? { genre: genre.trim() } : {}), eligibilityMode, windowStart, windowEnd,
+          collection, campaign, topic, creativeFamily, ...sessionMetadata, eligibilityMode, windowStart, windowEnd,
           repeatAnnually, sendToApprovalQueue, priority, creatorNote, allowedDestinations: selectedNetworks
         }})
       });
@@ -428,6 +447,11 @@ export function IntakeClient() {
       setMessageTone("error");
       return;
     }
+    if (sessionDateInvalid) {
+      setMessage("Session Date must be six valid digits (MMDDYY), or leave it blank.");
+      setMessageTone("error");
+      return;
+    }
     setBusy(true);
     setMessageTone("idle");
     setMessage("Beginning direct Dropbox intake, without S3…");
@@ -477,7 +501,7 @@ export function IntakeClient() {
         const response = await fetch("/api/assets/bulk-update", {
           method: "POST", headers: { "content-type": "application/json" },
           body: JSON.stringify({ action: "complete-dropbox-upload", brandSlug: brand, path: uploadedPath, mode,
-            metadata: { collection, campaign, topic, creativeFamily, ...(brand === "stashbox" && genre.trim() ? { genre: genre.trim() } : {}), eligibilityMode, windowStart, windowEnd,
+            metadata: { collection, campaign, topic, creativeFamily, ...sessionMetadata, eligibilityMode, windowStart, windowEnd,
               repeatAnnually, sendToApprovalQueue, priority, creatorNote, allowedDestinations: selectedNetworks } })
         });
         const result = await response.json();
@@ -499,6 +523,8 @@ export function IntakeClient() {
         setTopic("");
         setCreativeFamily("");
         setGenre("");
+        setSessionDateDigits("");
+        setSessionType("");
         setEligibilityMode("evergreen");
         setWindowStart("");
         setWindowEnd("");
@@ -584,6 +610,36 @@ export function IntakeClient() {
             <Field label="Genre (optional)">
               <input value={genre} onChange={(event) => setGenre(event.target.value)} placeholder="e.g. Reggae, Rock, Americana, Funk" />
             </Field>
+          )}
+          {brand === "stashbox" && (
+            <>
+              <Field label="Session Date (optional)">
+                <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                  <input aria-label="Session date six digits" type="text" inputMode="numeric" maxLength={6}
+                    value={sessionDateDigits}
+                    onChange={event=>setSessionDateDigits(event.target.value.replace(/\\D/g,"").slice(0,6))}
+                    placeholder="MMDDYY" style={{width:120}} />
+                  <input aria-label="Pick session date from calendar" type="date" value={parsedSessionDate || ""}
+                    onChange={event=>{
+                      const value = event.target.value;
+                      setSessionDateDigits(value ? value.slice(5,7)+value.slice(8,10)+value.slice(2,4) : "");
+                    }} style={{width:156}} />
+                  {sessionDateDigits && <button type="button" onClick={()=>setSessionDateDigits("")}>Clear</button>}
+                </div>
+                {sessionDateInvalid && <small style={{color:"#b42318"}}>Enter a real date as MMDDYY, or leave blank.</small>}
+              </Field>
+              <Field label="Session Type (optional)">
+                <select value={sessionType} onChange={event=>setSessionType(event.target.value)}>
+                  <option value="">Not tied to a session</option>
+                  <option value="studio_recording">Studio Recording</option>
+                  <option value="live_show">Live Show</option>
+                  <option value="rehearsal">Rehearsal</option>
+                  <option value="interview">Interview</option>
+                  <option value="behind_the_scenes">Behind the Scenes</option>
+                  <option value="other">Other</option>
+                </select>
+              </Field>
+            </>
           )}
           <Field label="Availability">
             <select
