@@ -204,6 +204,20 @@ export function IntakeClient() {
     return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
   }
 
+  // Dropbox content hash: SHA-256 of concatenated SHA-256 digests of 4 MiB blocks.
+  // This is intentionally distinct from a whole-file SHA-256.
+  async function dropboxContentHash(file: File): Promise<string> {
+    const blockSize = 4 * 1024 * 1024;
+    const digests: Uint8Array[] = [];
+    for (let offset = 0; offset < file.size; offset += blockSize) {
+      digests.push(new Uint8Array(await crypto.subtle.digest("SHA-256", await file.slice(offset, offset + blockSize).arrayBuffer())));
+    }
+    const combined = new Uint8Array(digests.length * 32);
+    digests.forEach((digest, index) => combined.set(digest, index * 32));
+    const finalHash = new Uint8Array(await crypto.subtle.digest("SHA-256", combined));
+    return Array.from(finalHash, byte => byte.toString(16).padStart(2, "0")).join("");
+  }
+
   async function addFiles(list: FileList | null) {
     if (!list || busy) return;
     const incoming = await Promise.all(Array.from(list).map(async (file) => ({
@@ -464,12 +478,40 @@ export function IntakeClient() {
     setMessage("Beginning direct Dropbox intake, without S3…");
     let count = 0;
     try {
+      setMessage("Checking " + unsaved.length + " files against Dropbox before uploading…");
+      const preflightResponse = await fetch("/api/dropbox/preflight", {
+        method:"POST", headers:{"content-type":"application/json"},
+        body:JSON.stringify({brand,folder:plannedDropboxFolder,names:unsaved.map(item=>item.name)})
+      });
+      const preflight = await preflightResponse.json() as {
+        results?:Array<{name:string;exists:boolean;size?:number;contentHash?:string;path?:string}>;error?:string
+      };
+      if(!preflightResponse.ok || !preflight.results || preflight.results.length!==unsaved.length)
+        throw Error(preflight.error || "Dropbox pre-upload check failed. No transfers started.");
       const seen = new Set<string>();
-      for (const item of unsaved) {
+      for (const [index,item] of unsaved.entries()) {
         const hash = item.sha256 || await sha256(item.file);
         if (seen.has(hash)) continue;
         seen.add(hash);
         let uploadedPath = item.dropboxUploadedPath || (files.length === 1 ? uploadedDropboxPath : null);
+        const existing = preflight.results[index];
+        if (!uploadedPath && existing.exists) {
+          // Same path does not necessarily mean identical content. Compare
+          // Dropbox's exact content hash before reusing the existing file.
+          if (existing.size !== item.size || !existing.contentHash) {
+            updateFile(item.id,{status:"error",error:"Filename already exists in Dropbox, but size or hash is unavailable. Skipped safely."});
+            continue;
+          }
+          setMessage("Checking content match for existing " + item.name + "…");
+          const localHash = await dropboxContentHash(item.file);
+          if(localHash !== existing.contentHash.toLowerCase()) {
+            updateFile(item.id,{status:"error",error:"Different file already uses this Dropbox filename. No overwrite or duplicate upload attempted."});
+            continue;
+          }
+          uploadedPath = existing.path || plannedDropboxFolder.replace(/\\/+$/,"") + "/" + item.name;
+          updateFile(item.id,{status:"uploaded",progress:100,dropboxUploadedPath:uploadedPath});
+          setMessage("Exact Dropbox duplicate verified. Registering without uploading " + item.name + "…");
+        }
         if (!uploadedPath) {
           if (getSavedFingerprints(brand).has(hash)) {
             updateFile(item.id, { status: "error", error: "Previously saved in this browser; skipped to avoid a duplicate." });
