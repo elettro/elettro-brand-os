@@ -769,6 +769,15 @@ export function IntakeClient() {
         )}
 
         <div style={{marginTop:18,padding:14,border:"1px solid var(--line)",borderRadius:10,background:"var(--panel-soft)"}}>
+          <strong>Fast Dropbox video upload (DEV)</strong>
+          <p className="muted" style={{margin:"6px 0 8px"}}>
+            To activate the faster direct-to-Dropbox transfer for videos over 10 MB,
+            <a href="/assets/fast-upload" style={{marginLeft:4}}>connect Dropbox on the Fast Upload V2 page</a>,
+            then return here in the same browser tab. Your selected Dropbox folder and metadata remain controlled on this page.
+            Without a connected session, the proven AWS upload method remains available.
+          </p>
+        </div>
+        <div style={{marginTop:18,padding:14,border:"1px solid var(--line)",borderRadius:10,background:"var(--panel-soft)"}}>
           <strong>DEV test: Upload one image directly to Dropbox (no S3)</strong>
           <p className="muted" style={{margin:"6px 0 10px"}}>Choose exactly one small image (up to 10 MB) and select a Dropbox folder above. This is a storage-only test: it does not create a Brand OS asset record or make the file ready to publish. Use a disposable image with a unique filename to avoid duplicate-name conflicts.</p>
           <button type="button" disabled={busy||dropboxTestBusy||!plannedDropboxFolder||files.length!==1||!files[0]?.type.startsWith("image/")||files[0]?.size>10*1024*1024} onClick={()=>void testDirectDropboxUpload()} style={buttonPrimary}>{dropboxTestBusy?"Testing…":"Test direct Dropbox upload"}</button>
