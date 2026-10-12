@@ -326,7 +326,8 @@ export function IntakeClient() {
 
   // Fast Upload V2: reuse the short-lived PKCE token from the isolated development test.
   // No refresh token or Dropbox app secret is ever persisted in browser storage.
-  async function uploadDirectToDropbox(item: IntakeFile, accessToken: string): Promise<string> {
+  async function uploadDirectToDropbox(item: IntakeFile, initialToken: string): Promise<string> {
+    let accessToken = initialToken;
     if (!plannedDropboxFolder || !plannedDropboxFolder.startsWith("/1---elettro-brand-os/" + brand + "/")) {
       throw new Error("Select a valid Dropbox folder before uploading");
     }
@@ -335,21 +336,27 @@ export function IntakeClient() {
     const chunkSize = 8 * 1024 * 1024;
     const startedAt = performance.now();
     const send = async (method: "start" | "append_v2" | "finish", args: unknown, blob: Blob) => {
-      const response = await fetch("https://content.dropboxapi.com/2/files/upload_session/" + method, {
+      const uploadChunk = (token: string) => fetch("https://content.dropboxapi.com/2/files/upload_session/" + method, {
         method: "POST",
         headers: {
-          Authorization: "Bearer " + accessToken,
+          Authorization: "Bearer " + token,
           "Dropbox-API-Arg": JSON.stringify(args),
           "Content-Type": "application/octet-stream"
         },
         body: blob
       });
+      let response = await uploadChunk(accessToken);
+      if (response.status === 401) {
+        // An unauthorized chunk was not accepted by Dropbox. Renew and retry once.
+        const renewal = await fetch("/api/dropbox/fast-token", {method:"POST"});
+        if (!renewal.ok) throw new Error("Fast Dropbox token renewal failed. HTTP 401.");
+        const fresh = await renewal.json() as {accessToken?:string};
+        if (!fresh.accessToken) throw new Error("Fast Dropbox token renewal failed. HTTP 401.");
+        accessToken = fresh.accessToken;
+        response = await uploadChunk(accessToken);
+      }
       const responseText = await response.text();
       if (!response.ok) {
-        if (response.status === 401) {
-          sessionStorage.removeItem("elettro-fast-dropbox-access-token");
-          throw new Error("Fast Upload Dropbox connection expired. Reconnect at /assets/fast-upload and retry. HTTP 401.");
-        }
         throw new Error("Dropbox direct " + method + " HTTP " + response.status + ": " + responseText.slice(0, 280));
       }
       return responseText ? JSON.parse(responseText) as Record<string, unknown> : {};
@@ -473,8 +480,14 @@ export function IntakeClient() {
           if (item.size > 10 * 1024 * 1024) {
             // Prefer the verified browser-to-Dropbox path when this tab has a PKCE session.
             // Without it, use the existing working AWS uploader unchanged.
-            const fastToken = typeof window !== "undefined"
-              ? sessionStorage.getItem("elettro-fast-dropbox-access-token") : null;
+            let fastToken: string | null = null;
+            try {
+              const authorization = await fetch("/api/dropbox/fast-token", { method: "POST" });
+              if (authorization.ok) {
+                const result = await authorization.json() as {accessToken?:string};
+                fastToken = result.accessToken || null;
+              }
+            } catch { /* Existing secure AWS uploader remains the fallback. */ }
             if (fastToken) {
               try {
                 uploadedPath = await uploadDirectToDropbox(item, fastToken);
