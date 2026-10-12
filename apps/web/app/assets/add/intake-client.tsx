@@ -303,6 +303,57 @@ export function IntakeClient() {
     finally {setRegisteringDropbox(false);}
   }
 
+  // Fast Upload V2: reuse the short-lived PKCE token from the isolated development test.
+  // No refresh token or Dropbox app secret is ever persisted in browser storage.
+  async function uploadDirectToDropbox(item: IntakeFile, accessToken: string): Promise<string> {
+    if (!plannedDropboxFolder || !plannedDropboxFolder.startsWith("/1---elettro-brand-os/" + brand + "/")) {
+      throw new Error("Select a valid Dropbox folder before uploading");
+    }
+    const folder = plannedDropboxFolder.replace(/\\/+$/, "");
+    const path = folder + "/" + item.name;
+    const chunkSize = 8 * 1024 * 1024;
+    const startedAt = performance.now();
+    const send = async (method: "start" | "append_v2" | "finish", args: unknown, blob: Blob) => {
+      const response = await fetch("https://content.dropboxapi.com/2/files/upload_session/" + method, {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + accessToken,
+          "Dropbox-API-Arg": JSON.stringify(args),
+          "Content-Type": "application/octet-stream"
+        },
+        body: blob
+      });
+      const responseText = await response.text();
+      if (!response.ok) {
+        if (response.status === 401) {
+          sessionStorage.removeItem("elettro-fast-dropbox-access-token");
+          throw new Error("Fast Upload Dropbox connection expired. Reconnect at /assets/fast-upload and retry. HTTP 401.");
+        }
+        throw new Error("Dropbox direct " + method + " HTTP " + response.status + ": " + responseText.slice(0, 280));
+      }
+      return responseText ? JSON.parse(responseText) as Record<string, unknown> : {};
+    };
+    const started = await send("start", { close: false }, new Blob([]));
+    const sessionId = String(started.session_id || "");
+    if (!sessionId) throw new Error("Dropbox did not provide an upload session ID");
+    let offset = 0;
+    while (offset < item.size) {
+      const end = Math.min(item.size, offset + chunkSize);
+      await send("append_v2", { cursor: { session_id: sessionId, offset }, close: end === item.size }, item.file.slice(offset, end));
+      offset = end;
+      const elapsed = Math.max((performance.now() - startedAt) / 1000, 0.001);
+      const mbPerSecond = (offset / 1048576) / elapsed;
+      const remainingSeconds = Math.ceil((item.size - offset) / 1048576 / Math.max(mbPerSecond, 0.001));
+      updateFile(item.id, { status: "uploading", progress: Math.round(offset / item.size * 100) });
+      setMessage("Fast Upload: " + item.name + " — " + Math.round(offset / item.size * 100) + "% · " + mbPerSecond.toFixed(2) + " MB/s · ~" + remainingSeconds + " sec remaining");
+    }
+    const result = await send("finish", {
+      cursor: { session_id: sessionId, offset },
+      commit: { path, mode: "add", autorename: false }
+    }, new Blob([]));
+    return String(result.path_display || path);
+  }
+
   // 2 MiB binary chunks are base64 encoded for the API Gateway -> Lambda transport.
   // OAuth credentials stay on AWS; the browser never uploads video through S3.
   async function uploadLargeDropboxFile(item: IntakeFile): Promise<string> {
@@ -394,7 +445,13 @@ export function IntakeClient() {
           updateFile(item.id, { status: "uploading", error: undefined, progress: 0 });
           setMessage("Uploading " + item.name + " directly to Dropbox…");
           if (item.size > 10 * 1024 * 1024) {
-            uploadedPath = await uploadLargeDropboxFile(item);
+            // Prefer the verified browser-to-Dropbox path when this tab has a PKCE session.
+            // Without it, use the existing working AWS uploader unchanged.
+            const fastToken = typeof window !== "undefined"
+              ? sessionStorage.getItem("elettro-fast-dropbox-access-token") : null;
+            uploadedPath = fastToken
+              ? await uploadDirectToDropbox(item, fastToken)
+              : await uploadLargeDropboxFile(item);
           } else {
             const linkResponse = await fetch("/api/dropbox/upload-link", {
               method: "POST", headers: { "content-type": "application/json" },
