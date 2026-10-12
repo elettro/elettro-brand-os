@@ -46,6 +46,8 @@ export default function FastUploadExperiment() {
   useEffect(() => {
     const savedKey = sessionStorage.getItem(STORAGE_PREFIX + "key") || "";
     setAppKey(savedKey);
+    const previousToken = sessionStorage.getItem(STORAGE_PREFIX + "access-token");
+    if (previousToken) setToken(previousToken);
     const params = new URLSearchParams(window.location.search);
     const code = params.get("code");
     const returnedState = params.get("state");
@@ -66,6 +68,7 @@ export default function FastUploadExperiment() {
         const data = await response.json();
         if (!response.ok || !data.access_token) throw new Error(data.error_description || data.error || "Dropbox authorization failed");
         setToken(data.access_token);
+        sessionStorage.setItem(STORAGE_PREFIX + "access-token", data.access_token);
         setStatus("Dropbox connected for this tab. Select a file and destination folder.");
       })
       .catch(error => setStatus(errorText(error)))
