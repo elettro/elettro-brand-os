@@ -42,7 +42,7 @@ export async function authenticated(): Promise<boolean> {
     const payload = await unseal(store.get(PREFIX+"session")?.value);
     if (!payload) return false;
     const [email, expiration] = payload.split("|");
-    const allowed = process.env.ELETTRO_OWNER_EMAIL?.toLowerCase();
+    const allowed = (process.env.ELETTRO_OWNER_EMAIL || "dpalermo@elettro.com").toLowerCase();
     return !!allowed && email.toLowerCase() === allowed && Number(expiration) > Date.now();
   } catch { return false; }
 }
