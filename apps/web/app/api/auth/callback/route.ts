@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AUTH_COOKIE, CALLBACK, COGNITO_CLIENT_ID, COGNITO_DOMAIN, DEV_ORIGIN, STATE_COOKIE, cookieSettings, unseal } from "@/lib/cognito-auth";
-import { createPublicKey, verify } from "node:crypto";
+import { createPublicKey, verify, type JsonWebKey as NodeJsonWebKey } from "node:crypto";
 export const runtime = "nodejs";
 async function verifiedClaims(jwt: string): Promise<Record<string,unknown>> {
   const [header, body, signature] = jwt.split(".");
@@ -15,7 +15,7 @@ async function verifiedClaims(jwt: string): Promise<Record<string,unknown>> {
   const keys = await response.json() as {keys: Array<JsonWebKey & {kid?:string}>};
   const jwk=keys.keys.find(key=>key.kid===parsedHeader.kid);
   if (!jwk) throw Error("Unknown Cognito signing key");
-  if (!verify("RSA-SHA256",Buffer.from(header+"."+body),createPublicKey({key:jwk,format:"jwk"}),Buffer.from(signature,"base64url"))) throw Error("Identity signature invalid");
+  if (!verify("RSA-SHA256",Buffer.from(header+"."+body),createPublicKey({key:jwk as NodeJsonWebKey,format:"jwk"}),Buffer.from(signature,"base64url"))) throw Error("Identity signature invalid");
   const claims=JSON.parse(Buffer.from(body,"base64url").toString()) as Record<string,unknown>;
   if (claims.iss !== issuer || claims.aud !== COGNITO_CLIENT_ID || claims.token_use !== "id" || Number(claims.exp)*1000 <= Date.now()) throw Error("Identity token invalid");
   return claims;
