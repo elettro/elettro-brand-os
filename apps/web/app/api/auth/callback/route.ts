@@ -35,7 +35,7 @@ export async function GET(request:NextRequest) {
     if (!data.id_token) throw Error("Missing identity token");
     const claims=await verifiedClaims(data.id_token);
     const email=String(claims.email||"").toLowerCase();
-    if (!email || claims.email_verified !== true || email !== process.env.ELETTRO_OWNER_EMAIL?.toLowerCase()) throw Error("Account not authorized");
+    if (!email || claims.email_verified !== true || email !== (process.env.ELETTRO_OWNER_EMAIL || "dpalermo@elettro.com").toLowerCase()) throw Error("Account not authorized");
     const destination=NextResponse.redirect(DEV_ORIGIN+"/assets/add");
     const expiration=Date.now()+8*60*60*1000;
     destination.cookies.set(AUTH_COOKIE,await seal(email+"|"+expiration),cookieSettings(8*60*60));
