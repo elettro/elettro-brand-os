@@ -1,6 +1,9 @@
 import { IntakeClient } from "./intake-client";
+import { authenticated } from "@/lib/cognito-auth";
+import { redirect } from "next/navigation";
 
-export default function AddAssetsPage() {
+export default async function AddAssetsPage() {
+  if (!(await authenticated())) redirect("/api/auth/login");
   return (
     <main className="main">
       <div className="eyebrow">Asset Intake</div>
