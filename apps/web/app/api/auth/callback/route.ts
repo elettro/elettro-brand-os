@@ -43,6 +43,6 @@ export async function GET(request:NextRequest) {
     return destination;
   } catch(error) {
     console.error("Cognito callback error:",error instanceof Error?error.message:"unknown");
-    return NextResponse.redirect(DEV_ORIGIN+"/?auth=error");
+    return NextResponse.redirect(DEV_ORIGIN+"/auth/error?reason="+encodeURIComponent(error instanceof Error ? error.message : "Authentication could not be completed"));
   }
 }
