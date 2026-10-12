@@ -3,7 +3,7 @@ import {useEffect,useState} from "react";
 type Folder={id?:string;name:string;path:string};
 type Listing={root:string;path:string;folders:Folder[];error?:string;details?:string};
 export function DropboxFolderBrowser({brand,fileTypes=[],onSelect}:{brand:string;fileTypes?:string[];onSelect?:(path:string|null)=>void}){
- const [open,setOpen]=useState(false);
+ const [open,setOpen]=useState(true);
  const [selected,setSelected]=useState<string|null>(null);
  const [creating,setCreating]=useState(false);
  const [newFolderName,setNewFolderName]=useState("");
@@ -23,7 +23,7 @@ export function DropboxFolderBrowser({brand,fileTypes=[],onSelect}:{brand:string
   }catch(e){setError(e instanceof Error?e.message:"Folder lookup failed");}
   finally{setLoading(false);}
  }
- useEffect(()=>{setPath(null);setFolders([]);setRoot("");setError("");setOpen(false);setSelected(null);onSelect?.(null);},[brand]);
+ useEffect(()=>{setPath(null);setFolders([]);setRoot("");setError("");setOpen(true);setSelected(null);onSelect?.(null);void load();},[brand]);
  const onlyImages=fileTypes.length>0&&fileTypes.every(type=>type.startsWith("image/"));
  const onlyVideos=fileTypes.length>0&&fileTypes.every(type=>type.startsWith("video/"));
  const suggested=folders.find(folder=>onlyImages?/^images?$/i.test(folder.name):onlyVideos?/^videos?$/i.test(folder.name):false);
@@ -45,12 +45,12 @@ export function DropboxFolderBrowser({brand,fileTypes=[],onSelect}:{brand:string
  const parent=path&&root&&path.length>root.length?path.slice(0,path.lastIndexOf("/")):root;
  return <section className="card" style={{marginTop:14}}>
   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
-   <div><div className="eyebrow">Dropbox destination · Step 1</div><h3 style={{margin:"6px 0"}}>Browse real brand folders</h3><p className="muted" style={{margin:0}}>Browse or create Dropbox folders. The selected folder is used for direct image uploads in DEV.</p></div>
+   <div><div className="eyebrow">Dropbox destination · Step 1</div><h3 style={{margin:"6px 0"}}>Browse real brand folders</h3><p className="muted" style={{margin:0}}>Browse or create Dropbox folders. Choose the real Dropbox folder for your uploaded assets.</p></div>
    <button type="button" onClick={()=>{if(!open){setOpen(true);void load();}else setOpen(false);}}>{open?"Close browser":"Browse Dropbox"}</button>
   </div>
   <div style={{marginTop:12,padding:12,fontSize:13,border:"1px solid var(--line)",borderRadius:8,background:"var(--panel-soft)"}}>
    <strong>Planned Dropbox destination:</strong> <span style={{overflowWrap:"anywhere"}}>{selected||"Not selected yet"}</span>
-   <p className="muted" style={{margin:"6px 0 0"}}>Selected destination applies to Save Raw and Ingest & Ready for images up to 10 MB. Larger assets and videos are blocked until direct upload sessions are implemented; S3 is not used.</p>
+   <p className="muted" style={{margin:"6px 0 0"}}>Selected destination applies to Save Raw and Ingest & Ready for images and videos. No S3 transfer.</p>
    {selected&&<button type="button" onClick={()=>{setSelected(null);onSelect?.(null);}} style={{marginTop:8}}>Clear selection</button>}
   </div>
   {open&&<div style={{marginTop:12,padding:12,background:"var(--panel-soft)",borderRadius:10}}>
@@ -62,7 +62,7 @@ export function DropboxFolderBrowser({brand,fileTypes=[],onSelect}:{brand:string
    </div>
    {creating&&<div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}><input aria-label="New folder name" value={newFolderName} onChange={event=>setNewFolderName(event.target.value)} placeholder="e.g. 16x9" maxLength={180}/><button type="button" disabled={savingFolder||!newFolderName.trim()} onClick={()=>void createFolder()}>{savingFolder?"Creating…":"Create in Dropbox"}</button><button type="button" onClick={()=>setCreating(false)}>Cancel</button></div>}
    {loading&&<p role="status">Loading folders from Dropbox…</p>}
-   {!loading&&!error&&path&&<button type="button" onClick={()=>choose(path)} style={{marginBottom:12,border:"1px solid var(--line)",background:"white",padding:"8px 12px",borderRadius:8}}>Use this folder as planned destination</button>}
+   {!loading&&!error&&path&&<button type="button" onClick={()=>choose(path)} style={{marginBottom:12,border:"2px solid #07559a",background:selected===path?"#116c46":"#07559a",color:"white",fontWeight:800,padding:"11px 16px",borderRadius:8,cursor:"pointer",boxShadow:selected===path?"0 0 0 3px rgba(17,108,70,.22)":"0 2px 8px rgba(7,85,154,.20)",transition:"background .2s,box-shadow .2s"}} onMouseEnter={e=>{if(selected!==path)e.currentTarget.style.background="#003b73";}} onMouseLeave={e=>{if(selected!==path)e.currentTarget.style.background="#07559a";}}>{selected===path?"✓ Destination locked — selected":"Use this folder as planned destination"}</button>}
    {!loading&&!error&&suggested&&<p style={{fontSize:12,margin:"0 0 12px"}}>Suggested for this batch: <strong>{suggested.name}</strong> (based on file type, not AI content analysis). <button type="button" onClick={()=>choose(suggested.path)}>Select suggestion</button></p>}
    {error&&<p role="alert" style={{color:"#b42318"}}>{error}</p>}
    {!loading&&!error&&folders.length===0&&<p className="muted">No subfolders at this level.</p>}
