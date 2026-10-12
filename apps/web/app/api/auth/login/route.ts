@@ -11,7 +11,7 @@ export async function GET() {
     url.searchParams.set("scope", "openid email");
     url.searchParams.set("state", state);
     const response = NextResponse.redirect(url);
-    response.cookies.set(STATE_COOKIE, seal(state), cookieSettings(600));
+    response.cookies.set(STATE_COOKIE, await seal(state), cookieSettings(600));
     return response;
   } catch {
     return NextResponse.json({ error: "Cognito authentication is not configured yet" }, { status: 503 });
