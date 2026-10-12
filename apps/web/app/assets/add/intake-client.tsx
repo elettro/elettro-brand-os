@@ -38,6 +38,7 @@ export function IntakeClient() {
   const [campaign, setCampaign] = useState("");
   const [topic, setTopic] = useState("");
   const [creativeFamily, setCreativeFamily] = useState("");
+  const [genre, setGenre] = useState("");
   const [eligibilityMode, setEligibilityMode] = useState<"evergreen" | "window">("evergreen");
   const [windowStart, setWindowStart] = useState("");
   const [windowEnd, setWindowEnd] = useState("");
@@ -288,7 +289,7 @@ export function IntakeClient() {
       const response = await fetch("/api/assets/bulk-update", {
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({ action: "complete-dropbox-upload", brandSlug: brand, path: uploadedDropboxPath, mode: "ready", metadata: {
-          collection, campaign, topic, creativeFamily, eligibilityMode, windowStart, windowEnd,
+          collection, campaign, topic, creativeFamily, ...(brand === "stashbox" && genre.trim() ? { genre: genre.trim() } : {}), eligibilityMode, windowStart, windowEnd,
           repeatAnnually, sendToApprovalQueue, priority, creatorNote, allowedDestinations: selectedNetworks
         }})
       });
@@ -476,7 +477,7 @@ export function IntakeClient() {
         const response = await fetch("/api/assets/bulk-update", {
           method: "POST", headers: { "content-type": "application/json" },
           body: JSON.stringify({ action: "complete-dropbox-upload", brandSlug: brand, path: uploadedPath, mode,
-            metadata: { collection, campaign, topic, creativeFamily, eligibilityMode, windowStart, windowEnd,
+            metadata: { collection, campaign, topic, creativeFamily, ...(brand === "stashbox" && genre.trim() ? { genre: genre.trim() } : {}), eligibilityMode, windowStart, windowEnd,
               repeatAnnually, sendToApprovalQueue, priority, creatorNote, allowedDestinations: selectedNetworks } })
         });
         const result = await response.json();
@@ -497,6 +498,7 @@ export function IntakeClient() {
         setCampaign("");
         setTopic("");
         setCreativeFamily("");
+        setGenre("");
         setEligibilityMode("evergreen");
         setWindowStart("");
         setWindowEnd("");
@@ -566,18 +568,23 @@ export function IntakeClient() {
               <option value="elettro">Elettro</option>
             </select>
           </Field>
-          <Field label="Collection">
-            <input value={collection} onChange={(e) => setCollection(e.target.value)} placeholder="e.g. Stashbox Does Sublime" />
+          <Field label={brand === "stashbox" ? "Show / Music Series" : "Collection"}>
+            <input value={collection} onChange={(e) => setCollection(e.target.value)} placeholder={brand === "stashbox" ? "e.g. Stashbox Does Dylan, Originals, Stashbox Radio" : "Optional"} />
           </Field>
-          <Field label="Campaign">
+          <Field label={brand === "stashbox" ? "Promotion / Initiative" : "Campaign"}>
             <input value={campaign} onChange={(e) => setCampaign(e.target.value)} placeholder="Optional" />
           </Field>
-          <Field label="Topic / Product">
+          <Field label={brand === "stashbox" ? "Content Focus" : "Topic / Product"}>
             <input value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="Optional" />
           </Field>
-          <Field label="Creative Family">
+          <Field label={brand === "stashbox" ? "Song / Creative Title" : "Creative Family"}>
             <input value={creativeFamily} onChange={(e) => setCreativeFamily(e.target.value)} placeholder="Optional" />
           </Field>
+          {brand === "stashbox" && (
+            <Field label="Genre (optional)">
+              <input value={genre} onChange={(event) => setGenre(event.target.value)} placeholder="e.g. Reggae, Rock, Americana, Funk" />
+            </Field>
+          )}
           <Field label="Availability">
             <select
               value={eligibilityMode}
