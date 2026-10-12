@@ -56,7 +56,7 @@ export default async function DashboardPage() {
       <main className="main">
         <div className="topbar">
           <div>
-            <div className="eyebrow">Publishing Engine · Sprint 1</div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}><div className="eyebrow">Publishing Engine · Sprint 1</div><a href="/api/auth/logout" style={{padding:"8px 12px",border:"1px solid #94a3b8",borderRadius:8,textDecoration:"none",fontWeight:700}}>Log out</a></div>
             <h1>Create. Approve. The engine distributes.</h1>
           </div>
           <BrandSwitcher brands={brands} />
