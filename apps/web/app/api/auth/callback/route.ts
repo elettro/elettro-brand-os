@@ -7,7 +7,9 @@ async function verifiedClaims(jwt: string): Promise<Record<string,unknown>> {
   if (!header || !body || !signature) throw Error("Malformed identity token");
   const parsedHeader = JSON.parse(Buffer.from(header,"base64url").toString()) as {kid?:string;alg?:string};
   if (parsedHeader.alg !== "RS256" || !parsedHeader.kid) throw Error("Invalid token algorithm");
-  const issuer = "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_YDbEhB7ps";
+  const poolId = process.env.ELETTRO_COGNITO_USER_POOL_ID;
+  if (!poolId || !/^us-east-1_[A-Za-z0-9]+$/.test(poolId)) throw Error("Cognito user pool is not configured");
+  const issuer = "https://cognito-idp.us-east-1.amazonaws.com/" + poolId;
   const response = await fetch(issuer + "/.well-known/jwks.json",{cache:"no-store"});
   if (!response.ok) throw Error("Unable to load Cognito signing keys");
   const keys = await response.json() as {keys: Array<JsonWebKey & {kid?:string}>};
