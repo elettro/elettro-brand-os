@@ -92,3 +92,17 @@ All mutations include an explicit confirmation field in the tool contract. The f
 Step 5 operator instructions after successful Amplify deploy: select Stashbox, search for `dean-stashbox-does-dylan9x16-2.png`, scroll to Step 5 and click **Verify existing registration (read-only)**. A PASS requires `registrationVerified:true`. If the registry omits `sourceFileId` and `sourcePath`, the check will display `source_locator_unavailable`, which is a limitation to investigate, not evidence of a duplicate.
 
 **Stock Galleries remain on hold.** The Step 5 work touches brand-owned files only and does not move, upload or change their approval status.
+
+## Step 5 diagnostic: source_locator_unavailable (October 13)
+
+User's live test on Stashbox asset `08adc79a-211e-4f9a-9ebe-da2614285dad` (`SE53F9~1.MP4`) returned `registrationVerified:false` with `verificationStatus:"source_locator_unavailable"`. Its `ingestStatus:ready` and `approvalStatus:approved` were unchanged.
+
+Independent **read-only** Dropbox lookup confirms that the video exists at:
+`/1---elettro-brand-os/stashbox/radio/1x1-promo-videos/1x1-surfing-dean-stashbox-radio/SE53F9~1.MP4`
+with Dropbox file ID `id:UM9GhyUcVDgAAAAAAAMB-g`. Presence and basename alone DO NOT establish the database record's identity.
+
+**Root-cause investigation:** The checked-in DEV API's asset detail query in `services/dev-api-lambda/db-main.mjs` returns `sourcePath` but not `sourceFileId`; the Prisma schema and Dropbox ingestion functions both use the stable `sourceFileId`. If `sourcePath` is null, the gateway currently cannot verify a source, even if the DB stores its Dropbox ID. Commit `905d42a` adds `a."sourceFileId"` to the detail query, with a regression assertion. The gateway's ID check was hardened to recognize moved files with the same Dropbox ID in commit `b38d901`.
+
+**CRITICAL DEPLOYMENT SAFETY:** The `Build DEV API Lambda` GitHub Actions workflow only packages and uploads a ZIP **artifact**. It does **NOT** deploy the new Lambda to AWS. Moreover, the checked-in Lambda source lacks the active `complete-dropbox-upload` action that is known to function in the deployed DEV API, indicating possible source/package drift. **Do not deploy the entire checked-in ZIP over the running Lambda without reconciling against its current deployed source, or Dropbox registration may regress.** A controlled, non-destructive Lambda update/reconciliation is needed first. Amplify deployment of the frontend does not apply this Lambda fix.
+
+Next test when the live Lambda's asset detail response includes a stable `sourceFileId`: In the AI Gateway Lab, search for `SE53F9~1.MP4`, select the corresponding asset, and click **Verify existing registration (read-only)**. PASS must require exact Dropbox file-ID equality and same-brand folder containment. If the database's sourceFileId is null, inspect the original registration path before considering any backfill. **Do not re-register, backfill, or alter Ready/Approved status without a separate guarded procedure and explicit approval.**
