@@ -64,9 +64,9 @@ export function IntakeClient() {
   const parsedSessionDate = (() => {
     if (!sessionDateDigits) return null;
     if (sessionDateDigits.length !== 6) return "";
-    const mm = Number(sessionDateDigits.slice(0, 2));
-    const dd = Number(sessionDateDigits.slice(2, 4));
-    const yyyy = 2000 + Number(sessionDateDigits.slice(4, 6));
+    const yyyy = 2000 + Number(sessionDateDigits.slice(0, 2));
+    const mm = Number(sessionDateDigits.slice(2, 4));
+    const dd = Number(sessionDateDigits.slice(4, 6));
     const d = new Date(Date.UTC(yyyy, mm - 1, dd));
     if (d.getUTCFullYear() !== yyyy || d.getUTCMonth() !== mm - 1 || d.getUTCDate() !== dd) return "";
     return `${yyyy}-${String(mm).padStart(2, "0")}-${String(dd).padStart(2, "0")}`;
@@ -503,7 +503,7 @@ export function IntakeClient() {
       return;
     }
     if (sessionDateInvalid) {
-      setMessage("Session Date must be six valid digits (MMDDYY), or leave it blank.");
+      setMessage("Session Date must be six valid digits (YYMMDD), or leave it blank.");
       setMessageTone("error");
       return;
     }
@@ -769,15 +769,15 @@ export function IntakeClient() {
                   <input aria-label="Session date six digits" type="text" inputMode="numeric" maxLength={6}
                     value={sessionDateDigits}
                     onChange={event=>setSessionDateDigits(event.target.value.replace(/\\D/g,"").slice(0,6))}
-                    placeholder="MMDDYY" style={{width:120}} />
+                    placeholder="YYMMDD" style={{width:120}} />
                   <input aria-label="Pick session date from calendar" type="date" value={parsedSessionDate || ""}
                     onChange={event=>{
                       const value = event.target.value;
-                      setSessionDateDigits(value ? value.slice(5,7)+value.slice(8,10)+value.slice(2,4) : "");
+                      setSessionDateDigits(value ? value.slice(2,4)+value.slice(5,7)+value.slice(8,10) : "");
                     }} style={{width:156}} />
                   {sessionDateDigits && <button type="button" onClick={()=>setSessionDateDigits("")}>Clear</button>}
                 </div>
-                {sessionDateInvalid && <small style={{color:"#b42318"}}>Enter a real date as MMDDYY, or leave blank.</small>}
+                {sessionDateInvalid && <small style={{color:"#b42318"}}>Enter a real date as YYMMDD, or leave blank.</small>}
               </Field>
               <Field label="Session Type (optional)">
                 <select value={sessionType} onChange={event=>setSessionType(event.target.value)}>
