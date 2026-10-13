@@ -166,11 +166,14 @@ async function registrationCandidates(
   if (!Array.isArray(response.assets)) throw new GatewayError(502,"Unable to inspect asset registry");
   const filename=path.slice(path.lastIndexOf("/")+1).toLowerCase();
   const rows=response.assets.filter((value):value is Dict=>!!value&&typeof value==="object"&&!Array.isArray(value));
-  const shortlist=rows.filter(row=>
+  const candidateRows=rows.filter(row=>
     row.sourceFileId===dropboxFileId||row.sourceExternalId===dropboxFileId||
     (typeof row.sourcePath==="string"&&row.sourcePath.toLowerCase()===path.toLowerCase())||
     (String(row.filename||"").toLowerCase()===filename&&row.brandSlug===brandSlug)
-  ).slice(0,40);
+  );
+  if(candidateRows.length>40)
+    throw new GatewayError(409,"Too many potential registration matches for safe automatic deduplication");
+  const shortlist=candidateRows;
   const detailed:RegistrationRecord[]=[];
   for(const entry of shortlist){
     const identifier=typeof entry.id==="string"?entry.id:"";
@@ -207,7 +210,7 @@ async function registrationCandidates(
 
 export const AI_GATEWAY_ACTIONS = [
   "capabilities", "search_assets", "get_asset", "update_asset_metadata",
-  "register_existing_asset", "inspect_brand_registration", "list_folders", "create_folder"
+  "register_existing_asset", "inspect_brand_registration", "inspect_registered_asset", "list_folders", "create_folder"
 ] as const;
 
 export async function executeAiGateway(input: unknown): Promise<Dict> {
@@ -251,6 +254,49 @@ export async function executeAiGateway(input: unknown): Promise<Dict> {
     const result = await api("/assets/bulk-update", { assetIds: [id], metadata: patch, markReady: false });
     if (result.updated !== 1) throw new GatewayError(502, "Metadata update was not confirmed by the registry");
     return { ok: true, updated: 1, assetId: id, brandSlug: slug, changedFields: Object.keys(patch) };
+  }
+
+  if(action==="inspect_registered_asset"){
+    const config=brandConfig(command.brandSlug);
+    const id=assetId(command.assetId);
+    const result=await api("/assets?id="+encodeURIComponent(id));
+    const asset=record(result.asset);
+    if(asset.id!==id||asset.brandSlug!==config.id)
+      throw new GatewayError(404,"Asset was not found in selected brand");
+    const storedPath=typeof asset.sourcePath==="string"?asset.sourcePath:null;
+    const storedFileId=typeof asset.sourceFileId==="string"?asset.sourceFileId:
+      typeof asset.sourceExternalId==="string"&&asset.sourceExternalId.startsWith("id:")?asset.sourceExternalId:null;
+    const filename=typeof asset.filename==="string"?asset.filename:"";
+    const currentState={
+      assetId:id,brandSlug:config.id,filename,
+      ingestStatus:typeof asset.ingestStatus==="string"?asset.ingestStatus:null,
+      approvalStatus:typeof asset.approvalStatus==="string"?asset.approvalStatus:null
+    };
+    if(!storedPath&&!storedFileId)
+      return {ok:true,...currentState,registrationVerified:false,
+        verificationStatus:"source_locator_unavailable",
+        note:"The registry did not expose a Dropbox file ID or path for this asset. No changes were made."};
+    if(storedPath)folderPath(storedPath,config.dropboxRoot,false);
+    const token=await dropboxToken();
+    let file:{".tag"?:string;id?:string;path_display?:string};
+    try{
+      file=await dropboxCall(token,"get_metadata",{path:storedFileId||storedPath});
+    }catch(error){
+      if(error instanceof GatewayError&&error.status===409)
+        return {ok:true,...currentState,registrationVerified:false,
+          verificationStatus:"dropbox_file_not_found",note:"Dropbox could not locate this asset. No changes were made."};
+      throw error;
+    }
+    const actualPath=file.path_display||"";
+    const within=actualPath.toLowerCase().startsWith(config.dropboxRoot.toLowerCase()+"/");
+    const idMatches=!storedFileId||storedFileId===file.id;
+    const pathMatches=!storedPath||storedPath.toLowerCase()===actualPath.toLowerCase();
+    const verified=file[".tag"]==="file"&&!!file.id&&within&&idMatches&&pathMatches;
+    return {ok:true,...currentState,registrationVerified:verified,
+      verificationStatus:verified?"registered_in_dropbox":"source_mismatch",
+      dropboxFileId:file.id||null,
+      dropboxPath:actualPath||null,
+      note:verified?"Existing asset and Dropbox source verified, without re-registering or changing status.":"Registry/Dropbox source mismatch. Do not register again until reviewed."};
   }
 
   if (action === "inspect_brand_registration" || action === "register_existing_asset") {
