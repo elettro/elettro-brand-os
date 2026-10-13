@@ -26,6 +26,9 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Check live DEV Lambda patch safety (offline)
+        run: python3 -m unittest discover -s tests -p "test_lambda_patch.py" -v
+
       - name: Test MCP tool permissions and assistant parity
         run: node --experimental-strip-types --test tests/ai-mcp-tools.test.mjs
 
