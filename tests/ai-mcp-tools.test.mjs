@@ -67,3 +67,17 @@ test("metadata batch tool uses the same brand grant and confirmation policy",()=
  assert.equal(tool.inputSchema.properties.items.maxItems,25);
  assert.ok(tool.inputSchema.required.includes("confirmed"));
 });
+
+test("diagnostic metadata write is owner-only, reversible and does not publish",()=>{
+ const helper=readFileSync(new URL("../apps/web/lib/ai-gateway-write-test.ts",import.meta.url),"utf8");
+ const owner=readFileSync(new URL("../apps/web/app/api/ai-gateway/route.ts",import.meta.url),"utf8");
+ const mcp=readFileSync(new URL("../apps/web/app/api/mcp/route.ts",import.meta.url),"utf8");
+ assert.match(owner,/runMetadataWriteSmokeTest/);
+ assert.match(owner,/authenticated\(\)/);
+ assert.match(helper,/brandSlug:"stashbox"/);
+ assert.match(helper,/originalTags/);
+ assert.match(helper,/cleanupVerified/);
+ assert.match(helper,/writeTags\(id,latestTags\.filter\(tag=>tag!==probe\)\)/);
+ assert.ok(!MCP_TOOLS.some(tool=>tool.action==="test_metadata_round_trip"));
+ assert.ok(!mcp.includes("test_metadata_round_trip"));
+});
