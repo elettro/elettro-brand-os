@@ -3,29 +3,54 @@ import { brandConfigs } from "@/lib/brand-config";
 import { authenticated } from "@/lib/cognito-auth";
 export const dynamic = "force-dynamic";
 const API_BASE = process.env.BRAND_OS_API_BASE_URL || process.env.NEXT_PUBLIC_BRAND_OS_API_BASE_URL || "https://zkjngy7rdd.execute-api.us-east-1.amazonaws.com";
+import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
+const secrets = new SecretsManagerClient({region:"us-east-1"});
+
+// List Dropbox directly at the selected brand root. Never delegate navigation
+// to an upstream handler that might resolve another brand or the global root.
 export async function GET(request:NextRequest){
  if(!(await authenticated()))return NextResponse.json({error:"Login required"},{status:401});
  const brand=request.nextUrl.searchParams.get("brand")||"";
  const config=brandConfigs.find(item=>item.id===brand);
  if(!config)return NextResponse.json({error:"Unknown brand"},{status:400});
  const root=config.dropboxRoot;
- const path=request.nextUrl.searchParams.get("path")||root;
- const normalized=path.replace(/\\/g,"/").replace(/\/+$/,"");
+ const normalized=(request.nextUrl.searchParams.get("path")||root).replace(/\\\\/g,"/").replace(/\\/+$/,"");
  if(normalized.toLowerCase()!==root.toLowerCase()&&!normalized.toLowerCase().startsWith(root.toLowerCase()+"/"))
   return NextResponse.json({error:"Outside brand root"},{status:403});
- try{
-  const response=await fetch(`${API_BASE}/assets/bulk-update`,{
-   method:"POST",
-   headers:{"content-type":"application/json"},
-   body:JSON.stringify({action:"dropbox-list-folders",brand,path:normalized}),
-   cache:"no-store"
+ try {
+  const secret=await secrets.send(new GetSecretValueCommand({SecretId:"elettro-brand-os-dev/dropbox"}));
+  const cfg=JSON.parse(secret.SecretString||"{}") as Record<string,string>;
+  const refresh=cfg.refresh_token||cfg.refreshToken;
+  const key=cfg.app_key||cfg.appKey;
+  const appSecret=cfg.app_secret||cfg.appSecret;
+  if(!refresh||!key||!appSecret)throw Error("Dropbox credentials unavailable");
+  const auth=await fetch("https://api.dropboxapi.com/oauth2/token",{
+   method:"POST",headers:{"content-type":"application/x-www-form-urlencoded"},
+   body:new URLSearchParams({grant_type:"refresh_token",refresh_token:refresh,client_id:key,client_secret:appSecret}),cache:"no-store"
   });
-  const raw=await response.text();
-  let data:Record<string,unknown>;
-  try{data=JSON.parse(raw)}catch{return NextResponse.json({error:"DEV API returned a non-JSON response"},{status:502});}
-  if(!response.ok||data.ok===false)return NextResponse.json({error:String(data.error||"Dropbox folder listing failed"),details:typeof data.detail==="string"?data.detail:undefined},{status:response.status});
-  return NextResponse.json({...data,root,path:typeof data.path==="string"?data.path:normalized},{headers:{"cache-control":"no-store"}});
- }catch(error){return NextResponse.json({error:"Unable to reach DEV API Gateway",details:error instanceof Error?error.message:"Network error"},{status:503});}
+  if(!auth.ok)throw Error("Dropbox authorization failed");
+  const token=(await auth.json() as {access_token:string}).access_token;
+  const folders:Array<{id?:string;name:string;path:string}>=[];
+  let cursor:string|undefined;
+  do {
+   const response=await fetch("https://api.dropboxapi.com/2/files/"+(cursor?"list_folder/continue":"list_folder"),{
+    method:"POST",headers:{"authorization":"Bearer "+token,"content-type":"application/json"},
+    body:JSON.stringify(cursor?{cursor}:{path:normalized,recursive:false,include_deleted:false,limit:200}),cache:"no-store"
+   });
+   if(!response.ok)throw Error("Dropbox listing returned HTTP "+response.status);
+   const page=await response.json() as {entries:Array<{".tag":string;id?:string;name:string;path_display?:string}>;cursor:string;has_more:boolean};
+   for(const entry of page.entries){
+    if(entry[".tag"]!=="folder"||!entry.path_display)continue;
+    if(!entry.path_display.toLowerCase().startsWith(root.toLowerCase()+"/"))continue;
+    folders.push({id:entry.id,name:entry.name,path:entry.path_display});
+   }
+   cursor=page.has_more?page.cursor:undefined;
+  }while(cursor);
+  return NextResponse.json({root,path:normalized,folders},{headers:{"cache-control":"no-store"}});
+ }catch(error){
+  console.error("Brand Dropbox listing failed",error instanceof Error?error.name:"Unknown");
+  return NextResponse.json({error:"Unable to list brand Dropbox folders"},{status:503});
+ }
 }
 
 // DEV-only folder creation; brand-root validated server-side as well as by Lambda.
