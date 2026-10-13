@@ -77,3 +77,18 @@ All mutations include an explicit confirmation field in the tool contract. The f
 - This controlled test is *not* exposed to ChatGPT or Claude MCP tools. It uses the signed-in owner dashboard only.
 - Commits: `1acba84` (server helper), `987e768` (owner gateway route), `6b12f54` (test UI), `4260d1f` (regression assertions).
 - **Do not claim the live metadata write has passed until the returned JSON verifies success and restoration.**
+
+## October 13: live Step 4 result and Step 5 preparation
+
+**Step 4 verified on live develop:** The user ran the metadata write + cleanup diagnostic on Stashbox asset `61e57e95-e8ec-4ddf-a986-824a4ccfddf9` (`dean-stashbox-does-dylan9x16-2.png`). The endpoint returned `writeVerified:true`, `cleanupVerified:true`, `exactRestoration:true`; tags were `[]` both before and after, and `ingestStatus:ready`, `approvalStatus:approved` were unchanged.
+
+**Step 5 committed in develop, not yet live-verified:**
+- Safeguarded `register_existing_asset` by looking up indexed records via Dropbox ID/path. Existing exact matches are reused without calling `complete-dropbox-upload` again. Uncertain same-name matches block registration rather than risk duplicating/resetting an existing asset.
+- `inspect_registered_asset` is a read-only diagnostic checking the selected brand asset's Dropbox source file ID/path, or reporting that the registry lacks enough source information. It does not modify anything.
+- `inspect_brand_registration` is a read-only Dropbox-path preflight to distinguish `registered`, `not_found`, and `needs_review`.
+- Added Step 5 inspection controls to `/ai-gateway` and both assistants' MCP tool catalogs.
+- **Do not claim idempotent re-registration end-to-end verified yet.** The initial Step 5 check reads only. Future testing of a genuinely new image registration in Raw mode and a second registration attempt requires a disposable brand test asset and explicit owner confirmation.
+
+Step 5 operator instructions after successful Amplify deploy: select Stashbox, search for `dean-stashbox-does-dylan9x16-2.png`, scroll to Step 5 and click **Verify existing registration (read-only)**. A PASS requires `registrationVerified:true`. If the registry omits `sourceFileId` and `sourcePath`, the check will display `source_locator_unavailable`, which is a limitation to investigate, not evidence of a duplicate.
+
+**Stock Galleries remain on hold.** The Step 5 work touches brand-owned files only and does not move, upload or change their approval status.
