@@ -10,6 +10,7 @@ export function DropboxFolderBrowser({brand,fileTypes=[],onSelect}:{brand:string
  const [savingFolder,setSavingFolder]=useState(false);
  const [path,setPath]=useState<string|null>(null);
  const [root,setRoot]=useState("");
+ const brandRoot="/1---elettro-brand-os/"+brand;
  const [folders,setFolders]=useState<Folder[]>([]);
  const [loading,setLoading]=useState(false);
  const [error,setError]=useState("");
@@ -19,7 +20,7 @@ export function DropboxFolderBrowser({brand,fileTypes=[],onSelect}:{brand:string
    const url="/api/dropbox/folders?brand="+encodeURIComponent(brand)+(target?"&path="+encodeURIComponent(target):"");
    const res=await fetch(url,{cache:"no-store"});const data:Listing=await res.json();
    if(!res.ok)throw Error(data.details?data.error+": "+data.details:data.error||"Folder listing failed");
-   setRoot(data.root);setPath(data.path);setFolders(data.folders);
+   setRoot(brandRoot);setPath(data.path||brandRoot);setFolders(data.folders);
   }catch(e){setError(e instanceof Error?e.message:"Folder lookup failed");}
   finally{setLoading(false);}
  }
@@ -41,8 +42,8 @@ export function DropboxFolderBrowser({brand,fileTypes=[],onSelect}:{brand:string
   }catch(error){setError(error instanceof Error?error.message:"Folder creation failed");}
   finally{setSavingFolder(false);}
  }
- const atRoot=!path||path.toLowerCase()===root.toLowerCase();
- const parent=path&&root&&path.length>root.length?path.slice(0,path.lastIndexOf("/")):root;
+ const atRoot=!path||path.toLowerCase()===brandRoot.toLowerCase();
+ const parent=path&&path.length>brandRoot.length?path.slice(0,path.lastIndexOf("/")):brandRoot;
  return <section className="card" style={{marginTop:14}}>
   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
    <div><div className="eyebrow">Dropbox destination · Step 1</div><h3 style={{margin:"6px 0"}}>Browse real brand folders</h3><p className="muted" style={{margin:0}}>Browse or create Dropbox folders. Choose the real Dropbox folder for your uploaded assets.</p></div>
@@ -57,6 +58,7 @@ export function DropboxFolderBrowser({brand,fileTypes=[],onSelect}:{brand:string
    <div style={{overflowWrap:"anywhere",fontSize:12,marginBottom:12}}>Current folder: <strong>{path||"Loading..."}</strong></div>
    <div style={{display:"flex",gap:8,marginBottom:12}}>
     <button type="button" disabled={loading||atRoot} onClick={()=>void load(parent)}>← Up</button>
+    <button type="button" disabled={loading||atRoot} onClick={()=>void load(brandRoot)}>Stashbox root</button>
     <button type="button" disabled={loading} onClick={()=>void load(path||undefined)}>Refresh</button>
     <button type="button" disabled={loading||!path||savingFolder} onClick={()=>setCreating(value=>!value)}>+ New folder</button>
    </div>
