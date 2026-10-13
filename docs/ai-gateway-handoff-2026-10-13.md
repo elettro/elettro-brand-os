@@ -125,3 +125,31 @@ The API detail query omitted `sourceExternalId` and `sourceUrl`. Both identifier
 - No Dropbox file, registry row, or production environment modified.
 
 **When user confirms AWS Lambda Code SHA still equals PATCH1**, deploy PATCH2 to the DEV API Lambda only, run the same read-only Lambda event with asset ID `08adc79a-211e-4f9a-9ebe-da2614285dad`. Check whether `sourceExternalId` is equal to independent Dropbox file ID `id:UM9GhyUcVDgAAAAAAAMB-g` and `sourceUrl` is the corresponding brand file path. If the result verifies these fields, Step 5 in the AI Gateway Lab can be rerun after the gateway's `develop` deployment. If either field is null, **do not infer an ID from filename**; investigate record origin further.
+
+## October 13 — Step 5 confirmed PASS; Step 6 read-only preflight prepared
+
+The user clicked **Verify existing registration (read-only)** in the deployed AI Gateway Lab on Stashbox asset `08adc79a-211e-4f9a-9ebe-da2614285dad` (`SE53F9~1.MP4`).
+
+Live response:
+- `registrationVerified:true`
+- `verificationStatus:"registered_in_dropbox"`
+- `dropboxFileId:"id:UM9GhyUcVDgAAAAAAAMB-g"`
+- `dropboxPath:"/1---elettro-brand-os/stashbox/radio/1x1-promo-videos/1x1-surfing-dean-stashbox-radio/SE53F9~1.MP4"`
+- `pathNeedsSync:false`
+- `ingestStatus:"ready"` and `approvalStatus:"approved"`.
+
+**Step 5 identity verification is passed.** The live database and Dropbox are linked correctly. No backfill, repair, re-upload or re-registration is required for this video.
+
+**Step 6 (committed; deploy and acceptance pending):** A new **Duplicate registration preflight** panel in `/ai-gateway` calls the existing read-only `inspect_brand_registration` action using the verified Dropbox path from Step 5. It independently checks that the returned existing asset ID equals the selected asset ID, its Dropbox file ID equals the verified source file ID, and `safeToRegister:false`. If all match, show `PASS · Existing registration recognized; no duplicate created`. It does NOT call any registration mutation.
+
+**Critical safety guard:** `GET /assets` in the DEV Lambda is capped to 500 recently created records. A missing result from this page cannot prove an asset is absent; a file may have moved or been renamed. Therefore, a new `register_existing_asset` invocation now fails closed until a database-indexed *global* Dropbox-ID lookup is available. Existing exact immutable Dropbox-ID matches can be reused without invoking `complete-dropbox-upload`. Path-only and filename-only matches are not accepted as proof of identity. The read-only preflight always returns `safeToRegister:false` unless an authoritative registration implementation is built. This affects the AI Gateway path only, not the existing dashboard upload path.
+
+**Status distinctions:**
+- Step 4 actual write+restoration: PASS.
+- Step 5 live identity verification: PASS.
+- Step 6 duplicate preflight: source prepared; not live tested.
+- New-file registration, repeated mutation idempotency, and cross-brand source lookups: NOT yet proven.
+- ChatGPT and Claude credentials and OAuth connectivity: NOT yet configured.
+- Stock Gallery development: paused.
+
+After Amplify deploy, search `SE53F9~1.MP4` in Stashbox, click Step 5 to verify again, then click the new **Step 6: Check existing asset for duplicates (read-only)** control. Confirm the preflight response identifies asset `08adc79a-211e-4f9a-9ebe-da2614285dad`, matching Dropbox ID `id:UM9GhyUcVDgAAAAAAAMB-g`.
