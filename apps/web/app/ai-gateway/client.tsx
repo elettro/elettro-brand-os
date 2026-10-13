@@ -34,6 +34,9 @@ export function AiGatewayLabClient(){
  const [testBusy,setTestBusy]=useState(false);
  const [testResult,setTestResult]=useState<ApiResult|null>(null);
  const [testError,setTestError]=useState("");
+ const [registrationBusy,setRegistrationBusy]=useState(false);
+ const [registrationResult,setRegistrationResult]=useState<ApiResult|null>(null);
+ const [registrationError,setRegistrationError]=useState("");
 
  async function call(action:"capabilities"|"search_assets"|"list_folders"){
   setBusy(true);setError("");setCurrent(action);setReply(null);
@@ -46,10 +49,23 @@ export function AiGatewayLabClient(){
    if(action==="search_assets"){
     const assets=result.assets||[];
     setCandidates(assets);
+    setRegistrationResult(null);setRegistrationError("");
     setTestAssetId(currentId=>assets.some(a=>a.id===currentId)?currentId:(assets[0]?.id||""));
    }
   }catch(e){setError(e instanceof Error?e.message:"Gateway unavailable");}
   finally{setBusy(false);}
+ }
+
+ async function inspectRegistration(){
+  if(!testAssetId||registrationBusy||testBusy||busy)return;
+  setRegistrationBusy(true);setRegistrationError("");setRegistrationResult(null);
+  try{
+   const result=await gateway({
+    action:"inspect_registered_asset",brandSlug:brand,assetId:testAssetId
+   });
+   setRegistrationResult(result);
+  }catch(e){setRegistrationError(e instanceof Error?e.message:"Asset verification unavailable");}
+  finally{setRegistrationBusy(false);}
  }
 
  async function testMetadata(){
@@ -77,7 +93,7 @@ export function AiGatewayLabClient(){
     <label style={{display:"grid",gap:5}}>
      <span className="metric">Brand</span>
      <select value={brand} onChange={event=>{
-      setBrand(event.target.value);setCandidates([]);setTestAssetId("");setTestResult(null);
+      setBrand(event.target.value);setCandidates([]);setTestAssetId("");setTestResult(null);setRegistrationResult(null);setRegistrationError("");
      }} disabled={busy||testBusy}>
       {brands.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}
      </select>
@@ -133,6 +149,35 @@ export function AiGatewayLabClient(){
     <pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",overflow:"auto",maxHeight:400,marginTop:10,padding:14,border:"1px solid var(--line)",borderRadius:10,background:"var(--panel-soft)",fontSize:12}}>
      {JSON.stringify(testResult,null,2)}
     </pre>
+   </div>}
+  </section>
+  <section className="card" style={{marginTop:18}}>
+   <h2 style={{marginTop:0}}>Step 5 · Registration and Dropbox identity check</h2>
+   <p className="muted">Check that a registered brand asset still points to its original Dropbox file. This is read-only and will not register anything twice or change publishing status.</p>
+   {candidates.length===0?<p className="muted">Search for brand assets above to select one for verification.</p>:
+    <div style={{display:"grid",gap:10,maxWidth:680}}>
+     <label style={{display:"grid",gap:5}}>
+      <span className="metric">Registered asset to inspect</span>
+      <select value={testAssetId} disabled={busy||testBusy||registrationBusy} onChange={event=>{setTestAssetId(event.target.value);setRegistrationResult(null);}}>
+       {candidates.map(asset=><option key={asset.id} value={asset.id}>
+        {asset.filename.slice(0,110)} · {asset.id.slice(0,8)}
+       </option>)}
+      </select>
+     </label>
+     <div><button type="button" disabled={busy||testBusy||registrationBusy||!testAssetId} onClick={()=>void inspectRegistration()}>
+      {registrationBusy?"Checking Dropbox identity…":"Verify existing registration (read-only)"}
+     </button></div>
+    </div>}
+   {registrationBusy&&<p role="status">Checking asset record and its Dropbox identity…</p>}
+   {registrationError&&<p role="alert" style={{color:"#b42318"}}>{registrationError}</p>}
+   {registrationResult&&<div style={{marginTop:16}}>
+    <strong style={{color:registrationResult.registrationVerified===true?"#116c46":"#b45309"}}>
+     {registrationResult.registrationVerified===true?"PASS · Dropbox source identity verified":"NEEDS REVIEW · Dropbox source identity not yet verified"}
+    </strong>
+    <pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",overflow:"auto",maxHeight:400,marginTop:10,padding:14,border:"1px solid var(--line)",borderRadius:10,background:"var(--panel-soft)",fontSize:12}}>
+     {JSON.stringify(registrationResult,null,2)}
+    </pre>
+    {registrationResult.registrationVerified!==true&&<p className="muted" style={{fontSize:12}}>This result does not mean the file is a duplicate. It means the database did not expose enough matching Dropbox identity information, or the source needs review. No changes were made.</p>}
    </div>}
   </section>
   <p className="muted" style={{marginTop:18,fontSize:12}}>
