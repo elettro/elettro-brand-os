@@ -51,6 +51,7 @@ export default async function DashboardPage() {
         <div className="nav-section">
           <div className="nav-label">Intelligence</div>
           <a className="nav-item" href="#">Chat</a>
+          <Link className="nav-item" href="/ai-gateway">AI Gateway Lab</Link>
           <a className="nav-item" href="#">Analytics</a>
           <a className="nav-item" href="#">Knowledge</a>
         </div>
