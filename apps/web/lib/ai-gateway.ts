@@ -202,9 +202,10 @@ async function registrationCandidates(
     throw new GatewayError(409,"Dropbox file is already indexed under a different brand");
   if(exact.length>1)
     throw new GatewayError(409,"Multiple asset records reference this Dropbox file; registration blocked");
+  // Same-name records that cannot be conclusively matched by Dropbox ID/path
+  // stay in review; never submit them to the Raw registration path blindly.
   const uncertain=detailed.filter(a=>a.brandSlug===brandSlug&&
-    a.filename.toLowerCase()===filename&&!exact.some(b=>b.id===a.id)&&
-    !a.sourceFileId&&!a.sourceExternalId&&!a.sourcePath);
+    a.filename.toLowerCase()===filename&&!exact.some(b=>b.id===a.id));
   return {existing:exact[0],uncertain};
 }
 
