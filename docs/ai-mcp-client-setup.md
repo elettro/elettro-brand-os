@@ -56,7 +56,7 @@ Store the token itself only in the appropriate assistant's protected connector s
 - `elettro_search_assets`: find assets in an authorized brand.
 - `elettro_get_asset`: retrieve metadata for a single brand asset.
 - `elettro_update_asset_metadata`: update existing asset tags, descriptions and metadata; requires explicit approval.
-- `elettro_register_brand_asset`: register an **already uploaded** Dropbox file as Raw; never publishes it.
+- `elettro_batch_update_metadata`: enrich up to 25 different existing brand assets with individual tags, titles and creative notes in one request; reports partial failures per asset. Requires confirmation.\n- `elettro_register_brand_asset`: register an **already uploaded** Dropbox file as Raw; never publishes it.
 - `elettro_list_brand_folders`: browse a brand's directory tree.
 - `elettro_create_brand_folder`: create directories within a brand after explicit approval.
 
@@ -64,7 +64,7 @@ All of these can be used with equal scopes by both assistants; any difference co
 
 **Not yet included:** moving registered files with database-path reconciliation; automatic file-byte upload through the MCP endpoint; shared Stock registration; public publishing tools; persistent per-operation database audit history.
 
-ChatGPT already has an independently connected Dropbox workflow for uploading a conversation file. The AI Gateway can then register that Dropbox file; the two connections are not yet fully coordinated.
+ChatGPT already has an independently connected Dropbox workflow for uploading a conversation file. The AI Gateway can then register that Dropbox file; the two connections are not yet fully coordinated. Metadata enrichment can be done individually or in batches after the files are registered.
 
 ## Protocol smoke test
 
