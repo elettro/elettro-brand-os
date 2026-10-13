@@ -14,6 +14,8 @@ export const MCP_TOOLS:ToolDefinition[]=[
   inputSchema:schema({assetId},["assetId"])},
  {name:"elettro_update_asset_metadata",description:"Edit a brand asset's title, tags, topic or notes with approval; does not publish",permission:"assets:write",action:"update_asset_metadata",
   inputSchema:schema({assetId,metadata:{type:"object"},confirmed:approval},["assetId","metadata","confirmed"])},
+ {name:"elettro_batch_update_metadata",description:"Update different titles, tags and creative notes for up to 25 existing brand assets after approval; reports each result separately",permission:"assets:write",action:"batch_update_asset_metadata",
+  inputSchema:schema({items:{type:"array",minItems:1,maxItems:25,items:{type:"object",properties:{assetId,metadata:{type:"object"}},required:["assetId","metadata"],additionalProperties:false}},confirmed:approval},["items","confirmed"])},
  {name:"elettro_register_brand_asset",description:"Register an existing Dropbox asset as Raw after approval",permission:"assets:register",action:"register_existing_asset",
   inputSchema:schema({path:{type:"string"},metadata:{type:"object"},confirmed:approval},["path","confirmed"])},
  {name:"elettro_list_brand_folders",description:"List Dropbox directories for the specified brand",permission:"folders:read",action:"list_folders",
