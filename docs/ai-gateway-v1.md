@@ -10,7 +10,7 @@ Initial gateway implementation:
 - Authenticated Next.js API: POST /api/ai-gateway
 - Development branch: develop
 
-**Current status:** This is a server-side first increment, **not a connected ChatGPT or Claude MCP tool**. The endpoint accepts only a valid Elettro Cognito owner session and same-origin browser requests. Do not describe the AI connectors as live until the external auth/MCP adapter is implemented and tested.
+**Current status (October 13, 2026):** The owner-session API and a stateless MCP tool transport are committed in code. The MCP bridge has separate hashed bearer credentials and brand scopes but **no AWS credentials are provisioned or verified**, and neither ChatGPT nor Claude has been connected. OAuth support, production hardening and live acceptance tests are still outstanding. Do not describe the assistant connectors as live.
 
 ## Input contract
 
@@ -56,8 +56,8 @@ The server checks boundaries. A brand path outside that brand, or a stock path o
 
 - **Gateway core:** executeAiGateway() contains action validation and implementation, independent of any AI provider.
 - **Transport A:** authenticated Next.js owner session (implemented).
-- **Transport B:** OAuth-protected MCP adapter for ChatGPT (not implemented).
-- **Transport C:** the same MCP adapter for Claude (not implemented).
+- **Transport B:** Brand-only stateless HTTP MCP server at /api/mcp (coded; individual service credentials and connector setup outstanding).
+- **Transport C:** The same MCP tool contract for Claude (coded; provider integration not connected).
 - **Future scopes:** read:assets, write:metadata, read:folders, write:folders, write:files, write:registration, write:publishing. Authorize scopes and brands at the server for each request.
 - The asset registry should track Dropbox IDs and enforce source-versus-publishable roles. Both assistants and dashboard should use identical mutation contracts.
 
@@ -82,7 +82,15 @@ From an authenticated session on the develop site, after deploy:
 1. Confirm the gateway deploy and run smoke tests on develop.
 2. Add shared Stock source model / usage permissions and registration without publishability.
 3. Add Dropbox-ID move reconciliation and persistent audit log.
-4. Implement and connect OAuth/MCP transport so ChatGPT and Claude can use the SAME actions.
+4. Provision separate provider credentials, validate the MCP transport, then add OAuth/PKCE connector compatibility to connect ChatGPT and Claude to the SAME actions.
 5. Test actual attachment uploads through both assistants end to end, then expand permissions.
 
 **Security note:** The owner-session API is only for testing the shared action logic; it is not a substitute for scoped external-AI authentication.
+
+## Current developer aids
+
+- A protected, read-only **AI Gateway Lab** at `/ai-gateway` in the develop web application checks capabilities, asset search and brand-folder navigation.
+- `tests/ai-mcp-tools.test.mjs` checks provider parity, brand-only scopes, read-only restriction and explicit confirmation flags. Included in develop CI.
+- `scripts/check-ai-mcp.mjs` performs authenticated, read-only MCP smoke tests when credentials have been configured.
+- `docs/ai-mcp-client-setup.md` describes service-token provisioning and OAuth limitations.
+- `/api/mcp` uses structured provider-specific logs for mutations; a permanent audit database table remains future work.
