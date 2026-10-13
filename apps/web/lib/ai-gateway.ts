@@ -148,9 +148,66 @@ async function dropboxCall<T>(token: string, endpoint: string, body: Dict): Prom
   return result.json() as Promise<T>;
 }
 
+
+/**
+ * Confirm duplicate status against the registry BEFORE calling its upload
+ * completion action. Registration by an existing Dropbox ID must not reset
+ * a previously Ready or Approved asset back to Raw.
+ */
+type RegistrationRecord = {
+  id: string; brandSlug: string; filename: string;
+  sourcePath?: string; sourceFileId?: string; sourceExternalId?: string;
+  ingestStatus?: string; approvalStatus?: string;
+};
+async function registrationCandidates(
+  brandSlug: string, path: string, dropboxFileId: string
+): Promise<{existing?: RegistrationRecord; uncertain: RegistrationRecord[]}> {
+  const response = await api("/assets");
+  if (!Array.isArray(response.assets)) throw new GatewayError(502,"Unable to inspect asset registry");
+  const filename=path.slice(path.lastIndexOf("/")+1).toLowerCase();
+  const rows=response.assets.filter((value):value is Dict=>!!value&&typeof value==="object"&&!Array.isArray(value));
+  const shortlist=rows.filter(row=>
+    row.sourceFileId===dropboxFileId||row.sourceExternalId===dropboxFileId||
+    (typeof row.sourcePath==="string"&&row.sourcePath.toLowerCase()===path.toLowerCase())||
+    (String(row.filename||"").toLowerCase()===filename&&row.brandSlug===brandSlug)
+  ).slice(0,40);
+  const detailed:RegistrationRecord[]=[];
+  for(const entry of shortlist){
+    const identifier=typeof entry.id==="string"?entry.id:"";
+    if(!identifier)continue;
+    // The list API may omit source identifiers. Fetch detailed candidates.
+    let data:Dict=entry;
+    if(!entry.sourceFileId&&!entry.sourceExternalId&&!entry.sourcePath){
+      const detail=await api("/assets?id="+encodeURIComponent(identifier));
+      data=record(detail.asset);
+    }
+    detailed.push({
+      id:identifier,brandSlug:String(data.brandSlug||entry.brandSlug||""),
+      filename:String(data.filename||entry.filename||""),
+      ...(typeof data.sourceFileId==="string"?{sourceFileId:data.sourceFileId}:{}),
+      ...(typeof data.sourceExternalId==="string"?{sourceExternalId:data.sourceExternalId}:{}),
+      ...(typeof data.sourcePath==="string"?{sourcePath:data.sourcePath}:{}),
+      ...(typeof data.ingestStatus==="string"?{ingestStatus:data.ingestStatus}:{}),
+      ...(typeof data.approvalStatus==="string"?{approvalStatus:data.approvalStatus}:{})
+    });
+  }
+  const exact=detailed.filter(a=>
+    a.sourceFileId===dropboxFileId||a.sourceExternalId===dropboxFileId||
+    a.sourcePath?.toLowerCase()===path.toLowerCase()
+  );
+  if(exact.some(a=>a.brandSlug!==brandSlug))
+    throw new GatewayError(409,"Dropbox file is already indexed under a different brand");
+  if(exact.length>1)
+    throw new GatewayError(409,"Multiple asset records reference this Dropbox file; registration blocked");
+  const uncertain=detailed.filter(a=>a.brandSlug===brandSlug&&
+    a.filename.toLowerCase()===filename&&!exact.some(b=>b.id===a.id)&&
+    !a.sourceFileId&&!a.sourceExternalId&&!a.sourcePath);
+  return {existing:exact[0],uncertain};
+}
+
 export const AI_GATEWAY_ACTIONS = [
   "capabilities", "search_assets", "get_asset", "update_asset_metadata",
-  "register_existing_asset", "list_folders", "create_folder"
+  "register_existing_asset", "inspect_brand_registration", "list_folders", "create_folder"
 ] as const;
 
 export async function executeAiGateway(input: unknown): Promise<Dict> {
@@ -196,26 +253,57 @@ export async function executeAiGateway(input: unknown): Promise<Dict> {
     return { ok: true, updated: 1, assetId: id, brandSlug: slug, changedFields: Object.keys(patch) };
   }
 
-  if (action === "register_existing_asset") {
-    const config = brandConfig(command.brandSlug);
-    const path = folderPath(command.path, config.dropboxRoot, false);
-    if (!/\.(png|jpe?g|webp|gif|mp4|mov|m4v|webm)$/i.test(path))
-      throw new GatewayError(400, "Only image and video source files are supported");
-    if (command.confirmed !== true) throw new GatewayError(400, "Explicit confirmation required to register asset");
-    const metadata = command.metadata === undefined ? {} : metadataPatch(command.metadata);
-    // Require a real Dropbox file before relying on upstream idempotent registration.
-    const token = await dropboxToken();
-    const file = await dropboxCall<{ ".tag"?: string; id?: string }>(token, "get_metadata", { path });
-    if (file[".tag"] !== "file" || !file.id) throw new GatewayError(400, "Destination is not a Dropbox file");
-    const result = await api("/assets/bulk-update", {
-      action: "complete-dropbox-upload", brandSlug: config.id, path,
-      mode: "raw", metadata: { ...metadata, allowedDestinations: [], sendToApprovalQueue: false }
+  if (action === "inspect_brand_registration" || action === "register_existing_asset") {
+    const config=brandConfig(command.brandSlug);
+    const path=folderPath(command.path,config.dropboxRoot,false);
+    if(!/\.(png|jpe?g|webp|gif|mp4|mov|m4v|webm)$/i.test(path))
+      throw new GatewayError(400,"Only image or video files are supported");
+    if(action==="register_existing_asset"&&command.confirmed!==true)
+      throw new GatewayError(400,"Explicit confirmation required to register an asset");
+    const metadata=command.metadata===undefined?{}:metadataPatch(command.metadata);
+    const token=await dropboxToken();
+    const file=await dropboxCall<{".tag"?:string;id?:string;path_display?:string}>(token,"get_metadata",{path});
+    if(file[".tag"]!=="file"||!file.id)
+      throw new GatewayError(400,"Selected Dropbox path is not a file");
+    const resolved=file.path_display||path;
+    const registry=await registrationCandidates(config.id,resolved,file.id);
+    const existing=registry.existing;
+    if(action==="inspect_brand_registration"){
+      return {ok:true,brandSlug:config.id,path:resolved,dropboxFileId:file.id,
+        registrationStatus:existing?"registered":registry.uncertain.length?"needs_review":"not_found",
+        asset:existing?{
+          id:existing.id,filename:existing.filename,
+          ingestStatus:existing.ingestStatus,approvalStatus:existing.approvalStatus
+        }:null,
+        uncertainMatches:registry.uncertain.map(a=>({id:a.id,filename:a.filename})),
+        safeToRegister:!existing&&registry.uncertain.length===0,
+        note:"Read-only registry/Dropbox comparison. No files or asset records modified."};
+    }
+    if(registry.uncertain.length)
+      throw new GatewayError(409,"Registration blocked: existing asset with this filename cannot be conclusively matched by Dropbox ID");
+    if(existing){
+      // Important: do NOT call complete-dropbox-upload for an already indexed file.
+      // Doing so with mode raw could change eligibility of a Ready asset.
+      if(Object.keys(metadata).length){
+        await executeAiGateway({action:"update_asset_metadata",brandSlug:config.id,
+          assetId:existing.id,metadata,confirmed:true});
+      }
+      return {ok:true,alreadyRegistered:true,assetId:existing.id,
+        dropboxFileId:file.id,brandSlug:config.id,ingestStatus:existing.ingestStatus,
+        approvalStatus:existing.approvalStatus,metadataUpdated:Object.keys(metadata).length>0,
+        message:"Existing asset reused. Registration was skipped to preserve its publishing state."};
+    }
+    const result=await api("/assets/bulk-update",{
+      action:"complete-dropbox-upload",brandSlug:config.id,path:resolved,
+      mode:"raw",metadata:{...metadata,allowedDestinations:[],sendToApprovalQueue:false}
     });
-    const asset = record(result.asset);
-    if (!asset.id) throw new GatewayError(502, "Asset registration was not confirmed");
-    return { ok: true, assetId: asset.id, dropboxFileId: file.id,
-      brandSlug: config.id, alreadyRegistered: result.alreadyRegistered === true,
-      ingestStatus: asset.ingestStatus, approvalStatus: asset.approvalStatus };
+    const asset=record(result.asset);
+    if(typeof asset.id!=="string"||!asset.id)
+      throw new GatewayError(502,"Asset registration was not confirmed");
+    return {ok:true,alreadyRegistered:result.alreadyRegistered===true,
+      assetId:asset.id,dropboxFileId:file.id,brandSlug:config.id,
+      ingestStatus:asset.ingestStatus,approvalStatus:asset.approvalStatus,
+      message:"Dropbox asset registration returned by registry. Verify publishing exclusions before rollout."};
   }
 
   if (action === "list_folders" || action === "create_folder") {
