@@ -12,7 +12,7 @@ const all={
 test("brand-only tools are exposed, without stock, deletion, moving or publishing",()=>{
  const names=MCP_TOOLS.map(t=>t.name);
  assert.equal(names.length,new Set(names).size);
- assert.equal(names.length,6);
+ assert.equal(names.length,7);
  assert.ok(!names.some(name=>/stock|delete|move|publish/.test(name)));
 });
 
@@ -20,7 +20,7 @@ test("two AI clients with matching scopes see equivalent operations",()=>{
  const chatgpt=toolsForClient(all);
  const claude=toolsForClient({...all,clientId:"claude"});
  assert.deepEqual(chatgpt,claude);
- assert.equal(chatgpt.length,6);
+ assert.equal(chatgpt.length,7);
 });
 
 test("each tool exposes only the caller's allowed brand slugs",()=>{
@@ -57,4 +57,13 @@ test("gateway registration uses Raw and metadata edits cannot mark Ready",()=>{
  assert.match(source,/mode: "raw"/);
  assert.match(source,/markReady: false/);
  assert.match(source,/allowedDestinations: \[\]/);
+});
+
+test("metadata batch tool uses the same brand grant and confirmation policy",()=>{
+ const tool=MCP_TOOLS.find(t=>t.name==="elettro_batch_update_metadata");
+ assert.ok(tool);
+ assert.equal(tool.permission,"assets:write");
+ assert.equal(tool.action,"batch_update_asset_metadata");
+ assert.equal(tool.inputSchema.properties.items.maxItems,25);
+ assert.ok(tool.inputSchema.required.includes("confirmed"));
 });
