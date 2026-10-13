@@ -281,7 +281,7 @@ export async function executeAiGateway(input: unknown): Promise<Dict> {
     const token=await dropboxToken();
     let file:{".tag"?:string;id?:string;path_display?:string};
     try{
-      file=await dropboxCall(token,"get_metadata",{path:storedFileId||storedPath});
+      file=await dropboxCall<{".tag"?:string;id?:string;path_display?:string}>(token,"get_metadata",{path:storedFileId||storedPath});
     }catch(error){
       if(error instanceof GatewayError&&error.status===409)
         return {ok:true,...currentState,registrationVerified:false,
