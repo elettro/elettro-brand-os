@@ -66,3 +66,14 @@ All mutations include an explicit confirmation field in the tool contract. The f
 8. Implement upload orchestration and registered-file move/reconcile as separate reviewed steps.
 
 **Do not describe the connector as live until live steps 1–7 succeed.**
+
+## Follow-up milestone: first live write verification (October 13)
+
+- The owner-only AI Gateway Lab now has a **Step 4 · Metadata write and restoration test**.
+- After deployment, select Stashbox, click **Search brand assets**, select one returned asset, then choose **Run write + restore test** and confirm.
+- The server snapshots the original tags and ingest/approval status, writes a uniquely generated temporary tag, reads it back, removes only that tag, and reads the record again.
+- A PASS means **writeVerified**, **cleanupVerified**, and **exactRestoration** are all true. If any check fails, inspect the returned JSON and do not run another test until the asset is reviewed.
+- No stock-gallery files, Dropbox paths, publishing destinations, or approval statuses are intentionally changed.
+- This controlled test is *not* exposed to ChatGPT or Claude MCP tools. It uses the signed-in owner dashboard only.
+- Commits: `1acba84` (server helper), `987e768` (owner gateway route), `6b12f54` (test UI), `4260d1f` (regression assertions).
+- **Do not claim the live metadata write has passed until the returned JSON verifies success and restoration.**
