@@ -99,3 +99,11 @@ test("Dropbox registration preflight remains read-only",()=>{
  assert.equal(tool?.action,"inspect_brand_registration");
  assert.ok(tool?.inputSchema.required.includes("path"));
 });
+
+test("DEV asset detail query returns Dropbox identity needed for Step 5",()=>{
+ const src=readFileSync(new URL("../services/dev-api-lambda/db-main.mjs",import.meta.url),"utf8");
+ const detail=src.split('if (assetId) {')[1]?.split('if (!result.rows[0])')[0]||"";
+ assert.match(detail,/a\."sourceFileId"/);
+ assert.match(detail,/a\."sourcePath"/);
+ assert.match(detail,/b\."slug" AS "brandSlug"/);
+});
