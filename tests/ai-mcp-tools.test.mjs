@@ -12,7 +12,7 @@ const all={
 test("brand-only tools are exposed, without stock, deletion, moving or publishing",()=>{
  const names=MCP_TOOLS.map(t=>t.name);
  assert.equal(names.length,new Set(names).size);
- assert.equal(names.length,7);
+ assert.equal(names.length,8);
  assert.ok(!names.some(name=>/stock|delete|move|publish/.test(name)));
 });
 
@@ -20,7 +20,7 @@ test("two AI clients with matching scopes see equivalent operations",()=>{
  const chatgpt=toolsForClient(all);
  const claude=toolsForClient({...all,clientId:"claude"});
  assert.deepEqual(chatgpt,claude);
- assert.equal(chatgpt.length,7);
+ assert.equal(chatgpt.length,8);
 });
 
 test("each tool exposes only the caller's allowed brand slugs",()=>{
@@ -34,7 +34,7 @@ test("each tool exposes only the caller's allowed brand slugs",()=>{
 test("read-only clients cannot discover mutation tools",()=>{
  const reader={...all,brandSlugs:["stashbox"],permissions:["assets:read","folders:read"]};
  const listed=toolsForClient(reader).map(item=>item.name);
- assert.deepEqual(listed,["elettro_search_assets","elettro_get_asset","elettro_list_brand_folders"]);
+ assert.deepEqual(listed,["elettro_search_assets","elettro_get_asset","elettro_verify_brand_asset","elettro_list_brand_folders"]);
  assert.equal(findAuthorizedTool("elettro_update_asset_metadata",reader),undefined);
  assert.equal(findAuthorizedTool("elettro_create_brand_folder",reader),undefined);
 });
@@ -80,4 +80,15 @@ test("diagnostic metadata write is owner-only, reversible and does not publish",
  assert.match(helper,/writeTags\(id,latestTags\.filter\(tag=>tag!==probe\)\)/);
  assert.ok(!MCP_TOOLS.some(tool=>tool.action==="test_metadata_round_trip"));
  assert.ok(!mcp.includes("test_metadata_round_trip"));
+});
+
+test("Step 5 identity inspection is read-only, and registration avoids Raw reset of existing files",()=>{
+ const src=readFileSync(new URL("../apps/web/lib/ai-gateway.ts",import.meta.url),"utf8");
+ assert.match(src,/action==="inspect_registered_asset"/);
+ assert.match(src,/action === "inspect_brand_registration"/);
+ assert.match(src,/if\(existing\)\{/);
+ assert.match(src,/Existing asset reused\. Registration was skipped/);
+ assert.match(src,/Too many potential registration matches/);
+ const verifyTool=MCP_TOOLS.find(t=>t.name==="elettro_verify_brand_asset");
+ assert.equal(verifyTool?.permission,"assets:read");
 });
