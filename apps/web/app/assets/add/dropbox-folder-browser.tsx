@@ -31,10 +31,10 @@ export function DropboxFolderBrowser({brand,mode="brand",fileTypes=[],onSelect}:
  const suggested=folders.find(folder=>onlyImages?/^images?$/i.test(folder.name):onlyVideos?/^videos?$/i.test(folder.name):false);
  function choose(folderPath:string){setSelected(folderPath);onSelect?.(folderPath);}
  async function createFolder(){
-  if(mode==="stock"||!path||!newFolderName.trim()||savingFolder)return;
+  if(!path||!newFolderName.trim()||savingFolder)return;
   setSavingFolder(true);setError("");
   try{
-   const response=await fetch("/api/dropbox/folders",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({brand,path,name:newFolderName.trim()})});
+   const response=await fetch(mode==="stock"?"/api/dropbox/stock-folders":"/api/dropbox/folders",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({brand,path,name:newFolderName.trim()})});
    const payload=await response.json();
    if(!response.ok||payload.ok===false)throw new Error(payload.detail?`${payload.error}: ${payload.detail}`:payload.error||"Folder creation failed");
    setNewFolderName("");setCreating(false);
@@ -47,12 +47,12 @@ export function DropboxFolderBrowser({brand,mode="brand",fileTypes=[],onSelect}:
  const parent=path&&path.length>activeRoot.length?path.slice(0,path.lastIndexOf("/")):activeRoot;
  return <section className="card" style={{marginTop:14}}>
   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
-   <div><div className="eyebrow">Dropbox destination · Step 1</div><h3 style={{margin:"6px 0"}}>{mode==="stock"?"Browse shared stock folders":"Browse real brand folders"}</h3><p className="muted" style={{margin:0}}>{mode==="stock"?"Shared stock source library, outside individual brand folders. Upload integration is not yet enabled.":"Browse or create Dropbox folders. Choose the real Dropbox folder for your uploaded assets."}</p></div>
+   <div><div className="eyebrow">Dropbox destination · Step 1</div><h3 style={{margin:"6px 0"}}>{mode==="stock"?"Browse shared stock folders":"Browse real brand folders"}</h3><p className="muted" style={{margin:0}}>{mode==="stock"?"Shared stock library. Create size folders and your own categories under Stock Graphics or Stock Videos.":"Browse or create Dropbox folders. Choose the real Dropbox folder for your uploaded assets."}</p></div>
    <button type="button" onClick={()=>{if(!open){setOpen(true);void load();}else setOpen(false);}}>{open?"Close browser":"Browse Dropbox"}</button>
   </div>
   <div style={{marginTop:12,padding:12,fontSize:13,border:"1px solid var(--line)",borderRadius:8,background:"var(--panel-soft)"}}>
    <strong>Planned Dropbox destination:</strong> <span style={{overflowWrap:"anywhere"}}>{selected||"Not selected yet"}</span>
-   <p className="muted" style={{margin:"6px 0 0"}}>{mode==="stock"?"Stock uploads are disabled until shared-root registration and permissions are verified.":"Selected destination applies to Save Raw and Ingest & Ready for images and videos. No S3 transfer."}</p>
+   <p className="muted" style={{margin:"6px 0 0"}}>{mode==="stock"?"You can create and organize stock folders. Asset uploads are still being integrated.":"Selected destination applies to Save Raw and Ingest & Ready for images and videos. No S3 transfer."}</p>
    {selected&&<button type="button" onClick={()=>{setSelected(null);onSelect?.(null);}} style={{marginTop:8}}>Clear selection</button>}
   </div>
   {open&&<div style={{marginTop:12,padding:12,background:"var(--panel-soft)",borderRadius:10}}>
@@ -61,11 +61,11 @@ export function DropboxFolderBrowser({brand,mode="brand",fileTypes=[],onSelect}:
     <button type="button" disabled={loading||atRoot} onClick={()=>void load(parent)}>← Up</button>
     <button type="button" disabled={loading||atRoot} onClick={()=>void load(activeRoot)}>{mode==="stock"?"Stock root":brand+" root"}</button>
     <button type="button" disabled={loading} onClick={()=>void load(path||undefined)}>Refresh</button>
-    <button type="button" disabled={loading||!path||savingFolder||mode==="stock"} onClick={()=>setCreating(value=>!value)}>+ New folder</button>
+    <button type="button" disabled={loading||!path||savingFolder} onClick={()=>setCreating(value=>!value)}>+ New folder</button>
    </div>
    {creating&&<div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}><input aria-label="New folder name" value={newFolderName} onChange={event=>setNewFolderName(event.target.value)} placeholder="e.g. 16x9" maxLength={180}/><button type="button" disabled={savingFolder||!newFolderName.trim()} onClick={()=>void createFolder()}>{savingFolder?"Creating…":"Create in Dropbox"}</button><button type="button" onClick={()=>setCreating(false)}>Cancel</button></div>}
    {loading&&<p role="status">Loading folders from Dropbox…</p>}
-   {mode==="stock"&&<p className="muted" style={{fontSize:12}}>Shared stock library is read-only until its upload path is enabled.</p>}
+   {mode==="stock"&&<p className="muted" style={{fontSize:12}}>Create your size folders, then categories inside them. Stock uploads are not enabled yet.</p>}
    {!loading&&!error&&path&&<button type="button" onClick={()=>choose(path)} style={{marginBottom:12,border:"2px solid "+(selected===path?"#116c46":"#a6b5c5"),background:selected===path?"#116c46":"#fff",color:selected===path?"#fff":"#243447",fontWeight:800,padding:"11px 16px",borderRadius:8,cursor:"pointer",boxShadow:selected===path?"0 0 0 3px rgba(17,108,70,.22)":"none",transition:"background .2s,border-color .2s,color .2s,box-shadow .2s"}} onMouseEnter={e=>{if(selected!==path){e.currentTarget.style.background="#dceeff";e.currentTarget.style.borderColor="#1477d4";e.currentTarget.style.color="#07559a";}}} onMouseLeave={e=>{if(selected!==path){e.currentTarget.style.background="#fff";e.currentTarget.style.borderColor="#a6b5c5";e.currentTarget.style.color="#243447";}}}>{selected===path?"✓ Destination locked — selected":"Use this folder as planned destination"}</button>}
    {!loading&&!error&&suggested&&<p style={{fontSize:12,margin:"0 0 12px"}}>Suggested for this batch: <strong>{suggested.name}</strong> (based on file type, not AI content analysis). <button type="button" onClick={()=>choose(suggested.path)}>Select suggestion</button></p>}
    {error&&<p role="alert" style={{color:"#b42318"}}>{error}</p>}
