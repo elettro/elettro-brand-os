@@ -156,7 +156,7 @@ async function dropboxCall<T>(token: string, endpoint: string, body: Dict): Prom
  */
 type RegistrationRecord = {
   id: string; brandSlug: string; filename: string;
-  sourcePath?: string; sourceFileId?: string; sourceExternalId?: string;
+  sourcePath?: string; sourceUrl?: string; sourceFileId?: string; sourceExternalId?: string;
   ingestStatus?: string; approvalStatus?: string;
 };
 async function registrationCandidates(
@@ -169,6 +169,7 @@ async function registrationCandidates(
   const candidateRows=rows.filter(row=>
     row.sourceFileId===dropboxFileId||row.sourceExternalId===dropboxFileId||
     (typeof row.sourcePath==="string"&&row.sourcePath.toLowerCase()===path.toLowerCase())||
+    (typeof row.sourceUrl==="string"&&row.sourceUrl.toLowerCase()===path.toLowerCase())||
     (String(row.filename||"").toLowerCase()===filename&&row.brandSlug===brandSlug)
   );
   if(candidateRows.length>40)
@@ -180,7 +181,7 @@ async function registrationCandidates(
     if(!identifier)continue;
     // The list API may omit source identifiers. Fetch detailed candidates.
     let data:Dict=entry;
-    if(!entry.sourceFileId&&!entry.sourceExternalId&&!entry.sourcePath){
+    if(!entry.sourceFileId&&!entry.sourceExternalId&&!entry.sourcePath&&!entry.sourceUrl){
       const detail=await api("/assets?id="+encodeURIComponent(identifier));
       data=record(detail.asset);
     }
@@ -190,14 +191,19 @@ async function registrationCandidates(
       ...(typeof data.sourceFileId==="string"?{sourceFileId:data.sourceFileId}:{}),
       ...(typeof data.sourceExternalId==="string"?{sourceExternalId:data.sourceExternalId}:{}),
       ...(typeof data.sourcePath==="string"?{sourcePath:data.sourcePath}:{}),
+      ...(typeof data.sourceUrl==="string"?{sourceUrl:data.sourceUrl}:{}),
       ...(typeof data.ingestStatus==="string"?{ingestStatus:data.ingestStatus}:{}),
       ...(typeof data.approvalStatus==="string"?{approvalStatus:data.approvalStatus}:{})
     });
   }
-  const exact=detailed.filter(a=>
-    a.sourceFileId===dropboxFileId||a.sourceExternalId===dropboxFileId||
-    a.sourcePath?.toLowerCase()===path.toLowerCase()
-  );
+  const exact=detailed.filter(a=>{
+    const linkedId=a.sourceFileId||a.sourceExternalId;
+    const idMatch=linkedId===dropboxFileId;
+    const pathMatch=a.sourcePath?.toLowerCase()===path.toLowerCase()||
+      a.sourceUrl?.toLowerCase()===path.toLowerCase();
+    // An explicit, different Dropbox ID overrides any coincidental path match.
+    return idMatch||(!linkedId&&pathMatch);
+  });
   if(exact.some(a=>a.brandSlug!==brandSlug))
     throw new GatewayError(409,"Dropbox file is already indexed under a different brand");
   if(exact.length>1)
@@ -264,7 +270,12 @@ export async function executeAiGateway(input: unknown): Promise<Dict> {
     const asset=record(result.asset);
     if(asset.id!==id||asset.brandSlug!==config.id)
       throw new GatewayError(404,"Asset was not found in selected brand");
-    const storedPath=typeof asset.sourcePath==="string"?asset.sourcePath:null;
+    if(asset.sourceType!=="dropbox")
+      throw new GatewayError(400,"The selected asset is not a Dropbox source");
+    // Older Dropbox-sync records use sourcePath/sourceFileId; direct dashboard
+    // uploads use sourceUrl/sourceExternalId. Both are first-class identities.
+    const storedPath=typeof asset.sourcePath==="string"?asset.sourcePath:
+      typeof asset.sourceUrl==="string"&&asset.sourceUrl.startsWith("/")?asset.sourceUrl:null;
     const storedFileId=typeof asset.sourceFileId==="string"?asset.sourceFileId:
       typeof asset.sourceExternalId==="string"&&asset.sourceExternalId.startsWith("id:")?asset.sourceExternalId:null;
     const filename=typeof asset.filename==="string"?asset.filename:"";
@@ -276,7 +287,7 @@ export async function executeAiGateway(input: unknown): Promise<Dict> {
     if(!storedPath&&!storedFileId)
       return {ok:true,...currentState,registrationVerified:false,
         verificationStatus:"source_locator_unavailable",
-        note:"The registry did not expose a Dropbox file ID or path for this asset. No changes were made."};
+        note:"Neither sync nor direct-upload Dropbox source identifiers are available. No changes were made."};
     if(storedPath)folderPath(storedPath,config.dropboxRoot,false);
     const token=await dropboxToken();
     let file:{".tag"?:string;id?:string;path_display?:string};
