@@ -52,11 +52,14 @@ test("MCP route forces brand scope independent of agent-supplied fields",()=>{
  assert.match(source,/requireMcpScope\(identity,tool.permission,args.brandSlug\)/);
 });
 
-test("gateway registration uses Raw and metadata edits cannot mark Ready",()=>{
+test("gateway metadata cannot mark Ready; new registration fails closed pending indexed ID lookup",()=>{
  const source=readFileSync(new URL("../apps/web/lib/ai-gateway.ts",import.meta.url),"utf8");
- assert.match(source,/mode:\s*"raw"/);
  assert.match(source,/markReady:\s*false/);
- assert.match(source,/allowedDestinations:\s*\[\]/);
+ assert.match(source,/New AI registration is paused until authoritative Dropbox-ID deduplication/);
+ assert.match(source,/safeToRegister:false/);
+ assert.match(source,/registrationStatus:existing\?"registered"/);
+ assert.match(source,/a\.sourceFileId===dropboxFileId\|\|a\.sourceExternalId===dropboxFileId/);
+ assert.match(source,/const inventoryComplete=rows\.length<500/);
 });
 
 test("metadata batch tool uses the same brand grant and confirmation policy",()=>{
@@ -116,7 +119,16 @@ test("direct Dropbox uploads resolve via sourceExternalId/sourceUrl while sync u
  assert.match(source,/asset\.sourceUrl/);
  assert.match(source,/row\.sourceUrl/);
  assert.match(source,/a\.sourceExternalId/);
- assert.match(source,/linkedId===dropboxFileId/);
- assert.match(source,/!linkedId&&pathMatch/);
+ assert.match(source,/a\.sourceFileId===dropboxFileId\|\|a\.sourceExternalId===dropboxFileId/);
+ assert.match(source,/new AI registrations until that DB-indexed lookup exists/);
  assert.match(source,/sourceType!=="dropbox"/);
+});
+
+test("Step 6 UI verifies the same immutable Dropbox ID without calling registration",()=>{
+ const ui=readFileSync(new URL("../apps/web/app/ai-gateway/client.tsx",import.meta.url),"utf8");
+ assert.match(ui,/Step 6 · Duplicate registration preflight/);
+ assert.match(ui,/action:"inspect_brand_registration"/);
+ assert.match(ui,/preflightMatchVerified:matches/);
+ assert.match(ui,/result\.safeToRegister===false/);
+ assert.ok(!ui.includes('action:"register_existing_asset"'));
 });
