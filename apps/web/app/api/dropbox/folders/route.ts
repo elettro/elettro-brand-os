@@ -14,7 +14,7 @@ export async function GET(request:NextRequest){
  const config=brandConfigs.find(item=>item.id===brand);
  if(!config)return NextResponse.json({error:"Unknown brand"},{status:400});
  const root=config.dropboxRoot;
- const normalized=(request.nextUrl.searchParams.get("path")||root).replace(/\\\\/g,"/").replace(/\\/+$/,"");
+ const normalized=(request.nextUrl.searchParams.get("path")||root).replace(/\\/g,"/").replace(/\/+$/,"");
  if(normalized.toLowerCase()!==root.toLowerCase()&&!normalized.toLowerCase().startsWith(root.toLowerCase()+"/"))
   return NextResponse.json({error:"Outside brand root"},{status:403});
  try {
