@@ -1,6 +1,7 @@
 import {NextRequest,NextResponse} from "next/server";
 import {DEV_ORIGIN} from "@/lib/cognito-auth";
 import {executeAiGateway,GatewayError} from "@/lib/ai-gateway";
+import {batchUpdateAssetMetadata} from "@/lib/ai-gateway-batch";
 import {authorizeMcp,requireMcpScope,McpAuthorizationError} from "@/lib/ai-mcp-auth";
 import {findAuthorizedTool,toolsForClient} from "@/lib/ai-mcp-tools";
 
@@ -76,14 +77,16 @@ export async function POST(request:NextRequest){
   try{
    requireMcpScope(identity,tool.permission,args.brandSlug);
    // Action and Dropbox scope are server-owned: caller cannot override them.
-   const result=await executeAiGateway({...args,action:tool.action,scope:"brand"});
+   const result=tool.action==="batch_update_asset_metadata"
+    ? await batchUpdateAssetMetadata(args)
+    : await executeAiGateway({...args,action:tool.action,scope:"brand"});
    if(tool.action!=="search_assets"&&tool.action!=="get_asset"&&tool.action!=="list_folders")
     console.info("Elettro MCP audit",JSON.stringify({
       provider:identity.clientId,action:tool.action,brandSlug:args.brandSlug,
       assetId:typeof args.assetId==="string"?args.assetId:undefined,
-      outcome:"success",timestamp:new Date().toISOString()
+      outcome:result.ok===false?"partial":"success",timestamp:new Date().toISOString()
     }));
-   return success(id,{content:[{type:"text",text:JSON.stringify(result)}],structuredContent:result,isError:false});
+   return success(id,{content:[{type:"text",text:JSON.stringify(result)}],structuredContent:result,isError:result.ok===false});
   }catch(error){
    const known=error instanceof GatewayError||error instanceof McpAuthorizationError;
    const messageText=known?error.message:"Elettro operation unavailable";
