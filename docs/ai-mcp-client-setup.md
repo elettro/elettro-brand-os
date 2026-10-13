@@ -55,6 +55,8 @@ Store the token itself only in the appropriate assistant's protected connector s
 
 - `elettro_search_assets`: find assets in an authorized brand.
 - `elettro_get_asset`: retrieve metadata for a single brand asset.
+- `elettro_verify_brand_asset`: verify that a registered brand asset still points to its Dropbox file (read-only).
+- `elettro_check_brand_file`: inspect whether a Dropbox file is already registered without writing or resetting status.
 - `elettro_update_asset_metadata`: update existing asset tags, descriptions and metadata; requires explicit approval.
 - `elettro_batch_update_metadata`: enrich up to 25 different existing brand assets with individual tags, titles and creative notes in one request; reports partial failures per asset. Requires confirmation.
 - `elettro_register_brand_asset`: register an **already uploaded** Dropbox file as Raw; never publishes it.
@@ -108,3 +110,7 @@ Do not place real credentials in command histories, pastebins, tickets, or scree
 - Durable audit records identifying assistant/client ID, brand, asset, operation, time, before and after values.
 - OAuth authorization, consent and role controls.
 - After ordinary brand content is operational, resume shared Stock Gallery intelligence (currently paused).
+
+### Registration protection
+
+The gateway now performs an identity preflight by Dropbox file ID/path. Exact existing registrations are reused without another Raw ingestion call, preserving their current Ready/Approved status. Ambiguous same-name matches fail closed for review. These behaviors have code coverage, but a real second-registration test with a disposable brand file is still pending. Step 5 of the AI Gateway Lab is read-only and safe to run first.
