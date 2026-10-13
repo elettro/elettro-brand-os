@@ -80,7 +80,7 @@ export async function POST(request:NextRequest){
    const result=tool.action==="batch_update_asset_metadata"
     ? await batchUpdateAssetMetadata(args)
     : await executeAiGateway({...args,action:tool.action,scope:"brand"});
-   if(tool.action!=="search_assets"&&tool.action!=="get_asset"&&tool.action!=="list_folders")
+   if(tool.action!=="search_assets"&&tool.action!=="get_asset"&&tool.action!=="inspect_registered_asset"&&tool.action!=="list_folders")
     console.info("Elettro MCP audit",JSON.stringify({
       provider:identity.clientId,action:tool.action,brandSlug:args.brandSlug,
       assetId:typeof args.assetId==="string"?args.assetId:undefined,
