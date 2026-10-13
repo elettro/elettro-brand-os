@@ -37,6 +37,9 @@ export function AiGatewayLabClient(){
  const [registrationBusy,setRegistrationBusy]=useState(false);
  const [registrationResult,setRegistrationResult]=useState<ApiResult|null>(null);
  const [registrationError,setRegistrationError]=useState("");
+ const [duplicateBusy,setDuplicateBusy]=useState(false);
+ const [duplicateResult,setDuplicateResult]=useState<ApiResult|null>(null);
+ const [duplicateError,setDuplicateError]=useState("");
 
  async function call(action:"capabilities"|"search_assets"|"list_folders"){
   setBusy(true);setError("");setCurrent(action);setReply(null);
@@ -49,7 +52,7 @@ export function AiGatewayLabClient(){
    if(action==="search_assets"){
     const assets=result.assets||[];
     setCandidates(assets);
-    setRegistrationResult(null);setRegistrationError("");
+    setRegistrationResult(null);setRegistrationError("");setDuplicateResult(null);setDuplicateError("");
     setTestAssetId(currentId=>assets.some(a=>a.id===currentId)?currentId:(assets[0]?.id||""));
    }
   }catch(e){setError(e instanceof Error?e.message:"Gateway unavailable");}
@@ -66,6 +69,27 @@ export function AiGatewayLabClient(){
    setRegistrationResult(result);
   }catch(e){setRegistrationError(e instanceof Error?e.message:"Asset verification unavailable");}
   finally{setRegistrationBusy(false);}
+ }
+
+ async function inspectDuplicateProtection(){
+  if(duplicateBusy||busy||testBusy||registrationBusy)return;
+  if(registrationResult?.registrationVerified!==true||
+     typeof registrationResult.dropboxPath!=="string"||
+     typeof registrationResult.dropboxFileId!=="string"||
+     registrationResult.assetId!==testAssetId)return;
+  setDuplicateBusy(true);setDuplicateError("");setDuplicateResult(null);
+  try{
+   const result=await gateway({
+    action:"inspect_brand_registration",brandSlug:brand,path:registrationResult.dropboxPath
+   });
+   const existing=result.asset as {id?:unknown}|null|undefined;
+   const matches=result.registrationStatus==="registered"&&
+    existing?.id===testAssetId&&
+    result.dropboxFileId===registrationResult.dropboxFileId&&
+    result.safeToRegister===false;
+   setDuplicateResult({...result,preflightMatchVerified:matches});
+  }catch(e){setDuplicateError(e instanceof Error?e.message:"Duplicate preflight unavailable");}
+  finally{setDuplicateBusy(false);}
  }
 
  async function testMetadata(){
@@ -93,7 +117,7 @@ export function AiGatewayLabClient(){
     <label style={{display:"grid",gap:5}}>
      <span className="metric">Brand</span>
      <select value={brand} onChange={event=>{
-      setBrand(event.target.value);setCandidates([]);setTestAssetId("");setTestResult(null);setRegistrationResult(null);setRegistrationError("");
+      setBrand(event.target.value);setCandidates([]);setTestAssetId("");setTestResult(null);setRegistrationResult(null);setRegistrationError("");setDuplicateResult(null);setDuplicateError("");
      }} disabled={busy||testBusy}>
       {brands.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}
      </select>
@@ -127,7 +151,7 @@ export function AiGatewayLabClient(){
     <div style={{display:"grid",gap:10,maxWidth:680}}>
      <label style={{display:"grid",gap:5}}>
       <span className="metric">Test asset</span>
-      <select value={testAssetId} disabled={busy||testBusy} onChange={event=>setTestAssetId(event.target.value)}>
+      <select value={testAssetId} disabled={busy||testBusy} onChange={event=>{setTestAssetId(event.target.value);setRegistrationResult(null);setDuplicateResult(null);}}>
        {candidates.map(asset=><option key={asset.id} value={asset.id}>
         {asset.filename.slice(0,110)} · {asset.id.slice(0,8)}
        </option>)}
@@ -158,7 +182,7 @@ export function AiGatewayLabClient(){
     <div style={{display:"grid",gap:10,maxWidth:680}}>
      <label style={{display:"grid",gap:5}}>
       <span className="metric">Registered asset to inspect</span>
-      <select value={testAssetId} disabled={busy||testBusy||registrationBusy} onChange={event=>{setTestAssetId(event.target.value);setRegistrationResult(null);}}>
+      <select value={testAssetId} disabled={busy||testBusy||registrationBusy} onChange={event=>{setTestAssetId(event.target.value);setRegistrationResult(null);setDuplicateResult(null);}}>
        {candidates.map(asset=><option key={asset.id} value={asset.id}>
         {asset.filename.slice(0,110)} · {asset.id.slice(0,8)}
        </option>)}
@@ -178,6 +202,39 @@ export function AiGatewayLabClient(){
      {JSON.stringify(registrationResult,null,2)}
     </pre>
     {registrationResult.registrationVerified!==true&&<p className="muted" style={{fontSize:12}}>This result does not mean the file is a duplicate. It means the database did not expose enough matching Dropbox identity information, or the source needs review. No changes were made.</p>}
+   </div>}
+  </section>
+  <section className="card" style={{marginTop:18}}>
+   <h2 style={{marginTop:0}}>Step 6 · Duplicate registration preflight</h2>
+   <p className="muted">
+    Check that the gateway's registration lookup recognizes this same Dropbox file ID as an
+    existing asset. This test only reads Elettro and Dropbox; it never registers an asset,
+    creates a duplicate, or changes its Ready / Approved status.
+   </p>
+   {registrationResult?.registrationVerified!==true||
+     registrationResult.assetId!==testAssetId?
+     <p className="muted">First run <strong>Verify existing registration (read-only)</strong> in Step 5 above.</p>:
+     <div>
+      <p className="muted" style={{fontSize:12}}>Using the verified Dropbox file path from Step 5. No file selection or new upload required.</p>
+      <button type="button" disabled={busy||testBusy||registrationBusy||duplicateBusy} onClick={()=>void inspectDuplicateProtection()}>
+       {duplicateBusy?"Checking duplicate registration…":"Check existing asset for duplicates (read-only)"}
+      </button>
+     </div>}
+   {duplicateBusy&&<p role="status">Checking the immutable Dropbox ID against the asset registry…</p>}
+   {duplicateError&&<p role="alert" style={{color:"#b42318"}}>{duplicateError}</p>}
+   {duplicateResult&&<div style={{marginTop:16}}>
+    <strong style={{color:duplicateResult.preflightMatchVerified===true?"#116c46":"#b45309"}}>
+     {duplicateResult.preflightMatchVerified===true?
+      "PASS · Existing registration recognized; no duplicate created":
+      "NEEDS REVIEW · Existing registration was not conclusively identified"}
+    </strong>
+    <pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",maxHeight:390,overflow:"auto",marginTop:10,padding:14,border:"1px solid var(--line)",borderRadius:10,background:"var(--panel-soft)",fontSize:12}}>
+     {JSON.stringify(duplicateResult,null,2)}
+    </pre>
+    <p className="muted" style={{fontSize:12}}>
+     This is a read-only preflight result, not an end-to-end registration write test.
+     New AI registrations remain paused until a full-database Dropbox-ID lookup is available.
+    </p>
    </div>}
   </section>
   <p className="muted" style={{marginTop:18,fontSize:12}}>
