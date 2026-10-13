@@ -56,7 +56,8 @@ Store the token itself only in the appropriate assistant's protected connector s
 - `elettro_search_assets`: find assets in an authorized brand.
 - `elettro_get_asset`: retrieve metadata for a single brand asset.
 - `elettro_update_asset_metadata`: update existing asset tags, descriptions and metadata; requires explicit approval.
-- `elettro_batch_update_metadata`: enrich up to 25 different existing brand assets with individual tags, titles and creative notes in one request; reports partial failures per asset. Requires confirmation.\n- `elettro_register_brand_asset`: register an **already uploaded** Dropbox file as Raw; never publishes it.
+- `elettro_batch_update_metadata`: enrich up to 25 different existing brand assets with individual tags, titles and creative notes in one request; reports partial failures per asset. Requires confirmation.
+- `elettro_register_brand_asset`: register an **already uploaded** Dropbox file as Raw; never publishes it.
 - `elettro_list_brand_folders`: browse a brand's directory tree.
 - `elettro_create_brand_folder`: create directories within a brand after explicit approval.
 
