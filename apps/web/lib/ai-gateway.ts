@@ -292,12 +292,18 @@ export async function executeAiGateway(input: unknown): Promise<Dict> {
     const within=actualPath.toLowerCase().startsWith(config.dropboxRoot.toLowerCase()+"/");
     const idMatches=!storedFileId||storedFileId===file.id;
     const pathMatches=!storedPath||storedPath.toLowerCase()===actualPath.toLowerCase();
-    const verified=file[".tag"]==="file"&&!!file.id&&within&&idMatches&&pathMatches;
+    // Dropbox ID is stable across moves/renames; a stale path must not turn a
+    // matching ID into a false mismatch. Still enforce the current brand root.
+    const verified=file[".tag"]==="file"&&!!file.id&&within&&idMatches&&(storedFileId?true:pathMatches);
+    const pathNeedsSync=verified&&!!storedFileId&&!pathMatches;
     return {ok:true,...currentState,registrationVerified:verified,
-      verificationStatus:verified?"registered_in_dropbox":"source_mismatch",
+      verificationStatus:verified?(pathNeedsSync?"registered_file_moved":"registered_in_dropbox"):"source_mismatch",
       dropboxFileId:file.id||null,
       dropboxPath:actualPath||null,
-      note:verified?"Existing asset and Dropbox source verified, without re-registering or changing status.":"Registry/Dropbox source mismatch. Do not register again until reviewed."};
+      pathNeedsSync,
+      note:pathNeedsSync?"Stable Dropbox ID verified; its current path differs from the stored path. File was not moved by this check.":
+       verified?"Existing asset and Dropbox source verified, without re-registering or changing status.":
+       "Registry/Dropbox source mismatch. Do not register again until reviewed."};
   }
 
   if (action === "inspect_brand_registration" || action === "register_existing_asset") {
