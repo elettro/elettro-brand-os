@@ -841,7 +841,7 @@ export function IntakeClient() {
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr>
-                  {["File", "Quick analysis", "Size", "Recommended folder", "Status"].map((label) => (
+                  {["File", "Quick analysis", "Size", "Status"].map((label) => (
                     <th key={label} style={th}>{label}</th>
                   ))}
                 </tr>
@@ -891,21 +891,6 @@ export function IntakeClient() {
                       )}
                     </td>
                     <td style={td}>{(file.size / 1024 / 1024).toFixed(1)} MB</td>
-                    <td style={{ ...td, minWidth: 240 }}>
-                      {file.status === "analyzing" ? (
-                        <span className="muted">Analyzing…</span>
-                      ) : file.recommendedFolder ? (
-                        <div>
-                          <div style={{ fontWeight: 700, overflowWrap: "anywhere" }}>{file.recommendedFolder}</div>
-                          <div className="muted" style={{ fontSize: 11, marginTop: 3 }}>
-                            {file.recommendationConfidence}% confidence
-                            {file.recommendationReason ? " · " + file.recommendationReason : ""}
-                          </div>
-                        </div>
-                      ) : (
-                        <span className="muted">No confident recommendation</span>
-                      )}
-                    </td>
                     <td style={td}>
                       <span className="status-chip">
                         {file.status === "queued" ? "Queued" :
