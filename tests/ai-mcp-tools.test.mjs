@@ -54,9 +54,9 @@ test("MCP route forces brand scope independent of agent-supplied fields",()=>{
 
 test("gateway registration uses Raw and metadata edits cannot mark Ready",()=>{
  const source=readFileSync(new URL("../apps/web/lib/ai-gateway.ts",import.meta.url),"utf8");
- assert.match(source,/mode: "raw"/);
- assert.match(source,/markReady: false/);
- assert.match(source,/allowedDestinations: \[\]/);
+ assert.match(source,/mode:\s*"raw"/);
+ assert.match(source,/markReady:\s*false/);
+ assert.match(source,/allowedDestinations:\s*\[\]/);
 });
 
 test("metadata batch tool uses the same brand grant and confirmation policy",()=>{
