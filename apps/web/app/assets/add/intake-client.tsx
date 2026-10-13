@@ -787,6 +787,8 @@ export function IntakeClient() {
                   <option value="rehearsal">Rehearsal</option>
                   <option value="interview">Interview</option>
                   <option value="behind_the_scenes">Behind the Scenes</option>
+                  <option value="brand_promo">Brand Promo</option>
+                  <option value="song_promo">Song Promo</option>
                   <option value="other">Other</option>
                 </select>
               </Field>
