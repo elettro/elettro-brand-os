@@ -370,6 +370,14 @@ export function IntakeClient() {
         accessToken = fresh.accessToken;
         response = await uploadChunk(accessToken);
       }
+      // Retry explicit throttling/service errors only. A network error may
+      // mean Dropbox accepted the chunk; blindly repeating could corrupt offsets.
+      for(let retry=0;retry<3 && (response.status===429||response.status===503);retry++){
+        const wait=Math.min(6000,750*Math.pow(2,retry));
+        setMessage("Dropbox temporarily busy. Retrying " + item.name + " ("+(retry+1)+"/3)…");
+        await new Promise(resolve=>setTimeout(resolve,wait));
+        response=await uploadChunk(accessToken);
+      }
       const responseText = await response.text();
       if (!response.ok) {
         throw new Error("Dropbox direct " + method + " HTTP " + response.status + ": " + responseText.slice(0, 280));
@@ -582,12 +590,23 @@ export function IntakeClient() {
           updateFile(item.id, { status: "uploaded", progress: 100, dropboxUploadedPath: uploadedPath });
         }
         setMessage("Verifying and registering " + item.name + " in Brand OS…");
-        const response = await fetch("/api/assets/bulk-update", {
-          method: "POST", headers: { "content-type": "application/json" },
-          body: JSON.stringify({ action: "complete-dropbox-upload", brandSlug: brand, path: uploadedPath, mode,
-            metadata: { collection, campaign, topic, creativeFamily, ...sessionMetadata, eligibilityMode, windowStart, windowEnd,
-              repeatAnnually, sendToApprovalQueue, priority, creatorNote, allowedDestinations: selectedNetworks } })
-        });
+        const registerPayload = JSON.stringify({ action: "complete-dropbox-upload", brandSlug: brand, path: uploadedPath, mode,
+          metadata: { collection, campaign, topic, creativeFamily, ...sessionMetadata, eligibilityMode, windowStart, windowEnd,
+            repeatAnnually, sendToApprovalQueue, priority, creatorNote, allowedDestinations: selectedNetworks } });
+        let response: Response | undefined;
+        for (let attempt=0;attempt<3;attempt++) {
+          try {
+            response = await fetch("/api/assets/bulk-update",{
+              method:"POST",headers:{"content-type":"application/json"},body:registerPayload
+            });
+            if(response.ok || (response.status!==429 && response.status<500)) break;
+          }catch { /* Server may have registered it; server must enforce idempotency by Dropbox file ID. */ }
+          if(attempt<2) {
+            setMessage("Verifying registration for "+item.name+" (retry "+(attempt+2)+"/3)…");
+            await new Promise(resolve=>setTimeout(resolve,750*Math.pow(2,attempt)));
+          }
+        }
+        if(!response)throw Error("Dropbox has "+item.name+", but registration was interrupted. Retry Ingest & Ready; file will not be reuploaded.");
         const result = await response.json();
         if (!response.ok || result.ok === false || !result.asset?.id) {
           throw new Error("Dropbox has " + item.name + ", but registration failed: " + (result.detail || result.error || "Unknown error") + ". Retry without uploading again.");
