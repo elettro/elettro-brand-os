@@ -19,6 +19,7 @@ import re
 import shutil
 import subprocess
 import sys
+from tempfile import TemporaryDirectory
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -138,13 +139,14 @@ def build_patch(original_zip):
     return patched_zip, diff
 
 
-def check_node_syntax(zip_bytes, temp_dir):
+def check_node_syntax(zip_bytes):
     if not shutil.which("node"):
         print("Node is not installed; syntax check skipped (SQL diff still validated).")
         return
-    with zipfile.ZipFile(io.BytesIO(zip_bytes)) as bundle:
+    with TemporaryDirectory(prefix="elettro-lambda-syntax-") as temp, \
+         zipfile.ZipFile(io.BytesIO(zip_bytes)) as bundle:
         for name in ["index.mjs", TARGET]:
-            path = temp_dir / name
+            path = Path(temp) / name
             path.write_bytes(bundle.read(name))
             proc = subprocess.run(["node", "--check", str(path)],
                                   capture_output=True, text=True)
@@ -180,7 +182,7 @@ def main():
         fail("An output file already exists; retry with a different directory.")
     backup.write_bytes(live_zip)
     patched.write_bytes(patched_zip)
-    check_node_syntax(patched_zip, outdir)
+    check_node_syntax(patched_zip)
     print("FUNCTION:", FUNCTION, "| REGION:", REGION)
     print("ORIGINAL AWS CODE SHA256:", expected_hash)
     print("BACKUP:", backup)
