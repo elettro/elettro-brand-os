@@ -27,6 +27,7 @@ type IntakeFile = {
 };
 
 const networks = ["Instagram", "Facebook", "TikTok", "YouTube", "Threads", "X", "LinkedIn", "Pinterest", "GMB", "Feed"];
+const brandChoices = [{id:"stashbox",label:"Stashbox"},{id:"solarmeister",label:"SolarMeister"},{id:"weightlossdavie",label:"WeightLossDavie"},{id:"neckermann-strom",label:"Neckermann Strom"},{id:"therasbox",label:"Therasbox"},{id:"elettro",label:"Elettro"}];
 
 export function IntakeClient() {
   const [files, setFiles] = useState<IntakeFile[]>([]);
@@ -51,6 +52,7 @@ export function IntakeClient() {
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
   const [selectedNetworks, setSelectedNetworks] = useState(networks);
+  const [stockAllowedBrands, setStockAllowedBrands] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [dropboxTestBusy, setDropboxTestBusy] = useState(false);
   const [dropboxTestResult, setDropboxTestResult] = useState("");
@@ -61,6 +63,9 @@ export function IntakeClient() {
   const [batchReport, setBatchReport] = useState<{total:number;uploaded:number;reused:number;skipped:number;failed:number;registered:number;complete:boolean}|null>(null);
   const [folderInventory, setFolderInventory] = useState<Array<{ path: string; count: number }>>([]);
 
+  const stockAsset = !!plannedDropboxFolder && /\/creative-assets\/(stock-graphics|stock-videos)(?:\/|$)/i.test(plannedDropboxFolder);
+  const stockType = stockAsset ? (/\/stock-videos(?:\/|$)/i.test(plannedDropboxFolder!) ? "stock_video" : "stock_graphic") : null;
+  const stockMetadata = stockAsset ? {assetRole:"generative_source",stockType,allowedBrandSlugs:stockAllowedBrands} : {};
   const parsedSessionDate = (() => {
     if (!sessionDateDigits) return null;
     if (sessionDateDigits.length !== 6) return "";
@@ -343,13 +348,14 @@ export function IntakeClient() {
   // Register only after a separately verified direct Dropbox upload; never send file contents through S3.
   async function testDropboxRegistration() {
     if (!uploadedDropboxPath || registeringDropbox) return;
+    if (stockAsset) {setDropboxTestResult("Stock source assets must use Save Raw until the publishing exclusion is verified.");return;}
     setRegisteringDropbox(true);
     try {
       const response = await fetch("/api/assets/bulk-update", {
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({ action: "complete-dropbox-upload", brandSlug: brand, path: uploadedDropboxPath, mode: "ready", metadata: {
           collection, campaign, topic, creativeFamily, ...sessionMetadata, eligibilityMode, windowStart, windowEnd,
-          repeatAnnually, sendToApprovalQueue, priority, creatorNote, tags, allowedDestinations: selectedNetworks
+          repeatAnnually, sendToApprovalQueue, priority, creatorNote, tags, ...stockMetadata, allowedDestinations: stockAsset ? [] : selectedNetworks
         }})
       });
       const data = await response.json();
@@ -485,6 +491,14 @@ export function IntakeClient() {
       setMessageTone("error");
       return;
     }
+    if (stockAsset && stockAllowedBrands.length === 0) {
+      setMessage("Choose at least one brand permitted to use this stock asset.");
+      setMessageTone("error");return;
+    }
+    if (stockAsset && mode === "ready") {
+      setMessage("Stock source assets must use Save Raw until the publishing exclusion is verified.");
+      setMessageTone("error");return;
+    }
     if (eligibilityMode === "window" && (!windowStart || !windowEnd)) {
       setMessage("Choose both publishing window dates.");
       setMessageTone("error");
@@ -617,7 +631,7 @@ export function IntakeClient() {
         setMessage("Verifying and registering " + item.name + " in Brand OS…");
         const registerPayload = JSON.stringify({ action: "complete-dropbox-upload", brandSlug: brand, path: uploadedPath, mode,
           metadata: { collection, campaign, topic, creativeFamily, ...sessionMetadata, eligibilityMode, windowStart, windowEnd,
-            repeatAnnually, sendToApprovalQueue, priority, creatorNote, tags, allowedDestinations: selectedNetworks } });
+            repeatAnnually, sendToApprovalQueue, priority, creatorNote, tags, ...stockMetadata, allowedDestinations: stockAsset ? [] : selectedNetworks } });
         let response: Response | undefined;
         for (let attempt=0;attempt<3;attempt++) {
           try {
@@ -668,6 +682,7 @@ export function IntakeClient() {
         setTags([]);
         setTagInput("");
         setSelectedNetworks(networks);
+        setStockAllowedBrands([]);
         setDropboxTestResult("");
       }
       setMessage(`${report.total} checked · ${report.uploaded} uploaded · ${report.reused} reused from Dropbox · ${report.registered} registered · ${report.skipped} skipped · ${report.failed} conflicts. No S3 transfer.`);
@@ -723,7 +738,7 @@ export function IntakeClient() {
           {!batchReport.complete && <p className="muted" style={{marginBottom:0}}>Batch incomplete or still processing. Do not assume every queued file was registered.</p>}
         </section>
       )}
-      <DropboxFolderBrowser brand={brand} fileTypes={files.map(file => file.type)} onSelect={setPlannedDropboxFolder} />
+      <DropboxFolderBrowser brand={brand} fileTypes={files.map(file => file.type)} onSelect={value=>{setPlannedDropboxFolder(value);setStockAllowedBrands(value && /\/creative-assets\/(stock-graphics|stock-videos)(?:\/|$)/i.test(value) ? [brand] : []);}} />
 
       <section className="card">
         <div className="topbar" style={{ marginBottom: 12 }}>
@@ -736,7 +751,7 @@ export function IntakeClient() {
 
         <div className="grid" style={{ gridTemplateColumns: "repeat(2, minmax(0,1fr))" }}>
           <Field label="Brand">
-            <select value={brand} onChange={(e) => {setBrand(e.target.value);setPlannedDropboxFolder(null);}}>
+            <select value={brand} onChange={(e) => {setBrand(e.target.value);setPlannedDropboxFolder(null);setStockAllowedBrands([]);}}>
               <option value="stashbox">Stashbox</option>
               <option value="solarmeister">SolarMeister</option>
               <option value="weightlossdavie">WeightLossDavie</option>
@@ -824,6 +839,24 @@ export function IntakeClient() {
           </Field>
         </div>
 
+        {stockAsset && (
+          <div className="card" style={{marginTop:18,border:"2px solid var(--line)",background:"var(--panel-soft)"}}>
+            <div className="eyebrow">Creative source asset</div>
+            <h3 style={{margin:"5px 0 8px"}}>Which brands are allowed to use this stock art?</h3>
+            <p className="muted" style={{margin:"0 0 12px"}}>Required for {stockType==="stock_video"?"Stock Videos":"Stock Graphics"}. Choose the brands allowed to reuse these assets.</p>
+            <div style={{display:"flex",flexWrap:"wrap",gap:14}}>
+              {brandChoices.map(option=>(
+                <label key={option.id} style={{display:"inline-flex",alignItems:"center",gap:7,fontSize:14}}>
+                  <input type="checkbox" checked={stockAllowedBrands.includes(option.id)}
+                    onChange={event=>setStockAllowedBrands(current=>event.target.checked ? [...current,option.id] : current.filter(id=>id!==option.id))}/>
+                  {option.label}
+                </label>
+              ))}
+            </div>
+            {stockAllowedBrands.length===0 && <p role="alert" style={{color:"#b42318",fontSize:13,marginBottom:0}}>Select at least one brand before saving.</p>}
+            <p className="muted" style={{fontSize:12,marginBottom:0}}>Stock sources use Save Raw for now. Brand selections are forwarded as metadata; server-side usage enforcement requires validation.</p>
+          </div>
+        )}
         {eligibilityMode === "window" && (
           <div className="card" style={{ marginTop: 18, background: "var(--panel-soft)" }}>
             <div className="eyebrow">Publishing window</div>
