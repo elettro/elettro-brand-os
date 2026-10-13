@@ -56,6 +56,7 @@ export function IntakeClient() {
   const [registeringDropbox, setRegisteringDropbox] = useState(false);
   const [message, setMessage] = useState("");
   const [messageTone, setMessageTone] = useState<"idle" | "success" | "error">("idle");
+  const [batchReport, setBatchReport] = useState<{total:number;uploaded:number;reused:number;skipped:number;failed:number;registered:number;complete:boolean}|null>(null);
   const [folderInventory, setFolderInventory] = useState<Array<{ path: string; count: number }>>([]);
 
   const parsedSessionDate = (() => {
@@ -474,9 +475,13 @@ export function IntakeClient() {
       return;
     }
     setBusy(true);
+    setBatchReport(null);
     setMessageTone("idle");
     setMessage("Beginning direct Dropbox intake, without S3…");
     let count = 0;
+    const report = {total:unsaved.length,uploaded:0,reused:0,skipped:0,failed:0,registered:0,complete:false};
+    let currentFile: IntakeFile | null = null;
+    const publishReport = () => setBatchReport({...report});
     try {
       setMessage("Checking " + unsaved.length + " files against Dropbox before uploading…");
       const preflightResponse = await fetch("/api/dropbox/preflight", {
@@ -490,8 +495,9 @@ export function IntakeClient() {
         throw Error(preflight.error || "Dropbox pre-upload check failed. No transfers started.");
       const seen = new Set<string>();
       for (const [index,item] of unsaved.entries()) {
+        currentFile = item;
         const hash = item.sha256 || await sha256(item.file);
-        if (seen.has(hash)) continue;
+        if (seen.has(hash)) { report.skipped++; publishReport(); currentFile=null; continue; }
         seen.add(hash);
         let uploadedPath = item.dropboxUploadedPath || (files.length === 1 ? uploadedDropboxPath : null);
         const existing = preflight.results[index];
@@ -500,14 +506,15 @@ export function IntakeClient() {
           // Dropbox's exact content hash before reusing the existing file.
           if (existing.size !== item.size || !existing.contentHash) {
             updateFile(item.id,{status:"error",error:"Filename already exists in Dropbox, but size or hash is unavailable. Skipped safely."});
-            continue;
+            report.failed++; publishReport(); currentFile=null; continue;
           }
           setMessage("Checking content match for existing " + item.name + "…");
           const localHash = await dropboxContentHash(item.file);
           if(localHash !== existing.contentHash.toLowerCase()) {
             updateFile(item.id,{status:"error",error:"Different file already uses this Dropbox filename. No overwrite or duplicate upload attempted."});
-            continue;
+            report.failed++; publishReport(); currentFile=null; continue;
           }
+          report.reused++;
           uploadedPath = existing.path || plannedDropboxFolder.replace(new RegExp("/+$"), "") + "/" + item.name;
           updateFile(item.id,{status:"uploaded",progress:100,dropboxUploadedPath:uploadedPath});
           setMessage("Exact Dropbox duplicate verified. Registering without uploading " + item.name + "…");
@@ -515,7 +522,7 @@ export function IntakeClient() {
         if (!uploadedPath) {
           if (getSavedFingerprints(brand).has(hash)) {
             updateFile(item.id, { status: "error", error: "Previously saved in this browser; skipped to avoid a duplicate." });
-            continue;
+            report.skipped++; publishReport(); currentFile=null; continue;
           }
           updateFile(item.id, { status: "uploading", error: undefined, progress: 0 });
           setMessage("Uploading " + item.name + " directly to Dropbox…");
@@ -560,6 +567,7 @@ export function IntakeClient() {
             }
             uploadedPath = String(link.path);
           }
+          report.uploaded++;
           updateFile(item.id, { status: "uploaded", progress: 100, dropboxUploadedPath: uploadedPath });
         }
         setMessage("Verifying and registering " + item.name + " in Brand OS…");
@@ -576,7 +584,12 @@ export function IntakeClient() {
         updateFile(item.id, { status: mode === "ready" ? "ready" : "saved", progress: 100, error: undefined, dropboxUploadedPath: uploadedPath });
         rememberSavedFingerprints(brand, [hash]);
         count++;
+        report.registered++;
+        currentFile=null;
+        publishReport();
       }
+      report.complete=true;
+      publishReport();
       setUploadedDropboxPath(null);
       // Reset the intake only after every attempted asset reached Ready.
       // Raw saves remain staged for future edits; partial failures remain recoverable.
@@ -600,9 +613,11 @@ export function IntakeClient() {
         setSelectedNetworks(networks);
         setDropboxTestResult("");
       }
-      setMessage(count + " asset" + (count===1?"":"s") + (mode==="ready"?" uploaded to Dropbox and registered Ready.":" uploaded to Dropbox and saved Raw.") + " No S3 transfer.");
-      setMessageTone("success");
+      setMessage(`${report.total} checked · ${report.uploaded} uploaded · ${report.reused} reused from Dropbox · ${report.registered} registered · ${report.skipped} skipped · ${report.failed} conflicts. No S3 transfer.`);
+      setMessageTone(report.failed ? "error" : "success");
     } catch(error) {
+      if(currentFile && report.uploaded + report.reused + report.skipped + report.failed < report.total) report.failed++;
+      publishReport();
       setMessage((count ? count + " completed. " : "") + (error instanceof Error ? error.message : "Direct Dropbox intake failed") + " No S3 fallback.");
       setMessageTone("error");
     } finally { setBusy(false); }
@@ -637,6 +652,20 @@ export function IntakeClient() {
         </label>
       </section>
 
+      {batchReport && (
+        <section className="card" aria-live="polite" style={{padding:16,border:"1px solid var(--line)"}}>
+          <h3 style={{marginTop:0}}>Batch {batchReport.complete?"completion":"progress"} report</h3>
+          <div style={{display:"flex",gap:16,flexWrap:"wrap"}}>
+            <strong>{batchReport.total} checked</strong>
+            <span>{batchReport.uploaded} new uploads</span>
+            <span>{batchReport.reused} existing Dropbox files reused</span>
+            <span>{batchReport.registered} registered</span>
+            <span>{batchReport.skipped} skipped</span>
+            <span>{batchReport.failed} conflicts / failures</span>
+          </div>
+          {!batchReport.complete && <p className="muted" style={{marginBottom:0}}>Batch incomplete or still processing. Do not assume every queued file was registered.</p>}
+        </section>
+      )}
       <DropboxFolderBrowser brand={brand} fileTypes={files.map(file => file.type)} onSelect={setPlannedDropboxFolder} />
 
       <section className="card">
