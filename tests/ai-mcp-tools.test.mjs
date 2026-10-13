@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import {readFileSync} from "node:fs";
 import {MCP_TOOLS,toolsForClient,findAuthorizedTool} from "../apps/web/lib/ai-mcp-tools.ts";
 
 const all={
@@ -43,4 +44,17 @@ test("write tools declare explicit human confirmation",()=>{
   assert.equal(tool.inputSchema.properties.confirmed.const,true);
   assert.ok(tool.inputSchema.required.includes("confirmed"));
  }
+});
+
+test("MCP route forces brand scope independent of agent-supplied fields",()=>{
+ const source=readFileSync(new URL("../apps/web/app/api/mcp/route.ts",import.meta.url),"utf8");
+ assert.match(source,/scope:"brand"/);
+ assert.match(source,/requireMcpScope\(identity,tool.permission,args.brandSlug\)/);
+});
+
+test("gateway registration uses Raw and metadata edits cannot mark Ready",()=>{
+ const source=readFileSync(new URL("../apps/web/lib/ai-gateway.ts",import.meta.url),"utf8");
+ assert.match(source,/mode: "raw"/);
+ assert.match(source,/markReady: false/);
+ assert.match(source,/allowedDestinations: \[\]/);
 });
