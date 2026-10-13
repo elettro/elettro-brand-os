@@ -104,6 +104,19 @@ test("DEV asset detail query returns Dropbox identity needed for Step 5",()=>{
  const src=readFileSync(new URL("../services/dev-api-lambda/db-main.mjs",import.meta.url),"utf8");
  const detail=src.split('if (assetId) {')[1]?.split('if (!result.rows[0])')[0]||"";
  assert.match(detail,/a\."sourceFileId"/);
+ assert.match(detail,/a\."sourceExternalId"/);
  assert.match(detail,/a\."sourcePath"/);
+ assert.match(detail,/a\."sourceUrl"/);
  assert.match(detail,/b\."slug" AS "brandSlug"/);
+});
+
+test("direct Dropbox uploads resolve via sourceExternalId/sourceUrl while sync uses sourceFileId/sourcePath",()=>{
+ const source=readFileSync(new URL("../apps/web/lib/ai-gateway.ts",import.meta.url),"utf8");
+ assert.match(source,/asset\.sourceExternalId/);
+ assert.match(source,/asset\.sourceUrl/);
+ assert.match(source,/row\.sourceUrl/);
+ assert.match(source,/a\.sourceExternalId/);
+ assert.match(source,/linkedId===dropboxFileId/);
+ assert.match(source,/!linkedId&&pathMatch/);
+ assert.match(source,/sourceType!=="dropbox"/);
 });
