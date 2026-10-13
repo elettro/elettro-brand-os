@@ -78,12 +78,21 @@ export async function POST(request:NextRequest){
    // Action and Dropbox scope are server-owned: caller cannot override them.
    const result=await executeAiGateway({...args,action:tool.action,scope:"brand"});
    if(tool.action!=="search_assets"&&tool.action!=="get_asset"&&tool.action!=="list_folders")
-    console.info("Elettro MCP action",identity.clientId,tool.action,args.brandSlug,"success");
+    console.info("Elettro MCP audit",JSON.stringify({
+      provider:identity.clientId,action:tool.action,brandSlug:args.brandSlug,
+      assetId:typeof args.assetId==="string"?args.assetId:undefined,
+      outcome:"success",timestamp:new Date().toISOString()
+    }));
    return success(id,{content:[{type:"text",text:JSON.stringify(result)}],structuredContent:result,isError:false});
   }catch(error){
    const known=error instanceof GatewayError||error instanceof McpAuthorizationError;
    const messageText=known?error.message:"Elettro operation unavailable";
-   console.error("Elettro MCP tool failure",identity.clientId,tool.action,known?messageText:"Internal");
+   console.error("Elettro MCP audit",JSON.stringify({
+     provider:identity.clientId,action:tool.action,brandSlug:args.brandSlug,
+     assetId:typeof args.assetId==="string"?args.assetId:undefined,
+     outcome:"error",timestamp:new Date().toISOString(),
+     error:known?messageText:"Internal error"
+   }));
    return success(id,{content:[{type:"text",text:messageText}],isError:true});
   }
  }
