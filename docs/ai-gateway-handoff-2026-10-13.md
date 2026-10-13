@@ -106,3 +106,22 @@ with Dropbox file ID `id:UM9GhyUcVDgAAAAAAAMB-g`. Presence and basename alone DO
 **CRITICAL DEPLOYMENT SAFETY:** The `Build DEV API Lambda` GitHub Actions workflow only packages and uploads a ZIP **artifact**. It does **NOT** deploy the new Lambda to AWS. Moreover, the checked-in Lambda source lacks the active `complete-dropbox-upload` action that is known to function in the deployed DEV API, indicating possible source/package drift. **Do not deploy the entire checked-in ZIP over the running Lambda without reconciling against its current deployed source, or Dropbox registration may regress.** A controlled, non-destructive Lambda update/reconciliation is needed first. Amplify deployment of the frontend does not apply this Lambda fix.
 
 Next test when the live Lambda's asset detail response includes a stable `sourceFileId`: In the AI Gateway Lab, search for `SE53F9~1.MP4`, select the corresponding asset, and click **Verify existing registration (read-only)**. PASS must require exact Dropbox file-ID equality and same-brand folder containment. If the database's sourceFileId is null, inspect the original registration path before considering any backfill. **Do not re-register, backfill, or alter Ready/Approved status without a separate guarded procedure and explicit approval.**
+
+## October 13 — Verified live Lambda registration field mismatch, PATCH2 ready
+
+The owner successfully deployed the first DEV API Lambda patch and executed the same asset-detail test on Stashbox `SE53F9~1.MP4`. The response was HTTP 200 with `sourceFileId:null`, `sourcePath:null`, `ingestStatus:ready`, `approvalStatus:approved`. The first patch successfully exposed `sourceFileId` but did not locate the file's source.
+
+**Actual root cause found by examining the owner's currently deployed, downloaded Lambda ZIP:** The working `completeDropboxUpload` implementation registers direct dashboard uploads into **`Asset.sourceExternalId`** (Dropbox file ID), **`Asset.sourceUrl`** (Dropbox path), and `sourceMetadata`. The older Dropbox-sync ingestion pathway instead writes `sourceFileId` and `sourcePath`. These are two different existing storage conventions, not proof of missing source information in the database.
+
+The API detail query omitted `sourceExternalId` and `sourceUrl`. Both identifiers must be exposed and checked before considering any DB fix.
+
+**PATCH2 generated and verified locally (not yet deployed):**
+- Input: the owner's first patched / currently deployed ZIP, `elettro-brand-os-dev-api-source-id-PATCHED.zip`, sha256 base64 `YuqaaxwcAhAt2SSoPQx980RkJMaDI9PRdvWID82OohA=`.
+- New file: `elettro-brand-os-dev-api-source-links-PATCH2.zip`, sha256 base64 `9yUq0+Hx38x9sbEvdL/SwjCIvr1fDD1nTi1IAKqMOBE=`.
+- Diff in `db-main.mjs` only: SQL SELECT adds `a."sourceExternalId"` and `a."sourceUrl"` directly after existing `sourceFileId` and `sourcePath`, without changing any other code/bytes of the 3,648 ZIP entries.
+- Integrity and Node syntax checks passed. The working `complete-dropbox-upload` implementation is unchanged.
+- The checked-in `services/dev-api-lambda/db-main.mjs` now has both fields too.
+- Gateway registration preflight and `inspect_registered_asset` now support **both** Dropbox field schemes and avoid trusting an accidental filename/path match when a different immutable Dropbox ID is present. Commit `6e11e73`.
+- No Dropbox file, registry row, or production environment modified.
+
+**When user confirms AWS Lambda Code SHA still equals PATCH1**, deploy PATCH2 to the DEV API Lambda only, run the same read-only Lambda event with asset ID `08adc79a-211e-4f9a-9ebe-da2614285dad`. Check whether `sourceExternalId` is equal to independent Dropbox file ID `id:UM9GhyUcVDgAAAAAAAMB-g` and `sourceUrl` is the corresponding brand file path. If the result verifies these fields, Step 5 in the AI Gateway Lab can be rerun after the gateway's `develop` deployment. If either field is null, **do not infer an ID from filename**; investigate record origin further.
