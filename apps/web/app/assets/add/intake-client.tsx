@@ -48,6 +48,8 @@ export function IntakeClient() {
   const [sendToApprovalQueue, setSendToApprovalQueue] = useState(false);
   const [priority, setPriority] = useState("normal");
   const [creatorNote, setCreatorNote] = useState("");
+  const [tags, setTags] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState("");
   const [selectedNetworks, setSelectedNetworks] = useState(networks);
   const [busy, setBusy] = useState(false);
   const [dropboxTestBusy, setDropboxTestBusy] = useState(false);
@@ -75,6 +77,29 @@ export function IntakeClient() {
     ...(parsedSessionDate ? { sessionDate: parsedSessionDate } : {}),
     ...(sessionType ? { sessionType } : {})
   } : {};
+
+  const addTags = (raw: string) => {
+    const candidates = raw.split(",").map(value => value.trim()).filter(Boolean);
+    setTags(current => {
+      const next = [...current];
+      for (const candidate of candidates) {
+        if (next.some(tag => tag.toLowerCase() === candidate.toLowerCase())) continue;
+        if ([...next, candidate].join(", ").length > 500) break;
+        next.push(candidate);
+      }
+      return next;
+    });
+    setTagInput("");
+  };
+  const handleTagKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter" || event.key === ",") {
+      event.preventDefault();
+      addTags(tagInput);
+    } else if (event.key === "Backspace" && !tagInput && tags.length) {
+      event.preventDefault();
+      setTags(current => current.slice(0, -1));
+    }
+  };
 
   const totalSize = useMemo(
     () => files.reduce((sum, file) => sum + file.size, 0),
@@ -324,7 +349,7 @@ export function IntakeClient() {
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({ action: "complete-dropbox-upload", brandSlug: brand, path: uploadedDropboxPath, mode: "ready", metadata: {
           collection, campaign, topic, creativeFamily, ...sessionMetadata, eligibilityMode, windowStart, windowEnd,
-          repeatAnnually, sendToApprovalQueue, priority, creatorNote, allowedDestinations: selectedNetworks
+          repeatAnnually, sendToApprovalQueue, priority, creatorNote, tags, allowedDestinations: selectedNetworks
         }})
       });
       const data = await response.json();
@@ -592,7 +617,7 @@ export function IntakeClient() {
         setMessage("Verifying and registering " + item.name + " in Brand OS…");
         const registerPayload = JSON.stringify({ action: "complete-dropbox-upload", brandSlug: brand, path: uploadedPath, mode,
           metadata: { collection, campaign, topic, creativeFamily, ...sessionMetadata, eligibilityMode, windowStart, windowEnd,
-            repeatAnnually, sendToApprovalQueue, priority, creatorNote, allowedDestinations: selectedNetworks } });
+            repeatAnnually, sendToApprovalQueue, priority, creatorNote, tags, allowedDestinations: selectedNetworks } });
         let response: Response | undefined;
         for (let attempt=0;attempt<3;attempt++) {
           try {
@@ -640,6 +665,8 @@ export function IntakeClient() {
         setSendToApprovalQueue(false);
         setPriority("normal");
         setCreatorNote("");
+        setTags([]);
+        setTagInput("");
         setSelectedNetworks(networks);
         setDropboxTestResult("");
       }
@@ -780,6 +807,15 @@ export function IntakeClient() {
               <option value="normal">Normal</option>
               <option value="high">High</option>
             </select>
+          </Field>
+          <Field label="Tags">
+            <div style={{display:"flex",flexWrap:"wrap",alignItems:"center",gap:6,padding:8,border:"1px solid var(--line)",borderRadius:8,minHeight:44,background:"white"}}>
+              {tags.map(tag => <span key={tag} style={{display:"inline-flex",alignItems:"center",gap:5,padding:"5px 8px",borderRadius:7,background:"var(--panel-soft)",border:"1px solid var(--line)",fontSize:13}}>
+                {tag}<button type="button" aria-label={`Remove tag ${tag}`} onClick={()=>setTags(current=>current.filter(item=>item!==tag))} style={{border:0,background:"transparent",cursor:"pointer",fontWeight:800}}>×</button>
+              </span>)}
+              <input aria-label="Add tags" value={tagInput} onChange={event=>{const value=event.target.value;if(value.includes(","))addTags(value);else setTagInput(value);}} onKeyDown={handleTagKeyDown} onBlur={()=>{if(tagInput.trim())addTags(tagInput);}} placeholder={tags.length?"Add tag":"People, subjects, keywords"} style={{flex:"1 1 140px",minWidth:130,border:0,outline:"none",padding:5}} />
+            </div>
+            <small className="muted">Enter or comma adds a tag. Applies to all files in this intake batch. {tags.join(", ").length}/500</small>
           </Field>
           <Field label="Creator Note">
             <input value={creatorNote} onChange={(e) => setCreatorNote(e.target.value)} placeholder="e.g. Strong booking clips, favor these" />
