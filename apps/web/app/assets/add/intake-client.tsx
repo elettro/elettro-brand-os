@@ -483,15 +483,19 @@ export function IntakeClient() {
     let currentFile: IntakeFile | null = null;
     const publishReport = () => setBatchReport({...report});
     try {
-      setMessage("Checking " + unsaved.length + " files against Dropbox before uploading…");
+      setMessage("Fingerprinting " + unsaved.length + " files and checking the full " + brand + " Dropbox library…");
+      const fileFingerprints = await Promise.all(unsaved.map(async item=>({
+        name:item.name,size:item.size,contentHash:await dropboxContentHash(item.file)
+      })));
       const preflightResponse = await fetch("/api/dropbox/preflight", {
         method:"POST", headers:{"content-type":"application/json"},
-        body:JSON.stringify({brand,folder:plannedDropboxFolder,names:unsaved.map(item=>item.name)})
+        body:JSON.stringify({brand,folder:plannedDropboxFolder,names:unsaved.map(item=>item.name),files:fileFingerprints})
       });
       const preflight = await preflightResponse.json() as {
-        results?:Array<{name:string;exists:boolean;size?:number;contentHash?:string;path?:string}>;error?:string
+        results?:Array<{name:string;exists:boolean;size?:number;contentHash?:string;path?:string}>;
+        matches?:Array<{name:string;path:string;id:string}|null>;error?:string
       };
-      if(!preflightResponse.ok || !preflight.results || preflight.results.length!==unsaved.length)
+      if(!preflightResponse.ok || !preflight.results || preflight.results.length!==unsaved.length || !preflight.matches || preflight.matches.length!==unsaved.length)
         throw Error(preflight.error || "Dropbox pre-upload check failed. No transfers started.");
       const seen = new Set<string>();
       for (const [index,item] of unsaved.entries()) {
@@ -501,6 +505,13 @@ export function IntakeClient() {
         seen.add(hash);
         let uploadedPath = item.dropboxUploadedPath || (files.length === 1 ? uploadedDropboxPath : null);
         const existing = preflight.results[index];
+        const brandMatch = preflight.matches[index];
+        if (!uploadedPath && brandMatch && !existing.exists) {
+          uploadedPath = brandMatch.path;
+          report.reused++;
+          updateFile(item.id,{status:"uploaded",progress:100,dropboxUploadedPath:uploadedPath});
+          setMessage("Exact duplicate found elsewhere in " + brand + ": " + brandMatch.path + ". Registering without uploading…");
+        }
         if (!uploadedPath && existing.exists) {
           // Same path does not necessarily mean identical content. Compare
           // Dropbox's exact content hash before reusing the existing file.
@@ -509,7 +520,7 @@ export function IntakeClient() {
             report.failed++; publishReport(); currentFile=null; continue;
           }
           setMessage("Checking content match for existing " + item.name + "…");
-          const localHash = await dropboxContentHash(item.file);
+          const localHash = fileFingerprints[index].contentHash;
           if(localHash !== existing.contentHash.toLowerCase()) {
             updateFile(item.id,{status:"error",error:"Different file already uses this Dropbox filename. No overwrite or duplicate upload attempted."});
             report.failed++; publishReport(); currentFile=null; continue;
