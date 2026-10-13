@@ -31,7 +31,7 @@ export async function authorizeMcp(header:string|null):Promise<McpIdentity>{
   throw new McpAuthorizationError(401,"Bearer token required");
  const hashed=createHash("sha256").update(header.slice(7)).digest();
  const clients=await clientConfig();
- const brands=new Set(brandConfigs.map(x=>x.id));
+ const brands:ReadonlySet<string>=new Set(brandConfigs.map(x=>x.id));
  let chosen:Client|undefined;
  for(const client of clients){
   if(!client||typeof client.tokenSha256!=="string"||!/^[a-f0-9]{64}$/i.test(client.tokenSha256))continue;
