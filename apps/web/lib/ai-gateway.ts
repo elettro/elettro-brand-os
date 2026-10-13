@@ -369,19 +369,6 @@ export async function executeAiGateway(input: unknown): Promise<Dict> {
     // Existing exact-ID registrations above can still be safely reused.
     throw new GatewayError(409,
       "New AI registration is paused until authoritative Dropbox-ID deduplication is available");
-    /* Registration after indexed-identity support is added:
-    const result=await api("/assets/bulk-update",{
-      action:"complete-dropbox-upload",brandSlug:config.id,path:resolved,
-      mode:"raw",metadata:{...metadata,allowedDestinations:[],sendToApprovalQueue:false}
-    });
-    const asset=record(result.asset);
-    if(typeof asset.id!=="string"||!asset.id)
-      throw new GatewayError(502,"Asset registration was not confirmed");
-    return {ok:true,alreadyRegistered:result.alreadyRegistered===true,
-      assetId:asset.id,dropboxFileId:file.id,brandSlug:config.id,
-      ingestStatus:asset.ingestStatus,approvalStatus:asset.approvalStatus,
-      message:"Dropbox asset registration returned by registry. Verify publishing exclusions before rollout."};
-    */
   }
 
   if (action === "list_folders" || action === "create_folder") {
