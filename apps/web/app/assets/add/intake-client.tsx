@@ -1018,7 +1018,7 @@ export function IntakeClient() {
           <strong>DEV test: Upload one image directly to Dropbox (no S3)</strong>
           <p className="muted" style={{margin:"6px 0 10px"}}>Choose exactly one small image (up to 10 MB) and select a Dropbox folder above. This is a storage-only test: it does not create a Brand OS asset record or make the file ready to publish. Use a disposable image with a unique filename to avoid duplicate-name conflicts.</p>
           <button type="button" disabled={busy||dropboxTestBusy||!plannedDropboxFolder||files.length!==1||!files[0]?.type.startsWith("image/")||files[0]?.size>10*1024*1024} onClick={()=>void testDirectDropboxUpload()} style={buttonPrimary}>{dropboxTestBusy?"Testing…":"Test direct Dropbox upload"}</button>
-          {uploadedDropboxPath&&<button type="button" disabled={registeringDropbox||dropboxTestBusy} onClick={()=>void testDropboxRegistration()} style={{...buttonSecondary,marginLeft:8}}>{registeringDropbox?"Registering…":"Register uploaded image as Ready in Brand OS"}</button>}
+          {uploadedDropboxPath&&<button type="button" disabled={registeringDropbox||dropboxTestBusy||stockAsset} onClick={()=>void testDropboxRegistration()} style={{...buttonSecondary,marginLeft:8}}>{registeringDropbox?"Registering…":"Register uploaded image as Ready in Brand OS"}</button>}
           {dropboxTestResult&&<p aria-live="polite" style={{margin:"10px 0 0",fontSize:13,overflowWrap:"anywhere"}}>{dropboxTestResult}</p>}
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap", marginTop: 18 }}>
@@ -1056,7 +1056,8 @@ export function IntakeClient() {
             </button>
             <button
               type="button"
-              disabled={!files.length || busy}
+              disabled={!files.length || busy || stockAsset}
+              title={stockAsset ? "Stock assets must use Save Raw until server-side publishing exclusion is verified" : undefined}
               onClick={() => submitBatch("ready")}
               style={buttonPrimary}
             >
