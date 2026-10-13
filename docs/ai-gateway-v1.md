@@ -36,7 +36,7 @@ JSON object with an action field. All brand-scoped operations require one of the
 
     {"action":"register_existing_asset","brandSlug":"elettro","path":"/1---elettro-brand-os/elettro/images/onesheets/example.png","metadata":{"title":"Example","tags":["one-sheet"]},"confirmed":true}
 
-  Dropbox file existence is checked first; existing server-side registration is called in raw mode only with no publishing destinations. Repeated attempts rely on the existing Dropbox-ID idempotency logic. There is no file-byte transport in this action.
+  **Current safety restriction:** The AI Gateway only reuses an existing, exact Dropbox-ID registration without rerunning the upload completion action. New file registration through AI is paused until the backend provides a full-database indexed Dropbox-ID lookup; the current recent-assets list is capped at 500. The dashboard upload/registration path is unchanged. No file bytes travel through this action.
 
 - Create a folder, scoped to one brand or shared stock root:
 
@@ -74,7 +74,7 @@ From an authenticated session on the develop site, after deploy:
 7. search_assets must filter results to the named brand.
 8. Try updating an asset under the wrong brand; must return 404 without changing anything.
 9. update_asset_metadata must reject unknown fields and lack of explicit confirmation.
-10. Register a harmless existing test file in raw mode; verify it is not in the publishing-ready pool. Repeat registration and verify no duplicate.
+10. Verify the Step 6 read-only duplicate preflight recognizes a known indexed Dropbox ID as the same existing asset. After adding authoritative indexed-ID lookup, test a disposable new Raw asset and repeated registration with owner approval.
 11. Verify the dashboard upload workflow remains unaffected.
 
 ## Next implementation steps
@@ -94,3 +94,11 @@ From an authenticated session on the develop site, after deploy:
 - `scripts/check-ai-mcp.mjs` performs authenticated, read-only MCP smoke tests when credentials have been configured.
 - `docs/ai-mcp-client-setup.md` describes service-token provisioning and OAuth limitations.
 - `/api/mcp` uses structured provider-specific logs for mutations; a permanent audit database table remains future work.
+
+## Steps 4–6 verification (October 13)
+
+- Step 4: live tag-write/readback and restoration on a Stashbox asset **PASS**.
+- Step 5: Stashbox video `SE53F9~1.MP4` has matching registry Dropbox ID, Dropbox path, Ready/Approved status, and no path drift **PASS**.
+- Step 6: read-only preflight panel added to the owner Lab on `develop`; checks immutable Dropbox ID and the same registry asset ID without registration writes. **Await deploy and live test**.
+- New AI file registration and end-to-end re-registration are not certified. The registry's `GET /assets` is capped at 500, so its absence result cannot authorize a new registration. Implement a global indexed Dropbox-ID query before enabling that capability.
+- Stock Galleries remain paused.
