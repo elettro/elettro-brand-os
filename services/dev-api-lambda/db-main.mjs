@@ -450,6 +450,7 @@ export const handler = async (event = {}) => {
             a."filename",
             a."kind",
             a."sourceType",
+            a."sourceFileId",
             a."sourcePath",
             a."fileSizeBytes",
             a."ingestStatus",
