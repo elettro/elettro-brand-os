@@ -35,6 +35,7 @@ export function IntakeClient() {
   const stagedHashes = useRef(new Set<string>());
   const [brand, setBrand] = useState("stashbox");
   const [plannedDropboxFolder, setPlannedDropboxFolder] = useState<string | null>(null);
+  const [intakeLibrary, setIntakeLibrary] = useState<"brand"|"stock">("brand");
   const [collection, setCollection] = useState("");
   const [campaign, setCampaign] = useState("");
   const [topic, setTopic] = useState("");
@@ -63,7 +64,7 @@ export function IntakeClient() {
   const [batchReport, setBatchReport] = useState<{total:number;uploaded:number;reused:number;skipped:number;failed:number;registered:number;complete:boolean}|null>(null);
   const [folderInventory, setFolderInventory] = useState<Array<{ path: string; count: number }>>([]);
 
-  const stockAsset = !!plannedDropboxFolder && /\/creative-assets\/(stock-graphics|stock-videos)(?:\/|$)/i.test(plannedDropboxFolder);
+  const stockAsset = intakeLibrary==="stock" && !!plannedDropboxFolder && /\/creative-assets\/(stock-graphics|stock-videos)(?:\/|$)/i.test(plannedDropboxFolder);
   const stockType = stockAsset ? (/\/stock-videos(?:\/|$)/i.test(plannedDropboxFolder!) ? "stock_video" : "stock_graphic") : null;
   const stockMetadata = stockAsset ? {assetRole:"generative_source",stockType,allowedBrandSlugs:stockAllowedBrands} : {};
   const parsedSessionDate = (() => {
@@ -486,6 +487,7 @@ export function IntakeClient() {
   // DEV direct Dropbox intake. Unsupported large uploads STOP; there is no S3 fallback.
   async function submitBatch(mode: "raw" | "ready") {
     if (busy || dropboxTestBusy || registeringDropbox || files.length === 0) return;
+    if (intakeLibrary==="stock") {setMessage("Shared Stock uploading is not enabled until the backend supports safe global-root registration and brand permissions.");setMessageTone("error");return;}
     if (!plannedDropboxFolder) {
       setMessage("Select a Dropbox destination folder before saving.");
       setMessageTone("error");
@@ -738,7 +740,15 @@ export function IntakeClient() {
           {!batchReport.complete && <p className="muted" style={{marginBottom:0}}>Batch incomplete or still processing. Do not assume every queued file was registered.</p>}
         </section>
       )}
-      <DropboxFolderBrowser brand={brand} fileTypes={files.map(file => file.type)} onSelect={value=>{setPlannedDropboxFolder(value);setStockAllowedBrands(value && /\/creative-assets\/(stock-graphics|stock-videos)(?:\/|$)/i.test(value) ? [brand] : []);}} />
+      <section className="card" style={{marginTop:14}}>
+        <div className="eyebrow">Choose asset library</div>
+        <div style={{display:"flex",gap:10,marginTop:10,flexWrap:"wrap"}}>
+          <button type="button" aria-pressed={intakeLibrary==="brand"} onClick={()=>{setIntakeLibrary("brand");setPlannedDropboxFolder(null);setStockAllowedBrands([]);}} style={intakeLibrary==="brand"?buttonPrimary:buttonSecondary}>Brand</button>
+          <button type="button" aria-pressed={intakeLibrary==="stock"} onClick={()=>{setIntakeLibrary("stock");setPlannedDropboxFolder(null);setStockAllowedBrands([brand]);}} style={intakeLibrary==="stock"?buttonPrimary:buttonSecondary}>Stock</button>
+        </div>
+        <p className="muted" style={{fontSize:13,marginBottom:0}}>{intakeLibrary==="stock"?"Stock opens the shared Elettro Creative Assets library. Uploading is disabled until shared-root backend handling is verified.":"Brand opens the current brand’s Dropbox library."}</p>
+      </section>
+      <DropboxFolderBrowser brand={brand} mode={intakeLibrary} fileTypes={files.map(file => file.type)} onSelect={value=>{setPlannedDropboxFolder(value);setStockAllowedBrands(value && /\/creative-assets\/(stock-graphics|stock-videos)(?:\/|$)/i.test(value) ? [brand] : []);}} />
 
       <section className="card">
         <div className="topbar" style={{ marginBottom: 12 }}>
@@ -1017,7 +1027,7 @@ export function IntakeClient() {
         <div style={{marginTop:18,padding:14,border:"1px solid var(--line)",borderRadius:10,background:"var(--panel-soft)"}}>
           <strong>DEV test: Upload one image directly to Dropbox (no S3)</strong>
           <p className="muted" style={{margin:"6px 0 10px"}}>Choose exactly one small image (up to 10 MB) and select a Dropbox folder above. This is a storage-only test: it does not create a Brand OS asset record or make the file ready to publish. Use a disposable image with a unique filename to avoid duplicate-name conflicts.</p>
-          <button type="button" disabled={busy||dropboxTestBusy||!plannedDropboxFolder||files.length!==1||!files[0]?.type.startsWith("image/")||files[0]?.size>10*1024*1024} onClick={()=>void testDirectDropboxUpload()} style={buttonPrimary}>{dropboxTestBusy?"Testing…":"Test direct Dropbox upload"}</button>
+          <button type="button" disabled={intakeLibrary==="stock"||busy||dropboxTestBusy||!plannedDropboxFolder||files.length!==1||!files[0]?.type.startsWith("image/")||files[0]?.size>10*1024*1024} onClick={()=>void testDirectDropboxUpload()} style={buttonPrimary}>{dropboxTestBusy?"Testing…":"Test direct Dropbox upload"}</button>
           {uploadedDropboxPath&&<button type="button" disabled={registeringDropbox||dropboxTestBusy||stockAsset} onClick={()=>void testDropboxRegistration()} style={{...buttonSecondary,marginLeft:8}}>{registeringDropbox?"Registering…":"Register uploaded image as Ready in Brand OS"}</button>}
           {dropboxTestResult&&<p aria-live="polite" style={{margin:"10px 0 0",fontSize:13,overflowWrap:"anywhere"}}>{dropboxTestResult}</p>}
         </div>
@@ -1048,7 +1058,7 @@ export function IntakeClient() {
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
             <button
               type="button"
-              disabled={!files.length || busy}
+              disabled={!files.length || busy || intakeLibrary==="stock"}
               onClick={() => submitBatch("raw")}
               style={buttonSecondary}
             >
@@ -1056,7 +1066,7 @@ export function IntakeClient() {
             </button>
             <button
               type="button"
-              disabled={!files.length || busy || stockAsset}
+              disabled={!files.length || busy || intakeLibrary==="stock" || stockAsset}
               title={stockAsset ? "Stock assets must use Save Raw until server-side publishing exclusion is verified" : undefined}
               onClick={() => submitBatch("ready")}
               style={buttonPrimary}
