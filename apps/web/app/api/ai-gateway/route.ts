@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authenticated, DEV_ORIGIN } from "@/lib/cognito-auth";
 import { executeAiGateway, GatewayError } from "@/lib/ai-gateway";
 import { batchUpdateAssetMetadata } from "@/lib/ai-gateway-batch";
+import { runMetadataWriteSmokeTest } from "@/lib/ai-gateway-write-test";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -36,7 +37,9 @@ export async function POST(request: NextRequest) {
     const action = typeof input === "object" && input && "action" in input ? (input as { action?: unknown }).action : undefined;
     const result = action === "batch_update_asset_metadata"
       ? await batchUpdateAssetMetadata(input)
-      : await executeAiGateway(input);
+      : action === "test_metadata_round_trip"
+        ? await runMetadataWriteSmokeTest(input)
+        : await executeAiGateway(input);
     if (typeof input === "object" && input && "action" in input) {
       const action = String((input as { action: unknown }).action);
       if (action !== "search_assets" && action !== "get_asset" && action !== "list_folders" && action !== "capabilities") {
