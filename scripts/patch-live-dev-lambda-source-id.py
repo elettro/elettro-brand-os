@@ -106,7 +106,7 @@ def patch_source(original):
                                     lineterm=""))
     expected = [line for line in diff if line.startswith("+") and not line.startswith("+++")]
     removed = [line for line in diff if line.startswith("-") and not line.startswith("---")]
-    if len(expected) != 1 or expected[0].strip() != '+a."sourceFileId",' or removed:
+    if len(expected) != 1 or expected[0][1:].strip() != 'a."sourceFileId",' or removed:
         fail("The proposed patch changed more than one SQL column; refusing.")
     return patched.encode("utf-8"), "\n".join(diff)
 
