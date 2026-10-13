@@ -232,7 +232,8 @@ export async function executeAiGateway(input: unknown): Promise<Dict> {
     actions: [...AI_GATEWAY_ACTIONS],
     limitations: ["Session-authenticated only; external MCP/OAuth adapter not connected",
       "Shared stock registration and folder/file moves are not enabled",
-      "Registration is raw only; cannot publish directly"]
+      "New AI registration is temporarily disabled pending a full-database Dropbox-ID lookup",
+      "No AI action can directly publish an asset"]
   };
 
   if (action === "search_assets") {
