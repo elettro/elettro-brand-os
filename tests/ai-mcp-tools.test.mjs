@@ -132,7 +132,7 @@ test("ChatGPT file-parameter schemas and read/write scope separation",()=>{
  const readTools=toolsForClient(reader);
  const writeTools=toolsForClient(writer);
  assert.equal(readTools.length,7);
- assert.equal(writeTools.length,12);
+ assert.equal(writeTools.length,11); // arbitrary registration intentionally excluded
  const preview=readTools.find(t=>t.name==="elettro_prepare_file_intake");
  const upload=writeTools.find(t=>t.name==="elettro_save_chat_file_to_dropbox");
  assert.ok(preview);
