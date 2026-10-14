@@ -93,13 +93,13 @@ type AssetSummary = {
   id: string; brandSlug: string; filename: string; sourcePath?: string;
   title?: string; topic?: string; contentGroup?: string;
   creativeFamily?: string; creativeNotes?: string; tags?: string[];
-  ingestStatus?: string; approvalStatus?: string;
+  ingestStatus?: string; enrichmentStatus?: string; approvalStatus?: string;
 };
 function sanitizedAsset(value: unknown): AssetSummary {
   const a = record(value);
   return {
     id: String(a.id || ""), brandSlug: String(a.brandSlug || ""), filename: String(a.filename || ""),
-    ...(typeof a.sourcePath === "string" ? { sourcePath: a.sourcePath } : {}),
+    ...(typeof a.sourcePath === "string" ? { sourcePath: a.sourcePath } : typeof a.sourceUrl === "string" && a.sourceUrl.startsWith("/") ? {sourcePath:a.sourceUrl} : {}),
     ...(typeof a.title === "string" ? { title: a.title } : {}),
     ...(typeof a.topic === "string" ? { topic: a.topic } : {}),
     ...(typeof a.contentGroup === "string" ? { contentGroup: a.contentGroup } : {}),
@@ -107,6 +107,7 @@ function sanitizedAsset(value: unknown): AssetSummary {
     ...(typeof a.creativeNotes === "string" ? { creativeNotes: a.creativeNotes } : {}),
     ...(Array.isArray(a.tags) ? { tags: a.tags.filter(t => typeof t === "string") as string[] } : {}),
     ...(typeof a.ingestStatus === "string" ? { ingestStatus: a.ingestStatus } : {}),
+    ...(typeof a.enrichmentStatus === "string" ? {enrichmentStatus:a.enrichmentStatus} : {}),
     ...(typeof a.approvalStatus === "string" ? { approvalStatus: a.approvalStatus } : {})
   };
 }
@@ -211,7 +212,7 @@ async function registrationCandidates(
 
 export const AI_GATEWAY_ACTIONS = [
   "capabilities", "search_assets", "get_asset", "update_asset_metadata",
-  "register_existing_asset", "inspect_brand_registration", "inspect_registered_asset", "inspect_global_dropbox_id", "list_folders", "create_folder"
+  "register_existing_asset", "inspect_brand_registration", "inspect_registered_asset", "inspect_global_dropbox_id", "list_folders", "create_folder", "rename_folder", "move_folder"
 ] as const;
 
 export async function executeAiGateway(input: unknown): Promise<Dict> {
@@ -222,7 +223,7 @@ export async function executeAiGateway(input: unknown): Promise<Dict> {
     ok: true, version: "v1",
     actions: [...AI_GATEWAY_ACTIONS],
     limitations: ["Session-authenticated only; external MCP/OAuth adapter not connected",
-      "Shared stock registration and folder/file moves are not enabled",
+      "Shared stock operations and individual file moves are not enabled",
       "New AI registration is temporarily disabled pending database-enforced ID uniqueness",
       "No AI action can directly publish an asset"]
   };
@@ -394,6 +395,23 @@ export async function executeAiGateway(input: unknown): Promise<Dict> {
       "New AI registration is paused until atomic Dropbox-ID uniqueness enforcement is available");
   }
 
+  if(action==="rename_folder"||action==="move_folder"){
+    const config=brandConfig(command.brandSlug);
+    if(command.confirmed!==true)throw new GatewayError(400,"Explicit confirmation required to move or rename a folder");
+    const path=folderPath(command.path,config.dropboxRoot,false);
+    const fields:Dict=action==="rename_folder"?{name:str(command.name,"folder name",180)}:
+      {parentPath:folderPath(command.parentPath,config.dropboxRoot)};
+    if(typeof fields.name==="string"&&(/[\/\\\x00-\x1f]/.test(fields.name)||fields.name==="."||fields.name===".."))
+      throw new GatewayError(400,"Unsafe folder name");
+    const response=await fetch(API_BASE+"/assets/bulk-update",{method:"POST",headers:{"content-type":"application/json"},
+      body:JSON.stringify({action:"move-brand-folder",operation:action==="rename_folder"?"rename":"move",brandSlug:config.id,path,...fields,confirmed:true}),
+      cache:"no-store",signal:AbortSignal.timeout(60000)});
+    const result=await response.json().catch(()=>null);
+    if(!result||typeof result!=="object")throw new GatewayError(502,"Folder operation response unavailable; inspect folder before retrying");
+    if(!response.ok)throw new GatewayError(response.status===409?409:502,typeof result.error==="string"?result.error:"Folder operation failed");
+    return {...result,brandSlug:config.id};
+  }
+
   if (action === "list_folders" || action === "create_folder") {
     const scope = scopeFor(command.scope);
     const root = rootFor(scope, command.brandSlug);
@@ -430,3 +448,4 @@ export async function executeAiGateway(input: unknown): Promise<Dict> {
 
   throw new GatewayError(400, "Unsupported AI Gateway action");
 }
+

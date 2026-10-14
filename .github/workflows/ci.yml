@@ -32,6 +32,9 @@ jobs:
       - name: Test MCP tool permissions and assistant parity
         run: node --experimental-strip-types --test tests/ai-mcp-tools.test.mjs
 
+      - name: Test Claude transfer and folder operations
+        run: node --test tests/claude-transfer-and-folders.test.cjs
+
       - name: Test cross-column Dropbox ID guard
         run: node --test tests/dropbox-identity.test.mjs
 

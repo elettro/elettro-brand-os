@@ -1,3 +1,4 @@
+import {moveBrandFolder,repairClaudeTestStatus} from "./claude-folder-ops.mjs";
 import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
 import { S3Client, PutObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
@@ -1511,6 +1512,8 @@ async function completeDropboxUpload(event){
 
 
 export const handler = async (event = {}) => {
+  // IAM-only one-record repair, never exposed through HTTP or MCP.
+  if(event.action === "repair-claude-title-test-status" && !event.requestContext && !event.rawPath && !event.path) return repairClaudeTestStatus(connectDatabase,json);
   const requestPath =
     event?.rawPath ||
     event?.requestContext?.http?.path ||
@@ -1683,6 +1686,7 @@ export const handler = async (event = {}) => {
 
   const routedBody = requestPath === "/assets/bulk-update" ? parseJsonBody(event) : {};
   const dropboxAction = event.action || routedBody.action;
+  if(dropboxAction === "move-brand-folder") return moveBrandFolder(routedBody,connectDatabase,json);
   if (dropboxAction === "complete-dropbox-upload") return completeDropboxUpload(event);
   if (["create-brand-folder", "prepare-brand-upload"].includes(dropboxAction)) return proxyDropboxWrite(event);
   if (dropboxAction === "dropbox-list-folders") return browseDropboxFolders(event);
@@ -1729,3 +1733,4 @@ export const handler = async (event = {}) => {
 
   return existingHandler(event);
 };
+

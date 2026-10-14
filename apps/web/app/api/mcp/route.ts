@@ -1,3 +1,4 @@
+import {prepareClaudeTransfer,completeClaudeTransfer,prepareClaudeUploadPage} from "@/lib/ai-mcp-claude-upload";
 import {NextRequest,NextResponse} from "next/server";
 import {DEV_ORIGIN} from "@/lib/cognito-auth";
 import {executeAiGateway,GatewayError} from "@/lib/ai-gateway";
@@ -99,6 +100,12 @@ export async function POST(request:NextRequest){
     ? await prepareChatFileIntake(args,identity)
     : tool.action==="upload_chat_file"
     ? await uploadApprovedChatFile(args,identity)
+    : tool.action==="prepare_claude_upload_page"
+    ? await prepareClaudeUploadPage(args,identity)
+    : tool.action==="prepare_claude_transfer"
+    ? await prepareClaudeTransfer(args,identity)
+    : tool.action==="complete_claude_transfer"
+    ? await completeClaudeTransfer(args,identity)
     : await executeAiGateway({...args,action:tool.action,scope:"brand"});
    const readOnlyActions=new Set(["search_assets","get_asset","inspect_registered_asset",
      "inspect_global_dropbox_id","inspect_brand_registration","list_folders",
@@ -156,3 +163,4 @@ export async function GET(request:NextRequest){
 export async function DELETE(){
  return new NextResponse(null,{status:405,headers:{...headers,allow:"POST"}});
 }
+

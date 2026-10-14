@@ -54,7 +54,7 @@ export function mediaType(name:string){
  if(!value)throw new GatewayError(400,"Unsupported media type: preview accepts common images, video, and audio");
  return value;
 }
-function normalizedMetadata(value:unknown,name:string):IntakeMetadata{
+export function normalizedMetadata(value:unknown,name:string):IntakeMetadata{
  const metadata=value===undefined?{}:inputRecord(value);
  const allowed=new Set(["title","topic","contentGroup","creativeFamily","creativeNotes","tags","priority"]);
  if(Object.keys(metadata).some(key=>!allowed.has(key)))
@@ -181,3 +181,4 @@ export async function prepareChatFileIntake(args:unknown,identity:McpIdentity){
    expiresInMinutes:15,folderCandidates:candidates,
    note:"Review the exact folder and tags. To upload, explicitly confirm and call the separate upload tool with this signed plan and the same authorized file. No file was transferred."};
 }
+
