@@ -1,6 +1,7 @@
 import {createPublicKey,verify,type JsonWebKey as NodeJsonWebKey} from "node:crypto";
 import {COGNITO_DOMAIN,DEV_ORIGIN} from "@/lib/cognito-auth";
 import {brandConfigs} from "@/lib/brand-config";
+import {isVerifiedCognitoOwner} from "@/lib/ai-mcp-userinfo";
 import {loadMcpAuthSettings,McpAuthorizationError,type McpIdentity} from "@/lib/ai-mcp-auth";
 
 /**
@@ -121,8 +122,7 @@ export async function authorizeChatGptOauth(header:string):Promise<McpIdentity>{
  try{user=await userInfo.json();}
  catch{throw new McpAuthorizationError(401,"OAuth owner identity invalid");}
  const expected=(process.env.ELETTRO_OWNER_EMAIL||"dpalermo@elettro.com").toLowerCase();
- if(user.sub!==claims.sub||typeof user.email!=="string"||
-   user.email.toLowerCase()!==expected||user.email_verified!==true)
+ if(!isVerifiedCognitoOwner(user,claims.sub,expected))
   throw new McpAuthorizationError(403,"ChatGPT owner identity denied");
 
  // Only a signed token with the explicit new custom write scope can enable
