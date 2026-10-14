@@ -79,6 +79,37 @@ test("remote MCP origin allowlist never bypasses the mandatory bearer credential
  assert.match(route,/requireMcpScope\(identity,tool\.permission,args\.brandSlug\)/);
 });
 
+test("ChatGPT OAuth integration is fail-closed and preserves Claude bearer authentication",()=>{
+ const auth=readFileSync(new URL("../apps/web/lib/ai-mcp-auth.ts",import.meta.url),"utf8");
+ const oauth=readFileSync(new URL("../apps/web/lib/ai-mcp-oauth.ts",import.meta.url),"utf8");
+ const route=readFileSync(new URL("../apps/web/app/api/mcp/route.ts",import.meta.url),"utf8");
+ const meta=readFileSync(new URL("../apps/web/app/.well-known/oauth-protected-resource/route.ts",import.meta.url),"utf8");
+ assert.match(auth,/loadMcpAuthSettings/);
+ assert.match(auth,/chatgptOauth/);
+ assert.match(auth,/timingSafeEqual/);
+ assert.match(route,/authorizeChatGptOauth\(bearer\)/);
+ assert.match(route,/authorizeMcp\(bearer\)/);
+ assert.match(route,/www-authenticate/);
+ assert.match(route,/oauthChallenge\(\)/);
+ assert.match(oauth,/cfg\.enabled!==true/);
+ assert.match(oauth,/claims\.iss!==cfg\.issuer/);
+ assert.match(oauth,/claims\.token_use!=="access"/);
+ assert.match(oauth,/claims\.client_id!==cfg\.clientId/);
+ assert.match(oauth,/claims\.aud!==MCP_OAUTH_RESOURCE/);
+ assert.match(oauth,/scope\.split\(" "\)\.includes\(MCP_OAUTH_SCOPE\)/);
+ assert.match(oauth,/verify\("RSA-SHA256"/);
+ assert.match(oauth,/\.well-known\/jwks\.json/);
+ assert.match(oauth,/user\.sub!==claims\.sub/);
+ assert.match(oauth,/user\.email_verified!==true/);
+ assert.match(oauth,/permissions:\["assets:read","folders:read"\]/);
+ assert.match(oauth,/brandSlugs:brandConfigs\.map/);
+ assert.match(meta,/chatGptOauthConfiguration\(\)/);
+ assert.match(meta,/authorization_servers:\[cfg\.issuer\]/);
+ assert.match(meta,/scopes_supported:\[MCP_OAUTH_SCOPE\]/);
+ assert.match(meta,/ChatGPT OAuth not configured/);
+ assert.ok(!route.includes("return toolsForClient({clientId:\"chatgpt_oauth\""));
+});
+
 test("Step 9 Windows credential bootstrap protects raw tokens and grants read-only scope",()=>{
  const script=readFileSync(new URL("../scripts/step9-readonly-clients.ps1",import.meta.url),"utf8");
  const auth=readFileSync(new URL("../apps/web/lib/ai-mcp-auth.ts",import.meta.url),"utf8");
