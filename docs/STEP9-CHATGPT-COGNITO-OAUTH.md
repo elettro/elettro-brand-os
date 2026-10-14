@@ -126,6 +126,22 @@ Authenticated Claude Code and Claude.ai remained working; the newly configured C
 
 If recreating the ChatGPT form, verify the **new form's callback URL** matches the URL already allowlisted on the dedicated Cognito app client. Do not create another Cognito app client or disable authentication just to make validation pass.
 
+## October 14 — Confirmed remaining ChatGPT OAuth provider incompatibility (BLOCKER)
+
+The owner retried the ChatGPT **Create as a plugin** screen after the path-aware resource metadata / 401 challenge fix and after correctly configuring `elettro-mcp/read`, `openid`, and `email`; the plugin UI continued to reject settings with its generic message.
+
+An **external credential-free GitHub Actions diagnostic** (run `38600808470`, UTC 2026-10-14 16:45) fetched the **live existing AWS Cognito user pool** OIDC document at `https://cognito-idp.us-east-1.amazonaws.com/us-east-1_YDBehB7ps/.well-known/openid-configuration` and confirmed:
+- `code_challenge_methods_supported`: **MISSING** (does not advertise `S256`).
+- `token_endpoint_auth_methods_supported`: **[\"client_secret_basic\", \"client_secret_post\"]** (does not advertise `none` for the previously configured public SPA client).
+- `grant_types_supported`: MISSING.
+- `authorization_response_iss_parameter_supported`: MISSING.
+- `authorization_endpoint`, `token_endpoint`, and `userinfo_endpoint`: present and publicly reachable.
+- DEV MCP `GET /api/mcp` properly returns 401 OAuth challenge; both protected-resource metadata paths return 200; those repairs **did not resolve registration**.
+
+**Root incompatibility:** OpenAI MCP authorization spec expressly requires the advertised S256 PKCE support, and its client registration must select supported token endpoint authentication. Cognito supports the PKCE flow but its OIDC discovery currently omits the required declaration. This is independently discussed in AWS re:Post articles, including `https://repost.aws/questions/QUYn3BAUkrRaqNQs7mcsTRYw/amazon-cognito-missing-pkce-s256-in-oidc-discovery-metadata-breaks-mcp-oauth-integration`. The exact error reason from ChatGPT is not exposed to the UI, so document this as a **confirmed protocol blocker**, not a complete enumeration of all possible issues.
+
+**DO NOT** keep retrying the same UI fields, create another Cognito app client, turn off MCP authentication, insert static credentials into public client metadata, or pretend another issuer produced Cognito-issued JWTs. A proper solution requires an OAuth authorization server/provider that truthfully advertises compliant PKCE S256/public-client token endpoint methods (e.g. dedicated compliant provider or a correctly implemented AWS-hosted authorization broker with its own issuer and token signing), while retaining the current six-brand read-only MCP protection. Prefer security review and explicit owner approval before making new auth-provider or infrastructure changes. The earlier Step F instructions are blocked by this finding until the authorization-server compatibility is resolved.
+
 ## Troubleshooting / risk notes
 
 - **503 from discovery:** OAuth `chatgptOauth` config is not provisioned or AWS SSM/IAM is unavailable; do not make the endpoint unauthenticated.
