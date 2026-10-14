@@ -1,5 +1,5 @@
-import {SecretsManagerClient,GetSecretValueCommand} from "@aws-sdk/client-secrets-manager";
-const secrets=new SecretsManagerClient({region:"us-east-1"});
+import {LambdaClient,InvokeCommand} from "@aws-sdk/client-lambda";
+const relay=new LambdaClient({region:"us-east-1",maxAttempts:1});
 const BRANDS=new Set(["stashbox","elettro","solarmeister","weightlossdavie","neckermann-strom","therasbox"]);
 function pathInBrand(value,root,allowRoot=false){
  if(typeof value!=="string"||value.length>2048||/[\\\x00-\x1f]/.test(value))throw new Error("Invalid folder path");
@@ -9,27 +9,28 @@ function pathInBrand(value,root,allowRoot=false){
   throw new Error("Folder outside brand, or brand root cannot be moved");
  return path;
 }
-async function accessToken(){
- const result=await secrets.send(new GetSecretValueCommand({SecretId:process.env.DROPBOX_SECRET_NAME||"elettro-brand-os-dev/dropbox"}));
- const c=JSON.parse(result.SecretString||"{}");
- const refresh=c.refresh_token||c.refreshToken,key=c.app_key||c.appKey,password=c.app_secret||c.appSecret;
- if(!refresh||!key||!password)throw new Error("Dropbox credentials unavailable");
- const r=await fetch("https://api.dropboxapi.com/oauth2/token",{method:"POST",body:new URLSearchParams({
-  grant_type:"refresh_token",refresh_token:refresh,client_id:key,client_secret:password}),signal:AbortSignal.timeout(10000)});
- if(!r.ok)throw new Error("Dropbox authorization failed");
- const token=(await r.json()).access_token;if(!token)throw new Error("Dropbox token missing");return token;
-}
-async function call(token,endpoint,body){
- const r=await fetch("https://api.dropboxapi.com/2/files/"+endpoint,{method:"POST",
-  headers:{authorization:"Bearer "+token,"content-type":"application/json"},body:JSON.stringify(body),signal:AbortSignal.timeout(25000)});
- if(!r.ok)throw new Error(r.status===409?"Dropbox folder missing or destination conflicts":"Dropbox folder operation failed");
- return r.json();
+async function call(context,endpoint,body){
+ if(Date.now()>context.deadline)throw new Error("Folder operation time budget exhausted before next step");
+ const functionName=process.env.DROPBOX_SYNC_FUNCTION_NAME;
+ if(!functionName)throw new Error("Dropbox worker is not configured");
+ console.info("[claude-folder] worker",endpoint);
+ let response;
+ try{
+  const result=await relay.send(new InvokeCommand({FunctionName:functionName,InvocationType:"RequestResponse",
+   Payload:Buffer.from(JSON.stringify({action:"claude-folder-relay-v1",brandSlug:context.brandSlug,endpoint,body}))}),
+   {abortSignal:AbortSignal.timeout(12000)});
+  if(result.FunctionError)throw new Error("Dropbox worker invocation failed");
+  response=JSON.parse(Buffer.from(result.Payload||[]).toString("utf8"));
+ }catch(error){error.uncertainMove=endpoint==="move_v2";throw error;}
+ if(response.ok!==true){const error=new Error(response.error||"Dropbox folder worker failed");
+  error.uncertainMove=response.uncertainMove===true;throw error;}
+ return response.result;
 }
 function relocate(value,from,to){
  return typeof value==="string"&&value.toLowerCase().startsWith(from.toLowerCase()+"/")?to+value.slice(from.length):value;
 }
 export async function moveBrandFolder(body,connectDatabase,json){
- let client,folderId,source,target,moved=false,commitStarted=false;
+ let client,folderId,source,target,moved=false,commitStarted=false,uncertainMove=false;
  try{
   if(body.confirmed!==true||!BRANDS.has(body.brandSlug))return json(400,{ok:false,error:"Confirmed brand folder operation required"});
   const root="/1---elettro-brand-os/"+body.brandSlug;
@@ -42,10 +43,11 @@ export async function moveBrandFolder(body,connectDatabase,json){
   if(target.toLowerCase()===source.toLowerCase()||parent.toLowerCase()===source.toLowerCase()||
    parent.toLowerCase().startsWith(source.toLowerCase()+"/"))return json(400,{ok:false,error:"Self and descendant moves are blocked"});
   client=await connectDatabase();await client.query("BEGIN");
+  await client.query("SET LOCAL lock_timeout = '5s'");
   await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))",["epe-folder:"+body.brandSlug]);
   const brand=await client.query('SELECT "id" FROM "Brand" WHERE "slug"=$1 AND "status"=$2',[body.brandSlug,"active"]);
   if(!brand.rows[0])throw new Error("Active brand not found");
-  const token=await accessToken();
+  const token={brandSlug:body.brandSlug,deadline:Date.now()+40000};
   const folder=await call(token,"get_metadata",{path:source});
   if(folder[".tag"]!=="folder"||!folder.id)throw new Error("Source must be an existing folder");
   folderId=folder.id;source=pathInBrand(folder.path_display,root);
@@ -90,14 +92,16 @@ export async function moveBrandFolder(body,connectDatabase,json){
   return json(200,{ok:true,dropboxFolderId:folderId,previousPath:source,path:target,assetsSynchronized:selected.rows.length,
    note:"Folder ID and file IDs preserved; asset workflow statuses unchanged"});
  }catch(error){
+  uncertainMove=error.uncertainMove===true;
+  console.error("[claude-folder] failed",{message:error.message,uncertainMove});
   if(client)await client.query("ROLLBACK").catch(()=>{});
   let restored=false;
   // A lost COMMIT response is ambiguous. Do not compensate in that case.
-  if(moved&&!commitStarted){try{const r=await call(await accessToken(),"move_v2",{from_path:folderId,to_path:source,autorename:false,allow_shared_folder:false,allow_ownership_transfer:false});restored=r.metadata?.id===folderId;}catch{}}
-  return json(moved&&!restored?200:409,{ok:false,reconciliationRequired:moved&&!restored,moveRolledBack:restored,
+  if(moved&&!commitStarted){try{const r=await call({brandSlug:body.brandSlug,deadline:Date.now()+12000},"move_v2",{from_path:folderId,to_path:source,autorename:false,allow_shared_folder:false,allow_ownership_transfer:false});restored=r.metadata?.id===folderId;}catch{}}
+  return json((moved&&!restored)||uncertainMove?200:409,{ok:false,reconciliationRequired:(moved&&!restored)||uncertainMove,moveRolledBack:restored,
    ...(folderId?{dropboxFolderId:folderId,previousPath:source,destinationPath:target}:{}),
    error:error instanceof Error?error.message:"Folder operation failed",
-   ...(moved&&!restored?{message:"Dropbox may have moved the folder. Do not retry the move; reconcile this folder ID and registered paths."}:{})});
+   ...((moved&&!restored)||uncertainMove?{message:"Dropbox may have moved the folder. Do not retry the move; reconcile this folder ID and registered paths."}:{})});
  }finally{if(client)await client.end().catch(()=>{});}
 }
 export async function repairClaudeTestStatus(connectDatabase,json){
