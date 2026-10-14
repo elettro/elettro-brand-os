@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import re
+import subprocess
 import urllib.request
 import urllib.error
 
@@ -14,6 +15,19 @@ def token_from_config():
     token = os.environ.get("EPE_MCP_TOKEN")
     if token:
         return token.removeprefix("Bearer ")
+    if os.name == "nt" and (Path(os.environ.get("LOCALAPPDATA", "")) / "ElettroMCP" / "claude_code.dpapi").is_file():
+        # Read the existing Step 9 credential with the same Windows DPAPI identity.
+        # Capture it in memory; never print it or write a plaintext token file.
+        script = "$ErrorActionPreference='Stop'; $p=Join-Path $env:LOCALAPPDATA 'ElettroMCP/claude_code.dpapi'; " \
+                 "$s=ConvertTo-SecureString ((Get-Content -Raw $p).Trim()); " \
+                 "$b=[Runtime.InteropServices.Marshal]::SecureStringToBSTR($s); " \
+                 "try {[Console]::Out.Write([Runtime.InteropServices.Marshal]::PtrToStringBSTR($b))} " \
+                 "finally {[Runtime.InteropServices.Marshal]::ZeroFreeBSTR($b)}"
+        response = subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script],
+                                  capture_output=True, text=True, timeout=20)
+        if response.returncode or not response.stdout.strip():
+            raise RuntimeError("Could not read the existing protected Claude Code credential")
+        return response.stdout.strip()
     candidates = [Path.cwd() / ".mcp.json", Path.home() / ".claude.json"]
     for candidate in candidates:
         if not candidate.is_file():
