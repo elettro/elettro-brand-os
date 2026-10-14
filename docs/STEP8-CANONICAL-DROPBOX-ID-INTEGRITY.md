@@ -197,3 +197,21 @@ The owner confirmed that RDS manual snapshot `elettro-brand-os-dev-pre-step8` is
 - **After successful verification restore original PATCH4 ZIP** to remove the migration handler while retaining database constraints.
 - User-facing operation guide prepared: `/mnt/data/elettro-step8-atomic-migration-RUNBOOK.md`. This path must not be inferred as a sandbox link in a later session; check the file.
 - **No database migration has yet been performed by the assistant.** Need owner upload PATCH5 to DEV Lambda, run preflight, review output, then execute explicitly approved apply event, verify, restore PATCH4. Do not expose this via dashboard, production or stock paths.
+
+## Live Step 8 database migration result — October 14, 2026
+
+The owner deployed the temporary live-derived PATCH5 DEV API Lambda and executed the direct, explicitly confirmed `step8-migration-apply` Lambda test against `elettro-brand-os-dev`, after the `elettro-brand-os-dev-pre-step8` snapshot was confirmed Available. The Lambda response explicitly included `transactionCommitted:true`, `uniquenessIndexValid:true`, `identityCheckValidated:true`, and `schemaState:"installed"`; HTTP 200.
+
+The owner subsequently executed an independent read-only `{"action":"step8-migration-verify"}` Lambda test. **VERIFIED PASS**:
+- `schemaState:"installed"`
+- `uniquenessIndexValid:true`
+- `identityCheckValidated:true`
+- `dropboxAssets:420`
+- `missingSourceIds:0`, `invalidSourceIds:0`, `conflictingSourceIds:0`, `duplicateDropboxIds:0`
+- `readOnly:true` and HTTP 200.
+
+**Permanent DB-level Dropbox duplicate protection is installed and independently verified in DEV.** The database enforces cross-brand uniqueness for the canonical Dropbox ID across both source ID conventions, including retired records. This does not mean concurrent upload or Dropbox-sync regression has been completely tested post-migration.
+
+**Immediate remaining cleanup:** Restore the exact previously deployed **PATCH4** Lambda ZIP (`elettro-brand-os-dev-api-step8-writer-safety-PATCH4.zip`; SHA-256 base64 `GzfIJoSxBbk+0eiO5VfIbh255y0vgAZnOVWY8j4ZRWg=`) to remove the temporary `step8-migration-apply` handler from the live API Lambda. The ZIP was reverified in the current container session. Restoring code does NOT undo the PostgreSQL constraint or index. After restoration, run the read-only `{"action":"audit-dropbox-ids"}` Lambda test and verify `auditVersion:2`, `uniquenessIndexValid:true`, `identityCheckValidated:true` and zero duplicate/missing/invalid/conflicting IDs. **Do not repeat migration apply.**
+
+**Subsequent acceptance:** Test one disposable direct-Dropbox upload and repeat after the index is installed, test Dropbox sync existing-ID reuse, and confirm existing publishing statuses; keep new AI registrations disabled until separately authorized and validated. Shared Stock Galleries and production untouched.
