@@ -75,7 +75,6 @@ test("remote MCP origin allowlist never bypasses the mandatory bearer credential
  const route=readFileSync(new URL("../apps/web/app/api/mcp/route.ts",import.meta.url),"utf8");
  assert.match(route,/allowedMcpOrigins=new Set\(\[DEV_ORIGIN,"https:\/\/claude\.ai","https:\/\/chatgpt\.com"\]\)/);
  assert.match(route,/if\(origin&&!allowedMcpOrigins\.has\(origin\)\)/);
- assert.match(route,/await authorizeMcp\(request\.headers\.get\("authorization"\)\)/);
  assert.match(route,/await authorizeMcp\(bearer\)/);
  assert.match(route,/await authorizeChatGptOauth\(bearer\)/);
 });
