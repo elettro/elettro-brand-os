@@ -90,13 +90,9 @@ Use the local helper; it reads the DPAPI-protected token and configures the remo
 powershell -NoProfile -ExecutionPolicy Bypass -File .\step9-readonly-clients.ps1 -Action ConnectClaudeCode
 ```
 
-It performs the equivalent of:
+The helper registers a **user-scoped Streamable HTTP MCP server** with a `headersHelper` command. On every connection, Claude Code launches that local helper, which decrypts the DPAPI-protected token and emits the Authorization header **without storing a raw bearer token in Claude's MCP configuration or the command history**.
 
-```text
-claude mcp add --transport http --scope user elettro-dev https://develop.d2k28tehm1a8zw.amplifyapp.com/api/mcp --header "Authorization: Bearer <PRIVATE_TOKEN>"
-```
-
-Do not execute the illustrative literal-token command in a recorded terminal session.
+Requires a current Claude Code release supporting `headersHelper`. The helper installs a stable copy of itself under `%LOCALAPPDATA%\\ElettroMCP\\step9-readonly-clients.ps1` during credential creation. Do not delete that local copy while Claude Code is connected.
 
 In Claude Code run `/mcp` and confirm **elettro-dev Connected**. Then ask:
 
