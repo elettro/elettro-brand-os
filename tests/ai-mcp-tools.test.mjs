@@ -71,6 +71,31 @@ test("MCP route forces brand scope independent of agent-supplied fields",()=>{
  assert.match(source,/requireMcpScope\(identity,tool.permission,args.brandSlug\)/);
 });
 
+test("remote MCP origin allowlist never bypasses the mandatory bearer credential",()=>{
+ const route=readFileSync(new URL("../apps/web/app/api/mcp/route.ts",import.meta.url),"utf8");
+ assert.match(route,/allowedMcpOrigins=new Set\(\[DEV_ORIGIN,"https:\/\/claude\.ai","https:\/\/chatgpt\.com"\]\)/);
+ assert.match(route,/if\(origin&&!allowedMcpOrigins\.has\(origin\)\)/);
+ assert.match(route,/await authorizeMcp\(request\.headers\.get\("authorization"\)\)/);
+ assert.match(route,/requireMcpScope\(identity,tool\.permission,args\.brandSlug\)/);
+});
+
+test("Step 9 Windows credential bootstrap protects raw tokens and grants read-only scope",()=>{
+ const script=readFileSync(new URL("../scripts/step9-readonly-clients.ps1",import.meta.url),"utf8");
+ const auth=readFileSync(new URL("../apps/web/lib/ai-mcp-auth.ts",import.meta.url),"utf8");
+ assert.match(script,/RandomNumberGenerator/);
+ assert.match(script,/ConvertFrom-SecureString/);
+ assert.match(script,/ConvertTo-SecureString/);
+ assert.match(script,/tokenSha256=/);
+ assert.match(script,/permissions=\$Permissions/);
+ assert.match(script,/\$Permissions = @\("assets:read","folders:read"\)/);
+ assert.match(script,/\$Brands = @\("stashbox","elettro"\)/);
+ assert.match(script,/TestClaudeCode/);
+ assert.match(script,/TestClaudeWeb/);
+ assert.match(auth,/timingSafeEqual/);
+ assert.match(auth,/WithDecryption:true/);
+ assert.match(auth,/MCP credentials not provisioned/);
+});
+
 test("gateway metadata cannot mark Ready; new AI registration remains paused until atomic uniqueness",()=>{
  const source=readFileSync(new URL("../apps/web/lib/ai-gateway.ts",import.meta.url),"utf8");
  assert.match(source,/markReady:\s*false/);
