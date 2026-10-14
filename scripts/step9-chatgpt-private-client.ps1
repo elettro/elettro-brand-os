@@ -92,7 +92,7 @@ switch($Action){
  "EnableWrites" {
   $cfg=ReadConfig
   $matched=@($cfg.clients | Where-Object {$_.id -eq "chatgpt_private"})
-  if($matched.Count -ne 1)throw "ChatGPT credential missing; no changes made."
+  if($matched.Count -ne 1){throw "ChatGPT credential missing; no changes made."}
   $entry=$matched[0]
   if(@($entry.permissions).Count -ne 2 -or
      @($entry.permissions) -notcontains "assets:read" -or
