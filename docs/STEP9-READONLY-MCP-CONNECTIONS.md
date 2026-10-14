@@ -72,6 +72,16 @@ PASS: authenticated MCP, six read-only tools, Stashbox asset search, cross-brand
 
 This tests the HTTP MCP protocol, authenticated read-only tool manifest, search of an existing known Stashbox asset, and denial of the unauthorized `solarmeister` brand. **If the test fails, do not connect any client yet; provide the error text only, never a bearer token or full header.**
 
+### Verify the independent Claude.ai token as well
+
+Before configuring the browser connector, test its separate credential:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\\step9-readonly-clients.ps1 -Action TestClaudeWeb
+```
+
+Expected: `PASS: Claude.ai separate credential authenticated with precisely six read-only tools.`
+
 ## 4. Connect Claude Code
 
 Use the local helper; it reads the DPAPI-protected token and configures the remote server without putting the secret into PowerShell command history:
