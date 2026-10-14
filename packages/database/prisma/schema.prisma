@@ -350,6 +350,7 @@ model Asset {
   @@index([brandId, campaignId])
   @@index([sourcePathLower])
   @@index([sourceType, sourceExternalId])
+  @@index([sourceType, sourceFileId])
   @@index([shopifyStoreId, shopifyProductId])
 }
 
