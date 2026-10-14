@@ -16,6 +16,7 @@ import {loadMcpAuthSettings,McpAuthorizationError,type McpIdentity} from "@/lib/
 export const MCP_OAUTH_RESOURCE=DEV_ORIGIN+"/api/mcp";
 export const MCP_OAUTH_METADATA=DEV_ORIGIN+"/.well-known/oauth-protected-resource";
 export const MCP_OAUTH_SCOPE="elettro-mcp/read";
+export const MCP_OAUTH_WRITE_SCOPE="elettro-mcp/write";
 const ISSUER_PATTERN=/^https:\/\/cognito-idp\.us-east-1\.amazonaws\.com\/us-east-1_[A-Za-z0-9]+$/;
 const CLIENT_PATTERN=/^[a-z0-9]{10,128}$/i;
 const MAX_JWT_LENGTH=16384;
@@ -118,11 +119,14 @@ export async function authorizeChatGptOauth(header:string):Promise<McpIdentity>{
    user.email.toLowerCase()!==expected||user.email_verified!==true)
   throw new McpAuthorizationError(403,"ChatGPT owner identity denied");
 
- // This owner-specific OAuth grant is deliberately read-only even if the
- // issuer someday offers broader scopes; no AI registration/publishing.
+ // Only a signed token with the explicit new custom write scope can enable
+ // controlled metadata, folder, and staged upload tools. Publishing and
+ // arbitrary registration remain excluded regardless of supplied scopes.
  return {
   clientId:"chatgpt_oauth",
   brandSlugs:brandConfigs.map(brand=>brand.id),
-  permissions:["assets:read","folders:read"]
+  permissions:claims.scope.split(" ").includes(MCP_OAUTH_WRITE_SCOPE)
+   ? ["assets:read","folders:read","assets:write","folders:write","assets:upload"]
+   : ["assets:read","folders:read"]
  };
 }
