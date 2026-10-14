@@ -3,6 +3,7 @@ import {DEV_ORIGIN} from "@/lib/cognito-auth";
 import {executeAiGateway,GatewayError} from "@/lib/ai-gateway";
 import {batchUpdateAssetMetadata} from "@/lib/ai-gateway-batch";
 import {authorizeMcp,requireMcpScope,McpAuthorizationError} from "@/lib/ai-mcp-auth";
+import {authorizeChatGptOauth,oauthChallenge} from "@/lib/ai-mcp-oauth";
 import {findAuthorizedTool,toolsForClient} from "@/lib/ai-mcp-tools";
 
 export const runtime="nodejs";
@@ -32,10 +33,19 @@ export async function POST(request:NextRequest){
   return NextResponse.json({error:"Request too large"},{status:413,headers});
 
  let identity;
- try{identity=await authorizeMcp(request.headers.get("authorization"));}
- catch(error){
+ try{
+  const bearer=request.headers.get("authorization");
+  // Distinct credentials with no fallback: JWTs are Cognito+PKCE OAuth tokens;
+  // opaque bearer tokens retain the independently scoped Claude SSM hash path.
+  identity=bearer&&/^Bearer [A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$/.test(bearer)
+   ? await authorizeChatGptOauth(bearer)
+   : await authorizeMcp(bearer);
+ }catch(error){
+  const responseHeaders=error instanceof McpAuthorizationError&&error.status===401
+   ? {...headers,"www-authenticate":oauthChallenge()}
+   : headers;
   if(error instanceof McpAuthorizationError)
-   return NextResponse.json({error:error.message},{status:error.status,headers});
+   return NextResponse.json({error:error.message},{status:error.status,headers:responseHeaders});
   return NextResponse.json({error:"MCP authentication unavailable"},{status:503,headers});
  }
 
