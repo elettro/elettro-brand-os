@@ -88,7 +88,12 @@ test("Step 9 Windows credential bootstrap protects raw tokens and grants read-on
  assert.match(script,/tokenSha256=/);
  assert.match(script,/permissions=\$Permissions/);
  assert.match(script,/\$Permissions = @\("assets:read","folders:read"\)/);
- assert.match(script,/\$Brands = @\("stashbox","elettro"\)/);
+ assert.match(script,/\$Brands = @\("stashbox","elettro","solarmeister","weightlossdavie","neckermann-strom","therasbox"\)/);
+ assert.match(script,/ExpandBrands/);
+ assert.match(script,/aws-readonly-clients\.pre-allbrands\.json/);
+ assert.match(script,/Neither bearer token nor either token hash was changed/);
+ assert.match(script,/Compare-Object -ReferenceObject \$expectedBrands -DifferenceObject \$grantedBrands/);
+ assert.match(script,/brandSlug="outside-elettro"/);
  assert.match(script,/TestClaudeCode/);
  assert.match(script,/TestClaudeWeb/);
  assert.match(script,/headersHelper/);
