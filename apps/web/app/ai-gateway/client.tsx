@@ -40,6 +40,9 @@ export function AiGatewayLabClient(){
  const [duplicateBusy,setDuplicateBusy]=useState(false);
  const [duplicateResult,setDuplicateResult]=useState<ApiResult|null>(null);
  const [duplicateError,setDuplicateError]=useState("");
+ const [globalBusy,setGlobalBusy]=useState(false);
+ const [globalResult,setGlobalResult]=useState<ApiResult|null>(null);
+ const [globalError,setGlobalError]=useState("");
 
  async function call(action:"capabilities"|"search_assets"|"list_folders"){
   setBusy(true);setError("");setCurrent(action);setReply(null);
@@ -53,6 +56,7 @@ export function AiGatewayLabClient(){
     const assets=result.assets||[];
     setCandidates(assets);
     setRegistrationResult(null);setRegistrationError("");setDuplicateResult(null);setDuplicateError("");
+    setGlobalResult(null);setGlobalError("");
     setTestAssetId(currentId=>assets.some(a=>a.id===currentId)?currentId:(assets[0]?.id||""));
    }
   }catch(e){setError(e instanceof Error?e.message:"Gateway unavailable");}
@@ -92,6 +96,18 @@ export function AiGatewayLabClient(){
   finally{setDuplicateBusy(false);}
  }
 
+ async function inspectGlobalIdentity(){
+  if(!testAssetId||busy||testBusy||registrationBusy||duplicateBusy||globalBusy)return;
+  setGlobalBusy(true);setGlobalError("");setGlobalResult(null);
+  try{
+   const result=await gateway({
+    action:"inspect_global_dropbox_id",brandSlug:brand,assetId:testAssetId
+   });
+   setGlobalResult(result);
+  }catch(e){setGlobalError(e instanceof Error?e.message:"Global Dropbox ID lookup unavailable");}
+  finally{setGlobalBusy(false);}
+ }
+
  async function testMetadata(){
   if(brand!=="stashbox"||!testAssetId||busy||testBusy)return;
   const choice=candidates.find(asset=>asset.id===testAssetId);
@@ -117,7 +133,7 @@ export function AiGatewayLabClient(){
     <label style={{display:"grid",gap:5}}>
      <span className="metric">Brand</span>
      <select value={brand} onChange={event=>{
-      setBrand(event.target.value);setCandidates([]);setTestAssetId("");setTestResult(null);setRegistrationResult(null);setRegistrationError("");setDuplicateResult(null);setDuplicateError("");
+      setBrand(event.target.value);setCandidates([]);setTestAssetId("");setTestResult(null);setRegistrationResult(null);setRegistrationError("");setDuplicateResult(null);setDuplicateError("");setGlobalResult(null);setGlobalError("");
      }} disabled={busy||testBusy}>
       {brands.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}
      </select>
@@ -151,7 +167,7 @@ export function AiGatewayLabClient(){
     <div style={{display:"grid",gap:10,maxWidth:680}}>
      <label style={{display:"grid",gap:5}}>
       <span className="metric">Test asset</span>
-      <select value={testAssetId} disabled={busy||testBusy} onChange={event=>{setTestAssetId(event.target.value);setRegistrationResult(null);setDuplicateResult(null);}}>
+      <select value={testAssetId} disabled={busy||testBusy} onChange={event=>{setTestAssetId(event.target.value);setRegistrationResult(null);setDuplicateResult(null);setGlobalResult(null);}}>
        {candidates.map(asset=><option key={asset.id} value={asset.id}>
         {asset.filename.slice(0,110)} · {asset.id.slice(0,8)}
        </option>)}
@@ -234,6 +250,45 @@ export function AiGatewayLabClient(){
     <p className="muted" style={{fontSize:12}}>
      This is a read-only preflight result, not an end-to-end registration write test.
      New AI registrations remain paused until a full-database Dropbox-ID lookup is available.
+    </p>
+   </div>}
+  </section>
+  <section className="card" style={{marginTop:18}}>
+   <h2 style={{marginTop:0}}>Step 7 · Database-wide Dropbox ID lookup</h2>
+   <p className="muted">Independently verify the selected asset across the <strong>entire Elettro registry</strong>, not only the latest 500 assets. This test uses the database only: no Dropbox token, upload, registration, metadata write, or publishing action.</p>
+   {candidates.length===0?
+    <p className="muted">Search for brand assets above to select one for this test.</p>:
+    <div style={{display:"grid",gap:10,maxWidth:680}}>
+     <label style={{display:"grid",gap:5}}>
+      <span className="metric">Asset to verify</span>
+      <select value={testAssetId} disabled={busy||testBusy||registrationBusy||duplicateBusy||globalBusy}
+       onChange={event=>{setTestAssetId(event.target.value);setRegistrationResult(null);setDuplicateResult(null);setGlobalResult(null);}}>
+       {candidates.map(asset=><option key={asset.id} value={asset.id}>
+        {asset.filename.slice(0,110)} · {asset.id.slice(0,8)}
+       </option>)}
+      </select>
+     </label>
+     <div>
+      <button type="button" disabled={busy||testBusy||registrationBusy||duplicateBusy||globalBusy||!testAssetId}
+       onClick={()=>void inspectGlobalIdentity()}>
+       {globalBusy?"Checking full database…":"Verify Dropbox ID across all assets (read-only)"}
+      </button>
+     </div>
+    </div>}
+   {globalBusy&&<p role="status">Searching both Dropbox ID fields across the entire database…</p>}
+   {globalError&&<p role="alert" style={{color:"#b42318"}}>{globalError}</p>}
+   {globalResult&&<div style={{marginTop:16}}>
+    <strong style={{color:globalResult.globalLookupVerified===true?"#116c46":"#b45309"}}>
+     {globalResult.globalLookupVerified===true?
+      "PASS · Global Dropbox identity lookup verified":
+      "NEEDS REVIEW · Global Dropbox identity not verified"}
+    </strong>
+    <pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",maxHeight:400,overflow:"auto",marginTop:10,padding:14,border:"1px solid var(--line)",borderRadius:10,background:"var(--panel-soft)",fontSize:12}}>
+     {JSON.stringify(globalResult,null,2)}
+    </pre>
+    <p className="muted" style={{fontSize:12}}>
+     This is an authoritative lookup, not a registration-write test.
+     New AI registration remains disabled until atomic uniqueness is enforced at the database level.
     </p>
    </div>}
   </section>
