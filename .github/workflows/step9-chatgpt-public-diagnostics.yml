@@ -1,0 +1,39 @@
+name: ChatGPT OAuth Public Endpoint Diagnostics
+on:
+  workflow_dispatch:
+  push:
+    branches: [develop]
+    paths:
+      - '.github/workflows/step9-chatgpt-public-diagnostics.yml'
+      - 'apps/web/app/api/mcp/route.ts'
+      - 'apps/web/app/.well-known/oauth-protected-resource/route.ts'
+      - 'apps/web/lib/ai-mcp-oauth.ts'
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Inspect public OAuth discovery and unauthorized MCP challenges only
+        run: |
+          python3 - <<'PY'
+          import urllib.request,urllib.error,json
+          base="https://develop.d2k28tehm1a8zw.amplifyapp.com"
+          paths=[
+            ("GET", base+"/.well-known/oauth-protected-resource",None,None),
+            ("GET", base+"/.well-known/oauth-protected-resource/api/mcp",None,None),
+            ("GET", base+"/api/mcp",None,{"Accept":"text/event-stream"}),
+            ("POST",base+"/api/mcp",b'{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"chatgpt-public-probe","version":"1"}}}',{"Content-Type":"application/json","Accept":"application/json, text/event-stream"}),
+            ("GET","https://cognito-idp.us-east-1.amazonaws.com/us-east-1_YDBehB7ps/.well-known/openid-configuration",None,None),
+            ("GET","https://cognito-idp.us-east-1.amazonaws.com/us-east-1_YDBehB7ps/.well-known/oauth-authorization-server",None,None),
+          ]
+          for method,url,data,headers in paths:
+            req=urllib.request.Request(url,method=method,data=data,headers=headers or {})
+            try:response=urllib.request.urlopen(req,timeout=15)
+            except urllib.error.HTTPError as e:response=e
+            except Exception as e:
+              print(method,url,"NETWORK_ERROR",str(e)[:150]);continue
+            with response:
+              payload=response.read(1000).decode('utf-8','replace')
+              print(method,url, "STATUS",response.status,"CONTENT_TYPE",response.headers.get('Content-Type'),"AUTH",response.headers.get('WWW-Authenticate'),"BODY",payload[:450])
+          PY
