@@ -2,7 +2,7 @@
 # Works in Windows PowerShell 5.1+; generate tokens LOCALLY, never in ChatGPT.
 # Tokens are stored using Windows DPAPI under the current user's LOCALAPPDATA.
 param(
-  [ValidateSet("Create","CopyAwsJson","TestClaudeCode","TestClaudeWeb","ConnectClaudeCode","CopyClaudeWebHeader")]
+  [ValidateSet("Create","CopyAwsJson","TestClaudeCode","TestClaudeWeb","ConnectClaudeCode","CopyClaudeWebHeader","EmitCodeHeaders")]
   [string] $Action = "Create"
 )
 $ErrorActionPreference = "Stop"
@@ -61,6 +61,11 @@ switch ($Action) {
    )
   } | ConvertTo-Json -Depth 8
   Set-Content -Path $ConfigFile -Value $cfg -Encoding UTF8
+  # Keep a stable local copy for the Claude Code headersHelper to call.
+  $helperFile=Join-Path $Dir "step9-readonly-clients.ps1"
+  if ($PSCommandPath -ne $helperFile) {
+    Copy-Item -LiteralPath $PSCommandPath -Destination $helperFile -Force
+  }
   $codeToken=$null; $webToken=$null
   Write-Host "CREATED two independent read-only credentials. Raw tokens were NOT printed or saved as plaintext."
   Write-Host "AWS SSM JSON (hashes only): $ConfigFile"
@@ -116,15 +121,29 @@ switch ($Action) {
   } finally { $token=$null }
   break
  }
- "ConnectClaudeCode" {
-  if (-not (Get-Command claude -ErrorAction SilentlyContinue)) { throw "Claude Code CLI not found. Install/sign in to Claude Code first." }
+ "EmitCodeHeaders" {
+  # Invoked only by Claude Code at connection time. Emits one JSON header
+  # object on stdout; the stored Claude config never contains a raw token.
   $token=Unprotect-Token "claude_code"
   try {
-    & claude mcp add --transport http --scope user elettro-dev $Endpoint --header ("Authorization: Bearer " + $token)
-    if ($LASTEXITCODE -ne 0) { throw "Claude Code rejected the MCP configuration" }
+   $headers=@{Authorization=("Bearer " + $token)} | ConvertTo-Json -Compress
+   [Console]::Out.WriteLine($headers)
   } finally { $token=$null }
-  Write-Host "Claude Code configuration added. In Claude Code use /mcp to check connection."
-  Write-Host "DO NOT paste output of 'claude mcp get' into chat; it may reveal the auth header."
+  break
+ }
+ "ConnectClaudeCode" {
+  if (-not (Get-Command claude -ErrorAction SilentlyContinue)) { throw "Claude Code CLI not found. Install/sign in to Claude Code first." }
+  $installedScript=Join-Path $Dir "step9-readonly-clients.ps1"
+  if (-not (Test-Path $installedScript)) { throw "Protected credential helper not installed. Run -Action Create first." }
+  # Modern Claude Code supports headersHelper in a remote HTTP server.
+  # It reads the DPAPI-protected credential at connection time, without storing
+  # the plaintext bearer token in the Claude configuration or shell history.
+  $helperCommand='powershell.exe -NoProfile -ExecutionPolicy Bypass -File "' + $installedScript + '" -Action EmitCodeHeaders'
+  $serverJson=@{type="http";url=$Endpoint;headersHelper=$helperCommand} | ConvertTo-Json -Compress
+  & claude mcp add-json elettro-dev $serverJson --scope user
+  if ($LASTEXITCODE -ne 0) { throw "Claude Code rejected the MCP configuration. Confirm Claude Code supports headersHelper." }
+  Write-Host "Claude Code configuration added without storing the raw token in its config."
+  Write-Host "In Claude Code use /mcp to confirm connection. Do not upload your local DPAPI files."
   break
  }
  "CopyClaudeWebHeader" {
