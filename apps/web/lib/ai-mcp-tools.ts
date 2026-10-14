@@ -14,6 +14,8 @@ export const MCP_TOOLS:ToolDefinition[]=[
   inputSchema:schema({assetId},["assetId"])},
  {name:"elettro_verify_brand_asset",description:"Check that an indexed brand asset still points to its Dropbox source file. Read-only; cannot register or alter status.",permission:"assets:read",action:"inspect_registered_asset",
   inputSchema:schema({assetId},["assetId"])},
+ {name:"elettro_verify_global_dropbox_id",description:"Verify a brand asset's Dropbox ID against every registered asset, including both legacy and direct-upload IDs. Read-only.",permission:"assets:read",action:"inspect_global_dropbox_id",
+  inputSchema:schema({assetId},["assetId"])},
  {name:"elettro_check_brand_file",description:"Check whether an existing Dropbox file is registered in Elettro, using Dropbox ID and path. Read-only.",permission:"assets:read",action:"inspect_brand_registration",
   inputSchema:schema({path:{type:"string",description:"Full Dropbox file path inside the selected brand"}},["path"])},
  {name:"elettro_update_asset_metadata",description:"Edit a brand asset's title, tags, topic or notes with approval; does not publish",permission:"assets:write",action:"update_asset_metadata",
