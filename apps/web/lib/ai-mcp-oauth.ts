@@ -14,6 +14,9 @@ import {loadMcpAuthSettings,McpAuthorizationError,type McpIdentity} from "@/lib/
  * the already encrypted SSM MCP parameter, OAuth fails closed.
  */
 export const MCP_OAUTH_RESOURCE=DEV_ORIGIN+"/api/mcp";
+// ChatGPT discovers PKCE-capable metadata from our DEV web origin while
+// all authentication and token verification remain at the configured Cognito issuer.
+export const MCP_OAUTH_AUTHORIZATION_SERVER=DEV_ORIGIN;
 export const MCP_OAUTH_METADATA=DEV_ORIGIN+"/.well-known/oauth-protected-resource";
 export const MCP_OAUTH_SCOPE="elettro-mcp/read";
 export const MCP_OAUTH_WRITE_SCOPE="elettro-mcp/write";
