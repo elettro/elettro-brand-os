@@ -347,3 +347,19 @@ test("DEV ChatGPT OAuth discovery facade advertises S256 while Cognito token che
  assert.match(oauth,/claims\.aud!==MCP_OAUTH_RESOURCE/);
  assert.match(mcp,/oauthChallenge\(\)/);
 });
+
+
+test("ChatGPT MCP OAuth scopes follow exact Cognito URL resource binding",()=>{
+ const oauth=readFileSync(new URL("../apps/web/lib/ai-mcp-oauth.ts",import.meta.url),"utf8");
+ const protectedResource=readFileSync(new URL("../apps/web/app/.well-known/oauth-protected-resource/route.ts",import.meta.url),"utf8");
+ const discovery=readFileSync(new URL("../apps/web/app/.well-known/oauth-authorization-server/route.ts",import.meta.url),"utf8");
+ assert.match(oauth,/MCP_OAUTH_SCOPE=MCP_OAUTH_RESOURCE\+"\\/read"/);
+ assert.match(oauth,/MCP_OAUTH_WRITE_SCOPE=MCP_OAUTH_RESOURCE\+"\\/write"/);
+ assert.ok(!oauth.includes('MCP_OAUTH_SCOPE="elettro-mcp/read"'));
+ assert.ok(!oauth.includes('MCP_OAUTH_WRITE_SCOPE="elettro-mcp/write"'));
+ assert.match(protectedResource,/scopes_supported:\[MCP_OAUTH_SCOPE\]/);
+ assert.match(discovery,/scopes_supported:\["openid","email",MCP_OAUTH_SCOPE\]/);
+ assert.match(oauth,/claims\.aud!==MCP_OAUTH_RESOURCE/);
+ assert.match(oauth,/claims\.scope\.split\(" "\)\.includes\(MCP_OAUTH_SCOPE\)/);
+ assert.match(oauth,/claims\.scope\.split\(" "\)\.includes\(MCP_OAUTH_WRITE_SCOPE\)/);
+});
