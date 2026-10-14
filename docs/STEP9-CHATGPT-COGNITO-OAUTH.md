@@ -114,6 +114,18 @@ Return to ChatGPT → Plugins → Add custom MCP server:
 
 Acknowledge ChatGPT's custom-server safety prompt only after the above validations. When ChatGPT requests sign-in, authenticate as the existing authorized Cognito owner; do not provide any credentials in chat messages. Then confirm six **read-only** tools are available and perform the familiar `SE53F9~1.MP4` asset identity check.
 
+## October 14 ChatGPT plugin-creation compatibility fix (deployed and verified)
+
+The ChatGPT **Add custom MCP server** UI initially rejected the form with: “Some app settings were rejected. Check the server URL or tunnel ID, icon, and authentication settings, then try again.”
+
+Authenticated Claude Code and Claude.ai remained working; the newly configured Cognito resource server `elettro-mcp` and the dedicated ChatGPT public app client remained intact. External public-only diagnostics (GitHub Actions, no credentials) found:
+- **Before fix:** `GET /api/mcp` returned HTTP 405 without an OAuth challenge; path-aware `GET /.well-known/oauth-protected-resource/api/mcp` returned HTTP 404.
+- **After fix:** unauthenticated `GET /api/mcp` returns **401** with an explicit `WWW-Authenticate` protected-resource challenge; `GET /.well-known/oauth-protected-resource/api/mcp` returns **200** with the same JSON as the root well-known route. Proper authenticated GET still returns spec-permitted HTTP 405 because SSE is unsupported. POST still requires authentication; OAuth JWT and Claude opaque-token paths are unchanged.
+- GitHub **CI passed** at `8638f25ad08`. External live probe passed from GitHub Actions run **38596950896**, including 401 challenge and 200 path-aware metadata. The backend compatibility repairs are committed on `develop`.
+- Do **not** claim ChatGPT plugin connected until the UI creates the plugin and the first Cognito-authorized read-only tool call succeeds.
+
+If recreating the ChatGPT form, verify the **new form's callback URL** matches the URL already allowlisted on the dedicated Cognito app client. Do not create another Cognito app client or disable authentication just to make validation pass.
+
 ## Troubleshooting / risk notes
 
 - **503 from discovery:** OAuth `chatgptOauth` config is not provisioned or AWS SSM/IAM is unavailable; do not make the endpoint unauthenticated.
