@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import {MCP_TOOLS,toolsForClient,findAuthorizedTool} from "../apps/web/lib/ai-mcp-tools.ts";
+import {isVerifiedCognitoOwner} from "../apps/web/lib/ai-mcp-userinfo.ts";
 
 const all={
  clientId:"chatgpt",
@@ -99,8 +100,8 @@ test("ChatGPT OAuth integration is fail-closed and preserves Claude bearer authe
  assert.match(oauth,/scope\.split\(" "\)\.includes\(MCP_OAUTH_SCOPE\)/);
  assert.match(oauth,/verify\("RSA-SHA256"/);
  assert.match(oauth,/\.well-known\/jwks\.json/);
- assert.match(oauth,/user\.sub!==claims\.sub/);
- assert.match(oauth,/user\.email_verified!==true/);
+ assert.match(oauth,/isVerifiedCognitoOwner\(user,claims\.sub,expected\)/);
+ assert.ok(!oauth.includes('user.email_verified!==true'));
  assert.match(oauth,/permissions:claims\.scope\.split/);
  assert.match(oauth,/MCP_OAUTH_WRITE_SCOPE/);
  assert.match(oauth,/"assets:upload"/);
@@ -362,4 +363,18 @@ test("ChatGPT MCP OAuth scopes follow exact Cognito URL resource binding",()=>{
  assert.match(oauth,/claims\.aud!==MCP_OAUTH_RESOURCE/);
  assert.match(oauth,/claims\.scope\.split\(" "\)\.includes\(MCP_OAUTH_SCOPE\)/);
  assert.match(oauth,/claims\.scope\.split\(" "\)\.includes\(MCP_OAUTH_WRITE_SCOPE\)/);
+});
+
+test("Cognito UserInfo owner verification accepts documented string true, rejects unverified identities",()=>{
+ const sub="cognito-sub-123";
+ const email="owner@example.com";
+ const good={sub,email,email_verified:"true"};
+ assert.equal(isVerifiedCognitoOwner(good,sub,email),true);
+ assert.equal(isVerifiedCognitoOwner({...good,email_verified:true},sub,email),true);
+ assert.equal(isVerifiedCognitoOwner({...good,email:"OWNER@example.com"},sub,email),true);
+ for(const flag of ["false","TRUE","1",false,1,undefined,null])
+  assert.equal(isVerifiedCognitoOwner({...good,email_verified:flag},sub,email),false);
+ assert.equal(isVerifiedCognitoOwner({...good,sub:"another-sub"},sub,email),false);
+ assert.equal(isVerifiedCognitoOwner({...good,email:"attacker@example.com"},sub,email),false);
+ assert.equal(isVerifiedCognitoOwner({...good,email:undefined},sub,email),false);
 });
