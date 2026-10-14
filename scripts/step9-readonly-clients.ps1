@@ -2,7 +2,7 @@
 # Works in Windows PowerShell 5.1+; generate tokens LOCALLY, never in ChatGPT.
 # Tokens are stored using Windows DPAPI under the current user's LOCALAPPDATA.
 param(
-  [ValidateSet("Create","CopyAwsJson","TestClaudeCode","ConnectClaudeCode","CopyClaudeWebHeader")]
+  [ValidateSet("Create","CopyAwsJson","TestClaudeCode","TestClaudeWeb","ConnectClaudeCode","CopyClaudeWebHeader")]
   [string] $Action = "Create"
 )
 $ErrorActionPreference = "Stop"
@@ -32,7 +32,7 @@ function Protect-Token([string] $Token, [string] $Client) {
 function Unprotect-Token([string] $Client) {
   $path = Join-Path $Dir ($Client + ".dpapi")
   if (-not (Test-Path $path)) { throw "Missing local protected token. Run -Action Create first." }
-  $secure = ConvertTo-SecureString (Get-Content -Raw $path)
+  $secure = ConvertTo-SecureString ((Get-Content -Raw $path).Trim())
   $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
   try { return [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr) }
   finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }
@@ -96,6 +96,23 @@ switch ($Action) {
    }
    if (-not $denied.result.isError) { throw "Unexpected cross-brand access: fail closed" }
    Write-Host "PASS: authenticated MCP, six read-only tools, Stashbox asset search, cross-brand access denied."
+  } finally { $token=$null }
+  break
+ }
+ "TestClaudeWeb" {
+  $token=Unprotect-Token "claude_web"
+  try {
+   $init=Mcp-Call $token 11 "initialize" @{
+    protocolVersion="2025-06-18";capabilities=@{};clientInfo=@{name="elettro-web-smoke";version="1"}
+   }
+   if ($init.result.serverInfo.name -ne "elettro-ai-gateway") { throw "Unexpected MCP server" }
+   $catalog=Mcp-Call $token 12 "tools/list" @{}
+   $tools=@($catalog.result.tools)
+   if ($tools.Count -ne 6) { throw "Expected precisely 6 read-only tools. Got $($tools.Count)" }
+   if (@($tools | Where-Object { $_.annotations.readOnlyHint -ne $true }).Count) {
+    throw "A tool was not marked read-only"
+   }
+   Write-Host "PASS: Claude.ai separate credential authenticated with precisely six read-only tools."
   } finally { $token=$null }
   break
  }
