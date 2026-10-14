@@ -182,3 +182,18 @@ The direct Lambda **Test** event `{"action":"audit-dropbox-ids"}` succeeded (HTT
 5. Only then consider enabling new AI registration and performing the separate new-file/repeat registration acceptance test.
 
 Do not infer that this test has completed the full Step 8 migration. Do not touch production or Shared Stock Galleries.
+
+## PATCH5 temporary atomic DEV migration (prepared, not deployed)
+
+The owner confirmed that RDS manual snapshot `elettro-brand-os-dev-pre-step8` is **Available / Completed**. PATCH4 (SHA-256 base64 `GzfIJoSxBbk+0eiO5VfIbh255y0vgAZnOVWY8j4ZRWg=`) is deployed and the extended `audit-dropbox-ids` returned 419 Dropbox assets with 0 duplicate, missing, conflicting and invalid IDs; both DB schema flags were false. The owner uploaded one new disposable Raw/Approved Elettro file, confirmed a repeat upload was recognized without saving a second record, and verified a unique DB-wide ID match (`matchingRecords:1`) in the Lab. The snapshot was made after these tests.
+
+**PATCH5 prepared OFFLINE**, without AWS deployment:
+- Temporary package `elettro-brand-os-dev-api-step8-atomic-migration-PATCH5.zip` is based on the exact confirmed PATCH4 ZIP and has Code SHA-256 `yjS0CpdwH6mQfGXeDGTd4tEd7gFsRgVjvmDZzuL9/gw=`.
+- 3650 ZIP files: the only changed existing file is `index.mjs`; the only added file is `step8-migration.mjs`. All 3648 remaining existing entries are byte-for-byte preserved. Both edited JavaScript files passed Node syntax validation and the ZIP passed CRC. 10/10 local mocked-database tests passed.
+- The new direct-Lambda-only action requires exact function name `elettro-brand-os-dev-api`, region `us-east-1`, DEV DB secret, and rejects API Gateway-shaped events. It is not a public API or MCP action.
+- `{"action":"step8-migration-preflight"}` re-audits globally across both identity columns, reports uniqueness/check status and `canApply` (read-only).
+- Apply event requires explicit `confirmed:true`, `snapshotName:"elettro-brand-os-dev-pre-step8"`, and `expectedTarget:"elettro-brand-os-dev-api"`. It acquires an exclusive Asset table lock **NOWAIT** and performs the full re-audit *inside* a single transaction. A validated CHECK then prevents blank/invalid and contradictory Dropbox IDs; a global partial UNIQUE expression index on `COALESCE("sourceExternalId","sourceFileId")` prevents cross-column duplicates. The index uses ordinary `CREATE UNIQUE INDEX` inside the transaction (rather than concurrent) because this DEV table has ~420 Dropbox rows, and the short exclusive lock provides atomic rollback instead of risking an invalid index. The entire transaction is rolled back if preconditions, DDL or post-DDL verification fail. Other Asset readers/writers may be briefly blocked during this action; lock acquisition fails instead of waiting.
+- Verify action `{"action":"step8-migration-verify"}` reports both validity flags and audit results, read-only.
+- **After successful verification restore original PATCH4 ZIP** to remove the migration handler while retaining database constraints.
+- User-facing operation guide prepared: `/mnt/data/elettro-step8-atomic-migration-RUNBOOK.md`. This path must not be inferred as a sandbox link in a later session; check the file.
+- **No database migration has yet been performed by the assistant.** Need owner upload PATCH5 to DEV Lambda, run preflight, review output, then execute explicitly approved apply event, verify, restore PATCH4. Do not expose this via dashboard, production or stock paths.
