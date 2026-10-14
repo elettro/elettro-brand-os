@@ -108,13 +108,17 @@ Expected: `PASS: Claude.ai separate credential, six read-only tools, 6 authorize
 
 ## 4. Connect Claude Code
 
-Use the local helper; it reads the DPAPI-protected token and configures the remote server without putting the secret into PowerShell command history:
+**Windows / Claude Code 2.1.299:** The old `step9-readonly-clients.ps1 -Action ConnectClaudeCode` CLI command has been shown to fail with `Invalid configuration: : Invalid input` due to Windows native `add-json` argument passing. Do not retry the broken action.
+
+Instead download [the tested Windows Claude Code registration fix](../scripts/step9-fix-claude-code-windows.ps1) and run:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\step9-readonly-clients.ps1 -Action ConnectClaudeCode
+powershell -NoProfile -ExecutionPolicy Bypass -File "$HOME\Downloads\step9-fix-claude-code-windows.ps1" -Action Install
 ```
 
-The helper registers a **user-scoped Streamable HTTP MCP server** with a `headersHelper` command. On every connection, Claude Code launches that local helper, which decrypts the DPAPI-protected token and emits the Authorization header **without storing a raw bearer token in Claude's MCP configuration or the command history**.
+This adds one `elettro-dev` user-scope MCP entry to `~/.claude.json` while taking a local backup of any existing configuration. It validates the local Windows DPAPI credential helper, does not print or store token plaintext, and refuses to replace a different pre-existing `elettro-dev` entry. Tested on a Windows runner with **Claude Code 2.1.299**, including CLI recognition and preservation of unrelated settings. The runner did **not** use real credentials or prove live remote connectivity; verify `/mcp` in your Claude Code session afterward.
+
+The fix registers a **user-scoped Streamable HTTP MCP server** with a `headersHelper` command. On every connection, Claude Code launches that local helper, which decrypts the DPAPI-protected token and emits the Authorization header **without storing a raw bearer token in Claude's MCP configuration or the command history**.
 
 Requires a current Claude Code release supporting `headersHelper`. The helper installs a stable copy of itself under `%LOCALAPPDATA%\\ElettroMCP\\step9-readonly-clients.ps1` during credential creation. Do not delete that local copy while Claude Code is connected.
 
