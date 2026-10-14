@@ -9,11 +9,11 @@ const all={
  permissions:["assets:read","assets:write","assets:register","folders:read","folders:write"]
 };
 
-test("brand-only tools are exposed, without stock, deletion, moving or publishing",()=>{
+test("brand-only tools are exposed, without stock, deletion or publishing; Claude-only folder moves are explicit",()=>{
  const names=MCP_TOOLS.map(t=>t.name);
  assert.equal(names.length,new Set(names).size);
- assert.equal(names.length,12);
- assert.ok(!names.some(name=>/stock|delete|move|publish/.test(name)));
+ assert.equal(names.length,17);
+ assert.ok(!names.some(name=>/stock|delete|publish/.test(name)));
 });
 
 test("two AI clients with matching scopes see equivalent operations",()=>{
@@ -326,3 +326,4 @@ test("Step 7 exposes one scoped read-only global ID check in Lab and both assist
  assert.equal(tool?.action,"inspect_global_dropbox_id");
  assert.ok(tool?.inputSchema.required.includes("assetId"));
 });
+
