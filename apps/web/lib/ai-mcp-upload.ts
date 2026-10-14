@@ -67,7 +67,7 @@ export function dropboxContentHash(buffer:Buffer):string{
   blocks.update(createHash("sha256").update(buffer.subarray(pos,Math.min(pos+CHUNK,buffer.length))).digest());
  return blocks.digest("hex");
 }
-async function dropboxToken():Promise<string>{
+export async function dropboxToken():Promise<string>{
  const response=await secrets.send(new GetSecretValueCommand({SecretId:"elettro-brand-os-dev/dropbox"}));
  const cfg=JSON.parse(response.SecretString||"{}") as Record<string,string>;
  const refresh=cfg.refresh_token||cfg.refreshToken;
@@ -85,7 +85,7 @@ async function dropboxToken():Promise<string>{
  if(!json.access_token)throw new GatewayError(503,"Dropbox token missing");
  return json.access_token;
 }
-async function metadata(token:string,path:string){
+export async function metadata(token:string,path:string){
  const r=await fetch("https://api.dropboxapi.com/2/files/get_metadata",{
   method:"POST",headers:{authorization:"Bearer "+token,"content-type":"application/json"},
   body:JSON.stringify({path}),cache:"no-store",
@@ -100,7 +100,7 @@ async function metadata(token:string,path:string){
  if(!r.ok)throw new GatewayError(502,"Dropbox destination check failed");
  return await r.json() as {".tag":string;id?:string;size?:number;content_hash?:string;path_display?:string};
 }
-async function matchingBrandFile(token:string,root:string,size:number,hash:string){
+export async function matchingBrandFile(token:string,root:string,size:number,hash:string){
  let cursor:string|undefined, pages=0;
  do{
   if(++pages>MAX_PAGES)throw new GatewayError(503,"Exhaustive Dropbox inventory too large; upload stopped");
@@ -243,3 +243,4 @@ export async function uploadApprovedChatFile(args:unknown,identity:McpIdentity){
    message:"Dropbox storage and Elettro registration completed, but metadata or identity follow-up needs review. Do not upload again."};
  }
 }
+
