@@ -9,6 +9,10 @@ export const runtime="nodejs";
 export const dynamic="force-dynamic";
 const MAX_BODY=64*1024;
 const headers={"cache-control":"no-store","mcp-protocol-version":"2025-06-18"};
+// An Origin is an advisory CSRF/DNS-rebinding signal, never authentication.
+// Cloud MCP hosts may send their own Origin; all requests still require a
+// valid independently scoped Bearer credential from AWS SSM.
+const allowedMcpOrigins=new Set([DEV_ORIGIN,"https://claude.ai","https://chatgpt.com"]);
 
 type RpcMessage={jsonrpc?:string;id?:string|number|null;method?:string;params?:unknown};
 function success(id:RpcMessage["id"],result:unknown){
@@ -20,7 +24,7 @@ function rpcError(id:RpcMessage["id"],code:number,message:string){
 
 export async function POST(request:NextRequest){
  const origin=request.headers.get("origin");
- if(origin&&origin!==DEV_ORIGIN)
+ if(origin&&!allowedMcpOrigins.has(origin))
   return NextResponse.json({error:"Invalid origin"},{status:403,headers});
  if(!(request.headers.get("content-type")||"").startsWith("application/json"))
   return NextResponse.json({error:"JSON required"},{status:415,headers});
