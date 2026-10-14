@@ -106,7 +106,7 @@ test("ChatGPT OAuth integration is fail-closed and preserves Claude bearer authe
  assert.match(oauth,/"assets:upload"/);
  assert.match(oauth,/brandSlugs:brandConfigs\.map/);
  assert.match(meta,/chatGptOauthConfiguration\(\)/);
- assert.match(meta,/authorization_servers:\[cfg\.issuer\]/);
+ assert.match(meta,/authorization_servers:\[MCP_OAUTH_AUTHORIZATION_SERVER\]/);
  assert.match(meta,/scopes_supported:\[MCP_OAUTH_SCOPE\]/);
  assert.match(meta,/ChatGPT OAuth not configured/);
  assert.ok(!route.includes("return toolsForClient({clientId:\"chatgpt_oauth\""));
