@@ -5,6 +5,7 @@ on:
     branches: [develop]
     paths:
       - '.github/workflows/step9-windows-cli-check.yml'
+      - 'scripts/step9-fix-claude-code-windows.ps1'
       - 'scripts/step9-connect-claude-windows.ps1'
 
 jobs:
@@ -19,26 +20,37 @@ jobs:
       - name: Install Claude Code 2.1.299
         shell: pwsh
         run: npm install -g @anthropic-ai/claude-code@2.1.299 --no-audit --no-fund
-      - name: Test JSON command-line quoting without credentials
+      - name: Verify direct user-scope MCP configuration with backup (no credentials)
         shell: powershell
         run: |
-          $ErrorActionPreference='Continue'
+          $ErrorActionPreference='Stop'
           claude --version
-          $config = @{type='http';url='https://example.invalid/mcp';headersHelper='powershell.exe -NoProfile -Command "Write-Output ''{}''"'} | ConvertTo-Json -Compress
-          $trials = @(
-            @{name='mcp_plain';value=$config},
-            @{name='mcp_escape';value=($config -replace '"','\"')},
-            @{name='mcp_double';value=($config -replace '"','""')}
-          )
-          foreach ($t in $trials) {
-            Write-Host "TRY $($t.name)"
-            claude mcp add-json $t.name $t.value --scope user
-            Write-Host "EXIT $LASTEXITCODE"
-            if ($LASTEXITCODE -eq 0) {
-              $state = Get-Content -Raw (Join-Path $HOME '.claude.json') | ConvertFrom-Json
-              $srv = $state.mcpServers.($t.name)
-              if ($srv.type -ne 'http' -or $srv.headersHelper -notlike 'powershell.exe*') {throw "Incorrect $($t.name) saved"}
-              Write-Host "VALID $($t.name): user config preserved HTTP and headersHelper"
+          $localDir=Join-Path $env:LOCALAPPDATA 'ElettroMCP'
+          New-Item -ItemType Directory -Force -Path $localDir | Out-Null
+          Copy-Item -LiteralPath './scripts/step9-readonly-clients.ps1' -Destination (Join-Path $localDir 'step9-readonly-clients.ps1')
+          Set-Content -Path (Join-Path $localDir 'claude_code.dpapi') -Value 'dummy-never-decrypted'
+          $original = [pscustomobject]@{
+            numStartups = 2
+            installMethod = 'npm'
+            nonAscii = 'café'
+            mcpServers = [pscustomobject]@{
+              existing = [pscustomobject]@{type='http';url='https://example.invalid/mcp'}
             }
           }
-          Write-Host "End of quoting diagnostics"
+          $config = Join-Path $HOME '.claude.json'
+          [System.IO.File]::WriteAllText($config, ($original | ConvertTo-Json -Depth 50), (New-Object System.Text.UTF8Encoding($false)))
+          & powershell -NoProfile -ExecutionPolicy Bypass -File './scripts/step9-fix-claude-code-windows.ps1' -Action Install
+          if ($LASTEXITCODE -ne 0) { throw 'Step 9 local config installation failed' }
+          & powershell -NoProfile -ExecutionPolicy Bypass -File './scripts/step9-fix-claude-code-windows.ps1' -Action Verify
+          if ($LASTEXITCODE -ne 0) { throw 'Step 9 local config verification failed' }
+          $cfg=Get-Content -Raw -Encoding UTF8 -LiteralPath $config | ConvertFrom-Json
+          if ($cfg.numStartups -ne 2 -or $cfg.nonAscii -ne 'café' -or $cfg.mcpServers.existing.url -ne 'https://example.invalid/mcp') { throw 'Existing config was not preserved' }
+          if ($cfg.mcpServers.'elettro-dev'.type -ne 'http' -or $cfg.mcpServers.'elettro-dev'.headersHelper -notlike '*EmitCodeHeaders*') { throw 'New MCP entry invalid' }
+          $backups=@(Get-ChildItem -LiteralPath $HOME -Filter '.claude.json.elettro-step9-backup-*.json')
+          if ($backups.Count -ne 1) { throw 'Expected exactly one safety backup' }
+          Write-Host 'PASS: user config preserved, encrypted helper referenced, backup present, no raw token.'
+          & powershell -NoProfile -ExecutionPolicy Bypass -File './scripts/step9-fix-claude-code-windows.ps1' -Action Install
+          if ($LASTEXITCODE -ne 0) { throw 'Second install was not idempotent' }
+          claude mcp get elettro-dev
+          if ($LASTEXITCODE -ne 0) { throw 'Claude Code could not read the configured MCP entry' }
+          Write-Host 'PASS: Claude Code 2.1.299 recognizes the secure Windows MCP configuration.'
