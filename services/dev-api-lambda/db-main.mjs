@@ -424,7 +424,546 @@ export const handler = async (event = {}) => {
           COUNT(*) FILTER (
             WHERE "sourceFileId" IS NOT NULL AND "sourceExternalId" IS NOT NULL
               AND "sourceFileId" <> "sourceExternalId"
-          )::int AS "conflictingSourceIds"
+          )::int AS "conflictingSourceIds",
+          COUNT(*) FILTER (
+            WHERE ("sourceFileId" IS NOT NULL AND
+                   "sourceFileId" !~ '^id:[A-Za-z0-9_-]{8,200}
+        WHERE "sourceType" = 'dropbox'
+      `);
+      const duplicates = await client.query(`
+        WITH keys AS (
+          SELECT a."id", k."dropboxId"
+          FROM "Asset" a
+          CROSS JOIN LATERAL (
+            SELECT DISTINCT "dropboxId"
+            FROM unnest(ARRAY[a."sourceFileId", a."sourceExternalId"])
+              AS identity("dropboxId")
+            WHERE "dropboxId" IS NOT NULL AND "dropboxId" <> ''
+          ) AS k
+          WHERE a."sourceType" = 'dropbox'
+        ), collisions AS (
+          SELECT "dropboxId"
+          FROM keys
+          GROUP BY "dropboxId"
+          HAVING COUNT(DISTINCT "id") > 1
+        )
+        SELECT COUNT(*)::int AS "duplicateDropboxIds" FROM collisions
+      `);
+      const integrity = await client.query(`
+        SELECT
+          COALESCE((SELECT i.indisvalid AND i.indisunique AND i.indisready
+                    FROM pg_class c JOIN pg_index i ON i.indexrelid = c.oid
+                    WHERE c.relname = 'Asset_dropbox_global_canonical_id_uq'
+                    LIMIT 1), FALSE) AS "uniquenessIndexValid",
+          COALESCE((SELECT c.convalidated
+                    FROM pg_constraint c
+                    WHERE c.conname = 'Asset_dropbox_identity_integrity_ck'
+                    LIMIT 1), FALSE) AS "identityCheckValidated"
+      `);
+      return json(200, {
+        ok: true, readOnly: true, auditVersion: 2,
+        ...totals.rows[0], ...duplicates.rows[0], ...integrity.rows[0],
+        note: "This audit does not create indexes or modify database records."
+      });
+    }
+
+    if (requestAction === "assets") {
+      const assetId = event?.queryStringParameters?.id || null;
+      const metadataOptions = event?.queryStringParameters?.metadataOptions === "1";
+      const brandSlug = event?.queryStringParameters?.brandSlug || null;
+
+      if (metadataOptions) {
+        if (!brandSlug) {
+          return json(400, { ok: false, error: "brandSlug is required for metadata options" });
+        }
+
+        const result = await client.query(`
+          SELECT
+            ARRAY_REMOVE(ARRAY_AGG(DISTINCT a."topic" ORDER BY a."topic"), NULL) AS "topics",
+            ARRAY_REMOVE(ARRAY_AGG(DISTINCT a."contentGroup" ORDER BY a."contentGroup"), NULL) AS "contentGroups",
+            ARRAY_REMOVE(ARRAY_AGG(DISTINCT a."creativeFamily" ORDER BY a."creativeFamily"), NULL) AS "creativeFamilies"
+          FROM "Asset" a
+          JOIN "Brand" b ON b."id" = a."brandId"
+          WHERE b."slug" = $1
+            AND a."retiredAt" IS NULL
+        `, [brandSlug]);
+
+        const row = result.rows[0] || {};
+        return json(200, {
+          ok: true,
+          topics: (row.topics || []).filter(Boolean),
+          contentGroups: (row.contentGroups || []).filter(Boolean),
+          creativeFamilies: (row.creativeFamilies || []).filter(Boolean)
+        });
+      }
+
+      const dropboxFileId = event?.queryStringParameters?.dropboxFileId || null;
+      if (dropboxFileId) {
+        // Authoritative registry lookup over ALL assets and BOTH Dropbox ID columns.
+        // Do not rely on the most-recent-500 asset list for duplicate protection.
+        if (assetId || metadataOptions ||
+            typeof dropboxFileId !== "string" ||
+            !/^id:[A-Za-z0-9_-]{8,200}$/.test(dropboxFileId) ||
+            !DROPBOX_BRAND_ROOTS.some(([slug]) => slug === brandSlug)) {
+          return json(400, { ok: false, error: "Valid brandSlug and Dropbox file ID required" });
+        }
+        const lookup = await client.query(`
+          SELECT
+            a."id", a."filename", a."sourceType",
+            a."sourceFileId", a."sourceExternalId",
+            a."sourcePath", a."sourceUrl", a."retiredAt",
+            a."ingestStatus", a."approvalStatus",
+            b."slug" AS "brandSlug",
+            COUNT(*) OVER()::int AS "matchCount"
+          FROM "Asset" a
+          JOIN "Brand" b ON b."id" = a."brandId"
+          WHERE a."sourceType" = 'dropbox'
+            AND (a."sourceFileId" = $1 OR a."sourceExternalId" = $1)
+          ORDER BY a."retiredAt" NULLS FIRST, a."createdAt" DESC, a."id"
+          LIMIT 3
+        `, [dropboxFileId]);
+        const matchCount = lookup.rows[0]?.matchCount || 0;
+        return json(200, {
+          ok: true, lookupComplete: true, lookupVersion: 2,
+          dropboxFileId, queryBrandSlug: brandSlug,
+          matchCount,
+          matches: lookup.rows.map(({ matchCount: _count, ...asset }) => asset)
+        });
+      }
+
+      if (assetId) {
+        const result = await client.query(`
+          SELECT
+            a."id",
+            a."filename",
+            a."kind",
+            a."sourceType",
+            a."sourceFileId",
+            a."sourceExternalId",
+            a."sourcePath",
+            a."sourceUrl",
+            a."fileSizeBytes",
+            a."ingestStatus",
+            a."enrichmentStatus",
+            a."approvalStatus",
+            a."title",
+            a."aiDescription",
+            a."contentGroup",
+            a."topic",
+            a."creativeFamily",
+            a."creativeNotes",
+            a."tags",
+            a."commerceLinks",
+            a."aspectRatioLabel",
+            a."folderSuggestions",
+            a."eligibilityType",
+            a."eligibleFrom",
+            a."eligibleUntil",
+            a."annualFromMmdd",
+            a."annualUntilMmdd",
+            a."containsSpecificPricing",
+            a."priority",
+            a."allowedDestinations",
+            a."excludedDestinations",
+            a."width",
+            a."height",
+            a."durationMs",
+            a."hasAudio",
+            a."createdAt",
+            a."updatedAt",
+            (SELECT MAX(pl."publishedAt") FROM "PublicationLedger" pl WHERE pl."assetId" = a."id") AS "lastUsedAt",
+            b."slug" AS "brandSlug",
+            b."name" AS "brandName"
+          FROM "Asset" a
+          JOIN "Brand" b ON b."id" = a."brandId"
+          WHERE a."id" = $1::uuid
+          LIMIT 1
+        `, [assetId]);
+
+        if (!result.rows[0]) return json(404, { ok: false, error: "Asset not found" });
+        return json(200, { ok: true, asset: result.rows[0] });
+      }
+
+      const result = await client.query(`
+        SELECT
+          a."id",
+          a."filename",
+          a."kind",
+          a."sourceType",
+          a."sourcePath",
+          a."fileSizeBytes",
+          a."ingestStatus",
+          a."enrichmentStatus",
+          a."approvalStatus",
+          a."contentGroup",
+          a."topic",
+          a."tags",
+          a."commerceLinks",
+          a."aspectRatioLabel",
+          a."folderSuggestions",
+          a."eligibilityType",
+          a."priority",
+          a."createdAt",
+          (SELECT MAX(pl."publishedAt") FROM "PublicationLedger" pl WHERE pl."assetId" = a."id") AS "lastUsedAt",
+          b."slug" AS "brandSlug",
+          b."name" AS "brandName"
+        FROM "Asset" a
+        JOIN "Brand" b ON b."id" = a."brandId"
+        ORDER BY a."createdAt" DESC
+        LIMIT 500
+      `);
+      return json(200, { ok: true, assets: result.rows });
+    }
+
+    if (requestAction === "content-pool") {
+      const result = await client.query(`
+        SELECT
+          a."id",
+          a."filename",
+          a."kind",
+          a."sourcePath",
+          a."aspectRatioLabel",
+          a."folderSuggestions",
+          a."createdAt",
+          (SELECT MAX(pl."publishedAt") FROM "PublicationLedger" pl WHERE pl."assetId" = a."id") AS "lastUsedAt",
+          a."contentGroup",
+          a."topic",
+          a."tags",
+          a."commerceLinks",
+          a."eligibilityType",
+          a."priority",
+          b."slug" AS "brandSlug",
+          b."name" AS "brandName"
+        FROM "Asset" a
+        JOIN "Brand" b ON b."id" = a."brandId"
+        WHERE a."approvalStatus" = 'approved'
+          AND a."ingestStatus" = 'ready'
+          AND a."retiredAt" IS NULL
+        ORDER BY a."updatedAt" DESC
+        LIMIT 100
+      `);
+      return json(200, { ok: true, assets: result.rows });
+    }
+
+    if (event?.action === "init-db") {
+      console.log("[init] starting schema initialization");
+      const initSql = readFileSync(new URL("./init.sql", import.meta.url), "utf8");
+      await client.query("BEGIN");
+      try {
+        await client.query(initSql);
+        await client.query("COMMIT");
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      }
+
+      const brandCount = await client.query(
+        'SELECT COUNT(*)::int AS count FROM "Brand"'
+      );
+      console.log("[init] schema initialization succeeded");
+
+      return json(200, {
+        ok: true,
+        message: "DEV database initialized",
+        database,
+        brands: brandCount.rows[0]?.count ?? 0
+      });
+    }
+
+    const result = await client.query("SELECT 1 AS ok");
+    console.log("[health] SELECT 1 succeeded");
+
+    return json(200, {
+      ok: true,
+      message: "Authenticated PostgreSQL connection succeeded",
+      database,
+      result: result.rows[0]
+    });
+  } catch (error) {
+    if(error instanceof DropboxIdentityConflict) {
+      console.error("[dropbox-identity] rejected", error.message);
+      return json(409,{ok:false,error:error.message});
+    }
+    console.error("[health] failed:", error instanceof Error ? error.message : error);
+    return json(500, {
+      ok: false,
+      error: error instanceof Error ? error.message : "Unknown database connection error"
+    });
+  } finally {
+    if (client) {
+      try {
+        await client.end();
+      } catch {
+        // Ignore cleanup errors.
+      }
+    }
+  }
+};
+)
+               OR ("sourceExternalId" IS NOT NULL AND
+                   "sourceExternalId" !~ '^id:[A-Za-z0-9_-]{8,200}
+        WHERE "sourceType" = 'dropbox'
+      `);
+      const duplicates = await client.query(`
+        WITH keys AS (
+          SELECT a."id", k."dropboxId"
+          FROM "Asset" a
+          CROSS JOIN LATERAL (
+            SELECT DISTINCT "dropboxId"
+            FROM unnest(ARRAY[a."sourceFileId", a."sourceExternalId"])
+              AS identity("dropboxId")
+            WHERE "dropboxId" IS NOT NULL AND "dropboxId" <> ''
+          ) AS k
+          WHERE a."sourceType" = 'dropbox'
+        ), collisions AS (
+          SELECT "dropboxId"
+          FROM keys
+          GROUP BY "dropboxId"
+          HAVING COUNT(DISTINCT "id") > 1
+        )
+        SELECT COUNT(*)::int AS "duplicateDropboxIds" FROM collisions
+      `);
+      return json(200, {
+        ok: true, readOnly: true, auditVersion: 1,
+        ...totals.rows[0], ...duplicates.rows[0],
+        note: "This audit does not create indexes or modify database records."
+      });
+    }
+
+    if (requestAction === "assets") {
+      const assetId = event?.queryStringParameters?.id || null;
+      const metadataOptions = event?.queryStringParameters?.metadataOptions === "1";
+      const brandSlug = event?.queryStringParameters?.brandSlug || null;
+
+      if (metadataOptions) {
+        if (!brandSlug) {
+          return json(400, { ok: false, error: "brandSlug is required for metadata options" });
+        }
+
+        const result = await client.query(`
+          SELECT
+            ARRAY_REMOVE(ARRAY_AGG(DISTINCT a."topic" ORDER BY a."topic"), NULL) AS "topics",
+            ARRAY_REMOVE(ARRAY_AGG(DISTINCT a."contentGroup" ORDER BY a."contentGroup"), NULL) AS "contentGroups",
+            ARRAY_REMOVE(ARRAY_AGG(DISTINCT a."creativeFamily" ORDER BY a."creativeFamily"), NULL) AS "creativeFamilies"
+          FROM "Asset" a
+          JOIN "Brand" b ON b."id" = a."brandId"
+          WHERE b."slug" = $1
+            AND a."retiredAt" IS NULL
+        `, [brandSlug]);
+
+        const row = result.rows[0] || {};
+        return json(200, {
+          ok: true,
+          topics: (row.topics || []).filter(Boolean),
+          contentGroups: (row.contentGroups || []).filter(Boolean),
+          creativeFamilies: (row.creativeFamilies || []).filter(Boolean)
+        });
+      }
+
+      const dropboxFileId = event?.queryStringParameters?.dropboxFileId || null;
+      if (dropboxFileId) {
+        // Authoritative registry lookup over ALL assets and BOTH Dropbox ID columns.
+        // Do not rely on the most-recent-500 asset list for duplicate protection.
+        if (assetId || metadataOptions ||
+            typeof dropboxFileId !== "string" ||
+            !/^id:[A-Za-z0-9_-]{8,200}$/.test(dropboxFileId) ||
+            !DROPBOX_BRAND_ROOTS.some(([slug]) => slug === brandSlug)) {
+          return json(400, { ok: false, error: "Valid brandSlug and Dropbox file ID required" });
+        }
+        const lookup = await client.query(`
+          SELECT
+            a."id", a."filename", a."sourceType",
+            a."sourceFileId", a."sourceExternalId",
+            a."sourcePath", a."sourceUrl", a."retiredAt",
+            a."ingestStatus", a."approvalStatus",
+            b."slug" AS "brandSlug",
+            COUNT(*) OVER()::int AS "matchCount"
+          FROM "Asset" a
+          JOIN "Brand" b ON b."id" = a."brandId"
+          WHERE a."sourceType" = 'dropbox'
+            AND (a."sourceFileId" = $1 OR a."sourceExternalId" = $1)
+          ORDER BY a."retiredAt" NULLS FIRST, a."createdAt" DESC, a."id"
+          LIMIT 3
+        `, [dropboxFileId]);
+        const matchCount = lookup.rows[0]?.matchCount || 0;
+        return json(200, {
+          ok: true, lookupComplete: true, lookupVersion: 2,
+          dropboxFileId, queryBrandSlug: brandSlug,
+          matchCount,
+          matches: lookup.rows.map(({ matchCount: _count, ...asset }) => asset)
+        });
+      }
+
+      if (assetId) {
+        const result = await client.query(`
+          SELECT
+            a."id",
+            a."filename",
+            a."kind",
+            a."sourceType",
+            a."sourceFileId",
+            a."sourceExternalId",
+            a."sourcePath",
+            a."sourceUrl",
+            a."fileSizeBytes",
+            a."ingestStatus",
+            a."enrichmentStatus",
+            a."approvalStatus",
+            a."title",
+            a."aiDescription",
+            a."contentGroup",
+            a."topic",
+            a."creativeFamily",
+            a."creativeNotes",
+            a."tags",
+            a."commerceLinks",
+            a."aspectRatioLabel",
+            a."folderSuggestions",
+            a."eligibilityType",
+            a."eligibleFrom",
+            a."eligibleUntil",
+            a."annualFromMmdd",
+            a."annualUntilMmdd",
+            a."containsSpecificPricing",
+            a."priority",
+            a."allowedDestinations",
+            a."excludedDestinations",
+            a."width",
+            a."height",
+            a."durationMs",
+            a."hasAudio",
+            a."createdAt",
+            a."updatedAt",
+            (SELECT MAX(pl."publishedAt") FROM "PublicationLedger" pl WHERE pl."assetId" = a."id") AS "lastUsedAt",
+            b."slug" AS "brandSlug",
+            b."name" AS "brandName"
+          FROM "Asset" a
+          JOIN "Brand" b ON b."id" = a."brandId"
+          WHERE a."id" = $1::uuid
+          LIMIT 1
+        `, [assetId]);
+
+        if (!result.rows[0]) return json(404, { ok: false, error: "Asset not found" });
+        return json(200, { ok: true, asset: result.rows[0] });
+      }
+
+      const result = await client.query(`
+        SELECT
+          a."id",
+          a."filename",
+          a."kind",
+          a."sourceType",
+          a."sourcePath",
+          a."fileSizeBytes",
+          a."ingestStatus",
+          a."enrichmentStatus",
+          a."approvalStatus",
+          a."contentGroup",
+          a."topic",
+          a."tags",
+          a."commerceLinks",
+          a."aspectRatioLabel",
+          a."folderSuggestions",
+          a."eligibilityType",
+          a."priority",
+          a."createdAt",
+          (SELECT MAX(pl."publishedAt") FROM "PublicationLedger" pl WHERE pl."assetId" = a."id") AS "lastUsedAt",
+          b."slug" AS "brandSlug",
+          b."name" AS "brandName"
+        FROM "Asset" a
+        JOIN "Brand" b ON b."id" = a."brandId"
+        ORDER BY a."createdAt" DESC
+        LIMIT 500
+      `);
+      return json(200, { ok: true, assets: result.rows });
+    }
+
+    if (requestAction === "content-pool") {
+      const result = await client.query(`
+        SELECT
+          a."id",
+          a."filename",
+          a."kind",
+          a."sourcePath",
+          a."aspectRatioLabel",
+          a."folderSuggestions",
+          a."createdAt",
+          (SELECT MAX(pl."publishedAt") FROM "PublicationLedger" pl WHERE pl."assetId" = a."id") AS "lastUsedAt",
+          a."contentGroup",
+          a."topic",
+          a."tags",
+          a."commerceLinks",
+          a."eligibilityType",
+          a."priority",
+          b."slug" AS "brandSlug",
+          b."name" AS "brandName"
+        FROM "Asset" a
+        JOIN "Brand" b ON b."id" = a."brandId"
+        WHERE a."approvalStatus" = 'approved'
+          AND a."ingestStatus" = 'ready'
+          AND a."retiredAt" IS NULL
+        ORDER BY a."updatedAt" DESC
+        LIMIT 100
+      `);
+      return json(200, { ok: true, assets: result.rows });
+    }
+
+    if (event?.action === "init-db") {
+      console.log("[init] starting schema initialization");
+      const initSql = readFileSync(new URL("./init.sql", import.meta.url), "utf8");
+      await client.query("BEGIN");
+      try {
+        await client.query(initSql);
+        await client.query("COMMIT");
+      } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+      }
+
+      const brandCount = await client.query(
+        'SELECT COUNT(*)::int AS count FROM "Brand"'
+      );
+      console.log("[init] schema initialization succeeded");
+
+      return json(200, {
+        ok: true,
+        message: "DEV database initialized",
+        database,
+        brands: brandCount.rows[0]?.count ?? 0
+      });
+    }
+
+    const result = await client.query("SELECT 1 AS ok");
+    console.log("[health] SELECT 1 succeeded");
+
+    return json(200, {
+      ok: true,
+      message: "Authenticated PostgreSQL connection succeeded",
+      database,
+      result: result.rows[0]
+    });
+  } catch (error) {
+    if(error instanceof DropboxIdentityConflict) {
+      console.error("[dropbox-identity] rejected", error.message);
+      return json(409,{ok:false,error:error.message});
+    }
+    console.error("[health] failed:", error instanceof Error ? error.message : error);
+    return json(500, {
+      ok: false,
+      error: error instanceof Error ? error.message : "Unknown database connection error"
+    });
+  } finally {
+    if (client) {
+      try {
+        await client.end();
+      } catch {
+        // Ignore cleanup errors.
+      }
+    }
+  }
+};
+)
+          )::int AS "invalidSourceIdRows"
         FROM "Asset"
         WHERE "sourceType" = 'dropbox'
       `);
