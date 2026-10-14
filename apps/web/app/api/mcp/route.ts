@@ -2,6 +2,8 @@ import {NextRequest,NextResponse} from "next/server";
 import {DEV_ORIGIN} from "@/lib/cognito-auth";
 import {executeAiGateway,GatewayError} from "@/lib/ai-gateway";
 import {batchUpdateAssetMetadata} from "@/lib/ai-gateway-batch";
+import {prepareChatFileIntake} from "@/lib/ai-mcp-intake";
+import {uploadApprovedChatFile} from "@/lib/ai-mcp-upload";
 import {authorizeMcp,requireMcpScope,McpAuthorizationError} from "@/lib/ai-mcp-auth";
 import {authorizeChatGptOauth,oauthChallenge} from "@/lib/ai-mcp-oauth";
 import {findAuthorizedTool,toolsForClient} from "@/lib/ai-mcp-tools";
@@ -93,9 +95,14 @@ export async function POST(request:NextRequest){
    // Action and Dropbox scope are server-owned: caller cannot override them.
    const result=tool.action==="batch_update_asset_metadata"
     ? await batchUpdateAssetMetadata(args)
+    : tool.action==="prepare_chat_file_intake"
+    ? await prepareChatFileIntake(args,identity)
+    : tool.action==="upload_chat_file"
+    ? await uploadApprovedChatFile(args,identity)
     : await executeAiGateway({...args,action:tool.action,scope:"brand"});
    const readOnlyActions=new Set(["search_assets","get_asset","inspect_registered_asset",
-     "inspect_global_dropbox_id","inspect_brand_registration","list_folders"]);
+     "inspect_global_dropbox_id","inspect_brand_registration","list_folders",
+     "prepare_chat_file_intake"]);
    if(!readOnlyActions.has(tool.action))
     console.info("Elettro MCP audit",JSON.stringify({
       provider:identity.clientId,action:tool.action,brandSlug:args.brandSlug,
