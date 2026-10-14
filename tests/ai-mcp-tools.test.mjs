@@ -12,7 +12,7 @@ const all={
 test("brand-only tools are exposed, without stock, deletion, moving or publishing",()=>{
  const names=MCP_TOOLS.map(t=>t.name);
  assert.equal(names.length,new Set(names).size);
- assert.equal(names.length,10);
+ assert.equal(names.length,12);
  assert.ok(!names.some(name=>/stock|delete|move|publish/.test(name)));
 });
 
@@ -101,7 +101,9 @@ test("ChatGPT OAuth integration is fail-closed and preserves Claude bearer authe
  assert.match(oauth,/\.well-known\/jwks\.json/);
  assert.match(oauth,/user\.sub!==claims\.sub/);
  assert.match(oauth,/user\.email_verified!==true/);
- assert.match(oauth,/permissions:\["assets:read","folders:read"\]/);
+ assert.match(oauth,/permissions:claims\.scope\.split/);
+ assert.match(oauth,/MCP_OAUTH_WRITE_SCOPE/);
+ assert.match(oauth,/"assets:upload"/);
  assert.match(oauth,/brandSlugs:brandConfigs\.map/);
  assert.match(meta,/chatGptOauthConfiguration\(\)/);
  assert.match(meta,/authorization_servers:\[cfg\.issuer\]/);
@@ -122,6 +124,61 @@ test("ChatGPT discovery supports GET challenge and both RFC 9728 metadata paths"
  assert.match(body,/status:405/);
  assert.match(variant,/export \{GET, runtime, dynamic\} from/);
  assert.match(metadata,/chatGptOauthConfiguration\(\)/);
+});
+
+test("ChatGPT file-parameter schemas and read/write scope separation",()=>{
+ const reader={clientId:"chatgpt_oauth",brandSlugs:["stashbox","elettro"],permissions:["assets:read","folders:read"]};
+ const writer={...reader,permissions:["assets:read","folders:read","assets:write","folders:write","assets:upload"]};
+ const readTools=toolsForClient(reader);
+ const writeTools=toolsForClient(writer);
+ assert.equal(readTools.length,7);
+ assert.equal(writeTools.length,12);
+ const preview=readTools.find(t=>t.name==="elettro_prepare_file_intake");
+ const upload=writeTools.find(t=>t.name==="elettro_save_chat_file_to_dropbox");
+ assert.ok(preview);
+ assert.ok(upload);
+ assert.equal(preview.annotations.readOnlyHint,true);
+ assert.equal(upload.annotations.readOnlyHint,false);
+ assert.deepEqual(preview._meta["openai/fileParams"],["file"]);
+ assert.deepEqual(upload._meta["openai/fileParams"],["file"]);
+ for(const tool of [preview,upload]){
+   const item=tool.inputSchema.properties.file;
+   assert.deepEqual(item.required,["download_url","file_id"]);
+   assert.ok(["download_url","file_id","mime_type","file_name"].every(field=>field in item.properties));
+   assert.equal(item.additionalProperties,false);
+   assert.ok(tool.inputSchema.required.includes("brandSlug"));
+ }
+ assert.equal(findAuthorizedTool("elettro_save_chat_file_to_dropbox",reader),undefined);
+ assert.ok(findAuthorizedTool("elettro_save_chat_file_to_dropbox",writer));
+ assert.equal(findAuthorizedTool("elettro_register_brand_asset",writer),undefined);
+ const claude={...writer,clientId:"claude_code",permissions:["assets:read","folders:read"]};
+ assert.equal(toolsForClient(claude).length,6);
+ assert.equal(findAuthorizedTool("elettro_prepare_file_intake",claude),undefined);
+});
+test("ChatGPT intake guards block unapproved uploads and unsafe destinations",()=>{
+ const preview=readFileSync(new URL("../apps/web/lib/ai-mcp-intake.ts",import.meta.url),"utf8");
+ const upload=readFileSync(new URL("../apps/web/lib/ai-mcp-upload.ts",import.meta.url),"utf8");
+ const route=readFileSync(new URL("../apps/web/app/api/mcp/route.ts",import.meta.url),"utf8");
+ assert.match(preview,/insideBrand/);
+ assert.match(preview,/randomBytes\(12\)/);
+ assert.match(preview,/timingSafeEqual/);
+ assert.match(preview,/verifyExistingFolder/);
+ assert.match(preview,/needsConfirmation:true/);
+ assert.match(preview,/15\*60\*1000/);
+ assert.match(upload,/command\.confirmed!==true/);
+ assert.match(upload,/identity\.permissions\.includes\("assets:upload"\)/);
+ assert.match(upload,/verifyIntakePlan\(command\.planToken,identity,file\)/);
+ assert.match(upload,/strict_conflict:true/);
+ assert.match(upload,/matchingBrandFile/);
+ assert.match(upload,/dropboxContentHash/);
+ assert.match(upload,/redirect:"error"/);
+ assert.match(upload,/MAX_BYTES=20\*1024\*1024/);
+ assert.match(upload,/action:"complete-dropbox-upload"/);
+ assert.match(upload,/action:"inspect_global_dropbox_id"/);
+ assert.match(upload,/action:"update_asset_metadata"/);
+ assert.ok(!upload.includes("s3.amazonaws.com"));
+ assert.match(route,/await prepareChatFileIntake\(args,identity\)/);
+ assert.match(route,/await uploadApprovedChatFile\(args,identity\)/);
 });
 
 test("Step 9 Windows credential bootstrap protects raw tokens and grants read-only scope",()=>{
