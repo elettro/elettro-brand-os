@@ -211,7 +211,7 @@ async function registrationCandidates(
 
 export const AI_GATEWAY_ACTIONS = [
   "capabilities", "search_assets", "get_asset", "update_asset_metadata",
-  "register_existing_asset", "inspect_brand_registration", "inspect_registered_asset", "list_folders", "create_folder"
+  "register_existing_asset", "inspect_brand_registration", "inspect_registered_asset", "inspect_global_dropbox_id", "list_folders", "create_folder"
 ] as const;
 
 export async function executeAiGateway(input: unknown): Promise<Dict> {
@@ -256,6 +256,39 @@ export async function executeAiGateway(input: unknown): Promise<Dict> {
     const result = await api("/assets/bulk-update", { assetIds: [id], metadata: patch, markReady: false });
     if (result.updated !== 1) throw new GatewayError(502, "Metadata update was not confirmed by the registry");
     return { ok: true, updated: 1, assetId: id, brandSlug: slug, changedFields: Object.keys(patch) };
+  }
+
+  if(action==="inspect_global_dropbox_id"){
+    const config=brandConfig(command.brandSlug);
+    const id=assetId(command.assetId);
+    const response=await api("/assets?id="+encodeURIComponent(id));
+    const asset=record(response.asset);
+    if(asset.id!==id||asset.brandSlug!==config.id)
+      throw new GatewayError(404,"Asset was not found in selected brand");
+    if(asset.sourceType!=="dropbox")
+      throw new GatewayError(400,"The selected asset is not a Dropbox source");
+    const linkedIds=[asset.sourceFileId,asset.sourceExternalId]
+      .filter((value):value is string=>typeof value==="string"&&value.startsWith("id:"));
+    if(linkedIds.length===0)
+      return {ok:true,assetId:id,brandSlug:config.id,globalLookupVerified:false,
+        verificationStatus:"source_id_unavailable",lookupVersion:2,matchingRecords:0,
+        note:"No Dropbox file ID is stored on this asset. Nothing was modified."};
+    if(new Set(linkedIds).size!==1)
+      throw new GatewayError(409,"Asset contains conflicting Dropbox IDs; manual review required");
+    const dropboxFileId=linkedIds[0];
+    // This is a DB-only check. No Dropbox token request or mutation is needed.
+    const lookup=await registrationCandidates(config.id,"",dropboxFileId);
+    const matched=lookup.existing;
+    const verified=!!matched&&matched.id===id;
+    return {ok:true,brandSlug:config.id,assetId:id,
+      filename:typeof asset.filename==="string"?asset.filename:"",
+      dropboxFileId,globalLookupVerified:verified,
+      verificationStatus:verified?"globally_unique_match":"source_id_not_found_in_lookup",
+      lookupVersion:2,lookupScope:"all_registered_assets",
+      matchingRecords:matched?1:0,
+      ingestStatus:typeof asset.ingestStatus==="string"?asset.ingestStatus:null,
+      approvalStatus:typeof asset.approvalStatus==="string"?asset.approvalStatus:null,
+      note:"Read-only global database lookup by immutable Dropbox ID. No registration or Dropbox operation performed."};
   }
 
   if(action==="inspect_registered_asset"){
