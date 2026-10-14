@@ -326,3 +326,23 @@ test("Step 7 exposes one scoped read-only global ID check in Lab and both assist
  assert.equal(tool?.action,"inspect_global_dropbox_id");
  assert.ok(tool?.inputSchema.required.includes("assetId"));
 });
+
+test("DEV ChatGPT OAuth discovery facade advertises S256 while Cognito token checks remain strict",()=>{
+ const resource=readFileSync(new URL("../apps/web/app/.well-known/oauth-protected-resource/route.ts",import.meta.url),"utf8");
+ const discovery=readFileSync(new URL("../apps/web/app/.well-known/oauth-authorization-server/route.ts",import.meta.url),"utf8");
+ const oauth=readFileSync(new URL("../apps/web/lib/ai-mcp-oauth.ts",import.meta.url),"utf8");
+ const mcp=readFileSync(new URL("../apps/web/app/api/mcp/route.ts",import.meta.url),"utf8");
+ assert.match(resource,/authorization_servers:\[MCP_OAUTH_AUTHORIZATION_SERVER\]/);
+ assert.match(oauth,/MCP_OAUTH_AUTHORIZATION_SERVER=DEV_ORIGIN/);
+ assert.match(discovery,/issuer:MCP_OAUTH_AUTHORIZATION_SERVER/);
+ assert.match(discovery,/code_challenge_methods_supported:\["S256"\]/);
+ assert.match(discovery,/token_endpoint_auth_methods_supported:\["none","client_secret_basic","client_secret_post"\]/);
+ assert.match(discovery,/await chatGptOauthConfiguration\(\)/);
+ assert.ok(!discovery.includes('authorization_response_iss_parameter_supported:true'));
+ assert.ok(!discovery.includes('client_id_metadata_document_supported:true'));
+ assert.match(discovery,/COGNITO_DOMAIN\+"\\/oauth2\\/authorize"/);
+ assert.match(discovery,/COGNITO_DOMAIN\+"\\/oauth2\\/token"/);
+ assert.match(oauth,/claims\.iss!==cfg\.issuer/);
+ assert.match(oauth,/claims\.aud!==MCP_OAUTH_RESOURCE/);
+ assert.match(mcp,/oauthChallenge\(\)/);
+});
