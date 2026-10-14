@@ -126,3 +126,34 @@ CREATE UNIQUE INDEX CONCURRENTLY "Asset_dropbox_canonical_id_unique_idx"
 - Step 8 writer compatibility patch / extended audit / unique DB constraint: **NOT DEPLOYED**.
 - New AI registrations: DISABLED.
 - External ChatGPT / Claude MCP credentials: NOT PROVISIONED.
+
+## Step 8 implementation handoff — prepared October 13–14, 2026
+
+**Status:** The code and migration artifacts are prepared; nothing has been deployed into AWS for Step 8. Production and Stock Galleries remain untouched. The original user's Step 7 `audit-dropbox-ids` returned 419 assets with zero duplicate/missing/conflicting IDs and Step 7 dashboard global-ID verification passed.
+
+### Code staged on `develop`
+
+- `services/dev-api-lambda/dropbox-identity.mjs`: global immutable Dropbox file ID validation, transaction-scoped advisory lock, global lookup across both `sourceFileId` and `sourceExternalId`, two-match collision fail-closed, cross-brand/retired/conflicting-identity fail-closed; no approval/status mutation.
+- `services/dev-api-lambda/db-main.mjs`: wraps existing Dropbox sync writer in global ID transaction, preserves existing raw/status update behavior, treats unique conflicts as existing assets only when immutable ID and brand match. Extends read-only `audit-dropbox-ids` to `auditVersion:2`, `invalidSourceIdRows`, `uniquenessIndexValid`, `identityCheckValidated`.
+- `tests/dropbox-identity.test.mjs` and CI step cover reuse, source column formats, cross-brand/retired/conflicting IDs, transaction rollback and no-write path.
+- **CRITICAL:** The checked-in `services/dev-api-lambda/index.mjs` predates the real working direct Dropbox upload code. **Do not deploy the generic GitHub Lambda build artifact over the live function.**
+
+### Safe live-derived PATCH4 ZIP
+
+Generated from the exact user-confirmed PATCH3 Lambda ZIP deployed in AWS. Only `index.mjs` and `db-main.mjs` differ, plus NEW `dropbox-identity.mjs`; all other **3,646** entries match the live-derived PATCH3 package byte-for-byte. The PATCH4 `index.mjs` patches the working direct Dropbox registration handler and its separate page-ingest path, retaining existing verification, metadata, dropdown and upload code. Both files pass `node --check`. An offline helper test suite passed **18/18**. GitHub CI `d7b0728` passed.
+
+- Expected current AWS Lambda PATCH3 `Code SHA-256`: `kbLgUThwVLpK+tf9tXkMu78L28LZiXQaPuMdy2t7Lew=`.
+- PATCH4 `Code SHA-256`: `GzfIJoSxBbk+0eiO5VfIbh255y0vgAZnOVWY8j4ZRWg=`.
+- Prepared artifact filename: `elettro-brand-os-dev-api-step8-writer-safety-PATCH4.zip`. Validation report: `elettro-step8-PATCH4-validation.txt`.
+- AWS remains on PATCH3 until the owner uploads PATCH4 to DEV; this has **not** happened in the current work.
+- No Lambda code update or DB DDL has been performed by the assistant.
+
+### Pre-migration verification
+
+After checking the live Lambda SHA is PATCH3, preserve a backup and deploy **only** the prepared live-derived PATCH4 to DEV (never production). Run direct AWS Lambda Test `{"action":"audit-dropbox-ids"}` and require:
+`readOnly:true`, `auditVersion:2`, `duplicateDropboxIds:0`, `missingSourceIds:0`, `conflictingSourceIds:0`, `invalidSourceIdRows:0`. The two constraint status flags will be false until schema enforcement is applied.
+
+A separate **NOT APPLIED** SQL review bundle `elettro-step8-DB-uniqueness-migration-REVIEW.zip` contains:
+`01_extended_audit_READ_ONLY.sql`, `02_add_check_AFTER_APPROVAL.sql`, `03_unique_index_AFTER_APPROVAL.sql`, `04_verify_READ_ONLY.sql`, `05_rollback_AFTER_APPROVAL.sql`, and README. The CHECK rejects null/invalid Dropbox IDs and contradictory fields; the partial unique expression index on `COALESCE(sourceExternalId,sourceFileId)` applies across all brands including retired. `CREATE UNIQUE INDEX CONCURRENTLY` must run outside any transaction. Do not execute until explicit owner approval, live writer acceptance, clean extended audit and rollback/snapshot plan.
+
+After both writers and DB index are live and healthy, perform controlled disposable-file registration + repeat, cross-brand rejection, rename/move and Ready/Approved preservation. **New AI registrations stay disabled until that acceptance passes.** ChatGPT and Claude.ai/Claude Code credentials are not yet connected.
