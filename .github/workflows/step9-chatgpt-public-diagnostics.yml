@@ -37,3 +37,34 @@ jobs:
               payload=response.read(1000).decode('utf-8','replace')
               print(method,url, "STATUS",response.status,"CONTENT_TYPE",response.headers.get('Content-Type'),"AUTH",response.headers.get('WWW-Authenticate'),"BODY",payload[:450])
           PY
+      - name: Wait for authenticated MCP GET challenge and path-specific metadata
+        run: |
+          python3 - <<'PY'
+          import urllib.request,urllib.error,time,sys,json
+          root="https://develop.d2k28tehm1a8zw.amplifyapp.com"
+          paths=[
+            (root+"/api/mcp",401),
+            (root+"/.well-known/oauth-protected-resource/api/mcp",200)
+          ]
+          for attempt in range(1,11):
+            checks=[]
+            for path,expected in paths:
+              try:r=urllib.request.urlopen(urllib.request.Request(path,headers={"Accept":"text/event-stream"}),timeout=12)
+              except urllib.error.HTTPError as e:r=e
+              except Exception as e:checks.append((path,"NETWORK_ERROR",False));continue
+              with r:
+                challenge=r.headers.get("WWW-Authenticate","")
+                body=r.read(1500).decode("utf-8","replace")
+                valid=(r.status==expected and (
+                  "resource_metadata=" in challenge if expected==401 else
+                  '"elettro-mcp/read"' in body and '"authorization_servers"' in body
+                ))
+                checks.append((path,r.status,valid))
+            print("Attempt",attempt,checks,flush=True)
+            if all(x[2] for x in checks):
+              print("PASS: ChatGPT OAuth GET challenge and path-specific protected-resource metadata are live.",flush=True)
+              sys.exit(0)
+            if attempt<10:time.sleep(15)
+          print("NOT LIVE: DEV Amplify may still be deploying; confirm deployment before ChatGPT retry",flush=True)
+          sys.exit(1)
+          PY
