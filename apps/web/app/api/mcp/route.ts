@@ -117,7 +117,33 @@ export async function POST(request:NextRequest){
  }
  return rpcError(id,-32601,"Unsupported MCP method");
 }
-export async function GET(){
+// Streamable HTTP permits HTTP 405 for authenticated GET if SSE is not
+// implemented. Unauthenticated GET must first advertise the RFC 9728 OAuth
+// challenge; otherwise clients probing the MCP endpoint cannot discover auth.
+export async function GET(request:NextRequest){
+ const origin=request.headers.get("origin");
+ if(origin&&!allowedMcpOrigins.has(origin))
+  return NextResponse.json({error:"Invalid origin"},{status:403,headers});
+ const auth=request.headers.get("authorization");
+ if(!auth){
+  return NextResponse.json({error:"Authentication required"},{
+   status:401,headers:{...headers,"www-authenticate":oauthChallenge()}
+  });
+ }
+ try{
+  if(/^Bearer [A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(auth))
+   await authorizeChatGptOauth(auth);
+  else
+   await authorizeMcp(auth);
+ }catch(error){
+  if(error instanceof McpAuthorizationError){
+   const responseHeaders=error.status===401
+    ? {...headers,"www-authenticate":oauthChallenge()}
+    : headers;
+   return NextResponse.json({error:error.message},{status:error.status,headers:responseHeaders});
+  }
+  return NextResponse.json({error:"MCP authentication unavailable"},{status:503,headers});
+ }
  return new NextResponse(null,{status:405,headers:{...headers,allow:"POST"}});
 }
 export async function DELETE(){
