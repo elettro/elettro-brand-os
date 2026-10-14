@@ -91,6 +91,12 @@ test("Step 9 Windows credential bootstrap protects raw tokens and grants read-on
  assert.match(script,/\$Brands = @\("stashbox","elettro"\)/);
  assert.match(script,/TestClaudeCode/);
  assert.match(script,/TestClaudeWeb/);
+ assert.match(script,/headersHelper/);
+ assert.match(script,/EmitCodeHeaders/);
+ assert.match(script,/add-json elettro-dev/);
+ assert.match(script,/Copy-Item -LiteralPath \$PSCommandPath/);
+ assert.ok(!script.includes('claude mcp add --transport http'));
+
  assert.match(auth,/timingSafeEqual/);
  assert.match(auth,/WithDecryption:true/);
  assert.match(auth,/MCP credentials not provisioned/);
