@@ -1,7 +1,7 @@
 # Elettro DEV — dedicated ChatGPT PRIVATE plugin credential.
 # No plaintext token is printed or written to JSON, AWS, GitHub, or Dropbox.
 # Existing Claude and Cognito records are preserved. Run as SAME Windows user.
-param([ValidateSet("Create","CopyToken","CopyAwsJson","EnableWrites","Test")][string]$Action="Create")
+param([ValidateSet("Create","CopyToken","CopyHeader","CopyAwsJson","EnableWrites","Test")][string]$Action="Create")
 $ErrorActionPreference="Stop"
 $Dir=Join-Path $env:LOCALAPPDATA "ElettroMCP"
 $ConfigPath=Join-Path $Dir "aws-readonly-clients.json"
@@ -36,7 +36,7 @@ function SaveConfig($cfg){
 }
 function Token {
  if(-not(Test-Path -LiteralPath $TokenFile)){throw "ChatGPT protected key not found; run -Action Create first."}
- $secure=Get-Content -Raw -LiteralPath $TokenFile | ConvertTo-SecureString
+ $secure=(Get-Content -Raw -LiteralPath $TokenFile).Trim() | ConvertTo-SecureString
  $ptr=[Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
  try{return [Runtime.InteropServices.Marshal]::PtrToStringBSTR($ptr)}
  finally{[Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr)}
@@ -79,9 +79,14 @@ switch($Action){
  }
  "CopyToken" {
   $token=Token
+   $token | Set-Clipboard
+  Write-Host "Copied private ChatGPT API KEY to clipboard without displaying it. Paste only in protected plugin connection prompt."
+  break
+ }
+ "CopyHeader" {
+  $token=Token
   ("Bearer "+$token) | Set-Clipboard
-  Write-Host "Copied the private ChatGPT Authorization header to clipboard without printing it."
-  Write-Host "If the PRIVATE plugin asks for an API key without 'Bearer', use the token only, not the prefix."
+  Write-Host "Copied ChatGPT Authorization HEADER with Bearer prefix without displaying it."
   break
  }
  "EnableWrites" {
