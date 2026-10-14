@@ -443,6 +443,40 @@ export const handler = async (event = {}) => {
         });
       }
 
+      const dropboxFileId = event?.queryStringParameters?.dropboxFileId || null;
+      if (dropboxFileId) {
+        // Authoritative registry lookup over ALL assets and BOTH Dropbox ID columns.
+        // Do not rely on the most-recent-500 asset list for duplicate protection.
+        if (assetId || metadataOptions ||
+            typeof dropboxFileId !== "string" ||
+            !/^id:[A-Za-z0-9_-]{8,200}$/.test(dropboxFileId) ||
+            !DROPBOX_BRAND_ROOTS.some(([slug]) => slug === brandSlug)) {
+          return json(400, { ok: false, error: "Valid brandSlug and Dropbox file ID required" });
+        }
+        const lookup = await client.query(`
+          SELECT
+            a."id", a."filename", a."sourceType",
+            a."sourceFileId", a."sourceExternalId",
+            a."sourcePath", a."sourceUrl", a."retiredAt",
+            a."ingestStatus", a."approvalStatus",
+            b."slug" AS "brandSlug",
+            COUNT(*) OVER()::int AS "matchCount"
+          FROM "Asset" a
+          JOIN "Brand" b ON b."id" = a."brandId"
+          WHERE a."sourceType" = 'dropbox'
+            AND (a."sourceFileId" = $1 OR a."sourceExternalId" = $1)
+          ORDER BY a."retiredAt" NULLS FIRST, a."createdAt" DESC, a."id"
+          LIMIT 3
+        `, [dropboxFileId]);
+        const matchCount = lookup.rows[0]?.matchCount || 0;
+        return json(200, {
+          ok: true, lookupComplete: true, lookupVersion: 2,
+          dropboxFileId, queryBrandSlug: brandSlug,
+          matchCount,
+          matches: lookup.rows.map(({ matchCount: _count, ...asset }) => asset)
+        });
+      }
+
       if (assetId) {
         const result = await client.query(`
           SELECT
