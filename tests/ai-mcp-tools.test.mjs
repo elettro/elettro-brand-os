@@ -39,6 +39,25 @@ test("read-only clients cannot discover mutation tools",()=>{
  assert.equal(findAuthorizedTool("elettro_create_brand_folder",reader),undefined);
 });
 
+test("read-only MCP credentials advertise precisely scoped, non-mutating tools",()=>{
+ const reader={...all,clientId:"claude_code",brandSlugs:["stashbox","elettro"],
+  permissions:["assets:read","folders:read"]};
+ const tools=toolsForClient(reader);
+ assert.equal(tools.length,6);
+ assert.ok(tools.every(tool=>tool.annotations.readOnlyHint===true));
+ assert.ok(tools.every(tool=>tool.annotations.destructiveHint===false));
+ assert.ok(tools.every(tool=>tool.annotations.idempotentHint===true));
+ assert.ok(tools.every(tool=>tool.inputSchema.properties.brandSlug.enum.length===2));
+ for(const tool of MCP_TOOLS.filter(t=>!["assets:read","folders:read"].includes(t.permission)))
+  assert.equal(findAuthorizedTool(tool.name,reader),undefined);
+});
+
+test("MCP tools declare mutating operations as not read-only",()=>{
+ const writable=toolsForClient(all).filter(t=>!t.annotations.readOnlyHint);
+ assert.equal(writable.length,4);
+ assert.ok(writable.every(t=>t.annotations.destructiveHint));
+});
+
 test("write tools declare explicit human confirmation",()=>{
  for(const tool of MCP_TOOLS.filter(t=>t.permission.endsWith(":write")||t.permission==="assets:register")){
   assert.equal(tool.inputSchema.properties.confirmed.const,true);
