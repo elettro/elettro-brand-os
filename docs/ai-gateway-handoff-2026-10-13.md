@@ -153,3 +153,23 @@ Live response:
 - Stock Gallery development: paused.
 
 After Amplify deploy, search `SE53F9~1.MP4` in Stashbox, click Step 5 to verify again, then click the new **Step 6: Check existing asset for duplicates (read-only)** control. Confirm the preflight response identifies asset `08adc79a-211e-4f9a-9ebe-da2614285dad`, matching Dropbox ID `id:UM9GhyUcVDgAAAAAAAMB-g`.
+
+## Continued Step 7 work: database-wide lookup, validation and safe PATCH3
+
+Step 6 live read-only preflight returned:
+`registrationStatus:"registered"`, `preflightMatchVerified:true`, `asset.id:"08adc79a-211e-4f9a-9ebe-da2614285dad"`, `dropboxFileId:"id:UM9GhyUcVDgAAAAAAAMB-g"`, `safeToRegister:false`, `inventoryComplete:true`. **Step 6 PASS** for the selected Stashbox video; this was NOT a registration write test.
+
+**Step 7 now coded on `develop`:**
+- Backend `services/dev-api-lambda/db-main.mjs` adds authoritative `GET /assets?brandSlug=...&dropboxFileId=id%3A...`, searching ALL asset records globally by `sourceExternalId` OR `sourceFileId`, including archived/retired rows, with `lookupVersion:2`, `lookupComplete:true`, `matchCount` and `matches`. It also supports direct Lambda action `audit-dropbox-ids` for aggregate read-only collision/ID-quality metrics.
+- Gateway `registrationCandidates` now calls that full-table lookup instead of the legacy latest-500 list; fails closed on duplicate matches, conflicting IDs, retired or cross-brand records. A missing authoritative endpoint fails closed. **New AI registrations remain disabled** until DB uniqueness and a transaction-safe real new-file registration path are designed and deployed; existing exact ID registrations can be reused. This does not change the dashboard upload behavior.
+- New DB-only read action `inspect_global_dropbox_id`, a **Step 7** panel in `/ai-gateway`, and scoped read-only `elettro_verify_global_dropbox_id` MCP tool for both future assistants. No Dropbox OAuth is needed for this lookup.
+- A non-unique lookup index on `(sourceType,sourceFileId)` is added to checked-in Prisma/schema SQL but NOT applied to RDS.
+- GitHub CI passed for code commit `279303f6152893df358261357d63b09afd32889f` (new tests, web build), with an additional documentation commit afterward.
+- A **PATCH3 ZIP** was generated from the owner's previously deployed PATCH2 ZIP (`elettro-brand-os-dev-api-source-links-PATCH2.zip`). **Original AWS Code SHA-256**: `9yUq0+Hx38x9sbEvdL/SwjCIvr1fDD1nTi1IAKqMOBE=`. **New PATCH3 SHA-256**: `kbLgUThwVLpK+tf9tXkMu78L28LZiXQaPuMdy2t7Lew=`. All 3,648 ZIP entries retained; ONLY `db-main.mjs` changed. It exactly matches the reviewed GitHub module SHA `b0ebbfd0496930150c14d099bfcad29cdce31e60`; `index.mjs` and all active Dropbox upload handlers preserved. Node syntax and ZIP integrity passed.
+- Generated files available in current conversation sandbox: `/mnt/data/elettro-brand-os-dev-api-step7-global-lookup-PATCH3.zip`, `/mnt/data/elettro-step7-global-lookup-PATCH3-validation.txt`. This description is **not** a reusable sandbox link in another session—verify actual paths.
+- **Not deployed to AWS, not live verified, no DB/Dropbox modifications.** Before upload check current DEV Lambda Code SHA still equals the PATCH2 value. If changed, stop.
+- Post-deployment tests: direct Lambda Test event `{"action":"assets","queryStringParameters":{"brandSlug":"stashbox","dropboxFileId":"id:UM9GhyUcVDgAAAAAAAMB-g"}}`, expect matchCount=1 and asset ID `08adc79a-211e-4f9a-9ebe-da2614285dad`; then action `{"action":"audit-dropbox-ids"}`. After latest Amplify develop deployment, search `SE53F9~1.MP4` and click Step 7 **Verify Dropbox ID across all assets (read-only)**. Record audit values before discussing a real unique DB index.
+- Canonical uniqueness isn't currently guaranteed; direct-upload and Dropbox-sync writers use different ID columns and must be reconciled before a DB uniqueness migration. New AI file registration and repeated write test remain pending.
+- Complete operator instructions: `docs/STEP7-DROPBOX-DUPLICATE-GUARD.md`.
+
+Shared Stock Galleries remain paused. Claude Code, claude.ai and ChatGPT connectors remain to be authenticated and tested independently after core brand actions.
