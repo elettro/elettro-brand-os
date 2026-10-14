@@ -169,3 +169,14 @@ Official references:
 - Test revocation: disable a client entry and verify its token stops working; restore after re-authenticated read-only tests if required.
 - Audit consumer access before widening to all six brands or enabling writes.
 - Keep AI registration paused pending direct-AI write-flow acceptance; the existence of the Step 8 database uniqueness constraint alone does not authorize write tools.
+
+
+## Live acceptance — Claude Code and Claude.ai (October 14, 2026)
+
+The owner confirmed successful **live** read-only MCP connections to the Elettro DEV registry from **both Claude Code 2.1.299** and **Claude.ai browser** using separate credentials. The credentials are stored in AWS Parameter Store under the established MCP SecureString, with each token hash configured for all six brands and permissions only `assets:read` and `folders:read`; private tokens remain protected on the owner's Windows PC / protected Claude.ai connector settings.
+
+**Claude Code:** The Windows PowerShell MCP `add-json` invocation initially failed due to native argument quoting. A Windows-tested, backup-preserving direct user-config installation successfully registered `elettro-dev`. The owner saw six read-only tools and used them to find Stashbox asset `SE53F9~1.MP4`. Claude Code returned exact expected asset ID `08adc79a-211e-4f9a-9ebe-da2614285dad`, immutable Dropbox ID `id:UM9GhyUcVDgAAAAAAAMB-g`, source Dropbox path, Approved status, and Ready ingest status, without changes.
+
+**Claude.ai:** The owner added the custom connector `Elettro Publishing Engine` to `https://develop.d2k28tehm1a8zw.amplifyapp.com/api/mcp` with No sign-in and required Authorization request header using the separate locally generated `claude_web` bearer token. Claude.ai displayed **six read-only tools**. In a new conversation, Claude.ai directly called Elettro and confirmed the same Stashbox asset, matching immutable Dropbox identity, `pathNeedsSync:false`, `registered_in_dropbox`, and `globally_unique_match` with precisely 1 registered record. Claude.ai confirmed all six brand roots returned `ok` on folder listings: Stashbox (band, radio, shared), Elettro (images, video), SolarMeister, WeightLossDavie, Neckermann Strom, and Therasbox (the latter four listed no child folders). Folder listings alone do not establish total asset counts. All calls were read-only.
+
+**Step 9 state:** Claude Code and Claude.ai integration COMPLETE at the read-only scope, with six-brand access. ChatGPT custom MCP integration remains **not connected** and requires a separate compatible authorization/connector rollout. Do not describe ChatGPT as connected. Keep write operations, AI registration and publishing disabled pending their own guarded acceptance tests. Shared Stock Galleries, production, and Dropbox source files unaffected.
