@@ -2,14 +2,14 @@
 # Works in Windows PowerShell 5.1+; generate tokens LOCALLY, never in ChatGPT.
 # Tokens are stored using Windows DPAPI under the current user's LOCALAPPDATA.
 param(
-  [ValidateSet("Create","CopyAwsJson","TestClaudeCode","TestClaudeWeb","ConnectClaudeCode","CopyClaudeWebHeader","EmitCodeHeaders")]
+  [ValidateSet("Create","ExpandBrands","CopyAwsJson","TestClaudeCode","TestClaudeWeb","ConnectClaudeCode","CopyClaudeWebHeader","EmitCodeHeaders")]
   [string] $Action = "Create"
 )
 $ErrorActionPreference = "Stop"
 $Dir = Join-Path $env:LOCALAPPDATA "ElettroMCP"
 $ConfigFile = Join-Path $Dir "aws-readonly-clients.json"
 $Endpoint = "https://develop.d2k28tehm1a8zw.amplifyapp.com/api/mcp"
-$Brands = @("stashbox","elettro")
+$Brands = @("stashbox","elettro","solarmeister","weightlossdavie","neckermann-strom","therasbox")
 $Permissions = @("assets:read","folders:read")
 
 function New-PrivateToken {
@@ -71,6 +71,137 @@ switch ($Action) {
   Write-Host "AWS SSM JSON (hashes only): $ConfigFile"
   Write-Host "AWS SSM parameter: /amplify/d2k28tehm1a8zw/develop-branch-b11b55647b/ELETTRO_AI_MCP_CLIENTS_JSON"
   Write-Host "NEXT: Run -Action CopyAwsJson, paste into AWS Systems Manager > Parameter Store > SecureString."
+  break
+ }
+ "ExpandBrands" {
+  if (-not (Test-Path $ConfigFile)) { throw "Local configuration missing. Run Create first." }
+  $cfg = Get-Content -Raw -LiteralPath $ConfigFile | ConvertFrom-Json
+  $clients = @($cfg.clients)
+  $ids = @($clients | ForEach-Object { $_.id })
+  if ($clients.Count -ne 2 -or $ids -notcontains "claude_code" -or $ids -notcontains "claude_web") {
+    throw "Expected the existing Claude Code and Claude.ai credentials; refusing to modify unexpected config."
+  }
+  foreach ($client in $clients) {
+    if ($client.tokenSha256 -notmatch '^[0-9a-f]{64}
+  if (-not (Test-Path $ConfigFile)) { throw "Run -Action Create first." }
+  (Get-Content -Raw $ConfigFile) | Set-Clipboard
+  Write-Host "Copied HASH-ONLY config to clipboard. Paste into the SSM SecureString VALUE. No tokens are included."
+  break
+ }
+ "TestClaudeCode" {
+  $token=Unprotect-Token "claude_code"
+  try {
+   $init=Mcp-Call $token 1 "initialize" @{
+    protocolVersion="2025-06-18";capabilities=@{};clientInfo=@{name="elettro-windows-smoke";version="1"}
+   }
+   if ($init.result.serverInfo.name -ne "elettro-ai-gateway") { throw "Unexpected MCP server" }
+   $catalog=Mcp-Call $token 2 "tools/list" @{}
+   $tools=@($catalog.result.tools)
+   if ($tools.Count -ne 6) { throw "Expected precisely 6 read-only tools. Got $($tools.Count)" }
+   if (@($tools | Where-Object { $_.annotations.readOnlyHint -ne $true }).Count) {
+    throw "A tool was not marked read-only"
+   }
+   $query=Mcp-Call $token 3 "tools/call" @{
+     name="elettro_search_assets";arguments=@{brandSlug="stashbox";query="SE53F9";limit=5}
+   }
+   if ($query.result.isError) { throw "Authorized search failed" }
+   $localConfig = Get-Content -Raw -LiteralPath $ConfigFile | ConvertFrom-Json
+   $expectedBrands = @($localConfig.clients | Where-Object { $_.id -eq "claude_code" } |
+     ForEach-Object { $_.brandSlugs } | ForEach-Object { $_ })
+   $grantedBrands = @($tools[0].inputSchema.properties.brandSlug.enum)
+   if (@(Compare-Object -ReferenceObject $expectedBrands -DifferenceObject $grantedBrands).Count -gt 0) {
+     throw "AWS and local Claude Code brand permissions do not match. Update the existing SSM parameter value and retry."
+   }
+   $id = 4
+   foreach ($brand in $expectedBrands) {
+     $result=Mcp-Call $token $id "tools/call" @{
+       name="elettro_search_assets";arguments=@{brandSlug=$brand;limit=1}
+     }
+     if ($result.result.isError) { throw "Expected brand access failed: $brand" }
+     $id++
+   }
+   $denied=Mcp-Call $token $id "tools/call" @{
+     name="elettro_search_assets";arguments=@{brandSlug="outside-elettro";limit=1}
+   }
+   if (-not $denied.result.isError) { throw "Unexpected unrecognized-brand access: fail closed" }
+   Write-Host "PASS: Claude Code MCP, six read-only tools, $($expectedBrands.Count) authorized brands, unknown brand denied."
+  } finally { $token=$null }
+  break
+ }
+ "TestClaudeWeb" {
+  $token=Unprotect-Token "claude_web"
+  try {
+   $init=Mcp-Call $token 11 "initialize" @{
+    protocolVersion="2025-06-18";capabilities=@{};clientInfo=@{name="elettro-web-smoke";version="1"}
+   }
+   if ($init.result.serverInfo.name -ne "elettro-ai-gateway") { throw "Unexpected MCP server" }
+   $catalog=Mcp-Call $token 12 "tools/list" @{}
+   $tools=@($catalog.result.tools)
+   if ($tools.Count -ne 6) { throw "Expected precisely 6 read-only tools. Got $($tools.Count)" }
+   if (@($tools | Where-Object { $_.annotations.readOnlyHint -ne $true }).Count) {
+    throw "A tool was not marked read-only"
+   }
+   $localConfig = Get-Content -Raw -LiteralPath $ConfigFile | ConvertFrom-Json
+   $expectedBrands = @($localConfig.clients | Where-Object { $_.id -eq "claude_web" } |
+     ForEach-Object { $_.brandSlugs } | ForEach-Object { $_ })
+   $grantedBrands = @($tools[0].inputSchema.properties.brandSlug.enum)
+   if (@(Compare-Object -ReferenceObject $expectedBrands -DifferenceObject $grantedBrands).Count -gt 0) {
+     throw "AWS and local Claude.ai brand permissions do not match."
+   }
+   Write-Host "PASS: Claude.ai separate credential, six read-only tools, $($expectedBrands.Count) authorized brands."
+  } finally { $token=$null }
+  break
+ }
+ "EmitCodeHeaders" {
+  # Invoked only by Claude Code at connection time. Emits one JSON header
+  # object on stdout; the stored Claude config never contains a raw token.
+  $token=Unprotect-Token "claude_code"
+  try {
+   $headers=@{Authorization=("Bearer " + $token)} | ConvertTo-Json -Compress
+   [Console]::Out.WriteLine($headers)
+  } finally { $token=$null }
+  break
+ }
+ "ConnectClaudeCode" {
+  if (-not (Get-Command claude -ErrorAction SilentlyContinue)) { throw "Claude Code CLI not found. Install/sign in to Claude Code first." }
+  $installedScript=Join-Path $Dir "step9-readonly-clients.ps1"
+  if (-not (Test-Path $installedScript)) { throw "Protected credential helper not installed. Run -Action Create first." }
+  # Modern Claude Code supports headersHelper in a remote HTTP server.
+  # It reads the DPAPI-protected credential at connection time, without storing
+  # the plaintext bearer token in the Claude configuration or shell history.
+  $helperCommand='powershell.exe -NoProfile -ExecutionPolicy Bypass -File "' + $installedScript + '" -Action EmitCodeHeaders'
+  $serverJson=@{type="http";url=$Endpoint;headersHelper=$helperCommand} | ConvertTo-Json -Compress
+  & claude mcp add-json elettro-dev $serverJson --scope user
+  if ($LASTEXITCODE -ne 0) { throw "Claude Code rejected the MCP configuration. Confirm Claude Code supports headersHelper." }
+  Write-Host "Claude Code configuration added without storing the raw token in its config."
+  Write-Host "In Claude Code use /mcp to confirm connection. Do not upload your local DPAPI files."
+  break
+ }
+ "CopyClaudeWebHeader" {
+  $token=Unprotect-Token "claude_web"
+  try { ("Bearer " + $token) | Set-Clipboard }
+  finally { $token=$null }
+  Write-Host "Copied Claude.ai Authorization header VALUE to clipboard. Do NOT paste it into this chat."
+  Write-Host "In Claude.ai Custom Connector use key 'Authorization' and paste clipboard as its value."
+  break
+ }
+}
+ -or
+        @($client.permissions).Count -ne 2 -or
+        @($client.permissions) -notcontains "assets:read" -or
+        @($client.permissions) -notcontains "folders:read") {
+      throw "Unexpected credential or permissions configuration; refusing to modify."
+    }
+  }
+  $backup = Join-Path $Dir "aws-readonly-clients.pre-allbrands.json"
+  if (-not (Test-Path $backup)) {
+    Copy-Item -LiteralPath $ConfigFile -Destination $backup
+  }
+  foreach ($client in $clients) { $client.brandSlugs = @($Brands) }
+  $cfg | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $ConfigFile -Encoding UTF8
+  Write-Host "UPDATED: Both existing Claude credentials now have READ-ONLY access to all six brands in the local hash-only configuration."
+  Write-Host "Neither bearer token nor either token hash was changed. The AWS parameter is NOT updated yet."
+  Write-Host "NEXT: Run -Action CopyAwsJson, then edit (do not recreate) the existing AWS SSM SecureString value."
   break
  }
  "CopyAwsJson" {
