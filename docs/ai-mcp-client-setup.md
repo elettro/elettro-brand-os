@@ -118,3 +118,40 @@ Do not place real credentials in command histories, pastebins, tickets, or scree
 ### Registration protection
 
 The gateway now performs an identity preflight by Dropbox file ID/path. Exact existing registrations are reused without another Raw ingestion call, preserving their current Ready/Approved status. Ambiguous same-name matches fail closed for review. These behaviors have code coverage, but a real second-registration test with a disposable brand file is still pending. Step 5 of the AI Gateway Lab is read-only and safe to run first.
+
+## ChatGPT browser OAuth discovery compatibility (DEV only)
+
+Amazon Cognito's user-pool OpenID Connect metadata currently omits
+`code_challenge_methods_supported`, even when the public Cognito app client
+supports S256 PKCE. ChatGPT's MCP validation requires explicit S256 discovery.
+
+The Elettro web app offers a small discovery facade. It does **not** exchange
+tokens, issue credentials, change the Cognito app client, or modify the DEV
+Lambda, Dropbox, or asset registry:
+
+- `/.well-known/oauth-protected-resource` advertises the web origin as the OAuth authorization server while keeping the resource `/api/mcp`.
+- `/.well-known/oauth-authorization-server` advertises the web origin as its issuer, `S256` PKCE, and the existing Cognito `/oauth2/authorize` and `/oauth2/token` endpoints. Cognito performs the actual authorization-code exchange.
+- The dedicated public Cognito client's callback must match the **current** ChatGPT custom server form, exactly.
+- Do not advertise `authorization_response_iss_parameter_supported: true` because Cognito does not emit a matching facade issuer in authorization callbacks. ChatGPT must use its callback-specific redirect.
+- The MCP resource server continues validating the **real Cognito JWT issuer** (`cfg.issuer`), Cognito client ID, the exact MCP `aud`, expiry, read scope, token signature, and the verified owner via Cognito UserInfo. Do **not** relax these checks.
+- The initial discovery advertises **read** scope only. Do not enable write scopes until a real owner-authenticated read test succeeds and token claims are confirmed.
+
+After deploying a reviewed web-only change, verify these public endpoints in a browser:
+`/.well-known/oauth-protected-resource` and `/.well-known/oauth-authorization-server`.
+Both must return HTTP 200 with the same declared authorization-server issuer;
+the second must include `"code_challenge_methods_supported":["S256"]`.
+
+In ChatGPT's **Add custom MCP server** browser form, use **User-Defined OAuth
+Client** and the dedicated public Cognito client ID. Keep the client secret
+empty and the token endpoint authentication method as `none` for a verified
+public client. Check `elettro-mcp/read`, with `openid` and `email` base
+scopes. Disable the optional ChatGPT **OIDC enabled** checkbox for this
+metadata-only OAuth facade: Cognito ID tokens name the real Cognito issuer,
+not the facade issuer. The EPE backend still verifies the owner's email against
+the genuine Cognito UserInfo endpoint. Do not enter fake DCR or CIMD URLs.
+
+**Acceptance:** Browser-created plugin links via Cognito, authenticates its
+`initialize` / `tools/list` calls, and reads one registered asset. Failure
+to connect means further debugging is required. Do not infer success from
+metadata-only HTTP 200. Before enabling approved writes, test token audience
+and scopes in the Cognito app client. Do not publish files during this test.
