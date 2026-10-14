@@ -413,6 +413,48 @@ export const handler = async (event = {}) => {
       return json(200, { ok: true, dashboard: result.rows[0] });
     }
 
+    if (requestAction === "audit-dropbox-ids") {
+      // Direct Lambda test only. Aggregate read-only audit over the full Asset
+      // table, including retired records and BOTH Dropbox identifier columns.
+      const totals = await client.query(`
+        SELECT
+          COUNT(*)::int AS "dropboxAssets",
+          COUNT(*) FILTER (
+            WHERE "sourceFileId" IS NULL AND "sourceExternalId" IS NULL
+          )::int AS "missingSourceIds",
+          COUNT(*) FILTER (
+            WHERE "sourceFileId" IS NOT NULL AND "sourceExternalId" IS NOT NULL
+              AND "sourceFileId" <> "sourceExternalId"
+          )::int AS "conflictingSourceIds"
+        FROM "Asset"
+        WHERE "sourceType" = 'dropbox'
+      `);
+      const duplicates = await client.query(`
+        WITH keys AS (
+          SELECT a."id", k."dropboxId"
+          FROM "Asset" a
+          CROSS JOIN LATERAL (
+            SELECT DISTINCT "dropboxId"
+            FROM unnest(ARRAY[a."sourceFileId", a."sourceExternalId"])
+              AS identity("dropboxId")
+            WHERE "dropboxId" IS NOT NULL AND "dropboxId" <> ''
+          ) AS k
+          WHERE a."sourceType" = 'dropbox'
+        ), collisions AS (
+          SELECT "dropboxId"
+          FROM keys
+          GROUP BY "dropboxId"
+          HAVING COUNT(DISTINCT "id") > 1
+        )
+        SELECT COUNT(*)::int AS "duplicateDropboxIds" FROM collisions
+      `);
+      return json(200, {
+        ok: true, readOnly: true, auditVersion: 1,
+        ...totals.rows[0], ...duplicates.rows[0],
+        note: "This audit does not create indexes or modify database records."
+      });
+    }
+
     if (requestAction === "assets") {
       const assetId = event?.queryStringParameters?.id || null;
       const metadataOptions = event?.queryStringParameters?.metadataOptions === "1";
