@@ -12,7 +12,7 @@ const all={
 test("brand-only tools are exposed, without stock, deletion, moving or publishing",()=>{
  const names=MCP_TOOLS.map(t=>t.name);
  assert.equal(names.length,new Set(names).size);
- assert.equal(names.length,9);
+ assert.equal(names.length,10);
  assert.ok(!names.some(name=>/stock|delete|move|publish/.test(name)));
 });
 
@@ -20,7 +20,7 @@ test("two AI clients with matching scopes see equivalent operations",()=>{
  const chatgpt=toolsForClient(all);
  const claude=toolsForClient({...all,clientId:"claude"});
  assert.deepEqual(chatgpt,claude);
- assert.equal(chatgpt.length,9);
+ assert.equal(chatgpt.length,10);
 });
 
 test("each tool exposes only the caller's allowed brand slugs",()=>{
@@ -34,7 +34,7 @@ test("each tool exposes only the caller's allowed brand slugs",()=>{
 test("read-only clients cannot discover mutation tools",()=>{
  const reader={...all,brandSlugs:["stashbox"],permissions:["assets:read","folders:read"]};
  const listed=toolsForClient(reader).map(item=>item.name);
- assert.deepEqual(listed,["elettro_search_assets","elettro_get_asset","elettro_verify_brand_asset","elettro_check_brand_file","elettro_list_brand_folders"]);
+ assert.deepEqual(listed,["elettro_search_assets","elettro_get_asset","elettro_verify_brand_asset","elettro_verify_global_dropbox_id","elettro_check_brand_file","elettro_list_brand_folders"]);
  assert.equal(findAuthorizedTool("elettro_update_asset_metadata",reader),undefined);
  assert.equal(findAuthorizedTool("elettro_create_brand_folder",reader),undefined);
 });
@@ -145,6 +145,8 @@ test("global lookup and read-only duplicate audit are available in DEV Lambda wi
  assert.match(backend,/lookupComplete: true, lookupVersion: 2/);
  assert.match(backend,/HAVING COUNT\(DISTINCT "id"\) > 1/);
  assert.match(gateway,/queryBrandSlug !== brandSlug/);
+ assert.match(gateway,/action==="inspect_global_dropbox_id"/);
+ assert.match(gateway,/globalLookupVerified:verified/);
  assert.match(gateway,/recordData\.retiredAt!==null/);
  assert.match(gateway,/already indexed under another brand/);
 });
@@ -154,4 +156,15 @@ test("supporting legacy Dropbox file ID index is documented without applying a d
  const sql=readFileSync(new URL("../services/dev-api-lambda/init.sql",import.meta.url),"utf8");
  assert.match(schema,/@@index\(\[sourceType, sourceFileId\]\)/);
  assert.match(sql,/CREATE INDEX IF NOT EXISTS "Asset_sourceType_sourceFileId_idx"/);
+});
+
+test("Step 7 exposes one scoped read-only global ID check in Lab and both assistants",()=>{
+ const ui=readFileSync(new URL("../apps/web/app/ai-gateway/client.tsx",import.meta.url),"utf8");
+ assert.match(ui,/Step 7 · Database-wide Dropbox ID lookup/);
+ assert.match(ui,/action:"inspect_global_dropbox_id"/);
+ assert.match(ui,/globalLookupVerified===true/);
+ const tool=MCP_TOOLS.find(t=>t.name==="elettro_verify_global_dropbox_id");
+ assert.equal(tool?.permission,"assets:read");
+ assert.equal(tool?.action,"inspect_global_dropbox_id");
+ assert.ok(tool?.inputSchema.required.includes("assetId"));
 });
