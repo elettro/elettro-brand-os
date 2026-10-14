@@ -287,13 +287,19 @@ async function bulkUpdateAssets(event) {
     if (Object.prototype.hasOwnProperty.call(metadata, "allowedDestinations")) addSet("allowedDestinations", metadata.allowedDestinations);
     if (Object.prototype.hasOwnProperty.call(metadata, "excludedDestinations")) addSet("excludedDestinations", metadata.excludedDestinations);
 
-    sets.push('"enrichmentStatus" = \'reviewed\'::"EnrichmentStatus"');
-
-    if (body.markReady) {
-      sets.push('"ingestStatus" = \'ready\'::"IngestStatus"');
-      sets.push('"firstApprovedAt" = COALESCE("firstApprovedAt", CURRENT_TIMESTAMP)');
-    } else {
-      sets.push('"ingestStatus" = CASE WHEN "ingestStatus" = \'raw\' THEN \'needs_metadata\'::"IngestStatus" ELSE "ingestStatus" END');
+    // Metadata-only AI edits must not advance ingest/enrichment workflow.
+    // Existing dashboard review and mark-ready behavior remains the default.
+    if (body.preserveWorkflowState === true && body.markReady) {
+      return json(400, { ok: false, error: "Cannot preserve workflow state and mark ready" });
+    }
+    if (body.preserveWorkflowState !== true) {
+      sets.push('"enrichmentStatus" = \'reviewed\'::"EnrichmentStatus"');
+      if (body.markReady) {
+        sets.push('"ingestStatus" = \'ready\'::"IngestStatus"');
+        sets.push('"firstApprovedAt" = COALESCE("firstApprovedAt", CURRENT_TIMESTAMP)');
+      } else {
+        sets.push('"ingestStatus" = CASE WHEN "ingestStatus" = \'raw\' THEN \'needs_metadata\'::"IngestStatus" ELSE "ingestStatus" END');
+      }
     }
 
     sets.push('"updatedAt" = CURRENT_TIMESTAMP');
