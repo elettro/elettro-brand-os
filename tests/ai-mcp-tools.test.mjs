@@ -52,14 +52,16 @@ test("MCP route forces brand scope independent of agent-supplied fields",()=>{
  assert.match(source,/requireMcpScope\(identity,tool.permission,args.brandSlug\)/);
 });
 
-test("gateway metadata cannot mark Ready; new registration fails closed pending indexed ID lookup",()=>{
+test("gateway metadata cannot mark Ready; new AI registration remains paused until atomic uniqueness",()=>{
  const source=readFileSync(new URL("../apps/web/lib/ai-gateway.ts",import.meta.url),"utf8");
  assert.match(source,/markReady:\s*false/);
- assert.match(source,/New AI registration is paused until authoritative Dropbox-ID deduplication/);
+ assert.match(source,/New AI registration is paused until atomic Dropbox-ID uniqueness enforcement/);
  assert.match(source,/safeToRegister:false/);
- assert.match(source,/registrationStatus:existing\?"registered"/);
- assert.match(source,/a\.sourceFileId===dropboxFileId\|\|a\.sourceExternalId===dropboxFileId/);
- assert.match(source,/const inventoryComplete=rows\.length<500/);
+ assert.match(source,/registrationStatus:existing\?"registered":"not_found"/);
+ assert.match(source,/lookup\.lookupComplete !== true/);
+ assert.match(source,/lookup\.lookupVersion !== 2/);
+ assert.match(source,/count>1/);
+ assert.ok(!source.includes('await api("/assets")'));
 });
 
 test("metadata batch tool uses the same brand grant and confirmation policy",()=>{
@@ -91,7 +93,7 @@ test("Step 5 identity inspection is read-only, and registration avoids Raw reset
  assert.match(src,/action === "inspect_brand_registration"/);
  assert.match(src,/if\(existing\)\{/);
  assert.match(src,/Existing asset reused\. Registration was skipped/);
- assert.match(src,/Too many potential registration matches/);
+ assert.match(src,/Conflicting registrations for this Dropbox file ID/);
  const verifyTool=MCP_TOOLS.find(t=>t.name==="elettro_verify_brand_asset");
  assert.equal(verifyTool?.permission,"assets:read");
 });
@@ -117,10 +119,10 @@ test("direct Dropbox uploads resolve via sourceExternalId/sourceUrl while sync u
  const source=readFileSync(new URL("../apps/web/lib/ai-gateway.ts",import.meta.url),"utf8");
  assert.match(source,/asset\.sourceExternalId/);
  assert.match(source,/asset\.sourceUrl/);
- assert.match(source,/row\.sourceUrl/);
- assert.match(source,/a\.sourceExternalId/);
- assert.match(source,/a\.sourceFileId===dropboxFileId\|\|a\.sourceExternalId===dropboxFileId/);
- assert.match(source,/new AI registrations until that DB-indexed lookup exists/);
+ assert.match(source,/recordData\.sourceExternalId/);
+ assert.match(source,/recordData\.sourceFileId/);
+ assert.match(source,/lookupVersion !== 2/);
+ assert.match(source,/database\s+enforces global uniqueness/);
  assert.match(source,/sourceType!=="dropbox"/);
 });
 
@@ -131,4 +133,25 @@ test("Step 6 UI verifies the same immutable Dropbox ID without calling registrat
  assert.match(ui,/preflightMatchVerified:matches/);
  assert.match(ui,/result\.safeToRegister===false/);
  assert.ok(!ui.includes('action:"register_existing_asset"'));
+});
+
+test("global lookup and read-only duplicate audit are available in DEV Lambda without relying on limit-500 list",()=>{
+ const backend=readFileSync(new URL("../services/dev-api-lambda/db-main.mjs",import.meta.url),"utf8");
+ const gateway=readFileSync(new URL("../apps/web/lib/ai-gateway.ts",import.meta.url),"utf8");
+ assert.match(backend,/requestAction === "audit-dropbox-ids"/);
+ assert.match(backend,/WHERE a\."sourceType" = 'dropbox'/);
+ assert.match(backend,/a\."sourceFileId" = \$1 OR a\."sourceExternalId" = \$1/);
+ assert.match(backend,/COUNT\(\*\) OVER\(\)::int AS "matchCount"/);
+ assert.match(backend,/lookupComplete: true, lookupVersion: 2/);
+ assert.match(backend,/HAVING COUNT\(DISTINCT "id"\) > 1/);
+ assert.match(gateway,/queryBrandSlug !== brandSlug/);
+ assert.match(gateway,/recordData\.retiredAt!==null/);
+ assert.match(gateway,/already indexed under another brand/);
+});
+
+test("supporting legacy Dropbox file ID index is documented without applying a database migration",()=>{
+ const schema=readFileSync(new URL("../packages/database/prisma/schema.prisma",import.meta.url),"utf8");
+ const sql=readFileSync(new URL("../services/dev-api-lambda/init.sql",import.meta.url),"utf8");
+ assert.match(schema,/@@index\(\[sourceType, sourceFileId\]\)/);
+ assert.match(sql,/CREATE INDEX IF NOT EXISTS "Asset_sourceType_sourceFileId_idx"/);
 });
