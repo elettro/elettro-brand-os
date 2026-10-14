@@ -110,6 +110,20 @@ test("ChatGPT OAuth integration is fail-closed and preserves Claude bearer authe
  assert.ok(!route.includes("return toolsForClient({clientId:\"chatgpt_oauth\""));
 });
 
+test("ChatGPT discovery supports GET challenge and both RFC 9728 metadata paths",()=>{
+ const route=readFileSync(new URL("../apps/web/app/api/mcp/route.ts",import.meta.url),"utf8");
+ const variant=readFileSync(new URL("../apps/web/app/.well-known/oauth-protected-resource/api/mcp/route.ts",import.meta.url),"utf8");
+ const metadata=readFileSync(new URL("../apps/web/app/.well-known/oauth-protected-resource/route.ts",import.meta.url),"utf8");
+ const body=route.split("export async function GET(request:NextRequest)")[1]?.split("export async function DELETE")[0]||"";
+ assert.match(body,/if\(!auth\)/);
+ assert.match(body,/status:401,headers:\{\.\.\.headers,"www-authenticate":oauthChallenge\(\)\}/);
+ assert.match(body,/await authorizeMcp\(auth\)/);
+ assert.match(body,/await authorizeChatGptOauth\(auth\)/);
+ assert.match(body,/status:405/);
+ assert.match(variant,/export \{GET, runtime, dynamic\} from/);
+ assert.match(metadata,/chatGptOauthConfiguration\(\)/);
+});
+
 test("Step 9 Windows credential bootstrap protects raw tokens and grants read-only scope",()=>{
  const script=readFileSync(new URL("../scripts/step9-readonly-clients.ps1",import.meta.url),"utf8");
  const auth=readFileSync(new URL("../apps/web/lib/ai-mcp-auth.ts",import.meta.url),"utf8");
