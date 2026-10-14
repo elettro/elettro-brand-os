@@ -11,7 +11,9 @@ type Client={id:string;tokenSha256:string;brandSlugs:string[];permissions:McpPer
 export class McpAuthorizationError extends Error {
  constructor(public status:number,message:string){super(message);this.name="McpAuthorizationError";}
 }
-async function clientConfig():Promise<Client[]>{
+// Keep all MCP client settings in the existing encrypted DEV-only SSM value.
+// Its existing "clients" entries remain untouched when adding "chatgptOauth".
+export async function loadMcpAuthSettings():Promise<{clients:Client[];chatgptOauth?:unknown}>{
  if(process.env.AWS_BRANCH&&process.env.AWS_BRANCH!=="develop")
   throw new McpAuthorizationError(404,"DEV only");
  let raw=process.env.ELETTRO_AI_MCP_CLIENTS_JSON;
@@ -21,10 +23,13 @@ async function clientConfig():Promise<Client[]>{
  }
  if(!raw)throw new McpAuthorizationError(503,"MCP credentials not provisioned");
  try{
-  const data=JSON.parse(raw) as {clients?:unknown};
+  const data=JSON.parse(raw) as {clients?:unknown;chatgptOauth?:unknown};
   if(!Array.isArray(data.clients))throw Error("Invalid");
-  return data.clients as Client[];
+  return {...data,clients:data.clients as Client[]};
  }catch{throw new McpAuthorizationError(503,"Invalid MCP credential configuration");}
+}
+async function clientConfig():Promise<Client[]>{
+ return (await loadMcpAuthSettings()).clients;
 }
 export async function authorizeMcp(header:string|null):Promise<McpIdentity>{
  if(!header||!/^Bearer [A-Za-z0-9_-]{43,256}$/.test(header))
