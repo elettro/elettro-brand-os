@@ -250,6 +250,7 @@ CREATE INDEX IF NOT EXISTS "Asset_brandId_collectionId_idx" ON "Asset"("brandId"
 CREATE INDEX IF NOT EXISTS "Asset_brandId_campaignId_idx" ON "Asset"("brandId","campaignId");
 CREATE INDEX IF NOT EXISTS "Asset_sourcePathLower_idx" ON "Asset"("sourcePathLower");
 CREATE INDEX IF NOT EXISTS "Asset_sourceType_sourceExternalId_idx" ON "Asset"("sourceType","sourceExternalId");
+CREATE INDEX IF NOT EXISTS "Asset_sourceType_sourceFileId_idx" ON "Asset"("sourceType","sourceFileId");
 CREATE INDEX IF NOT EXISTS "Asset_shopifyStoreId_shopifyProductId_idx" ON "Asset"("shopifyStoreId","shopifyProductId");
 
 INSERT INTO "Organization" ("name","slug","updatedAt")
