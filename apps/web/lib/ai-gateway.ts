@@ -160,62 +160,53 @@ type RegistrationRecord = {
   ingestStatus?: string; approvalStatus?: string;
 };
 async function registrationCandidates(
-  brandSlug: string, path: string, dropboxFileId: string
+  brandSlug: string, _path: string, dropboxFileId: string
 ): Promise<{existing?: RegistrationRecord; uncertain: RegistrationRecord[]; inventoryComplete: boolean}> {
-  const response = await api("/assets");
-  if (!Array.isArray(response.assets)) throw new GatewayError(502,"Unable to inspect asset registry");
-  const filename=path.slice(path.lastIndexOf("/")+1).toLowerCase();
-  const rows=response.assets.filter((value):value is Dict=>!!value&&typeof value==="object"&&!Array.isArray(value));
-  // The upstream GET /assets query has LIMIT 500. Absence from that page is
-  // never proof that an arbitrary Dropbox ID is not already registered.
-  const inventoryComplete=rows.length<500;
-  const candidateRows=rows.filter(row=>
-    row.sourceFileId===dropboxFileId||row.sourceExternalId===dropboxFileId||
-    (typeof row.sourcePath==="string"&&row.sourcePath.toLowerCase()===path.toLowerCase())||
-    (typeof row.sourceUrl==="string"&&row.sourceUrl.toLowerCase()===path.toLowerCase())||
-    (String(row.filename||"").toLowerCase()===filename&&row.brandSlug===brandSlug)
+  // This endpoint queries the entire database by immutable Dropbox ID.
+  // The legacy GET /assets endpoint contains only the latest 500 records
+  // and MUST NOT be used to authorize asset registration.
+  const lookup = await api(
+    "/assets?brandSlug=" + encodeURIComponent(brandSlug) +
+    "&dropboxFileId=" + encodeURIComponent(dropboxFileId)
   );
-  if(candidateRows.length>40)
-    throw new GatewayError(409,"Too many potential registration matches for safe automatic deduplication");
-  const shortlist=candidateRows;
-  const detailed:RegistrationRecord[]=[];
-  for(const entry of shortlist){
-    const identifier=typeof entry.id==="string"?entry.id:"";
-    if(!identifier)continue;
-    // The list API may omit source identifiers. Fetch detailed candidates.
-    let data:Dict=entry;
-    if(!entry.sourceFileId&&!entry.sourceExternalId&&!entry.sourcePath&&!entry.sourceUrl){
-      const detail=await api("/assets?id="+encodeURIComponent(identifier));
-      data=record(detail.asset);
-    }
-    detailed.push({
-      id:identifier,brandSlug:String(data.brandSlug||entry.brandSlug||""),
-      filename:String(data.filename||entry.filename||""),
-      ...(typeof data.sourceFileId==="string"?{sourceFileId:data.sourceFileId}:{}),
-      ...(typeof data.sourceExternalId==="string"?{sourceExternalId:data.sourceExternalId}:{}),
-      ...(typeof data.sourcePath==="string"?{sourcePath:data.sourcePath}:{}),
-      ...(typeof data.sourceUrl==="string"?{sourceUrl:data.sourceUrl}:{}),
-      ...(typeof data.ingestStatus==="string"?{ingestStatus:data.ingestStatus}:{}),
-      ...(typeof data.approvalStatus==="string"?{approvalStatus:data.approvalStatus}:{})
-    });
+  if (lookup.lookupComplete !== true || lookup.lookupVersion !== 2 ||
+      lookup.dropboxFileId !== dropboxFileId ||
+      lookup.queryBrandSlug !== brandSlug ||
+      !Number.isInteger(lookup.matchCount) ||
+      !Array.isArray(lookup.matches)) {
+    throw new GatewayError(502, "Authoritative Dropbox-ID lookup is not available");
   }
-  // Only immutable Dropbox ID equality proves an existing registration.
-  // Paths and basenames can be reused after moving/replacing a source file.
-  const exact=detailed.filter(a=>
-    a.sourceFileId===dropboxFileId||a.sourceExternalId===dropboxFileId
-  );
-  if(exact.some(a=>a.brandSlug!==brandSlug))
-    throw new GatewayError(409,"Dropbox file is already indexed under a different brand");
-  if(exact.length>1)
-    throw new GatewayError(409,"Multiple asset records reference this Dropbox file; registration blocked");
-  // Same-name records that cannot be conclusively matched by Dropbox ID/path
-  // stay in review; never submit them to the Raw registration path blindly.
-  const uncertain=detailed.filter(a=>a.brandSlug===brandSlug&&
-    (a.filename.toLowerCase()===filename||
-     a.sourcePath?.toLowerCase()===path.toLowerCase()||
-     a.sourceUrl?.toLowerCase()===path.toLowerCase())&&
-    !exact.some(b=>b.id===a.id));
-  return {existing:exact[0],uncertain,inventoryComplete};
+  const count=lookup.matchCount as number;
+  const entries=lookup.matches as unknown[];
+  if(count<0 || count>1 || count!==entries.length)
+    throw new GatewayError(409, "Conflicting registrations for this Dropbox file ID; manual review required");
+  if(count===0)return {inventoryComplete:true,uncertain:[]};
+  const recordData=record(entries[0]);
+  const sourceFileId=recordData.sourceFileId;
+  const sourceExternalId=recordData.sourceExternalId;
+  if(recordData.sourceType!=="dropbox" ||
+      (sourceFileId!==dropboxFileId&&sourceExternalId!==dropboxFileId))
+    throw new GatewayError(502,"Registry did not return a matching Dropbox file ID");
+  if((typeof sourceFileId==="string"&&sourceFileId!==dropboxFileId) ||
+     (typeof sourceExternalId==="string"&&sourceExternalId!==dropboxFileId))
+    throw new GatewayError(409,"The asset has conflicting Dropbox IDs; manual review required");
+  if(recordData.retiredAt!==null&&recordData.retiredAt!==undefined)
+    throw new GatewayError(409,"This Dropbox file is linked to a retired asset; manual review required");
+  if(recordData.brandSlug!==brandSlug)
+    throw new GatewayError(409,"Dropbox file is already indexed under another brand");
+  if(typeof recordData.id!=="string"||
+     typeof recordData.filename!=="string")
+    throw new GatewayError(502,"Registry returned an invalid asset identity");
+  const existing:RegistrationRecord={
+    id:recordData.id,brandSlug,filename:recordData.filename,
+    ...(typeof sourceFileId==="string"?{sourceFileId}:{}),
+    ...(typeof sourceExternalId==="string"?{sourceExternalId}:{}),
+    ...(typeof recordData.sourcePath==="string"?{sourcePath:recordData.sourcePath}:{}),
+    ...(typeof recordData.sourceUrl==="string"?{sourceUrl:recordData.sourceUrl}:{}),
+    ...(typeof recordData.ingestStatus==="string"?{ingestStatus:recordData.ingestStatus}:{}),
+    ...(typeof recordData.approvalStatus==="string"?{approvalStatus:recordData.approvalStatus}:{})
+  };
+  return {existing,uncertain:[],inventoryComplete:true};
 }
 
 export const AI_GATEWAY_ACTIONS = [
@@ -232,7 +223,7 @@ export async function executeAiGateway(input: unknown): Promise<Dict> {
     actions: [...AI_GATEWAY_ACTIONS],
     limitations: ["Session-authenticated only; external MCP/OAuth adapter not connected",
       "Shared stock registration and folder/file moves are not enabled",
-      "New AI registration is temporarily disabled pending a full-database Dropbox-ID lookup",
+      "New AI registration is temporarily disabled pending database-enforced ID uniqueness",
       "No AI action can directly publish an asset"]
   };
 
@@ -338,8 +329,7 @@ export async function executeAiGateway(input: unknown): Promise<Dict> {
     const existing=registry.existing;
     if(action==="inspect_brand_registration"){
       return {ok:true,brandSlug:config.id,path:resolved,dropboxFileId:file.id,
-        registrationStatus:existing?"registered":registry.uncertain.length?"needs_review":
-          registry.inventoryComplete?"unconfirmed_absence":"incomplete_inventory",
+        registrationStatus:existing?"registered":"not_found",
         asset:existing?{
           id:existing.id,filename:existing.filename,
           ingestStatus:existing.ingestStatus,approvalStatus:existing.approvalStatus
@@ -348,7 +338,7 @@ export async function executeAiGateway(input: unknown): Promise<Dict> {
         safeToRegister:false,
         inventoryComplete:registry.inventoryComplete,
         note:existing?"Immutable Dropbox ID matched an existing brand asset. No registration performed.":
-          "A search of the capped registry list cannot authorize creation. An indexed Dropbox-ID lookup is required before registering a new file. No files or records modified."};
+          "Authoritative database-wide lookup found no matching Dropbox ID. Creation is still paused pending atomic uniqueness enforcement. No files or records modified."};
     }
     if(registry.uncertain.length)
       throw new GatewayError(409,"Registration blocked: potential existing asset cannot be conclusively matched by Dropbox ID");
@@ -364,12 +354,11 @@ export async function executeAiGateway(input: unknown): Promise<Dict> {
         approvalStatus:existing.approvalStatus,metadataUpdated:Object.keys(metadata).length>0,
         message:"Existing asset reused. Registration was skipped to preserve its publishing state."};
     }
-    // The registry currently exposes only a capped recent-assets listing,
-    // not an authoritative lookup across every brand by immutable Dropbox ID.
-    // Refuse new AI registrations until that DB-indexed lookup exists.
-    // Existing exact-ID registrations above can still be safely reused.
+    // The global lookup now proves whether an ID exists, but read-then-insert
+    // alone is not race-safe. Keep creation disabled until the database
+    // enforces global uniqueness across BOTH Dropbox source columns.
     throw new GatewayError(409,
-      "New AI registration is paused until authoritative Dropbox-ID deduplication is available");
+      "New AI registration is paused until atomic Dropbox-ID uniqueness enforcement is available");
   }
 
   if (action === "list_folders" || action === "create_folder") {
