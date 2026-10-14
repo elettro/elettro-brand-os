@@ -35,6 +35,18 @@ jobs:
       - name: Test cross-column Dropbox ID guard
         run: node --test tests/dropbox-identity.test.mjs
 
+      - name: Validate Step 9 Windows PowerShell setup script syntax
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile("./scripts/step9-readonly-clients.ps1", [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            exit 1
+          }
+          Write-Host "PASS: Step 9 PowerShell script parses"
+
       - name: Generate Prisma client
         run: npm run db:generate
         env:
