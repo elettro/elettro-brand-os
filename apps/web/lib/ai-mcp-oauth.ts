@@ -7,7 +7,7 @@ import {loadMcpAuthSettings,McpAuthorizationError,type McpIdentity} from "@/lib/
  * DEV-only OAuth compatibility for ChatGPT's custom MCP connector.
  * Requires a dedicated PUBLIC Cognito authorization-code+PKCE app client,
  * a resource binding to this exact MCP URL, and the custom scope
- * "elettro-mcp/read". This code never mints, exchanges, or stores tokens.
+ * "<exact MCP resource URL>/read". This code never mints, exchanges, or stores tokens.
  *
  * Existing 43-character static Claude bearer tokens are handled separately.
  * Unless the dedicated Cognito configuration is explicitly provisioned in
@@ -18,8 +18,11 @@ export const MCP_OAUTH_RESOURCE=DEV_ORIGIN+"/api/mcp";
 // all authentication and token verification remain at the configured Cognito issuer.
 export const MCP_OAUTH_AUTHORIZATION_SERVER=DEV_ORIGIN;
 export const MCP_OAUTH_METADATA=DEV_ORIGIN+"/.well-known/oauth-protected-resource";
-export const MCP_OAUTH_SCOPE="elettro-mcp/read";
-export const MCP_OAUTH_WRITE_SCOPE="elettro-mcp/write";
+// Cognito resource binding (RFC 8707) requires scopes registered under the
+// exact requested resource URI. A legacy "elettro-mcp/read" scope belongs to a
+// different resource server and is deliberately not accepted here.
+export const MCP_OAUTH_SCOPE=MCP_OAUTH_RESOURCE+"/read";
+export const MCP_OAUTH_WRITE_SCOPE=MCP_OAUTH_RESOURCE+"/write";
 const ISSUER_PATTERN=/^https:\/\/cognito-idp\.us-east-1\.amazonaws\.com\/us-east-1_[A-Za-z0-9]+$/;
 const CLIENT_PATTERN=/^[a-z0-9]{10,128}$/i;
 const MAX_JWT_LENGTH=16384;
