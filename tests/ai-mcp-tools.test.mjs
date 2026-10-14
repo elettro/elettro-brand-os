@@ -340,8 +340,8 @@ test("DEV ChatGPT OAuth discovery facade advertises S256 while Cognito token che
  assert.match(discovery,/await chatGptOauthConfiguration\(\)/);
  assert.ok(!discovery.includes('authorization_response_iss_parameter_supported:true'));
  assert.ok(!discovery.includes('client_id_metadata_document_supported:true'));
- assert.match(discovery,/COGNITO_DOMAIN\+"\\/oauth2\\/authorize"/);
- assert.match(discovery,/COGNITO_DOMAIN\+"\\/oauth2\\/token"/);
+ assert.ok(discovery.includes('COGNITO_DOMAIN+"/oauth2/authorize"'));
+ assert.ok(discovery.includes('COGNITO_DOMAIN+"/oauth2/token"'));
  assert.match(oauth,/claims\.iss!==cfg\.issuer/);
  assert.match(oauth,/claims\.aud!==MCP_OAUTH_RESOURCE/);
  assert.match(mcp,/oauthChallenge\(\)/);
