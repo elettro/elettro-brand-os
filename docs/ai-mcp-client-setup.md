@@ -1,5 +1,7 @@
 # Elettro AI Gateway: AI Client Setup (development)
 
+> **October 13 Step 9 update:** Begin with the **read-only, separately scoped** Claude Code and Claude.ai credentials in [Step 9 setup instructions](./STEP9-READONLY-MCP-CONNECTIONS.md). The broader write-enabled client example later in this document is **not approved for initial provisioning**. ChatGPT's credential and OAuth setup remain separate. No external MCP clients have been verified connected yet.
+
 ## Purpose and rollout status
 
 One operational contract for **ChatGPT, Claude and the dashboard**. Each AI client runs the same brand-scoped MCP tools implemented by Elettro, backed by one Dropbox filesystem and one asset registry.
@@ -26,22 +28,24 @@ An environment variable `ELETTRO_AI_MCP_CLIENTS_JSON` is also supported. Store o
 {
   "clients": [
     {
-      "id": "chatgpt",
-      "tokenSha256": "REPLACE_WITH_64_HEX_SHA256",
-      "brandSlugs": ["stashbox", "elettro", "solarmeister", "weightlossdavie", "neckermann-strom", "therasbox"],
-      "permissions": ["assets:read", "assets:write", "assets:register", "folders:read", "folders:write"]
+      "id": "claude_code",
+      "tokenSha256": "REPLACE_WITH_FIRST_64_HEX_SHA256",
+      "brandSlugs": ["stashbox", "elettro"],
+      "permissions": ["assets:read", "folders:read"],
+      "enabled": true
     },
     {
-      "id": "claude",
-      "tokenSha256": "A_DIFFERENT_64_HEX_SHA256",
-      "brandSlugs": ["stashbox", "elettro", "solarmeister", "weightlossdavie", "neckermann-strom", "therasbox"],
-      "permissions": ["assets:read", "assets:write", "assets:register", "folders:read", "folders:write"]
+      "id": "claude_web",
+      "tokenSha256": "REPLACE_WITH_SECOND_64_HEX_SHA256",
+      "brandSlugs": ["stashbox", "elettro"],
+      "permissions": ["assets:read", "folders:read"],
+      "enabled": true
     }
   ]
 }
 ```
 
-Generate a different random token for each provider with a local terminal (never in ChatGPT or source control):
+For initial setup, use the [Windows DPAPI-protected Step 9 generator](../scripts/step9-readonly-clients.ps1), which creates a separate token for each Claude client and saves only token hashes in the SSM JSON. The one-off command below is a fallback for technical operators, not the recommended guided setup.
 
 ```bash
 node -e 'const c=require("node:crypto");const token=c.randomBytes(32).toString("base64url"); console.log("SAVE TOKEN PRIVATELY:",token); console.log("STORE ONLY SHA256:",c.createHash("sha256").update(token).digest("hex"));'
