@@ -42,7 +42,7 @@ export const MCP_TOOLS:ToolDefinition[]=[
   inputSchema:schema({path:{type:"string"},name:{type:"string"},confirmed:approval},["name","confirmed"])}
 ];
 export function toolsForClient(identity:McpIdentity){
- return MCP_TOOLS.filter(t=>identity.permissions.includes(t.permission)&&(!t.chatgptOnly||identity.clientId==="chatgpt_oauth")).map(t=>{
+ return MCP_TOOLS.filter(t=>identity.permissions.includes(t.permission)&&(!t.chatgptOnly||(identity.clientId==="chatgpt_oauth"||identity.clientId==="chatgpt_private"))).map(t=>{
   const readOnly=t.permission==="assets:read"||t.permission==="folders:read";
   return {
    name:t.name,description:t.description,
@@ -57,5 +57,5 @@ export function toolsForClient(identity:McpIdentity){
  });
 }
 export function findAuthorizedTool(name:string,identity:McpIdentity){
- return MCP_TOOLS.find(t=>t.name===name&&identity.permissions.includes(t.permission)&&(!t.chatgptOnly||identity.clientId==="chatgpt_oauth"));
+ return MCP_TOOLS.find(t=>t.name===name&&identity.permissions.includes(t.permission)&&(!t.chatgptOnly||(identity.clientId==="chatgpt_oauth"||identity.clientId==="chatgpt_private")));
 }
