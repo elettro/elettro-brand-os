@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
 import pg from "pg";
+import { withDropboxIdentityTransaction, findDropboxAsset, DropboxIdentityConflict } from "./dropbox-identity.mjs";
 
 const { Client } = pg;
 const secrets = new SecretsManagerClient({});
@@ -295,15 +296,8 @@ export const handler = async (event = {}) => {
         }
 
         const root = rootByBrandId.get(brandId);
-        const existing = await client.query(
-          `SELECT "id" FROM "Asset"
-           WHERE "brandId" = $1
-             AND "sourceType" = 'dropbox'
-             AND "sourceFileId" = $2
-           LIMIT 1`,
-          [brandId, entry.id]
-        );
-
+        await withDropboxIdentityTransaction(client,entry.id,brandId,async(identified)=>{
+        const existing={rows:identified?[{id:identified.id}]:[]};
         if (existing.rows[0]) {
           await client.query(
             `UPDATE "Asset"
@@ -334,14 +328,14 @@ export const handler = async (event = {}) => {
             ]
           );
         } else {
-          await client.query(
+          const insertedAsset=await client.query(
             `INSERT INTO "Asset"
               ("brandId","storageRootId","sourceType","sourceFileId","sourceMetadata",
                "sourcePath","sourcePathLower","contentHash","filename","fileSizeBytes",
                "kind","ingestStatus","enrichmentStatus","approvalStatus","updatedAt")
              VALUES
               ($1,$2,'dropbox',$3,$4::jsonb,$5,$6,$7,$8,$9,$10::"AssetKind",
-               'raw','pending','approved',CURRENT_TIMESTAMP)`,
+               'raw','pending','approved',CURRENT_TIMESTAMP) ON CONFLICT DO NOTHING RETURNING "id"`,
             [
               brandId,
               root?.id ?? null,
@@ -359,8 +353,13 @@ export const handler = async (event = {}) => {
               kind
             ]
           );
+          if(!insertedAsset.rows[0]) {
+            const concurrent=await findDropboxAsset(client,entry.id,brandId);
+            if(!concurrent)throw new DropboxIdentityConflict("Dropbox sync insert collided with an unrelated constraint");
+          }
         }
 
+        });
         indexed += 1;
       }
 
@@ -668,6 +667,10 @@ export const handler = async (event = {}) => {
       result: result.rows[0]
     });
   } catch (error) {
+    if(error instanceof DropboxIdentityConflict) {
+      console.error("[dropbox-identity] rejected", error.message);
+      return json(409,{ok:false,error:error.message});
+    }
     console.error("[health] failed:", error instanceof Error ? error.message : error);
     return json(500, {
       ok: false,
