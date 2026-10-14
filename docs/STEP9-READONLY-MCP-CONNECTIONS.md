@@ -1,6 +1,6 @@
 # Step 9 — Read-only Claude Code / Claude.ai / ChatGPT connectivity
 
-**Current status:** MCP service exists on DEV. Provider credentials are **not yet provisioned**. No Claude client or ChatGPT connection has yet been proven live. This first phase supports read-only connections for Stashbox and Elettro, not mutations.
+**Current status:** MCP service exists on DEV. Provider credentials are **not yet provisioned**. No Claude client or ChatGPT connection has yet been proven live. The owner requested that both dedicated Claude credentials have read-only access to **all six** brands. The initial Stashbox/Elettro-only credential provisioning was a temporary least-privilege acceptance test, not a limit on the owner. This is still not Elettro login/password authentication; each Claude client has its own revocable service credential.
 
 Endpoint: `https://develop.d2k28tehm1a8zw.amplifyapp.com/api/mcp`
 
@@ -45,7 +45,7 @@ In AWS Console, Region **us-east-1** → **Systems Manager → Parameter Store**
 - KMS: default AWS managed SSM key (or an authorized existing key)
 - Value: JSON containing two `clients` objects from the local hash-only file.
 - Client IDs: `claude_code`, `claude_web`.
-- Each client allows only `stashbox` and `elettro`, and permissions `assets:read` and `folders:read`.
+- Each owner-controlled Claude client should now allow all six: `stashbox`, `elettro`, `solarmeister`, `weightlossdavie`, `neckermann-strom`, and `therasbox`. Permissions remain strictly `assets:read` and `folders:read`.
 
 To copy just the hash-only JSON into the clipboard:
 
@@ -57,6 +57,30 @@ Then paste it into the **SecureString Value** field. Don't paste raw tokens into
 
 **IMPORTANT:** Check if the named parameter already exists first; don't overwrite a working configuration without reviewing/merging it. Ensure Amplify's DEV SSR execution role is allowed `ssm:GetParameter` and `kms:Decrypt` as applicable for that specific parameter. A 503 from MCP usually means missing parameters/IAM; a 401 means invalid/missing bearer credential.
 
+### Promoting the *existing* two-brand owner credentials to all six brands
+
+If you already completed the first successful two-brand smoke test, do **not** regenerate credentials, delete the SSM parameter, or call `-Action Create` again. Download the current version of `scripts/step9-readonly-clients.ps1` from `develop`, replacing the old downloaded .ps1 (keep the generated DPAPI credential files unchanged).
+
+Run in PowerShell:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File "$HOME\\Downloads\\step9-readonly-clients.ps1" -Action ExpandBrands
+```
+
+This saves a **hash-only** local backup and changes the `brandSlugs` arrays of the **existing** `claude_code` and `claude_web` clients to all six brands. It does not regenerate tokens, change token hashes, or modify AWS.
+
+Then copy the local hash-only config to the clipboard:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File "$HOME\\Downloads\\step9-readonly-clients.ps1" -Action CopyAwsJson
+```
+
+In AWS Systems Manager → Parameter Store (`us-east-1`), open the **existing** `/amplify/d2k28tehm1a8zw/develop-branch-b11b55647b/ELETTRO_AI_MCP_CLIENTS_JSON` **SecureString**, click **Edit**, replace the Value with the clipboard JSON, and **Save changes**. Do **not** create another parameter, reveal its Value in screenshots, or modify the role's IAM policy. The role already has narrowly scoped `ssm:GetParameter` via `ElettroDevMcpCredentialsRead`.
+
+After saving, rerun the read-only `-Action TestClaudeCode` test below. It now checks that every grant in the AWS MCP tool manifest matches the local brand list; it searches all authorized brand catalogs without changing files and tests denial of a deliberately nonexistent `outside-elettro` brand. You should see `6 authorized brands` and `unknown brand denied`.
+
+The developer-facing code and tests can safely know all six brand identifiers; **never** store the plaintext bearer credentials in source control, shared screenshots, or chat.
+
 ## 3. Read-only MCP acceptance test, before any Claude connection
 
 After GitHub CI / Amplify `develop` deployment of the annotations and parameter provisioning:
@@ -67,7 +91,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\step9-readonly-clients.ps1
 
 Expected output:
 ```text
-PASS: authenticated MCP, six read-only tools, Stashbox asset search, cross-brand access denied.
+PASS: Claude Code MCP, six read-only tools, 6 authorized brands, unknown brand denied.
 ```
 
 This tests the HTTP MCP protocol, authenticated read-only tool manifest, search of an existing known Stashbox asset, and denial of the unauthorized `solarmeister` brand. **If the test fails, do not connect any client yet; provide the error text only, never a bearer token or full header.**
@@ -80,7 +104,7 @@ Before configuring the browser connector, test its separate credential:
 powershell -NoProfile -ExecutionPolicy Bypass -File .\\step9-readonly-clients.ps1 -Action TestClaudeWeb
 ```
 
-Expected: `PASS: Claude.ai separate credential authenticated with precisely six read-only tools.`
+Expected: `PASS: Claude.ai separate credential, six read-only tools, 6 authorized brands.`
 
 ## 4. Connect Claude Code
 
@@ -135,7 +159,7 @@ Official references:
 
 ## Hard gates for any further rollout
 
-- The first SSM credentials expose **only read-only functions** and **only Stashbox/Elettro**.
+- The owner-controlled SSM credentials expose **only read-only functions**, with brand grants listing **all six** brands.
 - Don't share or screenshot raw tokens; don't put them in the repository or send them to this assistant.
 - Verify the first local HTTP smoke test, then Claude Code, then Claude.ai browser.
 - Test revocation: disable a client entry and verify its token stops working; restore after re-authenticated read-only tests if required.
