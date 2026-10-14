@@ -157,3 +157,28 @@ A separate **NOT APPLIED** SQL review bundle `elettro-step8-DB-uniqueness-migrat
 `01_extended_audit_READ_ONLY.sql`, `02_add_check_AFTER_APPROVAL.sql`, `03_unique_index_AFTER_APPROVAL.sql`, `04_verify_READ_ONLY.sql`, `05_rollback_AFTER_APPROVAL.sql`, and README. The CHECK rejects null/invalid Dropbox IDs and contradictory fields; the partial unique expression index on `COALESCE(sourceExternalId,sourceFileId)` applies across all brands including retired. `CREATE UNIQUE INDEX CONCURRENTLY` must run outside any transaction. Do not execute until explicit owner approval, live writer acceptance, clean extended audit and rollback/snapshot plan.
 
 After both writers and DB index are live and healthy, perform controlled disposable-file registration + repeat, cross-brand rejection, rename/move and Ready/Approved preservation. **New AI registrations stay disabled until that acceptance passes.** ChatGPT and Claude.ai/Claude Code credentials are not yet connected.
+
+## PATCH4 live read-only acceptance — October 14, 2026
+
+Owner uploaded the verified DEV Lambda PATCH4 ZIP. Live Lambda SHA-256: `GzfIJoSxBbk+0eiO5VfIbh255y0vgAZnOVWY8j4ZRWg=`.
+
+The direct Lambda **Test** event `{"action":"audit-dropbox-ids"}` succeeded (HTTP 200) with:
+- `ok:true`, `readOnly:true`, `auditVersion:2`
+- `dropboxAssets:419`
+- `duplicateDropboxIds:0`
+- `missingSourceIds:0`
+- `conflictingSourceIds:0`
+- `invalidSourceIdRows:0`
+- `uniquenessIndexValid:false`
+- `identityCheckValidated:false`
+
+**Interpretation:** PATCH4 executes correctly against the DEV registry and the read-only data-integrity audit is clean. Database uniqueness and the CHECK constraint are **not yet installed**. Read-only audit success does not prove that the updated upload/sync writers work under mutation or concurrent requests.
+
+**NEXT GATES (not yet completed):**
+1. Verify the existing direct-Dropbox dashboard uploader using a harmless disposable asset, including a repeat/same-ID upload; ensure exactly one registry row and that existing Ready/Approved records are not reset.
+2. Verify Dropbox discovery/sync correctly reuses a registered direct-upload asset by immutable ID, and that a cross-brand collision is blocked. Use only disposable fixtures and explicit approval.
+3. Obtain a current DEV RDS snapshot and confirm a functioning SQL execution path from the VPC. Repeat the extended read-only audit just before any DDL.
+4. Obtain explicit approval for the *separate* schema migration. Install and validate the integrity CHECK, then the cross-column partial UNIQUE index outside a transaction. Verify both flags become true and all counts remain zero. Confirm ordinary dashboard uploading still works.
+5. Only then consider enabling new AI registration and performing the separate new-file/repeat registration acceptance test.
+
+Do not infer that this test has completed the full Step 8 migration. Do not touch production or Shared Stock Galleries.
