@@ -1,0 +1,44 @@
+name: Step 9 Windows Claude MCP CLI Compatibility
+on:
+  workflow_dispatch:
+  push:
+    branches: [develop]
+    paths:
+      - '.github/workflows/step9-windows-cli-check.yml'
+      - 'scripts/step9-connect-claude-windows.ps1'
+
+jobs:
+  windows-claude-mcp:
+    runs-on: windows-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Claude Code 2.1.299
+        shell: pwsh
+        run: npm install -g @anthropic-ai/claude-code@2.1.299 --no-audit --no-fund
+      - name: Test JSON command-line quoting without credentials
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Continue'
+          claude --version
+          $config = @{type='http';url='https://example.invalid/mcp';headersHelper='powershell.exe -NoProfile -Command "Write-Output ''{}''"'} | ConvertTo-Json -Compress
+          $trials = @(
+            @{name='mcp_plain';value=$config},
+            @{name='mcp_escape';value=($config -replace '"','\"')},
+            @{name='mcp_double';value=($config -replace '"','""')}
+          )
+          foreach ($t in $trials) {
+            Write-Host "TRY $($t.name)"
+            claude mcp add-json $t.name $t.value --scope user
+            Write-Host "EXIT $LASTEXITCODE"
+            if ($LASTEXITCODE -eq 0) {
+              $state = Get-Content -Raw (Join-Path $HOME '.claude.json') | ConvertFrom-Json
+              $srv = $state.mcpServers.($t.name)
+              if ($srv.type -ne 'http' -or $srv.headersHelper -notlike 'powershell.exe*') {throw "Incorrect $($t.name) saved"}
+              Write-Host "VALID $($t.name): user config preserved HTTP and headersHelper"
+            }
+          }
+          Write-Host "End of quoting diagnostics"
