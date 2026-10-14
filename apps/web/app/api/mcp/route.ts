@@ -37,7 +37,7 @@ export async function POST(request:NextRequest){
   const bearer=request.headers.get("authorization");
   // Distinct credentials with no fallback: JWTs are Cognito+PKCE OAuth tokens;
   // opaque bearer tokens retain the independently scoped Claude SSM hash path.
-  identity=bearer&&/^Bearer [A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$/.test(bearer)
+  identity=bearer&&/^Bearer [A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(bearer)
    ? await authorizeChatGptOauth(bearer)
    : await authorizeMcp(bearer);
  }catch(error){
