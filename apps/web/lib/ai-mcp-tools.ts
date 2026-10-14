@@ -8,7 +8,7 @@ function schema(properties:Record<string,unknown>,required:string[]){
  return {type:"object" as const,properties:{brandSlug,...properties},required:["brandSlug",...required],additionalProperties:false as const};
 }
 export const MCP_TOOLS:ToolDefinition[]=[
- {name:"elettro_search_assets",description:"Search assets within the named brand",permission:"assets:read",action:"search_assets",
+ {name:"elettro_search_assets",description:"Search the recent Elettro asset catalog in the named brand (currently limited to latest 500 records)",permission:"assets:read",action:"search_assets",
   inputSchema:schema({query:{type:"string"},limit:{type:"integer",minimum:1,maximum:50}},[])},
  {name:"elettro_get_asset",description:"Get metadata for one brand asset",permission:"assets:read",action:"get_asset",
   inputSchema:schema({assetId},["assetId"])},
@@ -30,10 +30,18 @@ export const MCP_TOOLS:ToolDefinition[]=[
   inputSchema:schema({path:{type:"string"},name:{type:"string"},confirmed:approval},["name","confirmed"])}
 ];
 export function toolsForClient(identity:McpIdentity){
- return MCP_TOOLS.filter(t=>identity.permissions.includes(t.permission)).map(t=>({
-  name:t.name,description:t.description,
-  inputSchema:{...t.inputSchema,properties:{...t.inputSchema.properties,brandSlug:{...brandSlug,enum:identity.brandSlugs}}}
- }));
+ return MCP_TOOLS.filter(t=>identity.permissions.includes(t.permission)).map(t=>{
+  const readOnly=t.permission==="assets:read"||t.permission==="folders:read";
+  return {
+   name:t.name,description:t.description,
+   // These MCP annotations accurately identify tools that cannot mutate the
+   // registry or Dropbox, making read-only client review more predictable.
+   annotations:readOnly
+    ? {readOnlyHint:true,destructiveHint:false,idempotentHint:true}
+    : {readOnlyHint:false,destructiveHint:true,idempotentHint:false},
+   inputSchema:{...t.inputSchema,properties:{...t.inputSchema.properties,brandSlug:{...brandSlug,enum:identity.brandSlugs}}}
+  };
+ });
 }
 export function findAuthorizedTool(name:string,identity:McpIdentity){
  return MCP_TOOLS.find(t=>t.name===name&&identity.permissions.includes(t.permission));
