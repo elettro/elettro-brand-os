@@ -106,3 +106,45 @@ A supporting NON-unique index on `(sourceType, sourceFileId)` has been added to 
 - Canonical uniqueness + real new-file/repeated-registration write test: **pending audit and schema migration**.
 - ChatGPT and Claude connections: **not provisioned**.
 - Stock Galleries: **paused**.
+
+
+## October 13, 2026 — Live DEV audit result: CLEAN
+
+Owner deployed PATCH3 to AWS Lambda `elettro-brand-os-dev-api`. Code SHA-256 on Lambda run: `kbLgUThwVLpK+tf9tXkMu78L28LZiXQaPuMdy2t7Lew=`. The first direct read-only Lambda Test of the global lookup returned:
+- `lookupComplete:true`, `lookupVersion:2`, `matchCount:1`;
+- Stashbox asset `08adc79a-211e-4f9a-9ebe-da2614285dad`, Dropbox ID `id:UM9GhyUcVDgAAAAAAAMB-g`;
+- Original asset remained `ready / approved`.
+
+The second live read-only Lambda Test event `{"action":"audit-dropbox-ids"}` returned HTTP 200:
+- `dropboxAssets:419`;
+- `missingSourceIds:0`;
+- `conflictingSourceIds:0`;
+- `duplicateDropboxIds:0`.
+
+**Interpretation:** The 419 Dropbox-source records have no duplicate, missing-null, or conflicting paired IDs *according to this audit at test time*. This does NOT enforce future uniqueness, establish full format validation (e.g. blank/invalid IDs), guarantee race safety, or certify a registration write. Re-run audit immediately before any migration.
+
+### Discovered writer compatibility concerns
+
+- The checked-in DEV Lambda `db-main.mjs` Dropbox sync writer selects existing assets by `brandId + sourceFileId` and can insert a new `sourceFileId` row without checking `sourceExternalId`.
+- The checked-in `index.mjs` also contains an older Dropbox sync writer. **Do not replace the LIVE `index.mjs` from the repo**: the real live Lambda ZIP has newer direct-Dropbox upload handlers that are absent from the checked-in `index.mjs`.
+- The live direct-Dropbox upload writer stores `sourceExternalId` and `sourceUrl` and had been confirmed working with PATCH2/3.
+- Source IDs should remain authoritative across moves, and uniqueness must cover BOTH columns **across every brand** (including retired records), not just `(brandId, sourceExternalId)`.
+
+### Proposed non-applied Postgres integrity gate
+
+**Do not execute until owner authorizes it and the live upload/sync writers have been inspected for uniqueness-conflict handling, rollback, and safe atomic update/insert behavior.**
+
+Suggested order:
+1. Read-only extended validation: confirm all non-null Dropbox IDs start with `id:`, are nonblank, no pair of non-null IDs in the same row disagrees, and no cross-column duplicate exists across the full registry. The previous audit checks duplicate, missing/null and conflicting ID counts, but **not** ID format or blanks.
+2. Verify **all live writers**, not merely GitHub code, gracefully interpret duplicate-key conflicts as a re-use/read-existing outcome. Sync should update an existing matching row by either source ID instead of trying to create a second record. If a different brand owns the file ID, **block and flag it** rather than silently moving ownership.
+3. Add a conditional **CHECK** on Dropbox-source rows ensuring `sourceFileId` and `sourceExternalId` are not contradictory and the canonical source ID is nonblank and `id:`-prefixed. Confirm every existing row passes before validation.
+4. Add a **unique expression index** on the canonical ID (e.g. `COALESCE("sourceExternalId","sourceFileId")`) for `"sourceType"='dropbox'`, covering all brands and both writer formats. Consider `CREATE UNIQUE INDEX CONCURRENTLY` as a standalone migration operation to minimize write blocking. A unique expression index must not be assumed convertible into a simple table `UNIQUE` constraint. If a concurrent build fails, inspect/remove the invalid index safely and re-audit before retrying.
+5. Confirm direct dashboard uploads and Dropbox sync still function, then test a disposable new asset + repeat registration only with explicit consent. Verify Ready/Approved assets do not become Raw. No Stock Gallery action.
+
+**Rationale:** A read-then-insert dedup check alone can race; the DB needs the final say. Merely adding unique indexes separately to `sourceExternalId` and `sourceFileId` would NOT prevent two different rows using the same Dropbox ID in opposite columns.
+
+### DEV rollout gate
+
+The Step 7 **read-only dashboard** test is still pending user execution after the latest Amplify develop build. The button is `Verify Dropbox ID across all assets (read-only)` in `/ai-gateway`; it does NOT request a Dropbox OAuth token.
+
+No RDS schema migration has been run. No new AI registration path has been opened.
