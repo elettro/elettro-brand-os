@@ -155,3 +155,40 @@ the genuine Cognito UserInfo endpoint. Do not enter fake DCR or CIMD URLs.
 to connect means further debugging is required. Do not infer success from
 metadata-only HTTP 200. Before enabling approved writes, test token audience
 and scopes in the Cognito app client. Do not publish files during this test.
+
+
+## ChatGPT Cognito resource-bound scopes (October 14)
+
+ChatGPT includes RFC 8707 `resource` with the full MCP URL. Amazon Cognito
+rejects a custom scope whose resource-server identifier differs from that URL.
+The old `elettro-mcp/read` belongs to the legacy `elettro-mcp` resource
+server. Preserve it for legacy clients; do not request it for ChatGPT.
+
+The new Cognito resource server identifier must be exactly
+`https://develop.d2k28tehm1a8zw.amplifyapp.com/api/mcp`.
+Give this server `read` and `write` scopes, which Cognito renders as:
+
+- `https://develop.d2k28tehm1a8zw.amplifyapp.com/api/mcp/read`
+- `https://develop.d2k28tehm1a8zw.amplifyapp.com/api/mcp/write`
+
+In Cognito User Pool > Applications > App clients, select the dedicated
+**public ChatGPT OAuth client** (the one whose client ID is registered in
+`chatgptOauth.clientId`). Open **Login pages > Edit** and add the new
+`.../api/mcp/read` custom scope to its allowed OAuth scopes. Preserve the
+`openid` and `email` scopes, Authorization code grant and existing exact
+ChatGPT callback URL. The user must never create a client secret for this
+public PKCE client. **Do not enable the new write scope for the first test.**
+
+After the approved web-only deployment, verify public protected-resource and
+authorization-server discovery both report the **new URL-prefixed read
+scope**, and the authorization server still advertises S256. In ChatGPT's
+custom MCP server settings, change the old default scope to the new full
+`.../api/mcp/read` scope; set base scopes to `openid`, `email`.
+Keep OIDC toggle off for the discovery facade. Retry OAuth sign-in and
+verify a read-only EPE asset lookup before allowing any write scope.
+
+The backend continues rejecting tokens without an exact Cognito JWT issuer,
+owner email, registered public client ID, MCP audience and new read scope.
+The `.../api/mcp/write` scope is recognized by the code but grants nothing
+until a Cognito client explicitly allows it and ChatGPT requests it.
+No Lambda, Dropbox or asset registry code is changed.
