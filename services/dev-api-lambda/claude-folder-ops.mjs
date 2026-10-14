@@ -63,11 +63,13 @@ export async function moveBrandFolder(body,connectDatabase,json){
     ("sourceFileId"=ANY($4::text[]) OR "sourceExternalId"=ANY($4::text[]) OR
      ("brandId"=$1 AND (left(lower(coalesce("sourcePath",'')),$2)=$3 OR left(lower(coalesce("sourceUrl",'')),$2)=$3))) FOR UPDATE`,
    [brand.rows[0].id,source.length+1,source.toLowerCase()+"/",[...files.keys()]]);
-  const currentPaths=new Map();
+  const currentPaths=new Map(),seenIds=new Set();
   for(const asset of selected.rows){
    if(asset.brandId!==brand.rows[0].id)throw new Error("A folder file is registered under another brand; move stopped");
-   const ids=[asset.sourceFileId,asset.sourceExternalId].filter(v=>typeof v==="string"&&v.startsWith("id:"));
-   if(!ids.length||new Set(ids).size!==1)throw new Error("An affected asset lacks a consistent Dropbox ID; move stopped");
+   const ids=[asset.sourceFileId,asset.sourceExternalId].filter(v=>v!==null&&v!==undefined&&v!=="");
+   if(!ids.length||ids.some(v=>typeof v!=="string"||!v.startsWith("id:"))||new Set(ids).size!==1)throw new Error("An affected asset lacks a consistent Dropbox ID; move stopped");
+   if(seenIds.has(ids[0]))throw new Error("A folder file has duplicate registered assets; move stopped");
+   seenIds.add(ids[0]);
    const currentPath=files.get(ids[0]);
    if(!currentPath)throw new Error("An affected asset is absent from the folder inventory; reconcile before moving");
    currentPaths.set(asset.id,currentPath);
