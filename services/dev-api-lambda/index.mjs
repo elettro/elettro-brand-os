@@ -3,12 +3,15 @@ import { S3Client, PutObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { randomUUID } from "node:crypto";
 import pg from "pg";
+import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
+import { withDropboxIdentityTransaction, DropboxIdentityConflict } from "./dropbox-identity.mjs";
 import { handler as existingHandler } from "./db-main.mjs";
 import { handleDropboxUploadSession } from "./dropbox-upload-session.mjs";
 
 const { Client } = pg;
 const secrets = new SecretsManagerClient({});
 const s3 = new S3Client({});
+const lambdaInvoker = new LambdaClient({});
 
 const DROPBOX_BRAND_ROOTS = [
   ["solarmeister", "/1---elettro-brand-os/solarmeister"],
@@ -1402,6 +1405,111 @@ async function completeDirectUploads(event) {
   }
 }
 
+async function proxyDropboxWrite(event) {
+  const body = parseJsonBody(event);
+  const action = String(body.action || event.action || "");
+  const brand = String(body.brand || "");
+  const root = DROPBOX_BRAND_ROOTS.find(([slug]) => slug === brand)?.[1];
+  if (!root) return json(400,{ok:false,error:"Invalid brand"});
+  const path = String(body.path || root).replace(/\\/g,"/").replace(/\/+$/,"");
+  if (path.toLowerCase() !== root.toLowerCase() && !path.toLowerCase().startsWith(root.toLowerCase()+"/"))
+    return json(403,{ok:false,error:"Folder outside brand root"});
+  const name = String(action === "create-brand-folder" ? body.name || "" : body.filename || "").trim();
+  if (!name || name.length > 180 || /[\\/\x00-\x1f]/.test(name) || name === "." || name === "..")
+    return json(400,{ok:false,error:"Invalid folder or file name"});
+  const functionName = process.env.DROPBOX_SYNC_FUNCTION_NAME;
+  if (!functionName) return json(503,{ok:false,error:"Dropbox sync Lambda not configured"});
+  try {
+    const invocation = await lambdaInvoker.send(new InvokeCommand({
+      FunctionName:functionName,InvocationType:"RequestResponse",
+      Payload:Buffer.from(JSON.stringify({action,brand,path,name,filename:name}))
+    }));
+    if (invocation.FunctionError) throw new Error("Dropbox Lambda invocation failed");
+    const result = JSON.parse(Buffer.from(invocation.Payload || []).toString("utf8"));
+    return typeof result.statusCode === "number" ? result : json(502,{ok:false,error:"Invalid Dropbox Lambda response"});
+  }catch(error){return json(502,{ok:false,error:error instanceof Error?error.message:"Dropbox write unavailable"});}
+}
+
+async function browseDropboxFolders(event) {
+  const body = parseJsonBody(event);
+  const brand = String(body.brand || "");
+  const root = DROPBOX_BRAND_ROOTS.find(([slug]) => slug === brand)?.[1];
+  if (!root) return json(400, { ok: false, error: "Invalid brand" });
+  const path = String(body.path || root).replace(/\\/g, "/").replace(/\/+$/, "");
+  if (path.toLowerCase() !== root.toLowerCase() &&
+      !path.toLowerCase().startsWith(root.toLowerCase() + "/"))
+    return json(403, { ok: false, error: "Outside brand Dropbox root" });
+  const functionName = process.env.DROPBOX_SYNC_FUNCTION_NAME;
+  if (!functionName) return json(503, { ok: false, error: "DROPBOX_SYNC_FUNCTION_NAME is not configured" });
+  try {
+    const invocation = await lambdaInvoker.send(new InvokeCommand({
+      FunctionName: functionName,
+      InvocationType: "RequestResponse",
+      Payload: Buffer.from(JSON.stringify({ action: "list-brand-folders", brand, path }))
+    }));
+    if (invocation.FunctionError)
+      throw new Error("Dropbox sync Lambda invocation failed");
+    const raw = Buffer.from(invocation.Payload || []).toString("utf8");
+    const result = JSON.parse(raw);
+    return result && typeof result.statusCode === "number"
+      ? result
+      : json(502, { ok: false, error: "Unexpected Dropbox sync Lambda response" });
+  } catch (error) {
+    return json(502, { ok: false, error: error instanceof Error ? error.message : "Dropbox folder proxy unavailable" });
+  }
+}
+
+// DEV: Confirm a Dropbox file by its server-retrieved ID, then register it in Brand OS.
+// Never trust a client-supplied file ID or size; Dropbox is the authority.
+async function completeDropboxUpload(event){
+ let client;
+ try {
+  const body=parseJsonBody(event);
+  const brandSlug=String(body.brandSlug||"").trim().toLowerCase();
+  const root=DROPBOX_BRAND_ROOTS.find(([slug])=>slug===brandSlug)?.[1];
+  if(!root) return json(400,{ok:false,error:"Invalid brand"});
+  const path=String(body.path||"").replace(/\\/g,"/");
+  if(!path.toLowerCase().startsWith(root.toLowerCase()+"/")) return json(403,{ok:false,error:"File outside brand root"});
+  const metadata=body.metadata&&typeof body.metadata==="object"?body.metadata:{};
+  const mode=body.mode==="raw"?"raw":"ready";
+  if(!process.env.DROPBOX_SYNC_FUNCTION_NAME)return json(503,{ok:false,error:"Dropbox sync Lambda unavailable"});
+  const response=await lambdaInvoker.send(new InvokeCommand({FunctionName:process.env.DROPBOX_SYNC_FUNCTION_NAME,InvocationType:"RequestResponse",Payload:Buffer.from(JSON.stringify({action:"verify-brand-upload",brand:brandSlug,path}))}));
+  if(response.FunctionError)return json(502,{ok:false,error:"Dropbox verification Lambda failed"});
+  const verification=JSON.parse(Buffer.from(response.Payload||[]).toString("utf8"));
+  if(verification.statusCode!==200)return verification;
+  const verified=JSON.parse(verification.body||"{}");
+  const filename=String(verified.name||"");
+  const kind=assetKindFromName(filename);
+  if(!verified.id||!kind)return json(400,{ok:false,error:"Dropbox file cannot be registered"});
+  client=await connectDatabase();
+  const brand=await client.query('SELECT "id" FROM "Brand" WHERE "slug"=$1 AND "status"=$2 LIMIT 1',[brandSlug,"active"]);
+  const brandId=brand.rows[0]?.id;
+  if(!brandId)return json(404,{ok:false,error:"Active brand not found"});
+  return await withDropboxIdentityTransaction(client, verified.id, brandId, async (existing) => {
+  if(existing)return json(200,{ok:true,created:0,alreadyRegistered:true,asset:existing,path:verified.path,dropboxFileId:verified.id});
+  const approvalStatus=metadata.sendToApprovalQueue?"needs_review":"approved";
+  const eligibilityMode=metadata.eligibilityMode==="window"?"window":"evergreen";
+  const repeatAnnually=Boolean(metadata.repeatAnnually);
+  let eligibilityType="evergreen",eligibleFrom=null,eligibleUntil=null,annualFromMmdd=null,annualUntilMmdd=null;
+  if(eligibilityMode==="window"&&repeatAnnually){eligibilityType="annual";annualFromMmdd=mmddFromDateString(metadata.windowStart);annualUntilMmdd=mmddFromDateString(metadata.windowEnd);}
+  else if(eligibilityMode==="window"){eligibilityType="one_time";eligibleFrom=metadata.windowStart||null;eligibleUntil=metadata.windowEnd||null;}
+  const result=await client.query(`INSERT INTO "Asset" (
+    "brandId","sourceType","sourceExternalId","sourceUrl","sourceMetadata","filename","mimeType","fileSizeBytes","kind","ingestStatus","enrichmentStatus","approvalStatus","topic","creativeFamily","creatorNote","priority","eligibilityType","eligibleFrom","eligibleUntil","annualFromMmdd","annualUntilMmdd","allowedDestinations","firstApprovedAt","updatedAt")
+    VALUES ($1,'dropbox',$2,$3,$4::jsonb,$5,$6,$7,$8::"AssetKind",$9::"IngestStatus",$10::"EnrichmentStatus",$11::"ApprovalStatus",$12,$13,$14,$15,$16::"EligibilityType",$17::date,$18::date,$19,$20,$21,CASE WHEN $11='approved' AND $9='ready' THEN CURRENT_TIMESTAMP ELSE NULL END,CURRENT_TIMESTAMP)
+    ON CONFLICT DO NOTHING RETURNING "id","filename","ingestStatus","approvalStatus"`,[
+     brandId,verified.id,verified.path,JSON.stringify({dropboxFileId:verified.id,rev:verified.rev,contentHash:verified.contentHash,source:"direct_dropbox",path:verified.path}),filename,
+     kind==="image"?"image/"+filename.split(".").pop().toLowerCase():"video/"+filename.split(".").pop().toLowerCase(),String(verified.size),kind,
+     mode==="raw"?"raw":"ready",mode==="raw"?"pending":"reviewed",approvalStatus,
+     String(metadata.topic||"").trim()||null,String(metadata.creativeFamily||"").trim()||null,String(metadata.creatorNote||"").trim()||null,String(metadata.priority||"normal"),eligibilityType,eligibleFrom,eligibleUntil,annualFromMmdd,annualUntilMmdd,uploadDestinationNames(metadata.allowedDestinations)
+  ]);
+  if(!result.rows[0])return json(409,{ok:false,error:"Asset insert did not return a row; check for existing duplicate"});
+  return json(200,{ok:true,created:1,asset:result.rows[0],path:verified.path,dropboxFileId:verified.id,mode});
+ });
+ }catch(error){console.error("[complete-dropbox-upload] failed",error);return json(error instanceof DropboxIdentityConflict ? 409 : 500,{ok:false,error:error instanceof Error?error.message:"Dropbox registration failed"});}
+ finally{if(client){try{await client.end();}catch{}}}
+}
+
+
 export const handler = async (event = {}) => {
   const requestPath =
     event?.rawPath ||
@@ -1574,6 +1682,11 @@ export const handler = async (event = {}) => {
 
 
   const routedBody = requestPath === "/assets/bulk-update" ? parseJsonBody(event) : {};
+  const dropboxAction = event.action || routedBody.action;
+  if (dropboxAction === "complete-dropbox-upload") return completeDropboxUpload(event);
+  if (["create-brand-folder", "prepare-brand-upload"].includes(dropboxAction)) return proxyDropboxWrite(event);
+  if (dropboxAction === "dropbox-list-folders") return browseDropboxFolders(event);
+
   if (requestPath === "/assets/bulk-update" && ["start-dropbox-upload-session", "append-dropbox-upload-session", "finish-dropbox-upload-session"].includes(routedBody?.action)) {
     return handleDropboxUploadSession(routedBody);
   }
