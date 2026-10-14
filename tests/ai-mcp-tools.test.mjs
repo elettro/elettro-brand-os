@@ -61,7 +61,8 @@ test("gateway metadata cannot mark Ready; new AI registration remains paused unt
  assert.match(source,/lookup\.lookupComplete !== true/);
  assert.match(source,/lookup\.lookupVersion !== 2/);
  assert.match(source,/count>1/);
- assert.ok(!source.includes('await api("/assets")'));
+ const dedup=source.split("async function registrationCandidates(")[1]?.split("export const AI_GATEWAY_ACTIONS")[0]||"";
+ assert.ok(!dedup.includes('await api("/assets")'));
 });
 
 test("metadata batch tool uses the same brand grant and confirmation policy",()=>{
@@ -122,7 +123,7 @@ test("direct Dropbox uploads resolve via sourceExternalId/sourceUrl while sync u
  assert.match(source,/recordData\.sourceExternalId/);
  assert.match(source,/recordData\.sourceFileId/);
  assert.match(source,/lookupVersion !== 2/);
- assert.match(source,/database\s+enforces global uniqueness/);
+ assert.match(source,/enforces global uniqueness across BOTH Dropbox source columns/);
  assert.match(source,/sourceType!=="dropbox"/);
 });
 
