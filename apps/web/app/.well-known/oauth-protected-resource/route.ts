@@ -2,7 +2,8 @@ import {NextResponse} from "next/server";
 import {
  chatGptOauthConfiguration,
  MCP_OAUTH_RESOURCE,
- MCP_OAUTH_SCOPE
+ MCP_OAUTH_SCOPE,
+ MCP_OAUTH_AUTHORIZATION_SERVER
 } from "@/lib/ai-mcp-oauth";
 import {McpAuthorizationError} from "@/lib/ai-mcp-auth";
 
@@ -14,10 +15,10 @@ export const dynamic="force-dynamic";
 // This route never accepts credentials and never exposes private asset data.
 export async function GET(){
  try{
-  const cfg=await chatGptOauthConfiguration();
+  await chatGptOauthConfiguration();
   return NextResponse.json({
    resource:MCP_OAUTH_RESOURCE,
-   authorization_servers:[cfg.issuer],
+   authorization_servers:[MCP_OAUTH_AUTHORIZATION_SERVER],
    scopes_supported:[MCP_OAUTH_SCOPE]
   },{headers:{"cache-control":"no-store"}});
  }catch(error){
