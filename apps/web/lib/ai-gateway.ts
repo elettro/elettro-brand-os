@@ -253,7 +253,7 @@ export async function executeAiGateway(input: unknown): Promise<Dict> {
     const patch = metadataPatch(command.metadata);
     if (command.confirmed !== true) throw new GatewayError(400, "Explicit confirmation required to update metadata");
     await ownedAsset(id, slug);
-    const result = await api("/assets/bulk-update", { assetIds: [id], metadata: patch, markReady: false });
+    const result = await api("/assets/bulk-update", { assetIds: [id], metadata: patch, markReady: false, preserveWorkflowState: true });
     if (result.updated !== 1) throw new GatewayError(502, "Metadata update was not confirmed by the registry");
     return { ok: true, updated: 1, assetId: id, brandSlug: slug, changedFields: Object.keys(patch) };
   }
