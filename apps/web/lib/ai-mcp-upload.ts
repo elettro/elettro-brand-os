@@ -4,6 +4,7 @@ import {SecretsManagerClient,GetSecretValueCommand} from "@aws-sdk/client-secret
 import {brandConfigs} from "@/lib/brand-config";
 import {executeAiGateway,GatewayError} from "@/lib/ai-gateway";
 import {validChatFile,verifyIntakePlan,mediaType,type ChatFile} from "@/lib/ai-mcp-intake";
+import {approvedChatGptFileHost} from "@/lib/ai-mcp-file-hosts";
 import {verifyDropboxFileResponse} from "@/lib/ai-mcp-dropbox-identity";
 import type {McpIdentity} from "@/lib/ai-mcp-auth";
 
@@ -20,14 +21,7 @@ function inputRecord(value:unknown):Obj{
   throw new GatewayError(400,"Invalid upload arguments");
  return value as Obj;
 }
-export function approvedFileHost(host:string):boolean{
- const h=host.toLowerCase();
- // The platform may return other signed-host domains in the future.
- // Extend only after verifying actual trusted hosts and redirects.
- return h==="oaisdmntprcentralus.blob.core.windows.net"||
-  h==="chatgpt.com"||h==="files.oaiusercontent.com"||
-  (h.endsWith(".oaiusercontent.com")&&h.length>(".oaiusercontent.com").length);
-}
+export const approvedFileHost=approvedChatGptFileHost;
 export function validatedDownloadUrl(value:string):string{
  let url:URL;
  try{url=new URL(value);}
