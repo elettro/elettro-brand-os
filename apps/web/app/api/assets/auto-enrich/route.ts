@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "Invalid input" }, { status: 400 });
   }
   try {
-    const result = await enrichMissingAssetMetadata(input);
+    const result = await enrichMissingAssetMetadata({ brandSlug: input.brandSlug, assetId: input.assetId });
     return NextResponse.json(result, { headers: { "cache-control": "no-store" } });
   } catch (error) {
     if (error instanceof GatewayError)
