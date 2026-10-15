@@ -35,6 +35,9 @@ jobs:
       - name: Test asset metadata state and enrichment guards
         run: node --test tests/asset-enrichment-safety.test.mjs
 
+      - name: Test ChatGPT upload verification and brand lookup
+        run: node --test tests/chatgpt-upload-and-lookup.test.cjs
+
       - name: Test Claude transfer and folder operations
         run: node --test tests/claude-transfer-and-folders.test.cjs
 
