@@ -23,7 +23,8 @@ export function approvedFileHost(host:string):boolean{
  const h=host.toLowerCase();
  // The platform may return other signed-host domains in the future.
  // Extend only after verifying actual trusted hosts and redirects.
- return h==="chatgpt.com"||h==="files.oaiusercontent.com"||
+ return h==="oaisdmntprcentralus.blob.core.windows.net"||
+  h==="chatgpt.com"||h==="files.oaiusercontent.com"||
   (h.endsWith(".oaiusercontent.com")&&h.length>(".oaiusercontent.com").length);
 }
 export function validatedDownloadUrl(value:string):string{
