@@ -4,6 +4,7 @@ import {SecretsManagerClient,GetSecretValueCommand} from "@aws-sdk/client-secret
 import {brandConfigs} from "@/lib/brand-config";
 import {executeAiGateway,GatewayError} from "@/lib/ai-gateway";
 import {validChatFile,verifyIntakePlan,mediaType,type ChatFile} from "@/lib/ai-mcp-intake";
+import {verifyDropboxFileResponse} from "@/lib/ai-mcp-dropbox-identity";
 import type {McpIdentity} from "@/lib/ai-mcp-auth";
 
 const MAX_BYTES=20*1024*1024; // Pilot cap. Large videos need a resumable background worker.
@@ -129,7 +130,7 @@ export async function matchingBrandFile(token:string,root:string,size:number,has
  }while(cursor);
  return null;
 }
-async function putDropbox(token:string,path:string,bytes:Buffer){
+async function putDropbox(token:string,path:string,bytes:Buffer,contentHash:string){
  const r=await fetch("https://content.dropboxapi.com/2/files/upload",{
   method:"POST",
   headers:{authorization:"Bearer "+token,
@@ -142,10 +143,19 @@ async function putDropbox(token:string,path:string,bytes:Buffer){
   if(r.status===409)throw new GatewayError(409,"Dropbox filename or upload conflict. Nothing was overwritten.");
   throw new GatewayError(502,"Dropbox upload failed (HTTP "+r.status+"); nothing overwritten");
  }
- const data=await r.json() as {".tag"?:string;id?:string;path_display?:string;size?:number;content_hash?:string};
- if(data[".tag"]!=="file"||!data.id||!data.path_display)
-  throw new GatewayError(502,"Dropbox did not verify uploaded file identity");
- return {id:data.id,path:data.path_display,contentHash:data.content_hash,size:data.size};
+ // Dropbox upload returns FileMetadata without necessarily including ".tag".
+ // Verify the response and then ask Dropbox to independently confirm the
+ // persisted file ID and its exact content bytes before registration.
+ let uploaded;
+ try{uploaded=verifyDropboxFileResponse(await r.json(),path,bytes.length,contentHash);}
+ catch{throw new GatewayError(502,"Dropbox upload response did not match the requested file. Check the destination before retrying.");}
+ const stored=await metadata(token,uploaded.id);
+ let verified;
+ try{verified=verifyDropboxFileResponse(stored,path,bytes.length,contentHash);}
+ catch{throw new GatewayError(502,"Dropbox stored file verification failed. Check the destination before retrying.");}
+ if(verified.id!==uploaded.id)
+  throw new GatewayError(502,"Dropbox uploaded file identity changed. Check the destination before retrying.");
+ return verified;
 }
 async function apiAction(body:Obj):Promise<Obj>{
  const r=await fetch(API_BASE+"/assets/bulk-update",{
@@ -187,13 +197,13 @@ export async function uploadApprovedChatFile(args:unknown,identity:McpIdentity){
  }else{
   const present=await metadata(token,target);
   if(present){
-   if(present[".tag"]!=="file"||present.size!==bytes.length||
-      present.content_hash?.toLowerCase()!==contentHash)
-    throw new GatewayError(409,"Target filename already exists with different bytes; no overwrite");
-   if(!present.id)throw new GatewayError(502,"Existing Dropbox file identity missing");
-   fileIdentity={id:present.id,path:present.path_display||target};reused=true;
+   // Dropbox get_metadata also returns FileMetadata with an optional ".tag".
+   // Never overwrite a conflicting filename; only reuse an exact byte match.
+   try{fileIdentity=verifyDropboxFileResponse(present,target,bytes.length,contentHash);}
+   catch{throw new GatewayError(409,"Target filename already exists with different bytes; no overwrite");}
+   reused=true;
   }else{
-   fileIdentity=await putDropbox(token,target,bytes);
+   fileIdentity=await putDropbox(token,target,bytes,contentHash);
   }
  }
  if(!fileIdentity.id.startsWith("id:"))
