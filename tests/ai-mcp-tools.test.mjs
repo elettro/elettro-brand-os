@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import {MCP_TOOLS,toolsForClient,findAuthorizedTool} from "../apps/web/lib/ai-mcp-tools.ts";
+import {parseChatFileParam} from "../apps/web/lib/ai-mcp-chat-file.ts";
 import {isVerifiedCognitoOwner} from "../apps/web/lib/ai-mcp-userinfo.ts";
 
 const all={
@@ -125,6 +126,32 @@ test("ChatGPT discovery supports GET challenge and both RFC 9728 metadata paths"
  assert.match(body,/status:405/);
  assert.match(variant,/export \{GET, runtime, dynamic\} from/);
  assert.match(metadata,/chatGptOauthConfiguration\(\)/);
+});
+
+test("ChatGPT fileParam accepts canonical objects and serialized authorized file objects only",()=>{
+ const canonical={
+  download_url:"https://files.oaiusercontent.com/signed-asset.png?token=sample",
+  file_id:"file_000123asset",
+  mime_type:"image/png",
+  file_name:"brand-asset.png"
+ };
+ assert.deepEqual(parseChatFileParam(canonical),canonical);
+ assert.deepEqual(parseChatFileParam(JSON.stringify(canonical)),canonical);
+ assert.deepEqual(parseChatFileParam({...canonical,file_id:"file-12345"}),
+  {...canonical,file_id:"file-12345"});
+ assert.deepEqual(parseChatFileParam({...canonical,file_id:"sediment://authorized-asset"}),
+  {...canonical,file_id:"sediment://authorized-asset"});
+ assert.deepEqual(parseChatFileParam({...canonical,extra:"ignored"}),canonical);
+ for(const invalid of [
+  "file_000123asset","/mnt/data/image.png","https://files.oaiusercontent.com/asset.png",
+  {file_id:"file_000123asset"},{download_url:canonical.download_url},
+  {...canonical,download_url:"http://files.oaiusercontent.com/asset.png"},
+  {...canonical,file_id:"\nx"}
+ ]){
+  assert.throws(()=>parseChatFileParam(invalid),/ChatGPT/);
+ }
+ assert.throws(()=>parseChatFileParam({...canonical,file_name:123}),/Invalid source filename/);
+ assert.throws(()=>parseChatFileParam({...canonical,mime_type:123}),/Invalid source MIME type/);
 });
 
 test("ChatGPT file-parameter schemas and read/write scope separation",()=>{

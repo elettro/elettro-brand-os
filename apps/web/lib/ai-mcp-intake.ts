@@ -1,13 +1,12 @@
 import {createHmac,randomBytes,timingSafeEqual} from "node:crypto";
+import {parseChatFileParam,type ChatFile} from "@/lib/ai-mcp-chat-file";
+export type {ChatFile} from "@/lib/ai-mcp-chat-file";
 import {serverSetting} from "@/lib/cognito-auth";
 import {brandConfigs} from "@/lib/brand-config";
 import {executeAiGateway,GatewayError} from "@/lib/ai-gateway";
 import type {McpIdentity} from "@/lib/ai-mcp-auth";
 
 type Dict=Record<string,unknown>;
-export type ChatFile={
- download_url:string;file_id:string;file_name?:string;mime_type?:string;
-};
 export type IntakeMetadata={
  title:string;topic?:string;contentGroup?:string;creativeFamily?:string;
  creativeNotes?:string;tags:string[];priority:"low"|"normal"|"high"
@@ -24,16 +23,11 @@ function inputRecord(value:unknown):Dict{
  return value as Dict;
 }
 export function validChatFile(value:unknown):ChatFile{
- const obj=inputRecord(value);
- const fileId=obj.file_id, url=obj.download_url;
- if(typeof fileId!=="string"||!/^file_[A-Za-z0-9_-]{5,150}$/.test(fileId)||
-  typeof url!=="string"||!url.startsWith("https://")||url.length>6000)
-  throw new GatewayError(400,"Use a ChatGPT-authorized file input");
- if(obj.file_name!==undefined&&(typeof obj.file_name!=="string"||obj.file_name.length>180))
-  throw new GatewayError(400,"Invalid source filename");
- if(obj.mime_type!==undefined&&(typeof obj.mime_type!=="string"||obj.mime_type.length>100))
-  throw new GatewayError(400,"Invalid source MIME type");
- return obj as ChatFile;
+ try{return parseChatFileParam(value);}
+ catch(error){
+  throw new GatewayError(400,error instanceof Error?error.message:
+   "Use a ChatGPT-authorized file input");
+ }
 }
 export function safeFilename(name:unknown):string{
  if(typeof name!=="string"||!name||name.length>180||
