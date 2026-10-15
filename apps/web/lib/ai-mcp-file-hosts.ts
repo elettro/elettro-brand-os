@@ -5,7 +5,8 @@
 const CHATGPT_AZURE_BLOB_HOSTS=new Set([
  "oaisdmntprcentralus.blob.core.windows.net",
  "oaisdmntprnorthcentralus.blob.core.windows.net",
- "oaisdmntpreastus.blob.core.windows.net"
+ "oaisdmntpreastus.blob.core.windows.net",
+ "oaisdmntpreastus2.blob.core.windows.net"
 ]);
 
 export function approvedChatGptFileHost(host:string):boolean{
