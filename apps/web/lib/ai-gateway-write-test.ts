@@ -6,7 +6,7 @@ import {executeAiGateway,GatewayError} from "@/lib/ai-gateway";
  * Changes only the tags on one Stashbox asset, verifies the write, removes
  * the diagnostic tag, and independently verifies the cleanup.
  */
-type AssetSnapshot={id:string;brandSlug:string;filename:string;tags?:string[];ingestStatus?:string;approvalStatus?:string};
+type AssetSnapshot={id:string;brandSlug:string;filename:string;tags?:string[];ingestStatus?:string;enrichmentStatus?:string;approvalStatus?:string};
 type ReadResult={ok:boolean;asset:AssetSnapshot};
 const activeTests=new Set<string>();
 
@@ -61,7 +61,7 @@ export async function runMetadataWriteSmokeTest(input:unknown){
    await writeTags(id,added);
    const stored=await readAsset(id);
    writeVerified=tagsSame(stored.tags||[],added)&&
-    stored.ingestStatus===before.ingestStatus&&stored.approvalStatus===before.approvalStatus;
+    stored.ingestStatus===before.ingestStatus&&stored.enrichmentStatus===before.enrichmentStatus&&stored.approvalStatus===before.approvalStatus;
    if(!writeVerified)failure="Metadata write did not verify or asset status changed";
   }catch(error){failure=errorText(error);}
   finally{
@@ -76,7 +76,7 @@ export async function runMetadataWriteSmokeTest(input:unknown){
      after=await readAsset(id);
      cleanupVerified=!(after.tags||[]).includes(probe);
      exactRestoration=tagsSame(after.tags||[],originalTags)&&
-      after.ingestStatus===before.ingestStatus&&after.approvalStatus===before.approvalStatus;
+      after.ingestStatus===before.ingestStatus&&after.enrichmentStatus===before.enrichmentStatus&&after.approvalStatus===before.approvalStatus;
      if(!cleanupVerified)cleanupFailure="Temporary tag is still present";
     }catch(error){cleanupFailure=errorText(error);}
    }
@@ -86,8 +86,8 @@ export async function runMetadataWriteSmokeTest(input:unknown){
    assetId:id,brandSlug:"stashbox",filename:before.filename,
    writeVerified,cleanupVerified,exactRestoration,
    originalTags,finalTags:after?.tags,
-   originalStatus:{ingest:before.ingestStatus,approval:before.approvalStatus},
-   finalStatus:after?{ingest:after.ingestStatus,approval:after.approvalStatus}:null,
+   originalStatus:{ingest:before.ingestStatus,enrichment:before.enrichmentStatus,approval:before.approvalStatus},
+   finalStatus:after?{ingest:after.ingestStatus,enrichment:after.enrichmentStatus,approval:after.approvalStatus}:null,
    ...(failure?{error:failure}:{}),
    ...(cleanupFailure?{cleanupError:cleanupFailure}:{}),
    message:cleanupVerified?

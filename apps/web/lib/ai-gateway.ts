@@ -253,9 +253,16 @@ export async function executeAiGateway(input: unknown): Promise<Dict> {
     const id = assetId(command.assetId);
     const patch = metadataPatch(command.metadata);
     if (command.confirmed !== true) throw new GatewayError(400, "Explicit confirmation required to update metadata");
-    await ownedAsset(id, slug);
+    const before = await ownedAsset(id, slug);
     const result = await api("/assets/bulk-update", { assetIds: [id], metadata: patch, markReady: false, preserveWorkflowState: true });
     if (result.updated !== 1) throw new GatewayError(502, "Metadata update was not confirmed by the registry");
+    // Fail closed if a deployed Lambda silently ignores preserveWorkflowState.
+    const after = await ownedAsset(id, slug);
+    if (after.ingestStatus !== before.ingestStatus ||
+        after.enrichmentStatus !== before.enrichmentStatus ||
+        after.approvalStatus !== before.approvalStatus) {
+      throw new GatewayError(409, "Metadata was written but asset workflow status changed; inspect the asset before further edits");
+    }
     return { ok: true, updated: 1, assetId: id, brandSlug: slug, changedFields: Object.keys(patch) };
   }
 

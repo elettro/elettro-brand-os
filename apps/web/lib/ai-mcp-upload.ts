@@ -1,3 +1,4 @@
+import { enrichAfterRegistrationIfEnabled } from "@/lib/asset-ai-enrichment";
 import {createHash} from "node:crypto";
 import {SecretsManagerClient,GetSecretValueCommand} from "@aws-sdk/client-secrets-manager";
 import {brandConfigs} from "@/lib/brand-config";
@@ -232,7 +233,9 @@ export async function uploadApprovedChatFile(args:unknown,identity:McpIdentity){
   if(locationCheck.verificationStatus!=="registered_in_dropbox" &&
      locationCheck.verificationStatus!=="registered_file_moved")
    throw new GatewayError(502,"Dropbox file identity verification unavailable");
+  const enrichment=await enrichAfterRegistrationIfEnabled(plan.brandSlug,id);
   return {ok:true,assetId:id,brandSlug:plan.brandSlug,
+   ...(enrichment.attempted?{autoEnrichment:enrichment}:{}),
    dropboxFileId:fileIdentity.id,dropboxPath:fileIdentity.path,
    filename:plan.filename,reusedExistingFile:reused,metadata:plan.metadata,
    registered:true,identityVerified:true,

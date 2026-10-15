@@ -20,6 +20,7 @@ function load(file,mocks={},globals={}){
 class GatewayError extends Error{constructor(status,message){super(message);this.status=status;}}
 const inside=(slug,p)=>p.startsWith('/1---elettro-brand-os/'+slug+'/');
 const mocks={
+ '@/lib/asset-ai-enrichment':{enrichAfterRegistrationIfEnabled:async()=>({attempted:false})},
  '@/lib/cognito-auth':{serverSetting:async()=> 's'.repeat(64)},
  '@/lib/brand-config':{brandConfigs:brands},
  '@/lib/ai-mcp-intake':{safeFilename:n=>{if(/[\\/]/.test(n))throw Error('bad');return n;},mediaType:()=> 'image/png',

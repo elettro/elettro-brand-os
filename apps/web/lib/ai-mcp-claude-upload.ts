@@ -1,3 +1,4 @@
+import { enrichAfterRegistrationIfEnabled } from "@/lib/asset-ai-enrichment";
 import {createHmac,timingSafeEqual} from "node:crypto";
 import {serverSetting} from "@/lib/cognito-auth";
 import {brandConfigs} from "@/lib/brand-config";
@@ -110,7 +111,9 @@ export async function completeClaudeTransfer(args:unknown,identity:McpIdentity){
   const check=await executeAiGateway({action:"inspect_global_dropbox_id",brandSlug:plan.brandSlug,assetId:asset.id});
   const source=await executeAiGateway({action:"inspect_registered_asset",brandSlug:plan.brandSlug,assetId:asset.id});
   if(check.globalLookupVerified!==true||source.registrationVerified!==true)throw new Error("Verification pending");
+  const enrichment=await enrichAfterRegistrationIfEnabled(plan.brandSlug,asset.id);
   return {ok:true,registered:true,assetId:asset.id,brandSlug:plan.brandSlug,dropboxFileId:actual.id,dropboxPath:path,
+   ...(enrichment.attempted?{autoEnrichment:enrichment}:{}),
    alreadyRegistered:data.alreadyRegistered===true,metadata:plan.metadata,
    note:"Dropbox source and global asset identity verified. Metadata saved; no publishing or S3 transfer. Existing workflow state preserved."};
  }catch{return {...pending,registrationPending:false,metadataOrVerificationPending:true,assetId:asset.id};}

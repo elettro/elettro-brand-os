@@ -139,8 +139,8 @@ async function backfillFolderHints(event) {
         `UPDATE "Asset"
          SET "folderSuggestions" = $2::jsonb,
              "aspectRatioLabel" = COALESCE("aspectRatioLabel", $3),
-             "ingestStatus" = 'needs_metadata',
-             "enrichmentStatus" = 'suggested',
+
+             "enrichmentStatus" = CASE WHEN "enrichmentStatus" = 'pending' THEN 'suggested'::"EnrichmentStatus" ELSE "enrichmentStatus" END,
              "updatedAt" = CURRENT_TIMESTAMP
          WHERE "id" = $1`,
         [row.id, JSON.stringify(hints), hints.aspectRatioLabel]
@@ -435,7 +435,8 @@ async function ingestDropboxPage(event) {
                "sourceMetadata" = $9::jsonb,
                "folderSuggestions" = $10::jsonb,
                "aspectRatioLabel" = COALESCE("aspectRatioLabel", $11),
-               "ingestStatus" = CASE WHEN "ingestStatus" = 'raw' THEN 'needs_metadata'::"IngestStatus" ELSE "ingestStatus" END,
+
+                -- Rediscovery refreshes facts but never changes ingestion status.
                "enrichmentStatus" = CASE WHEN "enrichmentStatus" = 'pending' THEN 'suggested'::"EnrichmentStatus" ELSE "enrichmentStatus" END,
                "updatedAt" = CURRENT_TIMESTAMP
            WHERE "id" = $1`,

@@ -528,6 +528,8 @@ export function IntakeClient() {
     setMessageTone("idle");
     setMessage("Beginning direct Dropbox intake, without S3…");
     let count = 0;
+    let enriched = 0;
+    let enrichFailed = 0;
     const report = {total:unsaved.length,uploaded:0,reused:0,skipped:0,failed:0,registered:0,complete:false};
     let currentFile: IntakeFile | null = null;
     const publishReport = () => setBatchReport({...report});
@@ -656,6 +658,21 @@ export function IntakeClient() {
         rememberSavedFingerprints(brand, [hash]);
         count++;
         report.registered++;
+        // DEV opt-in: registration must succeed even if AI vision is unavailable.
+        // A one-frame video preview is an aid, not a full-video inspection.
+        if (process.env.NEXT_PUBLIC_EPE_AUTO_ENRICH_ENABLED === "true" && !stockAsset) {
+          try {
+            setMessage("Analyzing " + item.name + " for missing metadata…");
+            const aiResponse = await fetch("/api/assets/auto-enrich", {
+              method: "POST", headers: {"content-type":"application/json"},
+              body: JSON.stringify({ brandSlug: brand, assetId: result.asset.id })
+            });
+            const aiResult = await aiResponse.json();
+            if (aiResponse.ok && aiResult.ok === true) {
+              if (Array.isArray(aiResult.updatedFields) && aiResult.updatedFields.length) enriched++;
+            } else enrichFailed++;
+          } catch { enrichFailed++; }
+        }
         currentFile=null;
         publishReport();
       }
@@ -687,7 +704,8 @@ export function IntakeClient() {
         setStockAllowedBrands([]);
         setDropboxTestResult("");
       }
-      setMessage(`${report.total} checked · ${report.uploaded} uploaded · ${report.reused} reused from Dropbox · ${report.registered} registered · ${report.skipped} skipped · ${report.failed} conflicts. No S3 transfer.`);
+      setMessage(`${report.total} checked · ${report.uploaded} uploaded · ${report.reused} reused from Dropbox · ${report.registered} registered · ${report.skipped} skipped · ${report.failed} conflicts.` +
+        (process.env.NEXT_PUBLIC_EPE_AUTO_ENRICH_ENABLED === "true" ? ` AI enriched: ${enriched}; analysis unavailable: ${enrichFailed}.` : "") + " No S3 transfer.");
       setMessageTone(report.failed ? "error" : "success");
     } catch(error) {
       if(currentFile && report.uploaded + report.reused + report.skipped + report.failed < report.total) report.failed++;
