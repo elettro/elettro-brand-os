@@ -128,12 +128,13 @@ test("ChatGPT discovery supports GET challenge and both RFC 9728 metadata paths"
  assert.match(metadata,/chatGptOauthConfiguration\(\)/);
 });
 
-test("ChatGPT file download host allowlist uses exact observed Azure host only",()=>{
+test("ChatGPT file downloader delegates to a regional host allowlist with strict URL checks",()=>{
  const upload=readFileSync(new URL("../apps/web/lib/ai-mcp-upload.ts",import.meta.url),"utf8");
- assert.ok(upload.includes('h==="oaisdmntprcentralus.blob.core.windows.net"'));
- assert.ok(!upload.includes('h.endsWith(".blob.core.windows.net")'));
+ assert.match(upload,/import \{approvedChatGptFileHost\}/);
+ assert.match(upload,/export const approvedFileHost=approvedChatGptFileHost/);
  assert.match(upload,/redirect:"error"/);
  assert.match(upload,/url.protocol!=="https:"/);
+ assert.match(upload,/url.username\|\|url.password/);
 });
 
 test("ChatGPT download-host diagnostics expose only host, never the signed attachment URL",()=>{
