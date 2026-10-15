@@ -31,6 +31,8 @@ test("AI enrichment is owner-only, gated, non-destructive and scoped to brand ro
   const helper = file("apps/web/lib/asset-ai-enrichment.ts");
   const route = file("apps/web/app/api/assets/auto-enrich/route.ts");
   const intake = file("apps/web/app/assets/add/intake-client.tsx");
+  const claude = file("apps/web/lib/ai-mcp-claude-upload.ts");
+  const chat = file("apps/web/lib/ai-mcp-upload.ts");
   assert.match(helper, /EPE_AUTO_ENRICH_ENABLED !== "true"/);
   assert.match(helper, /EPE_BEDROCK_VISION_MODEL_ID/);
   assert.match(helper, /!asset\.title\?\.trim\(\)/);
@@ -42,4 +44,6 @@ test("AI enrichment is owner-only, gated, non-destructive and scoped to brand ro
   assert.match(intake, /NEXT_PUBLIC_EPE_AUTO_ENRICH_ENABLED === "true"/);
   assert.match(intake, /report\.registered\+\+;/);
   assert.match(intake, /auto-enrich/);
+  assert.match(claude, /enrichAfterRegistrationIfEnabled/);
+  assert.match(chat, /enrichAfterRegistrationIfEnabled/);
 });
