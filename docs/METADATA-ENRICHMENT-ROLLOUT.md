@@ -12,7 +12,7 @@ The Dropbox sync refresh and folder-hint backfill paths no longer convert existi
 
 ## 2. Optional visual enrichment
 
-New owner-authenticated `POST /api/assets/auto-enrich` analyzes missing metadata for one brand-owned Dropbox image or video. The web app calls it after successful dashboard registration when explicitly enabled.
+New owner-authenticated `POST /api/assets/auto-enrich` analyzes missing metadata for one brand-owned Dropbox image or video. The web app calls it after successful dashboard registration when explicitly enabled. Claude Web/Code transfer paths also trigger optional analysis after identity verification.
 
 - Image: Dropbox visual thumbnail. Video: a **single preview frame**, not video-wide or audio analysis.
 - Model: Amazon Bedrock Converse API, configured with a vision-compatible model.
@@ -36,6 +36,6 @@ New owner-authenticated `POST /api/assets/auto-enrich` analyzes missing metadata
 
 ### Current limits
 
-This DEV increment auto-enriches **dashboard uploads only**, when enabled. Files discovered exclusively by scheduled Dropbox sync need a queue/scheduler integration. Claude integrations already provide metadata in their own tool calls; add a scheduled backfill job before claiming all intake paths are automated. AI video analysis currently sees one thumbnail and cannot describe motion or audio.
+This DEV increment enriches dashboard registrations and Claude Web/Code transfer completions, when enabled. Claude clients already send metadata in their own tool calls, so only remaining gaps are filled. Dropbox-only discoveries still need queue/scheduler integration before all intake paths are fully automated. AI video analysis currently sees one thumbnail and cannot describe motion or audio.
 
 Do not label either feature live-verified until the deployment, AWS model authorization and end-to-end acceptance tests pass.
