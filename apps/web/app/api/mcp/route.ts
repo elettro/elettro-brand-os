@@ -17,6 +17,15 @@ const headers={"cache-control":"no-store","mcp-protocol-version":"2025-06-18"};
 // Cloud MCP hosts may send their own Origin; all requests still require a
 // valid independently scoped Bearer credential from AWS SSM.
 const allowedMcpOrigins=new Set([DEV_ORIGIN,"https://claude.ai","https://chatgpt.com"]);
+// Diagnostic logging is metadata-only. Never log Authorization headers,
+// bearer values, JWT claims, email addresses, OAuth codes or tool parameters.
+function logOAuthDiscoveryFailure(operation:"GET"|"POST",error:unknown){
+ const known=error instanceof McpAuthorizationError;
+ console.warn("Elettro ChatGPT MCP discovery auth rejected",JSON.stringify({
+  operation,status:known?error.status:503,
+  reason:known?error.message:"Unexpected authentication error"
+ }));
+}
 
 type RpcMessage={jsonrpc?:string;id?:string|number|null;method?:string;params?:unknown};
 function success(id:RpcMessage["id"],result:unknown){
@@ -28,22 +37,27 @@ function rpcError(id:RpcMessage["id"],code:number,message:string){
 
 export async function POST(request:NextRequest){
  const origin=request.headers.get("origin");
- if(origin&&!allowedMcpOrigins.has(origin))
+ if(origin&&!allowedMcpOrigins.has(origin)){
+  console.warn("Elettro MCP origin rejected",JSON.stringify({operation:request.method,status:403}));
   return NextResponse.json({error:"Invalid origin"},{status:403,headers});
+ }
  if(!(request.headers.get("content-type")||"").startsWith("application/json"))
   return NextResponse.json({error:"JSON required"},{status:415,headers});
  if(Number(request.headers.get("content-length")||0)>MAX_BODY)
   return NextResponse.json({error:"Request too large"},{status:413,headers});
 
  let identity;
+ let isChatGptOauth=false;
  try{
   const bearer=request.headers.get("authorization");
+  isChatGptOauth=Boolean(bearer&&/^Bearer [A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(bearer));
   // Distinct credentials with no fallback: JWTs are Cognito+PKCE OAuth tokens;
   // opaque bearer tokens retain the independently scoped Claude SSM hash path.
-  identity=bearer&&/^Bearer [A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(bearer)
+  identity=isChatGptOauth&&bearer
    ? await authorizeChatGptOauth(bearer)
    : await authorizeMcp(bearer);
  }catch(error){
+  if(isChatGptOauth)logOAuthDiscoveryFailure("POST",error);
   const responseHeaders=error instanceof McpAuthorizationError&&error.status===401
    ? {...headers,"www-authenticate":oauthChallenge()}
    : headers;
@@ -69,16 +83,23 @@ export async function POST(request:NextRequest){
  if(id===undefined||id===null||!(typeof id==="string"||typeof id==="number"))
   return rpcError(null,-32600,"Request id required");
 
- if(message.method==="initialize")
+ if(message.method==="initialize"){
+  if(identity.clientId==="chatgpt_oauth")
+   console.info("Elettro ChatGPT MCP discovery",JSON.stringify({phase:"initialize",status:200}));
   return success(id,{
    protocolVersion:"2025-06-18",
    capabilities:{tools:{listChanged:false}},
    serverInfo:{name:"elettro-ai-gateway",version:"0.1.0"},
    instructions:"Brand content only. Confirm mutations with the user before calling. The dashboard remains primary. Stock asset operations are paused."
   });
+ }
  if(message.method==="ping")return success(id,{});
- if(message.method==="tools/list")
-  return success(id,{tools:toolsForClient(identity)});
+ if(message.method==="tools/list"){
+  const tools=toolsForClient(identity);
+  if(identity.clientId==="chatgpt_oauth")
+   console.info("Elettro ChatGPT MCP discovery",JSON.stringify({phase:"tools/list",status:200,toolCount:tools.length}));
+  return success(id,{tools});
+ }
  if(message.method==="tools/call"){
   const p=message.params;
   if(!p||typeof p!=="object"||Array.isArray(p))
@@ -150,6 +171,8 @@ export async function GET(request:NextRequest){
   else
    await authorizeMcp(auth);
  }catch(error){
+  if(/^Bearer [A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(auth))
+   logOAuthDiscoveryFailure("GET",error);
   if(error instanceof McpAuthorizationError){
    const responseHeaders=error.status===401
     ? {...headers,"www-authenticate":oauthChallenge()}
@@ -158,6 +181,8 @@ export async function GET(request:NextRequest){
   }
   return NextResponse.json({error:"MCP authentication unavailable"},{status:503,headers});
  }
+ if(/^Bearer [A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(auth))
+  console.info("Elettro ChatGPT MCP discovery",JSON.stringify({phase:"authenticated GET",status:405}));
  return new NextResponse(null,{status:405,headers:{...headers,allow:"POST"}});
 }
 export async function DELETE(){

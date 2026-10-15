@@ -378,3 +378,15 @@ test("Cognito UserInfo owner verification accepts documented string true, reject
  assert.equal(isVerifiedCognitoOwner({...good,email:"attacker@example.com"},sub,email),false);
  assert.equal(isVerifiedCognitoOwner({...good,email:undefined},sub,email),false);
 });
+
+test("ChatGPT MCP action discovery logs statuses and tool counts without credentials",()=>{
+ const route=readFileSync(new URL("../apps/web/app/api/mcp/route.ts",import.meta.url),"utf8");
+ assert.match(route,/function logOAuthDiscoveryFailure\(/);
+ assert.match(route,/if\(isChatGptOauth\)logOAuthDiscoveryFailure\("POST",error\)/);
+ assert.match(route,/logOAuthDiscoveryFailure\("GET",error\)/);
+ assert.match(route,/phase:"initialize",status:200/);
+ assert.match(route,/phase:"tools\/list",status:200,toolCount:tools.length/);
+ assert.match(route,/phase:"authenticated GET",status:405/);
+ assert.ok(!route.includes('console.log(bearer)'));
+ assert.ok(!route.includes('console.warn(bearer)'));
+});
