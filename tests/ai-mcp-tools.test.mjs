@@ -128,6 +128,15 @@ test("ChatGPT discovery supports GET challenge and both RFC 9728 metadata paths"
  assert.match(metadata,/chatGptOauthConfiguration\(\)/);
 });
 
+test("ChatGPT download-host diagnostics expose only host, never the signed attachment URL",()=>{
+ const upload=readFileSync(new URL("../apps/web/lib/ai-mcp-upload.ts",import.meta.url),"utf8");
+ assert.match(upload,/if\(!approvedFileHost\(url\.hostname\)\)/);
+ assert.match(upload,/url\.hostname\.slice\(0,200\)/);
+ assert.match(upload,/no download attempted/);
+ assert.match(upload,/redirect:"error"/);
+ assert.ok(!upload.includes('+"?"+url.search'));
+});
+
 test("ChatGPT fileParam accepts canonical objects and serialized authorized file objects only",()=>{
  const canonical={
   download_url:"https://files.oaiusercontent.com/signed-asset.png?token=sample",

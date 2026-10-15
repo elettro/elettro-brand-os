@@ -30,9 +30,15 @@ export function validatedDownloadUrl(value:string):string{
  let url:URL;
  try{url=new URL(value);}
  catch{throw new GatewayError(400,"Invalid ChatGPT file URL");}
+ // Never reveal the temporary signed URL, path, query, or bearer credentials.
+ // This diagnostic exposes only the normalized hostname for a denied host.
  if(url.protocol!=="https:"||url.port||url.username||url.password||
-  !approvedFileHost(url.hostname)||url.hash||url.href.length>6000)
-  throw new GatewayError(403,"ChatGPT file URL host not on approved transfer list; no download attempted");
+    url.hash||url.href.length>6000)
+  throw new GatewayError(403,"ChatGPT file URL failed secure URL checks; no download attempted");
+ if(!approvedFileHost(url.hostname))
+  throw new GatewayError(403,
+   "ChatGPT attachment download host not yet approved: "+url.hostname.slice(0,200)+
+   " (only hostname reported; no download attempted)");
  return url.href;
 }
 async function downloadChatFile(file:ChatFile):Promise<Buffer>{
