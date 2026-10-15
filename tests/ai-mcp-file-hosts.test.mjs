@@ -6,6 +6,7 @@ test("accept ChatGPT attachments from both observed Azure regions",()=>{
  for(const host of [
   "oaisdmntprcentralus.blob.core.windows.net",
   "oaisdmntprnorthcentralus.blob.core.windows.net",
+  "oaisdmntpreastus.blob.core.windows.net",
   "OAISDMNTPRNORTHCENTRALUS.BLOB.CORE.WINDOWS.NET"
  ])assert.equal(approvedChatGptFileHost(host),true,host);
 });
