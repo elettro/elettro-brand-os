@@ -148,3 +148,15 @@ export async function enrichMissingAssetMetadata(input: { brandSlug: unknown; as
   return { ok: true, assetId: asset.id, updatedFields: Object.keys(patch),
     previewOnly: isVideo, statusPreserved: true };
 }
+
+/** Optional post-registration enhancement. Never converts a successful registration into a failure. */
+export async function enrichAfterRegistrationIfEnabled(brandSlug: string, assetId: string) {
+  if (process.env.EPE_AUTO_ENRICH_ENABLED !== "true" || !modelId) return { attempted: false };
+  try {
+    const result = await enrichMissingAssetMetadata({ brandSlug, assetId });
+    return { attempted: true, ok: true, updatedFields: result.updatedFields || [] };
+  } catch (error) {
+    console.warn("Optional AI metadata enrichment was unavailable", error instanceof Error ? error.name : "UnknownError");
+    return { attempted: true, ok: false };
+  }
+}
