@@ -55,8 +55,8 @@ export function missingMetadataPatch(asset: Asset, ai: Suggestion): Record<strin
     const tags = [...new Set(ai.tags
       .filter((v): v is string => typeof v === "string")
       .map(v => v.trim().toLowerCase())
-      .filter(v => v.length > 1 && v.length <= 60))]
-      .slice(0, 10);
+      .filter(v => v.length > 1 && v.length <= 40))]
+      .slice(0, 8);
     if (tags.length) patch.tags = tags;
   }
   return patch;
@@ -123,7 +123,7 @@ export async function enrichMissingAssetMetadata(input: { brandSlug: unknown; as
       { image: { format, source: { bytes } } }
     ] }],
     inferenceConfig: { maxTokens: 500, temperature: 0.1 }
-  }));
+  }), { abortSignal: AbortSignal.timeout(25000) });
   const textOutput = result.output?.message?.content?.flatMap(part => part.text ? [part.text] : []).join("\n") || "";
   let proposed: Suggestion;
   try {
