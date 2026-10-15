@@ -6,6 +6,7 @@ import {executeAiGateway,GatewayError} from "@/lib/ai-gateway";
 import {validChatFile,verifyIntakePlan,mediaType,type ChatFile} from "@/lib/ai-mcp-intake";
 import {approvedChatGptFileHost} from "@/lib/ai-mcp-file-hosts";
 import {verifyDropboxFileResponse} from "@/lib/ai-mcp-dropbox-identity";
+import {registrationPending,verificationFailed,uploadComplete,type VerificationStep} from "@/lib/ai-mcp-upload-result";
 import type {McpIdentity} from "@/lib/ai-mcp-auth";
 
 const MAX_BYTES=20*1024*1024; // Pilot cap. Large videos need a resumable background worker.
@@ -213,48 +214,44 @@ export async function uploadApprovedChatFile(args:unknown,identity:McpIdentity){
   sendToApprovalQueue:false,allowedDestinations:[],
   eligibilityMode:"evergreen"
  };
+ const stored={brandSlug:plan.brandSlug,dropboxFileId:fileIdentity.id,
+  dropboxPath:fileIdentity.path,reusedExistingFile:reused};
  let result:Obj;
  try{
   result=await apiAction({action:"complete-dropbox-upload",brandSlug:plan.brandSlug,
    path:fileIdentity.path,mode:"ready",metadata:registeredMetadata});
  }catch{
-  return {ok:false,registrationPending:true,brandSlug:plan.brandSlug,
-   dropboxFileId:fileIdentity.id,dropboxPath:fileIdentity.path,reusedExistingFile:reused,
-   message:"Dropbox file exists, but Elettro registration did not finish. Do not upload it again; reconcile this Dropbox ID and path."};
+  return registrationPending(stored);
  }
  const asset=result.asset && typeof result.asset==="object"&&!Array.isArray(result.asset)
   ?result.asset as Obj:null;
  const id=asset&&typeof asset.id==="string"?asset.id:undefined;
- if(!id){
-  return {ok:false,registrationPending:true,dropboxFileId:fileIdentity.id,
-   dropboxPath:fileIdentity.path,reusedExistingFile:reused,
-   message:"Registry did not provide an asset ID; no duplicate re-upload should be attempted."};
- }
+ if(!id)return registrationPending(stored);
+ // Report success only after every check passes; otherwise name the failed step.
+ let step:VerificationStep="metadata";
  try{
   // Enforce the final title/notes through the same existing owner-confirmed
   // metadata update path, without altering Ready/Approved or publish state.
   await executeAiGateway({action:"update_asset_metadata",brandSlug:plan.brandSlug,
    assetId:id,metadata:plan.metadata,confirmed:true});
+  step="global_identity";
   const identityCheck=await executeAiGateway({action:"inspect_global_dropbox_id",
    brandSlug:plan.brandSlug,assetId:id});
   if(identityCheck.globalLookupVerified!==true)
    throw new GatewayError(502,"Global Dropbox identity was not confirmed");
+  step="dropbox_location";
   const locationCheck=await executeAiGateway({action:"inspect_registered_asset",
    brandSlug:plan.brandSlug,assetId:id});
   if(locationCheck.verificationStatus!=="registered_in_dropbox" &&
      locationCheck.verificationStatus!=="registered_file_moved")
    throw new GatewayError(502,"Dropbox file identity verification unavailable");
-  const enrichment=await enrichAfterRegistrationIfEnabled(plan.brandSlug,id);
-  return {ok:true,assetId:id,brandSlug:plan.brandSlug,
-   ...(enrichment.attempted?{autoEnrichment:enrichment}:{}),
-   dropboxFileId:fileIdentity.id,dropboxPath:fileIdentity.path,
-   filename:plan.filename,reusedExistingFile:reused,metadata:plan.metadata,
-   registered:true,identityVerified:true,
-   note:"Saved to existing brand folder with metadata, no S3 transfer or publishing. Existing Approved status is preserved."};
  }catch{
-  return {ok:false,metadataOrVerificationPending:true,assetId:id,
-   dropboxFileId:fileIdentity.id,dropboxPath:fileIdentity.path,reusedExistingFile:reused,
-   message:"Dropbox storage and Elettro registration completed, but metadata or identity follow-up needs review. Do not upload again."};
+  return verificationFailed(stored,id,step);
  }
+ const enrichment=await enrichAfterRegistrationIfEnabled(plan.brandSlug,id);
+ return uploadComplete(stored,id,result.alreadyRegistered===true,{
+  ...(enrichment.attempted?{autoEnrichment:enrichment}:{}),
+  filename:plan.filename,metadata:plan.metadata,
+  note:"Saved to existing brand folder with metadata, no S3 transfer or publishing. Existing Approved status is preserved."});
 }
 

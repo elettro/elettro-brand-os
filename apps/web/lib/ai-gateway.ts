@@ -16,7 +16,11 @@ type Dict = Record<string, unknown>;
 type Scope = "brand" | "stock";
 
 export class GatewayError extends Error {
-  constructor(public status: number, message: string) { super(message); this.name = "GatewayError"; }
+  // actualBrandSlug is set only when an existing asset was requested under the
+  // wrong brand. Transports decide whether the caller may be told that brand.
+  constructor(public status: number, message: string, public actualBrandSlug?: string) {
+    super(message); this.name = "GatewayError";
+  }
 }
 function record(value: unknown): Dict {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new GatewayError(400, "Expected an object");
@@ -114,7 +118,9 @@ function sanitizedAsset(value: unknown): AssetSummary {
 async function ownedAsset(id: string, slug: string): Promise<AssetSummary> {
   const response = await api("/assets?id=" + encodeURIComponent(id));
   const asset = sanitizedAsset(response.asset);
-  if (!asset.id || asset.brandSlug !== slug) throw new GatewayError(404, "Asset not found in selected brand");
+  if (!asset.id) throw new GatewayError(404, "Asset not found in selected brand");
+  if (asset.brandSlug !== slug)
+    throw new GatewayError(404, "Asset not found in selected brand", asset.brandSlug || undefined);
   return asset;
 }
 
@@ -271,8 +277,11 @@ export async function executeAiGateway(input: unknown): Promise<Dict> {
     const id=assetId(command.assetId);
     const response=await api("/assets?id="+encodeURIComponent(id));
     const asset=record(response.asset);
-    if(asset.id!==id||asset.brandSlug!==config.id)
+    if(asset.id!==id)
       throw new GatewayError(404,"Asset was not found in selected brand");
+    if(asset.brandSlug!==config.id)
+      throw new GatewayError(404,"Asset was not found in selected brand",
+        typeof asset.brandSlug==="string"&&asset.brandSlug?asset.brandSlug:undefined);
     if(asset.sourceType!=="dropbox")
       throw new GatewayError(400,"The selected asset is not a Dropbox source");
     const linkedIds=[asset.sourceFileId,asset.sourceExternalId]
@@ -304,8 +313,11 @@ export async function executeAiGateway(input: unknown): Promise<Dict> {
     const id=assetId(command.assetId);
     const result=await api("/assets?id="+encodeURIComponent(id));
     const asset=record(result.asset);
-    if(asset.id!==id||asset.brandSlug!==config.id)
+    if(asset.id!==id)
       throw new GatewayError(404,"Asset was not found in selected brand");
+    if(asset.brandSlug!==config.id)
+      throw new GatewayError(404,"Asset was not found in selected brand",
+        typeof asset.brandSlug==="string"&&asset.brandSlug?asset.brandSlug:undefined);
     if(asset.sourceType!=="dropbox")
       throw new GatewayError(400,"The selected asset is not a Dropbox source");
     // Older Dropbox-sync records use sourcePath/sourceFileId; direct dashboard

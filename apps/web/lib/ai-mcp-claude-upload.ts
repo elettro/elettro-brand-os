@@ -5,6 +5,7 @@ import {brandConfigs} from "@/lib/brand-config";
 import {executeAiGateway,GatewayError} from "@/lib/ai-gateway";
 import {safeFilename,mediaType,normalizedMetadata,insideBrand} from "@/lib/ai-mcp-intake";
 import {dropboxToken,metadata,matchingBrandFile} from "@/lib/ai-mcp-upload";
+import {verificationFailed,type VerificationStep} from "@/lib/ai-mcp-upload-result";
 import type {McpIdentity} from "@/lib/ai-mcp-auth";
 
 type Obj=Record<string,unknown>;
@@ -105,18 +106,25 @@ export async function completeClaudeTransfer(args:unknown,identity:McpIdentity){
  }catch{return pending;}
  const asset=data.asset&&typeof data.asset==="object"?data.asset as Obj:null;
  if(typeof asset?.id!=="string")return pending;
+ let step:VerificationStep="metadata";
  try{
   await executeAiGateway({action:"update_asset_metadata",brandSlug:plan.brandSlug,assetId:asset.id,
    metadata:plan.metadata,confirmed:true});
+  step="global_identity";
   const check=await executeAiGateway({action:"inspect_global_dropbox_id",brandSlug:plan.brandSlug,assetId:asset.id});
+  if(check.globalLookupVerified!==true)throw new Error("Verification pending");
+  step="dropbox_location";
   const source=await executeAiGateway({action:"inspect_registered_asset",brandSlug:plan.brandSlug,assetId:asset.id});
-  if(check.globalLookupVerified!==true||source.registrationVerified!==true)throw new Error("Verification pending");
+  if(source.registrationVerified!==true)throw new Error("Verification pending");
   const enrichment=await enrichAfterRegistrationIfEnabled(plan.brandSlug,asset.id);
   return {ok:true,registered:true,assetId:asset.id,brandSlug:plan.brandSlug,dropboxFileId:actual.id,dropboxPath:path,
    ...(enrichment.attempted?{autoEnrichment:enrichment}:{}),
    alreadyRegistered:data.alreadyRegistered===true,metadata:plan.metadata,
    note:"Dropbox source and global asset identity verified. Metadata saved; no publishing or S3 transfer. Existing workflow state preserved."};
- }catch{return {...pending,registrationPending:false,metadataOrVerificationPending:true,assetId:asset.id};}
+ }catch{
+  return verificationFailed({brandSlug:plan.brandSlug,dropboxFileId:actual.id,dropboxPath:path},
+   asset.id,step);
+ }
 }
 
 type Portal={version:1;kind:"portal";provider:string;brandSlug:string;filename:string;folder:string;
