@@ -23,6 +23,7 @@ const mocks={
  '@/lib/asset-ai-enrichment':{enrichAfterRegistrationIfEnabled:async()=>({attempted:false})},
  '@/lib/cognito-auth':{serverSetting:async()=> 's'.repeat(64)},
  '@/lib/brand-config':{brandConfigs:brands},
+ '@/lib/ai-mcp-upload-result':load('apps/web/lib/ai-mcp-upload-result.ts'),
  '@/lib/ai-mcp-intake':{safeFilename:n=>{if(/[\\/]/.test(n))throw Error('bad');return n;},mediaType:()=> 'image/png',
   normalizedMetadata:(m,n)=>({title:n,tags:[],priority:'normal',...m}),insideBrand:inside},
 };

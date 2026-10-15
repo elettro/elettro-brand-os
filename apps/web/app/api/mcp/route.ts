@@ -8,6 +8,7 @@ import {uploadApprovedChatFile} from "@/lib/ai-mcp-upload";
 import {authorizeMcp,requireMcpScope,McpAuthorizationError} from "@/lib/ai-mcp-auth";
 import {authorizeChatGptOauth,oauthChallenge} from "@/lib/ai-mcp-oauth";
 import {findAuthorizedTool,toolsForClient} from "@/lib/ai-mcp-tools";
+import {mcpErrorText} from "@/lib/ai-mcp-errors";
 
 export const runtime="nodejs";
 export const dynamic="force-dynamic";
@@ -135,12 +136,14 @@ export async function POST(request:NextRequest){
     console.info("Elettro MCP audit",JSON.stringify({
       provider:identity.clientId,action:tool.action,brandSlug:args.brandSlug,
       assetId:typeof args.assetId==="string"?args.assetId:undefined,
-      outcome:result.ok===false?"partial":"success",timestamp:new Date().toISOString()
+      outcome:result.ok===false?"partial":"success",
+      status:"status" in result&&typeof result.status==="string"?result.status:undefined,timestamp:new Date().toISOString()
     }));
    return success(id,{content:[{type:"text",text:JSON.stringify(result)}],structuredContent:result,isError:result.ok===false});
   }catch(error){
    const known=error instanceof GatewayError||error instanceof McpAuthorizationError;
-   const messageText=known?error.message:"Elettro operation unavailable";
+   const messageText=error instanceof GatewayError?mcpErrorText(error,identity.brandSlugs):
+    known?error.message:"Elettro operation unavailable";
    console.error("Elettro MCP audit",JSON.stringify({
      provider:identity.clientId,action:tool.action,brandSlug:args.brandSlug,
      assetId:typeof args.assetId==="string"?args.assetId:undefined,
