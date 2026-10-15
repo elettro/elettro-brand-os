@@ -7,6 +7,7 @@ on:
       - '.github/workflows/step9-chatgpt-public-diagnostics.yml'
       - 'apps/web/app/api/mcp/route.ts'
       - 'apps/web/app/.well-known/oauth-protected-resource/route.ts'
+      - 'apps/web/app/.well-known/oauth-authorization-server/route.ts'
       - 'apps/web/lib/ai-mcp-oauth.ts'
 
 jobs:
@@ -57,7 +58,7 @@ jobs:
                 body=r.read(1500).decode("utf-8","replace")
                 valid=(r.status==expected and (
                   "resource_metadata=" in challenge if expected==401 else
-                  '"elettro-mcp/read"' in body and '"authorization_servers"' in body
+                  '"authorization_servers"' in body and '"https://develop.d2k28tehm1a8zw.amplifyapp.com/api/mcp/read"' in body and '"https://develop.d2k28tehm1a8zw.amplifyapp.com/api/mcp/write"' in body
                 ))
                 checks.append((path,r.status,valid))
             print("Attempt",attempt,checks,flush=True)
