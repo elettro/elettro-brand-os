@@ -3,7 +3,8 @@ import {COGNITO_DOMAIN} from "@/lib/cognito-auth";
 import {
  chatGptOauthConfiguration,
  MCP_OAUTH_AUTHORIZATION_SERVER,
- MCP_OAUTH_SCOPE
+ MCP_OAUTH_SCOPE,
+ MCP_OAUTH_WRITE_SCOPE
 } from "@/lib/ai-mcp-oauth";
 import {McpAuthorizationError} from "@/lib/ai-mcp-auth";
 
@@ -34,7 +35,7 @@ export async function GET(){
    grant_types_supported:["authorization_code","refresh_token"],
    token_endpoint_auth_methods_supported:["none","client_secret_basic","client_secret_post"],
    code_challenge_methods_supported:["S256"],
-   scopes_supported:["openid","email",MCP_OAUTH_SCOPE],
+   scopes_supported:["openid","email",MCP_OAUTH_SCOPE,MCP_OAUTH_WRITE_SCOPE],
    userinfo_endpoint:COGNITO_DOMAIN+"/oauth2/userInfo"
   },{headers:{"cache-control":"no-store"}});
  }catch(error){

@@ -3,6 +3,7 @@ import {
  chatGptOauthConfiguration,
  MCP_OAUTH_RESOURCE,
  MCP_OAUTH_SCOPE,
+ MCP_OAUTH_WRITE_SCOPE,
  MCP_OAUTH_AUTHORIZATION_SERVER
 } from "@/lib/ai-mcp-oauth";
 import {McpAuthorizationError} from "@/lib/ai-mcp-auth";
@@ -19,7 +20,7 @@ export async function GET(){
   return NextResponse.json({
    resource:MCP_OAUTH_RESOURCE,
    authorization_servers:[MCP_OAUTH_AUTHORIZATION_SERVER],
-   scopes_supported:[MCP_OAUTH_SCOPE]
+   scopes_supported:[MCP_OAUTH_SCOPE,MCP_OAUTH_WRITE_SCOPE]
   },{headers:{"cache-control":"no-store"}});
  }catch(error){
   const status=error instanceof McpAuthorizationError&&error.status===404?404:503;

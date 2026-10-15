@@ -108,7 +108,7 @@ test("ChatGPT OAuth integration is fail-closed and preserves Claude bearer authe
  assert.match(oauth,/brandSlugs:brandConfigs\.map/);
  assert.match(meta,/chatGptOauthConfiguration\(\)/);
  assert.match(meta,/authorization_servers:\[MCP_OAUTH_AUTHORIZATION_SERVER\]/);
- assert.match(meta,/scopes_supported:\[MCP_OAUTH_SCOPE\]/);
+ assert.match(meta,/scopes_supported:\[MCP_OAUTH_SCOPE,MCP_OAUTH_WRITE_SCOPE\]/);
  assert.match(meta,/ChatGPT OAuth not configured/);
  assert.ok(!route.includes("return toolsForClient({clientId:\"chatgpt_oauth\""));
 });
@@ -358,8 +358,8 @@ test("ChatGPT MCP OAuth scopes follow exact Cognito URL resource binding",()=>{
  assert.ok(oauth.includes('MCP_OAUTH_WRITE_SCOPE=MCP_OAUTH_RESOURCE+"/write"'));
  assert.ok(!oauth.includes('MCP_OAUTH_SCOPE="elettro-mcp/read"'));
  assert.ok(!oauth.includes('MCP_OAUTH_WRITE_SCOPE="elettro-mcp/write"'));
- assert.match(protectedResource,/scopes_supported:\[MCP_OAUTH_SCOPE\]/);
- assert.match(discovery,/scopes_supported:\["openid","email",MCP_OAUTH_SCOPE\]/);
+ assert.match(protectedResource,/scopes_supported:\[MCP_OAUTH_SCOPE,MCP_OAUTH_WRITE_SCOPE\]/);
+ assert.match(discovery,/scopes_supported:\["openid","email",MCP_OAUTH_SCOPE,MCP_OAUTH_WRITE_SCOPE\]/);
  assert.match(oauth,/claims\.aud!==MCP_OAUTH_RESOURCE/);
  assert.match(oauth,/claims\.scope\.split\(" "\)\.includes\(MCP_OAUTH_SCOPE\)/);
  assert.match(oauth,/claims\.scope\.split\(" "\)\.includes\(MCP_OAUTH_WRITE_SCOPE\)/);
