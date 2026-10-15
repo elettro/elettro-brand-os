@@ -130,7 +130,7 @@ test("ChatGPT discovery supports GET challenge and both RFC 9728 metadata paths"
 
 test("ChatGPT file download host allowlist uses exact observed Azure host only",()=>{
  const upload=readFileSync(new URL("../apps/web/lib/ai-mcp-upload.ts",import.meta.url),"utf8");
- assert.match(upload,/h==="oaisdmntprcentralus\\.blob\\.core\\.windows\\.net"/);
+ assert.ok(upload.includes('h==="oaisdmntprcentralus.blob.core.windows.net"'));
  assert.ok(!upload.includes('h.endsWith(".blob.core.windows.net")'));
  assert.match(upload,/redirect:"error"/);
  assert.match(upload,/url.protocol!=="https:"/);
