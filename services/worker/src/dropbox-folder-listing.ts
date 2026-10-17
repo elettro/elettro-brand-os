@@ -3,7 +3,7 @@
 // Uses the existing DROPBOX_SECRET_NAME secret. Never expose tokens in responses or logs.
 import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
 const secrets = new SecretsManagerClient({ region: process.env.AWS_REGION || "us-east-1" });
-const roots:Record<string,string>={stashbox:"/1---elettro-brand-os/stashbox",solarmeister:"/1---elettro-brand-os/solarmeister",weightlossdavie:"/1---elettro-brand-os/weightlossdavie","neckermann-strom":"/1---elettro-brand-os/neckermann-strom",therasbox:"/1---elettro-brand-os/therasbox",elettro:"/1---elettro-brand-os/elettro"};
+const roots:Record<string,string>={stashbox:"/1---elettro-brand-os/brands/stashbox",solarmeister:"/1---elettro-brand-os/brands/solarmeister",weightlossdavie:"/1---elettro-brand-os/brands/weightlossdavie","neckermann-strom":"/1---elettro-brand-os/brands/neckermann-strom",therasbox:"/1---elettro-brand-os/brands/therasbox",elettro:"/1---elettro-brand-os/brands/elettro"};
 type Entry={".tag":string;id?:string;name:string;path_display?:string;path_lower?:string};
 function response(statusCode:number,body:unknown){return {statusCode,headers:{"content-type":"application/json","cache-control":"no-store"},body:JSON.stringify(body)};}
 export async function listDropboxFolders(brand:string,requestedPath?:string) {
