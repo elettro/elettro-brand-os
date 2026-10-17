@@ -22,7 +22,7 @@ JSON object with an action field. All brand-scoped operations require one of the
 - search_assets: {"action":"search_assets","brandSlug":"stashbox","query":"rehearsal","limit":25}
 - get_asset: {"action":"get_asset","brandSlug":"stashbox","assetId":"<uuid>"}
 - list_folders (brand): {"action":"list_folders","scope":"brand","brandSlug":"elettro","path":"/1---elettro-brand-os/brands/elettro"}
-- list_folders (stock): {"action":"list_folders","scope":"stock","path":"/1---elettro-brand-os/brands/creative-assets/stock-videos"}
+- list_folders (stock): {"action":"list_folders","scope":"stock","path":"/1---elettro-brand-os/creative-assets/stock-videos"}
 
 ### Mutating operations (explicit confirmation required)
 
@@ -40,7 +40,7 @@ JSON object with an action field. All brand-scoped operations require one of the
 
 - Create a folder, scoped to one brand or shared stock root:
 
-    {"action":"create_folder","scope":"stock","path":"/1---elettro-brand-os/brands/creative-assets/stock-videos/9x16","name":"Miami","confirmed":true}
+    {"action":"create_folder","scope":"stock","path":"/1---elettro-brand-os/creative-assets/stock-videos/9x16","name":"Miami","confirmed":true}
 
 The server checks boundaries. A brand path outside that brand, or a stock path outside creative-assets, is rejected. Dropbox OAuth refresh secrets remain on the server.
 
