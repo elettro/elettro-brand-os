@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {verifyDropboxFileResponse} from "../apps/web/lib/ai-mcp-dropbox-identity.ts";
 
-const path="/1---elettro-brand-os/stashbox/band/image/stashbox-brand/graphics/1x1/envato-labs-image-edit (36).png";
+const path="/1---elettro-brand-os/brands/stashbox/band/image/stashbox-brand/graphics/1x1/envato-labs-image-edit (36).png";
 const hash="a".repeat(64);
 const size=1787864;
 const metadata={
@@ -31,7 +31,7 @@ test("Reject mismatched Dropbox ID, folder tag, destination and bytes before EPE
   {...metadata,id:"not-a-dropbox-id"},
   {...metadata,id:undefined},
   {...metadata,path_display:"/other-brand/file.png"},
-  {...metadata,path_display:"/1---elettro-brand-os/stashbox/band/image/stashbox-brand/graphics/1x1/other.png"},
+  {...metadata,path_display:"/1---elettro-brand-os/brands/stashbox/band/image/stashbox-brand/graphics/1x1/other.png"},
   {...metadata,size:0},
   {...metadata,size:size-1},
   {...metadata,content_hash:"b".repeat(64)},

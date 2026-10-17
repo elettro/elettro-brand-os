@@ -130,9 +130,11 @@ function AssetThumbnail({
 function relativeDropboxPath(sourcePath?: string | null) {
   if (!sourcePath) return "";
   const normalized = sourcePath.replace(/\\/g, "/");
-  const marker = "/1---elettro-brand-os/";
-  const index = normalized.toLowerCase().indexOf(marker);
-  if (index >= 0) return normalized.slice(index + marker.length);
+  // Support new brand roots while older Asset.sourcePath records await ID-based reconciliation.
+  for (const marker of ["/1---elettro-brand-os/brands/", "/1---elettro-brand-os/"]) {
+    const index = normalized.toLowerCase().indexOf(marker);
+    if (index >= 0) return normalized.slice(index + marker.length);
+  }
   return normalized.replace(/^\/+/, "");
 }
 

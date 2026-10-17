@@ -1,19 +1,21 @@
 # Asset Folder Convention
 
+All brand assets live under `/1---elettro-brand-os/brands/{brand}/` in Dropbox. Shared assets stay under `/1---elettro-brand-os/creative-assets/`; Brand Brain documents stay under `/1---elettro-brand-os/intelligence/`.
+
 Dropbox stays human-browsable. Metadata provides the machine intelligence.
 
 ## Recommended structure
 
 ```
-/<brand>/<media-type>/<subject-topic-or-collection>/<aspect-ratio>/<files>
+/1---elettro-brand-os/brands/<brand>/<media-type>/<subject-topic-or-collection>/<aspect-ratio>/<files>
 ```
 
 Examples:
 
 ```
-/stashbox/video/josh-dean/9x16/file.mp4
-/stashbox/video/stashbox-does-sublime/16x9/file.mp4
-/stashbox/images/dean/1x1/file.png
+/1---elettro-brand-os/brands/stashbox/video/josh-dean/9x16/file.mp4
+/1---elettro-brand-os/brands/stashbox/video/stashbox-does-sublime/16x9/file.mp4
+/1---elettro-brand-os/brands/stashbox/images/dean/1x1/file.png
 ```
 
 There is no year folder.

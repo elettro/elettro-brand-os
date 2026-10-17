@@ -21,7 +21,7 @@ JSON object with an action field. All brand-scoped operations require one of the
 - capabilities: {"action":"capabilities"}
 - search_assets: {"action":"search_assets","brandSlug":"stashbox","query":"rehearsal","limit":25}
 - get_asset: {"action":"get_asset","brandSlug":"stashbox","assetId":"<uuid>"}
-- list_folders (brand): {"action":"list_folders","scope":"brand","brandSlug":"elettro","path":"/1---elettro-brand-os/elettro"}
+- list_folders (brand): {"action":"list_folders","scope":"brand","brandSlug":"elettro","path":"/1---elettro-brand-os/brands/elettro"}
 - list_folders (stock): {"action":"list_folders","scope":"stock","path":"/1---elettro-brand-os/creative-assets/stock-videos"}
 
 ### Mutating operations (explicit confirmation required)
@@ -34,7 +34,7 @@ JSON object with an action field. All brand-scoped operations require one of the
 
 - Register a previously uploaded Dropbox file in its own brand folder:
 
-    {"action":"register_existing_asset","brandSlug":"elettro","path":"/1---elettro-brand-os/elettro/images/onesheets/example.png","metadata":{"title":"Example","tags":["one-sheet"]},"confirmed":true}
+    {"action":"register_existing_asset","brandSlug":"elettro","path":"/1---elettro-brand-os/brands/elettro/images/onesheets/example.png","metadata":{"title":"Example","tags":["one-sheet"]},"confirmed":true}
 
   **Current safety restriction:** The AI Gateway only reuses an existing, exact Dropbox-ID registration without rerunning the upload completion action. New file registration through AI is paused until the backend provides a full-database indexed Dropbox-ID lookup; the current recent-assets list is capped at 500. The dashboard upload/registration path is unchanged. No file bytes travel through this action.
 

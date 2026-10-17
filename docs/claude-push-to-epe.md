@@ -36,7 +36,7 @@ Existing ChatGPT file tools and OAuth settings are preserved. This change does n
 Save `scripts/push-to-epe.py` locally. Claude can use this helper after the owner authorizes the exact file, folder and metadata. It reads the existing token from `EPE_MCP_TOKEN`, `.mcp.json`, or matching server entries in `~/.claude.json`, without printing it. It reads the actual local bytes, computes the Dropbox content hash, asks EPE for a transfer plan, sends bytes to the one-use Dropbox URL, then completes registration and metadata.
 
 ```bash
-python3 push-to-epe.py --file IMAGE.png --brand elettro --folder /1---elettro-brand-os/elettro/recovery-test-20261014 --metadata metadata.json --confirmed
+python3 push-to-epe.py --file IMAGE.png --brand elettro --folder /1---elettro-brand-os/brands/elettro/recovery-test-20261014 --metadata metadata.json --confirmed
 ```
 
 Metadata is optional. Supported fields are title, tags, topic, contentGroup, creativeFamily, creativeNotes, priority. One owner instruction to push the reviewed file is sufficient authorization for its transfer sequence.

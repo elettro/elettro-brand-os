@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "build": "npm install --omit=dev --workspaces=false && zip -r elettro-brand-os-dev-api.zip index.mjs db-main.mjs dropbox-identity.mjs claude-folder-ops.mjs dropbox-upload-session.mjs init.sql node_modules package.json"
+    "build": "npm install --omit=dev --workspaces=false && zip -r elettro-brand-os-dev-api.zip index.mjs db-main.mjs dropbox-identity.mjs claude-folder-ops.mjs dropbox-upload-session.mjs brand-root-migration.mjs init.sql node_modules package.json"
   },
   "dependencies": {
     "@aws-sdk/client-secrets-manager": "^3.910.0",

@@ -7,12 +7,12 @@ const secrets = new SecretsManagerClient({});
 const MAX_CHUNK_BYTES = 2 * 1024 * 1024;
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024 * 1024;
 const ROOTS = {
-  stashbox: "/1---elettro-brand-os/stashbox",
-  solarmeister: "/1---elettro-brand-os/solarmeister",
-  weightlossdavie: "/1---elettro-brand-os/weightlossdavie",
-  "neckermann-strom": "/1---elettro-brand-os/neckermann-strom",
-  therasbox: "/1---elettro-brand-os/therasbox",
-  elettro: "/1---elettro-brand-os/elettro"
+  stashbox: "/1---elettro-brand-os/brands/stashbox",
+  solarmeister: "/1---elettro-brand-os/brands/solarmeister",
+  weightlossdavie: "/1---elettro-brand-os/brands/weightlossdavie",
+  "neckermann-strom": "/1---elettro-brand-os/brands/neckermann-strom",
+  therasbox: "/1---elettro-brand-os/brands/therasbox",
+  elettro: "/1---elettro-brand-os/brands/elettro"
 };
 const reply = (statusCode, value) => ({ statusCode, headers: { "content-type": "application/json" }, body: JSON.stringify(value) });
 

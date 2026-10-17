@@ -7,7 +7,7 @@ const TOKEN_HOST = "https://api.dropboxapi.com/oauth2/token";
 const CONTENT_HOST = "https://content.dropboxapi.com/2/files/upload_session";
 const CHUNK = 8 * 1024 * 1024;
 const STORAGE_PREFIX = "elettro-fast-dropbox-";
-const DEFAULT_FOLDER = "/1---elettro-brand-os/stashbox/video/";
+const DEFAULT_FOLDER = "/1---elettro-brand-os/brands/stashbox/band/video/";
 
 function base64Url(bytes: Uint8Array): string {
   return btoa(Array.from(bytes, value => String.fromCharCode(value)).join(""))
@@ -103,7 +103,7 @@ export default function FastUploadExperiment() {
   async function upload() {
     if (!token || !file || busy) return;
     const cleanFolder = folder.replace(/\/+$/, "");
-    if (!cleanFolder.startsWith("/1---elettro-brand-os/stashbox/") ||
+    if (!cleanFolder.startsWith("/1---elettro-brand-os/brands/stashbox/") ||
         cleanFolder.includes("..") || file.name.includes("/")) {
       setStatus("Choose a valid Stashbox Dropbox folder.");
       return;

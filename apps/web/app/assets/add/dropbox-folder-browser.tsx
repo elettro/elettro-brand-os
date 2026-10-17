@@ -10,8 +10,8 @@ export function DropboxFolderBrowser({brand,mode="brand",fileTypes=[],onSelect}:
  const [savingFolder,setSavingFolder]=useState(false);
  const [path,setPath]=useState<string|null>(null);
  const [root,setRoot]=useState("");
- const brandRoot="/1---elettro-brand-os/"+brand;
- const activeRoot=mode==="stock"?"/1---elettro-brand-os/creative-assets":brandRoot;
+ const brandRoot="/1---elettro-brand-os/brands/"+brand;
+ const activeRoot=mode==="stock"?"/1---elettro-brand-os/brands/creative-assets":brandRoot;
  const [folders,setFolders]=useState<Folder[]>([]);
  const [loading,setLoading]=useState(false);
  const [error,setError]=useState("");

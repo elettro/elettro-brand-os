@@ -1,4 +1,5 @@
 import {moveBrandFolder,repairClaudeTestStatus} from "./claude-folder-ops.mjs";
+import {runBrandRootMigration} from "./brand-root-migration.mjs";
 import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
 import { S3Client, PutObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
@@ -15,12 +16,12 @@ const s3 = new S3Client({});
 const lambdaInvoker = new LambdaClient({});
 
 const DROPBOX_BRAND_ROOTS = [
-  ["solarmeister", "/1---elettro-brand-os/solarmeister"],
-  ["stashbox", "/1---elettro-brand-os/stashbox"],
-  ["weightlossdavie", "/1---elettro-brand-os/weightlossdavie"],
-  ["neckermann-strom", "/1---elettro-brand-os/neckermann-strom"],
-  ["therasbox", "/1---elettro-brand-os/therasbox"],
-  ["elettro", "/1---elettro-brand-os/elettro"]
+  ["solarmeister", "/1---elettro-brand-os/brands/solarmeister"],
+  ["stashbox", "/1---elettro-brand-os/brands/stashbox"],
+  ["weightlossdavie", "/1---elettro-brand-os/brands/weightlossdavie"],
+  ["neckermann-strom", "/1---elettro-brand-os/brands/neckermann-strom"],
+  ["therasbox", "/1---elettro-brand-os/brands/therasbox"],
+  ["elettro", "/1---elettro-brand-os/brands/elettro"]
 ];
 
 function json(statusCode, body) {
@@ -92,7 +93,7 @@ async function connectDatabase() {
 function folderHintsFromPath(sourcePath = "", brandSlug = "") {
   const normalized = String(sourcePath || "").replace(/\\/g, "/");
   const lower = normalized.toLowerCase();
-  const root = `/1---elettro-brand-os/${brandSlug.toLowerCase()}/`;
+  const root = `/1---elettro-brand-os/brands/${brandSlug.toLowerCase()}/`;
   const start = lower.indexOf(root);
   const relative = start >= 0 ? normalized.slice(start + root.length) : normalized.replace(/^\/+/, "");
   const parts = relative.split("/").filter(Boolean);
@@ -374,12 +375,17 @@ async function ingestDropboxPage(event) {
     );
 
     const rootRows = await client.query(
-      'SELECT "id","brandId" FROM "BrandStorageRoot" WHERE "storageConnectionId" = $1',
+      'SELECT "id","brandId","rootPathLower" FROM "BrandStorageRoot" WHERE "storageConnectionId" = $1',
       [storageConnectionId]
     );
 
     const rootByBrandId = new Map(
       rootRows.rows.map((row) => [row.brandId, row.id])
+    );
+    // Only index files under the root the database has registered for the brand, so
+    // code and database cut over together (see brand-root-migration.mjs).
+    const rootPathByBrandId = new Map(
+      rootRows.rows.map((row) => [row.brandId, String(row.rootPathLower || "").toLowerCase()])
     );
 
     let indexed = 0;
@@ -398,7 +404,8 @@ async function ingestDropboxPage(event) {
       const brandSlug = brandSlugForDropboxPath(pathLower);
       const brandId = brandIdBySlug.get(brandSlug);
 
-      if (!brandId) {
+      const registeredRoot = rootPathByBrandId.get(brandId);
+      if (!brandId || !registeredRoot || !pathLower.startsWith(`${registeredRoot}/`)) {
         skipped += 1;
         continue;
       }
@@ -417,7 +424,7 @@ async function ingestDropboxPage(event) {
         `SELECT "id" FROM "Asset"
          WHERE "brandId" = $1
            AND "sourceType" = 'dropbox'
-           AND "sourceFileId" = $2
+           AND ("sourceFileId" = $2 OR "sourceExternalId" = $2)
          LIMIT 1`,
         [brandId, entry.id]
       );
@@ -1515,6 +1522,8 @@ async function completeDropboxUpload(event){
 export const handler = async (event = {}) => {
   // IAM-only one-record repair, never exposed through HTTP or MCP.
   if(event.action === "repair-claude-title-test-status" && !event.requestContext && !event.rawPath && !event.path) return repairClaudeTestStatus(connectDatabase,json);
+  // IAM-only Dropbox brands/ cutover (dry-run unless mode:"apply"); never exposed through HTTP or MCP.
+  if(event.action === "migrate-dropbox-brand-roots-20261017" && !event.requestContext && !event.rawPath && !event.path) return runBrandRootMigration(event,connectDatabase,json);
   const requestPath =
     event?.rawPath ||
     event?.requestContext?.http?.path ||

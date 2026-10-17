@@ -6,7 +6,7 @@ const path=require('node:path');
 const crypto=require('node:crypto');
 const ts=require('typescript');
 const root=path.resolve(__dirname,'..');
-const brands=[{id:'elettro',dropboxRoot:'/1---elettro-brand-os/elettro'}];
+const brands=[{id:'elettro',dropboxRoot:'/1---elettro-brand-os/brands/elettro'}];
 const identity={clientId:'claude_code',brandSlugs:['elettro'],permissions:['assets:read','assets:write','assets:upload','folders:write']};
 function load(file,mocks={},globals={}){
  const source=fs.readFileSync(path.join(root,file),'utf8');
@@ -18,7 +18,7 @@ function load(file,mocks={},globals={}){
  return module.exports;
 }
 class GatewayError extends Error{constructor(status,message){super(message);this.status=status;}}
-const inside=(slug,p)=>p.startsWith('/1---elettro-brand-os/'+slug+'/');
+const inside=(slug,p)=>p.startsWith('/1---elettro-brand-os/brands/'+slug+'/');
 const mocks={
  '@/lib/asset-ai-enrichment':{enrichAfterRegistrationIfEnabled:async()=>({attempted:false})},
  '@/lib/cognito-auth':{serverSetting:async()=> 's'.repeat(64)},
@@ -28,7 +28,7 @@ const mocks={
   normalizedMetadata:(m,n)=>({title:n,tags:[],priority:'normal',...m}),insideBrand:inside},
 };
 function transfer(overrides={}){
- const calls=[];let actual={'.tag':'file',id:'id:abcdefghijk',path_display:'/1---elettro-brand-os/elettro/test/a.png',size:3,content_hash:'a'.repeat(64)};
+ const calls=[];let actual={'.tag':'file',id:'id:abcdefghijk',path_display:'/1---elettro-brand-os/brands/elettro/test/a.png',size:3,content_hash:'a'.repeat(64)};
  const m={...mocks,
   '@/lib/ai-gateway':{GatewayError,executeAiGateway:async args=>{calls.push(args);return args.action==='inspect_global_dropbox_id'?{globalLookupVerified:true}:args.action==='inspect_registered_asset'?{registrationVerified:true}:{ok:true};}},
   '@/lib/ai-mcp-upload':{dropboxToken:async()=> 'secret',metadata:async()=>actual,matchingBrandFile:async()=>null,...overrides},
@@ -43,7 +43,7 @@ function transfer(overrides={}){
  }});
  return {module,calls,setActual:v=>actual=v};
 }
-const args={brandSlug:'elettro',filename:'a.png',folder:'/1---elettro-brand-os/elettro/test',size:3,contentHash:'a'.repeat(64),confirmed:true};
+const args={brandSlug:'elettro',filename:'a.png',folder:'/1---elettro-brand-os/brands/elettro/test',size:3,contentHash:'a'.repeat(64),confirmed:true};
 test('prepare fails before upload if permission, brand, size or confirmation is invalid',async()=>{
  const {module,calls}=transfer();
  for(const [command,client] of [[{...args,confirmed:false},identity],[args,{...identity,permissions:[]}],[{...args,size:20971521},identity],[{...args,folder:'/outside'},identity]])
@@ -51,7 +51,7 @@ test('prepare fails before upload if permission, brand, size or confirmation is 
  assert.equal(calls.length,0);
 });
 test('existing exact content is reused without issuing an upload link',async()=>{
- const {module,calls}=transfer({matchingBrandFile:async()=>({id:'id:abcdefghijk',path:'/1---elettro-brand-os/elettro/test/a.png'})});
+ const {module,calls}=transfer({matchingBrandFile:async()=>({id:'id:abcdefghijk',path:'/1---elettro-brand-os/brands/elettro/test/a.png'})});
  const prepared=await module.prepareClaudeTransfer(args,identity);
  assert.equal(prepared.uploadRequired,false);assert.equal(prepared.reusedExistingFile,true);
  assert.equal(calls.some(c=>c.url),false);
@@ -131,9 +131,9 @@ test('web chunks finish a single-chunk upload and bind subsequent chunks to the 
  assert.equal(second.complete,true);
  assert.equal(calls.find(c=>c.url?.endsWith('/finish')).arg.cursor.offset,1);
 });
-function folderHarness({failUpdate=false,failCommit=false}={}){
+function folderHarness({failUpdate=false,failCommit=false,failMoveReply=false}={}){
  let moved=false;const queries=[];const operations=[];
- const asset={id:'asset',brandId:'brand',sourceFileId:'id:abcdefghijk',sourcePath:'/1---elettro-brand-os/elettro/old/a.png',sourcePathLower:'/1---elettro-brand-os/elettro/old/a.png',sourceUrl:null,sourceMetadata:{path:'/1---elettro-brand-os/elettro/old/a.png'}};
+ const asset={id:'asset',brandId:'brand',sourceFileId:'id:abcdefghijk',sourcePath:'/1---elettro-brand-os/brands/elettro/old/a.png',sourcePathLower:'/1---elettro-brand-os/brands/elettro/old/a.png',sourceUrl:null,sourceMetadata:{path:'/1---elettro-brand-os/brands/elettro/old/a.png'}};
  const client={query:async(sql,values)=>{queries.push({sql,values});
   if(sql.startsWith('SELECT "id" FROM "Brand"'))return {rows:[{id:'brand'}]};
   if(sql.includes('FROM "Asset" WHERE'))return {rows:[asset]};
@@ -143,29 +143,34 @@ function folderHarness({failUpdate=false,failCommit=false}={}){
  let source=fs.readFileSync(path.join(root,'services/dev-api-lambda/claude-folder-ops.mjs'),'utf8').replace(/^import .*;\n/,'').replace(/export /g,'');
  source+='\nmodule.exports={moveBrandFolder,repairClaudeTestStatus};';
  const module={exports:{}};
- vm.runInNewContext(source,{module,SecretsManagerClient:class{send(){return {SecretString:JSON.stringify({refreshToken:'r',appKey:'k',appSecret:'s'})};}},GetSecretValueCommand:class{},
-  process:{env:{}},URLSearchParams,AbortSignal,fetch:async(url,options)=>{
-   if(url.endsWith('/token'))return {ok:true,json:async()=>({access_token:'t'})};
-   const body=JSON.parse(options.body);operations.push({url,body});
-   if(url.endsWith('list_folder'))return {ok:true,json:async()=>({entries:[{'.tag':'file',id:asset.sourceFileId,path_display:asset.sourcePath}],has_more:false})};
-   if(url.endsWith('move_v2')){moved=true;return {ok:true,json:async()=>({metadata:{id:'id:folderabcdefgh',path_display:body.to_path}})};}
-   return {ok:true,json:async()=>body.path==='id:abcdefghijk'?{'.tag':'file',id:body.path,path_display:asset.sourcePath}:{'.tag':'folder',id:'id:folderabcdefgh',path_display:body.path}};
-  }});
+ const workerCall=async(endpoint,body)=>{
+   const url='https://api.dropboxapi.com/2/files/'+endpoint;operations.push({url,body});
+   if(endpoint==='list_folder')return {entries:[{'.tag':'file',id:asset.sourceFileId,path_display:asset.sourcePath}],has_more:false};
+   if(endpoint==='move_v2'){moved=true;if(failMoveReply)throw Error('worker response lost');return {metadata:{id:'id:folderabcdefgh',path_display:body.to_path}};}
+   return {'.tag':'folder',id:'id:folderabcdefgh',path_display:body.path};
+ };
+ vm.runInNewContext(source,{module,Buffer,Date,console,
+  LambdaClient:class{async send(command){const event=JSON.parse(command.Payload.toString());
+   assert.equal(event.action,'claude-folder-relay-v1');assert.equal(event.brandSlug,'elettro');
+   return {Payload:Buffer.from(JSON.stringify({ok:true,result:await workerCall(event.endpoint,event.body)}))};}},
+  InvokeCommand:class{constructor(input){Object.assign(this,input);}},
+  process:{env:{DROPBOX_SYNC_FUNCTION_NAME:'worker'}},AbortSignal,
+  fetch:()=>{throw Error('VPC handler must never contact Dropbox directly');}});
  const json=(statusCode,body)=>({statusCode,body});
  return {module:module.exports,client,queries,operations,json,moved:()=>moved};
 }
-const rename={operation:'rename',brandSlug:'elettro',path:'/1---elettro-brand-os/elettro/old',name:'new',confirmed:true};
+const rename={operation:'rename',brandSlug:'elettro',path:'/1---elettro-brand-os/brands/elettro/old',name:'new',confirmed:true};
 test('rename preserves Dropbox ID and only changes source path fields',async()=>{
  const h=folderHarness();const result=await h.module.moveBrandFolder(rename,async()=>h.client,h.json);
  assert.equal(result.body.ok,true);assert.equal(result.body.dropboxFolderId,'id:folderabcdefgh');
  const update=h.queries.find(q=>q.sql.startsWith('UPDATE'));
- assert.equal(update.values[1],'/1---elettro-brand-os/elettro/new/a.png');
+ assert.equal(update.values[1],'/1---elettro-brand-os/brands/elettro/new/a.png');
  assert.ok(!/ingestStatus|approvalStatus|enrichmentStatus|sourceFileId.*=/.test(update.sql));
  assert.equal(h.operations.find(c=>c.url.endsWith('move_v2')).body.autorename,false);
 });
 test('brand roots, cross-brand destinations and descendant moves cannot mutate Dropbox',async()=>{
- for(const invalid of [{...rename,path:'/1---elettro-brand-os/elettro'},
-  {...rename,operation:'move',parentPath:'/1---elettro-brand-os/stashbox/new'},
+ for(const invalid of [{...rename,path:'/1---elettro-brand-os/brands/elettro'},
+  {...rename,operation:'move',parentPath:'/1---elettro-brand-os/brands/stashbox/new'},
   {...rename,operation:'move',parentPath:rename.path+'/child'}, {...rename,confirmed:false}]){
   const h=folderHarness();const result=await h.module.moveBrandFolder(invalid,async()=>h.client,h.json);
   assert.equal(result.body.ok,false);assert.equal(h.moved(),false);
@@ -178,4 +183,11 @@ test('database update failure compensates folder move; ambiguous commit reports 
  const ambiguous=folderHarness({failCommit:true});const b=await ambiguous.module.moveBrandFolder(rename,async()=>ambiguous.client,ambiguous.json);
  assert.equal(b.body.reconciliationRequired,true);
  assert.equal(ambiguous.operations.filter(o=>o.url.endsWith('move_v2')).length,1);
+});
+
+test('lost worker move response requires reconciliation without retry or compensation',async()=>{
+ const h=folderHarness({failMoveReply:true});const result=await h.module.moveBrandFolder(rename,async()=>h.client,h.json);
+ assert.equal(result.body.ok,false);assert.equal(result.body.reconciliationRequired,true);
+ assert.equal(h.operations.filter(o=>o.url.endsWith('move_v2')).length,1);
+ assert.equal(h.queries.some(q=>q.sql==='COMMIT'),false);
 });
