@@ -10,12 +10,12 @@ const DROPBOX_ROOT = "/1---elettro-brand-os";
 const DROPBOX_SECRET_DEFAULT = "elettro-brand-os-dev/dropbox";
 
 const DROPBOX_BRAND_ROOTS = [
-  ["solarmeister", "/1---elettro-brand-os/solarmeister"],
-  ["stashbox", "/1---elettro-brand-os/stashbox"],
-  ["weightlossdavie", "/1---elettro-brand-os/weightlossdavie"],
-  ["neckermann-strom", "/1---elettro-brand-os/neckermann-strom"],
-  ["therasbox", "/1---elettro-brand-os/therasbox"],
-  ["elettro", "/1---elettro-brand-os/elettro"]
+  ["solarmeister", "/1---elettro-brand-os/brands/solarmeister"],
+  ["stashbox", "/1---elettro-brand-os/brands/stashbox"],
+  ["weightlossdavie", "/1---elettro-brand-os/brands/weightlossdavie"],
+  ["neckermann-strom", "/1---elettro-brand-os/brands/neckermann-strom"],
+  ["therasbox", "/1---elettro-brand-os/brands/therasbox"],
+  ["elettro", "/1---elettro-brand-os/brands/elettro"]
 ];
 
 function assetKindFromName(name = "") {
@@ -203,14 +203,27 @@ export const handler = async (event = {}) => {
         );
         if (!brand.rows[0]) continue;
 
-        await client.query(
-          `INSERT INTO "BrandStorageRoot"
-            ("brandId","storageConnectionId","rootPath","rootPathLower","status","updatedAt")
-           VALUES ($1,$2,$3,$4,'active',CURRENT_TIMESTAMP)
-           ON CONFLICT ("storageConnectionId","rootPathLower")
-           DO UPDATE SET "brandId" = EXCLUDED."brandId", "status" = 'active', "updatedAt" = CURRENT_TIMESTAMP`,
-          [brand.rows[0].id, storageConnectionId, rootPath, rootPath.toLowerCase()]
+        // Update the existing brand root in place to preserve its ID and Asset.storageRootId references.
+        const existingRoot = await client.query(
+          'SELECT "id" FROM "BrandStorageRoot" WHERE "brandId" = $1 AND "storageConnectionId" = $2 LIMIT 1',
+          [brand.rows[0].id, storageConnectionId]
         );
+        if (existingRoot.rows[0]) {
+          await client.query(
+            `UPDATE "BrandStorageRoot" SET "rootPath" = $2, "rootPathLower" = $3,
+                    "status" = 'active', "updatedAt" = CURRENT_TIMESTAMP WHERE "id" = $1`,
+            [existingRoot.rows[0].id, rootPath, rootPath.toLowerCase()]
+          );
+        } else {
+          await client.query(
+            `INSERT INTO "BrandStorageRoot"
+              ("brandId","storageConnectionId","rootPath","rootPathLower","status","updatedAt")
+             VALUES ($1,$2,$3,$4,'active',CURRENT_TIMESTAMP)
+             ON CONFLICT ("storageConnectionId","rootPathLower")
+             DO UPDATE SET "brandId" = EXCLUDED."brandId", "status" = 'active', "updatedAt" = CURRENT_TIMESTAMP`,
+            [brand.rows[0].id, storageConnectionId, rootPath, rootPath.toLowerCase()]
+          );
+        }
       }
 
       return json(200, {
