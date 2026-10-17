@@ -57,6 +57,12 @@
             "show-promo",
             "stashbox-does-dylan",
             "stashbox-does-sublime"
+          ],
+          "tagSetsAny": [
+            [
+              "licensed-cover",
+              "reggae"
+            ]
           ]
         }
       },
@@ -174,13 +180,56 @@
         "email": "booking@stashbox.com"
       },
       "radio": "https://stashbox.com/radio/",
-      "merchStore": "https://stashbox.ai"
+      "merchStore": "https://stashbox.ai",
+      "streaming": {
+        "spotify": "https://open.spotify.com/artist/0QMZNPEj7A2MFnT9zJGERa",
+        "appleMusic": "https://music.apple.com/us/artist/stashbox/1464431398",
+        "amazonMusic": "https://music.amazon.com/artists/B003VPOKDO/stashbox",
+        "tidal": "https://tidal.com/artist/8920712"
+      },
+      "youtubeChannel": "https://youtube.com/@stashboxband"
     },
     "copy": {
       "enabled": true,
       "task": "write_copy",
       "concurrency": 6
-    }
+    },
+    "releasedTagsAny": [
+      "streaming",
+      "released",
+      "released-songs",
+      "release-promo",
+      "album-promo",
+      "distrokid",
+      "spotify"
+    ],
+    "balance": [
+      {
+        "name": "show",
+        "sectors": [
+          "live-shows"
+        ],
+        "weight": 12,
+        "values": {
+          "stashbox-does-dylan": {
+            "tagsAny": [
+              "stashbox-does-dylan"
+            ]
+          },
+          "stashbox-does-sublime": {
+            "tagsAny": [
+              "stashbox-does-sublime"
+            ],
+            "tagSetsAny": [
+              [
+                "licensed-cover",
+                "reggae"
+              ]
+            ]
+          }
+        }
+      }
+    ]
   },
   "accounts": [
     {

@@ -26,7 +26,9 @@ export function postFacts(asset, slot, songFacts = {}, links = {}) {
   const valueOf = (prefix) => tags.find((t) => t.startsWith(prefix + ":"))?.slice(prefix.length + 1) || null;
   const slug = songKeyOf(asset);
   const song = slug ? songFacts[slug] : null;
-  const showTag = Object.keys(SHOWS).find((t) => tags.includes(t));
+  // Reggae covers belong to the Sublime & Reggae show set even without the show tag.
+  const showTag = Object.keys(SHOWS).find((t) => tags.includes(t)) ||
+    (slot.sector === "live-shows" && tags.includes("reggae") && tags.includes("licensed-cover") ? "stashbox-does-sublime" : null);
   const people = {};
   for (const t of tags) {
     const m = /^([a-z]+-[a-z-]+):(vocals|guitar|bass|drums|keyboards|keys)$/.exec(t);
@@ -37,13 +39,16 @@ export function postFacts(asset, slot, songFacts = {}, links = {}) {
   const sectorLinks = {
     "live-shows": links.booking?.page ? [links.booking.page] : [],
     radio: song?.radioUrl ? [song.radioUrl] : [],
-    streaming: [song?.spotifyUrl, song?.appleMusicUrl, song?.youtubeMusicUrl].filter(Boolean)
+    // Spotify first (song, then artist profile), then the other platforms.
+    streaming: [song?.spotifyUrl, links.streaming?.spotify, song?.appleMusicUrl, song?.youtubeMusicUrl,
+      links.streaming?.appleMusic, links.streaming?.amazonMusic, links.streaming?.tidal].filter(Boolean)
   }[slot.sector] || [];
+  const artistLinks = Object.values(links.streaming || {}).filter(Boolean);
   return {
     sector: slot.sector,
     destination: slot.destination,
     placement: slot.placement,
-    song: song?.title || asset.topic || (slug ? titleCase(slug) : null),
+    song: slug ? song?.title || asset.topic || titleCase(slug) : null,
     show: showTag ? SHOWS[showTag] : null,
     isCover: tags.some((t) => ["cover", "licensed-cover", "bob-dylan-cover"].includes(t)),
     originalArtist: valueOf("original-artist") ? titleCase(valueOf("original-artist")) : null,
@@ -56,7 +61,8 @@ export function postFacts(asset, slot, songFacts = {}, links = {}) {
     aiGenerated: synthetic,
     linksInCaptionAreClickable: CLICKABLE.has(slot.destination),
     primaryLink: sectorLinks[0] || null,
-    allowedLinks: [...new Set([...sectorLinks, links.booking?.page, links.radio, links.merchStore].filter(Boolean))],
+    songHasOwnStreamingLink: Boolean(song?.spotifyUrl || song?.appleMusicUrl || song?.youtubeMusicUrl),
+    allowedLinks: [...new Set([...sectorLinks, ...artistLinks, links.youtubeChannel, links.booking?.page, links.radio, links.merchStore].filter(Boolean))],
     bookingEmail: slot.sector === "live-shows" ? links.booking?.email || null : null,
     contentGroup: asset.contentGroup || null,
     notes: asset.creativeNotes ? String(asset.creativeNotes).slice(0, 500) : null
@@ -69,6 +75,7 @@ function hashtagsFor(f) {
   if (f.show === "Stashbox Does Sublime & Reggae") tags.push("#sublime", "#reggae");
   if (f.sector === "live-shows") tags.push("#southflorida", "#liveband");
   if (f.sector === "radio") tags.push("#stashboxradio", "#newmusic");
+  if (f.sector === "streaming") tags.push("#spotify", "#newmusic");
   return [...new Set(tags)];
 }
 
@@ -96,8 +103,10 @@ export function templateCopy(f, seed) {
       `Full song on Stashbox Radio. Free members get the videos and their own playlists. ${cta}`
     ]);
   } else {
-    hook = `${songLine || "Stashbox"}.`;
-    body = `Listen on your platform: ${cta}`;
+    hook = pick(seed, [`${songLine || "Stashbox"}.`, `${songLine}, out now.`, `Stream ${songLine}.`]);
+    body = f.songHasOwnStreamingLink
+      ? `Listen on Spotify: ${cta}`
+      : `${f.album ? `From ${f.album}. ` : ""}Follow Stashbox on Spotify: ${cta}`;
   }
   const hashtags = hashtagsFor(f).slice(0, LIMITS[f.destination]?.hashtags ?? 5);
   const caption = `${hook}\n${body}`;

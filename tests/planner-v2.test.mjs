@@ -93,6 +93,26 @@ test("every slot fills, sectors without enough content wait, and the same song n
   assert.ok(plan.slots.filter((s) => s.socialAccountId === "tiktok-video" && s.sector === "radio").every((s) => s.synthetic));
 });
 
+test("tag sets put reggae covers in the show sector and the two shows stay in balance", () => {
+  const showSettings = resolvePlannerSettings({ planner: {
+    sectors: [{ slug: "live-shows", priority: 1, share: 1, match: { tagsAny: ["stashbox-does-dylan"], tagSetsAny: [["licensed-cover", "reggae"]] } }],
+    balance: [{ name: "show", sectors: ["live-shows"], weight: 12, values: {
+      dylan: { tagsAny: ["stashbox-does-dylan"] }, sublime: { tagSetsAny: [["licensed-cover", "reggae"]] } } }],
+    minPoolForSector: 1
+  } });
+  const pool = [
+    ...Array.from({ length: 12 }, (_, i) => asset(["stashbox-does-dylan", `song:d${i}`])),
+    ...Array.from({ length: 4 }, (_, i) => asset(["licensed-cover", "reggae", `song:r${i}`])),
+    asset(["reggae", "song:not-a-cover"])
+  ];
+  const plan = planWeek({ assets: pool, settings: showSettings, weekStart: WEEK, timeZone: TZ, now: NOW,
+    accounts: [account("instagram", "reel", 8)] });
+  const shows = plan.slots.map((s) => (pool.find((a) => a.id === s.assetId).tags.includes("stashbox-does-dylan") ? "dylan" : "sublime"));
+  assert.equal(shows.filter((s) => s === "dylan").length, 4);
+  assert.equal(shows.filter((s) => s === "sublime").length, 4);
+  assert.ok(!plan.slots.some((s) => s.songKey === "not-a-cover"));
+});
+
 test("history counts against cooldowns", () => {
   const used = library[0];
   const plan = run({ uses: [{ socialAccountId: "tiktok-video", assetId: used.id, songKey: songKeyOf(used), at: "2026-10-05T15:00:00Z" }] });

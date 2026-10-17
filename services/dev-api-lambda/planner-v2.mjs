@@ -107,6 +107,7 @@ export function sectorsOf(asset, settings) {
   const group = String(asset?.contentGroup || "").toLowerCase();
   return settings.sectors
     .filter((s) => hasAny(tags, s.match?.tagsAny) ||
+      (Array.isArray(s.match?.tagSetsAny) && s.match.tagSetsAny.some((set) => set.length && set.every((t) => tags.includes(String(t).toLowerCase())))) ||
       (Array.isArray(s.match?.contentGroupsAny) && s.match.contentGroupsAny.some((g) => String(g).toLowerCase() === group)))
     .map((s) => s.slug);
 }
@@ -115,14 +116,24 @@ export function sectorsOf(asset, settings) {
  * Sector requirements that make a post honest: a radio post needs the song's own
  * radio page, a streaming post needs a streaming link on the song record.
  */
+// A released song without its own streaming link can still point to the artist profile.
 const REQUIREMENTS = {
   radioLink: (facts) => Boolean(facts?.radioUrl),
-  streamingLink: (facts) => Boolean(facts?.spotifyUrl || facts?.appleMusicUrl || facts?.youtubeMusicUrl)
+  streamingLink: (facts, asset, settings) => Boolean(facts?.spotifyUrl || facts?.appleMusicUrl || facts?.youtubeMusicUrl) ||
+    (Boolean(settings?.links?.streaming?.spotify) && hasAny(tagsOf(asset), settings?.releasedTagsAny))
 };
 
-export function meetsSectorRequirements(asset, sector, songFacts) {
+export function meetsSectorRequirements(asset, sector, songFacts, settings) {
   const facts = songFacts?.[songKeyOf(asset)];
-  return (sector.requires || []).every((r) => REQUIREMENTS[r] ? REQUIREMENTS[r](facts) : false);
+  return (sector.requires || []).every((r) => REQUIREMENTS[r] ? REQUIREMENTS[r](facts, asset, settings) : false);
+}
+
+/** Which value of a balance group (e.g. which show) an asset belongs to, or null. */
+export function balanceValueOf(asset, group) {
+  const tags = tagsOf(asset);
+  const hit = Object.entries(group.values || {}).find(([, m]) => hasAny(tags, m.tagsAny) ||
+    (Array.isArray(m.tagSetsAny) && m.tagSetsAny.some((set) => set.length && set.every((t) => tags.includes(String(t).toLowerCase())))));
+  return hit ? hit[0] : null;
 }
 
 export function isSynthetic(asset, settings) {
@@ -250,7 +261,7 @@ export function planWeek({ assets, accounts, settings, weekStart, timeZone, uses
   const perAccount = accounts.map((account) => {
     const pool = assets.filter((a) => !poolRejection(a, account, settings));
     const bySector = Object.fromEntries(settings.sectors.map((s) => [s.slug,
-      pool.filter((a) => sectorsOf(a, settings).includes(s.slug) && meetsSectorRequirements(a, s, songFacts))]));
+      pool.filter((a) => sectorsOf(a, settings).includes(s.slug) && meetsSectorRequirements(a, s, songFacts, settings))]));
     const active = settings.sectors.filter((s) => bySector[s.slug].length >= (settings.minPoolForSector || 1));
     settings.sectors.filter((s) => !active.includes(s)).forEach((s) => sectorsWaiting.add(s.slug));
     const slots = buildSlots(account, weekStart, timeZone).filter((s) => new Date(s.scheduledFor) > now);
@@ -291,7 +302,23 @@ export function planWeek({ assets, accounts, settings, weekStart, timeZone, uses
       const songRepeats = song ? thisWeek.filter((u) => u.songKey === song).length : 0;
       const groupRepeats = asset.contentGroup ? thisWeek.filter((u) => u.contentGroup === asset.contentGroup).length : 0;
       const rule = settings.placements[`${slot.destination}:${String(slot.placement).toLowerCase()}`] || {};
+      // Keep groups like the two shows in balance within a sector: favor the value used least this week.
+      let balance = 0;
+      for (const group of settings.balance || []) {
+        if (group.sectors && !group.sectors.includes(slot.sector)) continue;
+        const mine = balanceValueOf(asset, group);
+        if (!mine) continue;
+        const counts = Object.fromEntries(Object.keys(group.values).map((v) => [v, 0]));
+        for (const u of thisWeek) {
+          const used = assetById.get(u.assetId);
+          const v = used ? balanceValueOf(used, group) : null;
+          if (v) counts[v] += 1;
+        }
+        const least = Math.min(...Object.values(counts));
+        balance += counts[mine] === least ? (group.weight ?? 12) : -4 * (counts[mine] - least);
+      }
       const breakdown = {
+        balance,
         freshness: round2(freshness),
         newBatch: round2(newBatch),
         priority: priorityScore(asset.priority),
