@@ -132,7 +132,7 @@ Target guidance size per call (excluding live JSON), enforced by a CI check:
 
 | Task | Max guidance tokens |
 |---|---|
-| enrich_asset | 3,500 (frames dominate this call's cost, not guidance) |
+| enrich_asset | 4,000 (frames dominate this call's cost, not guidance) |
 | select_content | 4,000 |
 | write_copy | 4,500 |
 

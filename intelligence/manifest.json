@@ -19,7 +19,7 @@
         "shared/asset-analysis.md",
         "brands/{brand}/brand.md#core"
       ],
-      "maxGuidanceTokens": 3500,
+      "maxGuidanceTokens": 4000,
       "liveInputs": ["asset technical fields", "frames", "transcript", "folder path", "brand vocabulary (sectors, content families, tags)", "known subjects (songs, shows, products)"]
     },
     "select_content": {
