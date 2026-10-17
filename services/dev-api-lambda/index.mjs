@@ -1,4 +1,5 @@
 import {moveBrandFolder,repairClaudeTestStatus} from "./claude-folder-ops.mjs";
+import {runBrandMediaReset} from "./brand-media-reset.mjs";
 import {runBrandRootMigration} from "./brand-root-migration.mjs";
 import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
 import { S3Client, PutObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
@@ -1524,6 +1525,8 @@ export const handler = async (event = {}) => {
   if(event.action === "repair-claude-title-test-status" && !event.requestContext && !event.rawPath && !event.path) return repairClaudeTestStatus(connectDatabase,json);
   // IAM-only Dropbox brands/ cutover (dry-run unless mode:"apply"); never exposed through HTTP or MCP.
   if(event.action === "migrate-dropbox-brand-roots-20261017" && !event.requestContext && !event.rawPath && !event.path) return runBrandRootMigration(event,connectDatabase,json);
+  // IAM-only one-time brand media reset (dry-run unless mode:"apply"); never exposed through HTTP or MCP.
+  if(event.action === "reset-brand-media-20261017" && !event.requestContext && !event.rawPath && !event.path) return runBrandMediaReset(event,connectDatabase,json);
   const requestPath =
     event?.rawPath ||
     event?.requestContext?.http?.path ||
