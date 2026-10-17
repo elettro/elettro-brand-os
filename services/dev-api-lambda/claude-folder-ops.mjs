@@ -32,7 +32,7 @@ export async function moveBrandFolder(body,connectDatabase,json){
  let client,folderId,source,target,moved=false,commitStarted=false;
  try{
   if(body.confirmed!==true||!BRANDS.has(body.brandSlug))return json(400,{ok:false,error:"Confirmed brand folder operation required"});
-  const root="/1---elettro-brand-os/"+body.brandSlug;
+  const root="/1---elettro-brand-os/brands/"+body.brandSlug;
   source=pathInBrand(body.path,root);
   const parent=body.operation==="rename"?source.slice(0,source.lastIndexOf("/")):pathInBrand(body.parentPath,root,true);
   const name=body.operation==="rename"?body.name:source.slice(source.lastIndexOf("/")+1);
