@@ -239,13 +239,14 @@ Each step ends with a check proving the file is used, not just present.
 | 1 | **Rules into config.** `CooldownRule` table, sectors + shares + exploration in `Brand.settings`, `song` subject type, Stashbox `SocialAccount` + `CadenceRule` seeded from `policy.json`. Planner reads them instead of hard-coded 45/21/5. | Change a value in `policy.json`, re-seed, planner output changes. |
 | 2 | **Context builder + loader** in `packages/ai`: section extraction, precedence assembly, budgets, hashes. | Unit tests; deleting a referenced file fails the task loudly; CI budget check. |
 | 3 | **asset-analysis live.** Multi-frame + transcript video analysis on Haiku 5.5 (Bedrock). Re-enrich Stashbox videos. | Before/after on 20 assets; output carries the file hash. |
-| 4 | **Data sources:** radio `songs` → Song records with `?song=key` links; **Session records** (date, location, show, roster of people + roles); **Location** and **Person** records (band members, regular guests, with usual roles); capture-date/GPS extraction from file metadata; blog posts; Shopify sync; streaming links; booking link. | Copy tasks stop returning `blocked` for missing links. |
+| 4 | **Data sources:** radio `songs` → Song records with `?song=key` links; song parsed from the shorts filename convention (`YYMMDD-stashbox-does-<show>-<song>-<ratio>-…`); blog posts; Shopify sync; streaming links; booking link. | Copy tasks stop returning `blocked` for missing links. |
 | 5 | **creative-selection live** at planner step 4, shadowing rules-only picks for one week. | Side-by-side picks reviewed by Dean. |
 | 6 | **copywriting + platforms live.** Captions on every ScheduledPost, handoff mode first. | Dean's edit rate on captions is the quality metric. |
 | 7 | **Post templates (§5):** style lab for one product and one song; Dean approves styles; replicate across the Shopify catalog and the song catalog. | Approved templates render correctly for 20 random subjects; Dean's approval rate per template. |
 | 8 | **Publishing:** YouTube Shorts API first, then Meta, others; UTM/post codes; radio registration attribution. | Ledger rows with external URLs; registrations traced to posts. |
 | 9 | **Learning:** performance index, `performance-review.md`, `campaign-planning.md`. | Scores shift with results; paid-media candidates listed. |
 | 10 | **Creative production:** `creative-production.md` (reframes, smart edits, generative). | Pending generated assets with provenance pass review. |
+| 11 | **Nice to have: Who / What / When / Where.** Session records (date, location, type, roster), Person and Location records, capture-date/GPS extraction, a session page, and a Who/What/When/Where panel on the asset page. Also fixes the intake form's Genre / Session Date / Session Type / tags / collection / campaign, which `complete-dropbox-upload` currently drops. Until then, `asset-analysis` output for session, location and people is kept in `Asset.aiSuggestions` only. | Editing a session's roster updates every linked clip on the asset page. |
 
 ---
 
