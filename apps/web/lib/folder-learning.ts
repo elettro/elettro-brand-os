@@ -3,7 +3,7 @@ export type FolderObservation = { fileId: string; signal: AssetSignal; path: str
 export type FolderSuggestion = { path: string | null; confidence: number; sampleSize: number; reason: string };
 const norm = (s:string)=>s.trim().toLowerCase();
 export const signalKey = (s:AssetSignal)=>[s.brand,s.campaign,s.purpose,s.shape].map(norm).join("|");
-export const brandRoot = (brand:string)=>`/1---elettro-brand-os/brands/${brand}/`;
+export const brandRoot = (brand:string)=>`/1---elettro-brand-os/${brand}/`;
 export function recommendFolder(signal:AssetSignal, history:FolderObservation[]):FolderSuggestion {
  const relevant=history.filter(h=>signalKey(h.signal)===signalKey(signal) && h.event!=="batch_override");
  // Only each Dropbox file's latest known destination counts. A rename or move supersedes an old path.
