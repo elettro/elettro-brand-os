@@ -15,12 +15,12 @@ const s3 = new S3Client({});
 const lambdaInvoker = new LambdaClient({});
 
 const DROPBOX_BRAND_ROOTS = [
-  ["solarmeister", "/1---elettro-brand-os/solarmeister"],
-  ["stashbox", "/1---elettro-brand-os/stashbox"],
-  ["weightlossdavie", "/1---elettro-brand-os/weightlossdavie"],
-  ["neckermann-strom", "/1---elettro-brand-os/neckermann-strom"],
-  ["therasbox", "/1---elettro-brand-os/therasbox"],
-  ["elettro", "/1---elettro-brand-os/elettro"]
+  ["solarmeister", "/1---elettro-brand-os/brands/solarmeister"],
+  ["stashbox", "/1---elettro-brand-os/brands/stashbox"],
+  ["weightlossdavie", "/1---elettro-brand-os/brands/weightlossdavie"],
+  ["neckermann-strom", "/1---elettro-brand-os/brands/neckermann-strom"],
+  ["therasbox", "/1---elettro-brand-os/brands/therasbox"],
+  ["elettro", "/1---elettro-brand-os/brands/elettro"]
 ];
 
 function json(statusCode, body) {
@@ -92,7 +92,7 @@ async function connectDatabase() {
 function folderHintsFromPath(sourcePath = "", brandSlug = "") {
   const normalized = String(sourcePath || "").replace(/\\/g, "/");
   const lower = normalized.toLowerCase();
-  const root = `/1---elettro-brand-os/${brandSlug.toLowerCase()}/`;
+  const root = `/1---elettro-brand-os/brands/${brandSlug.toLowerCase()}/`;
   const start = lower.indexOf(root);
   const relative = start >= 0 ? normalized.slice(start + root.length) : normalized.replace(/^\/+/, "");
   const parts = relative.split("/").filter(Boolean);
