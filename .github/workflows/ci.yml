@@ -38,6 +38,9 @@ jobs:
       - name: Test ChatGPT upload verification and brand lookup
         run: node --test tests/chatgpt-upload-and-lookup.test.cjs
 
+      - name: Validate Dropbox brand-root migration
+        run: node --test tests/brand-root-routing.test.cjs
+
       - name: Test Claude transfer and folder operations
         run: node --test tests/claude-transfer-and-folders.test.cjs
 
