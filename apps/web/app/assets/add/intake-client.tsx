@@ -375,7 +375,7 @@ export function IntakeClient() {
   // No refresh token or Dropbox app secret is ever persisted in browser storage.
   async function uploadDirectToDropbox(item: IntakeFile, initialToken: string): Promise<string> {
     let accessToken = initialToken;
-    if (!plannedDropboxFolder || !plannedDropboxFolder.startsWith("/1---elettro-brand-os/" + brand + "/")) {
+    if (!plannedDropboxFolder || !plannedDropboxFolder.startsWith("/1---elettro-brand-os/brands/" + brand + "/")) {
       throw new Error("Select a valid Dropbox folder before uploading");
     }
     const folder = plannedDropboxFolder.replace(new RegExp("/+$"), "");
