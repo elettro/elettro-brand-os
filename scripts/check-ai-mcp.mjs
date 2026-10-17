@@ -63,7 +63,7 @@ try{
  });
  if(list.isError)throw Error("Brand folders failed: "+list.content?.[0]?.text);
  const scoped=list.structuredContent;
- if(scoped?.path?.toLowerCase()!==("/1---elettro-brand-os/"+brand).toLowerCase())
+ if(scoped?.path?.toLowerCase()!==("/1---elettro-brand-os/brands/"+brand).toLowerCase())
   throw Error("Unexpected Dropbox brand root");
  console.log("OK: Folder scoped to",scoped.path);
 
