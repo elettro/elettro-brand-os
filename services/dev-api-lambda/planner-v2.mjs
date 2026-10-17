@@ -111,6 +111,20 @@ export function sectorsOf(asset, settings) {
     .map((s) => s.slug);
 }
 
+/**
+ * Sector requirements that make a post honest: a radio post needs the song's own
+ * radio page, a streaming post needs a streaming link on the song record.
+ */
+const REQUIREMENTS = {
+  radioLink: (facts) => Boolean(facts?.radioUrl),
+  streamingLink: (facts) => Boolean(facts?.spotifyUrl || facts?.appleMusicUrl || facts?.youtubeMusicUrl)
+};
+
+export function meetsSectorRequirements(asset, sector, songFacts) {
+  const facts = songFacts?.[songKeyOf(asset)];
+  return (sector.requires || []).every((r) => REQUIREMENTS[r] ? REQUIREMENTS[r](facts) : false);
+}
+
 export function isSynthetic(asset, settings) {
   return hasAny(tagsOf(asset), settings.syntheticTagsAny);
 }
@@ -223,7 +237,7 @@ function round2(n) {
  * { socialAccountId, assetId, songKey, shopifyProductId, contentGroup, at (ISO) }.
  * `preferences` maps slotId -> assetId (from the curator); honored only if still valid.
  */
-export function planWeek({ assets, accounts, settings, weekStart, timeZone, uses = [], now = new Date(), preferences = {} }) {
+export function planWeek({ assets, accounts, settings, weekStart, timeZone, uses = [], now = new Date(), preferences = {}, songFacts = {} }) {
   const cd = settings.cooldowns;
   const results = [];
   const gaps = [];
@@ -235,7 +249,8 @@ export function planWeek({ assets, accounts, settings, weekStart, timeZone, uses
   // Per-account pool and the sectors that have enough content to take part this week.
   const perAccount = accounts.map((account) => {
     const pool = assets.filter((a) => !poolRejection(a, account, settings));
-    const bySector = Object.fromEntries(settings.sectors.map((s) => [s.slug, pool.filter((a) => sectorsOf(a, settings).includes(s.slug))]));
+    const bySector = Object.fromEntries(settings.sectors.map((s) => [s.slug,
+      pool.filter((a) => sectorsOf(a, settings).includes(s.slug) && meetsSectorRequirements(a, s, songFacts))]));
     const active = settings.sectors.filter((s) => bySector[s.slug].length >= (settings.minPoolForSector || 1));
     settings.sectors.filter((s) => !active.includes(s)).forEach((s) => sectorsWaiting.add(s.slug));
     const slots = buildSlots(account, weekStart, timeZone).filter((s) => new Date(s.scheduledFor) > now);

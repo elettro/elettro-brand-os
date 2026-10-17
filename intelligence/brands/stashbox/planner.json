@@ -3,46 +3,221 @@
   "settings": {
     "version": 1,
     "pool": {
-      "kinds": ["video"],
-      "aspectRatios": ["9x16"],
-      "excludeTagsAny": ["no-audio", "silent-audio", "no-music"]
+      "kinds": [
+        "video"
+      ],
+      "aspectRatios": [
+        "9x16"
+      ],
+      "excludeTagsAny": [
+        "no-audio",
+        "silent-audio",
+        "no-music"
+      ]
     },
     "placements": {
-      "youtube:short": { "maxDurationBucket": "1-3min", "preferredDurationBuckets": ["15-30s", "30-60s"] },
-      "instagram:reel": { "maxDurationBucket": "1-3min", "preferredDurationBuckets": ["15-30s", "30-60s"] },
-      "facebook:reel": { "maxDurationBucket": "1-3min", "preferredDurationBuckets": ["15-30s", "30-60s"] },
-      "tiktok:video": { "maxDurationBucket": "1-3min", "preferredDurationBuckets": ["under-15s", "15-30s", "30-60s"] }
+      "youtube:short": {
+        "maxDurationBucket": "1-3min",
+        "preferredDurationBuckets": [
+          "15-30s",
+          "30-60s"
+        ]
+      },
+      "instagram:reel": {
+        "maxDurationBucket": "1-3min",
+        "preferredDurationBuckets": [
+          "15-30s",
+          "30-60s"
+        ]
+      },
+      "facebook:reel": {
+        "maxDurationBucket": "1-3min",
+        "preferredDurationBuckets": [
+          "15-30s",
+          "30-60s"
+        ]
+      },
+      "tiktok:video": {
+        "maxDurationBucket": "1-3min",
+        "preferredDurationBuckets": [
+          "under-15s",
+          "15-30s",
+          "30-60s"
+        ]
+      }
     },
     "sectors": [
-      { "slug": "live-shows", "priority": 1, "share": 0.28,
-        "match": { "tagsAny": ["studio-session", "show-promo", "stashbox-does-dylan", "stashbox-does-sublime"] } },
-      { "slug": "radio", "priority": 2, "share": 0.20,
-        "match": { "tagsAny": ["music-video", "stashbox-original", "stashbox-radio"] } },
-      { "slug": "radio-blog", "priority": 3, "share": 0.14,
-        "match": { "tagsAny": ["ecosystem", "explainer"] } },
-      { "slug": "merch", "priority": 4, "share": 0.13, "match": { "tagsAny": ["merch"] } },
-      { "slug": "streaming", "priority": 5, "share": 0.11,
-        "match": { "tagsAny": ["streaming", "release-promo", "album-promo"] } },
-      { "slug": "custom-production", "priority": 6, "share": 0.08, "match": { "tagsAny": ["custom-production"] } },
-      { "slug": "elettro", "priority": 7, "share": 0.06, "match": { "tagsAny": ["elettro"] } }
+      {
+        "slug": "live-shows",
+        "priority": 1,
+        "share": 0.28,
+        "match": {
+          "tagsAny": [
+            "studio-session",
+            "show-promo",
+            "stashbox-does-dylan",
+            "stashbox-does-sublime"
+          ]
+        }
+      },
+      {
+        "slug": "radio",
+        "priority": 2,
+        "share": 0.2,
+        "match": {
+          "tagsAny": [
+            "music-video",
+            "stashbox-original",
+            "stashbox-radio"
+          ]
+        },
+        "requires": [
+          "radioLink"
+        ]
+      },
+      {
+        "slug": "radio-blog",
+        "priority": 3,
+        "share": 0.14,
+        "match": {
+          "tagsAny": [
+            "ecosystem",
+            "explainer"
+          ]
+        }
+      },
+      {
+        "slug": "merch",
+        "priority": 4,
+        "share": 0.13,
+        "match": {
+          "tagsAny": [
+            "merch"
+          ]
+        }
+      },
+      {
+        "slug": "streaming",
+        "priority": 5,
+        "share": 0.11,
+        "match": {
+          "tagsAny": [
+            "streaming",
+            "release-promo",
+            "album-promo"
+          ]
+        },
+        "requires": [
+          "streamingLink"
+        ]
+      },
+      {
+        "slug": "custom-production",
+        "priority": 6,
+        "share": 0.08,
+        "match": {
+          "tagsAny": [
+            "custom-production"
+          ]
+        }
+      },
+      {
+        "slug": "elettro",
+        "priority": 7,
+        "share": 0.06,
+        "match": {
+          "tagsAny": [
+            "elettro"
+          ]
+        }
+      }
     ],
     "minPoolForSector": 3,
-    "exploration": { "default": 0.25, "tiktok": 0.40 },
-    "cooldowns": { "assetDays": 30, "songDays": 1, "productDays": 15 },
+    "exploration": {
+      "default": 0.25,
+      "tiktok": 0.4
+    },
+    "cooldowns": {
+      "assetDays": 30,
+      "songDays": 1,
+      "productDays": 15
+    },
     "newBatchBoostDays": 14,
-    "syntheticTagsAny": ["ai-generated", "ai-visuals", "ai-depiction", "mixed-media-visuals", "ai-assisted-audio", "ai-clip", "runway", "seedance", "wan-3"],
-    "readyTagsAny": ["ready-to-publish", "deans-favorite"],
+    "syntheticTagsAny": [
+      "ai-generated",
+      "ai-visuals",
+      "ai-depiction",
+      "mixed-media-visuals",
+      "ai-assisted-audio",
+      "ai-clip",
+      "runway",
+      "seedance",
+      "wan-3"
+    ],
+    "readyTagsAny": [
+      "ready-to-publish",
+      "deans-favorite"
+    ],
     "candidatesPerSlot": 5,
-    "curator": { "enabled": true, "task": "select_content" }
+    "curator": {
+      "enabled": true,
+      "task": "select_content"
+    },
+    "sources": {
+      "radioSongsUrl": "https://fmexmp5o52.execute-api.us-east-1.amazonaws.com/default/stashbox-radio-api-dev/radio/songs",
+      "radioBaseUrl": "https://stashbox.com/radio/",
+      "songOverrides": {}
+    },
+    "links": {
+      "booking": {
+        "page": "https://stashbox.com/booking/",
+        "email": "booking@stashbox.com"
+      },
+      "radio": "https://stashbox.com/radio/",
+      "merchStore": "https://stashbox.ai"
+    },
+    "copy": {
+      "enabled": true,
+      "task": "write_copy",
+      "concurrency": 6
+    }
   },
   "accounts": [
-    { "destination": "youtube", "accountName": "@Stashboxband", "placement": "short", "postsPerWeek": 14,
-      "preferredStartTime": "09:00", "preferredEndTime": "17:00", "publishingMode": "approval" },
-    { "destination": "instagram", "accountName": "Stashbox Instagram", "placement": "reel", "postsPerWeek": 14,
-      "preferredStartTime": "11:00", "preferredEndTime": "19:00", "publishingMode": "approval" },
-    { "destination": "tiktok", "accountName": "Stashbox TikTok", "placement": "video", "postsPerWeek": 14,
-      "preferredStartTime": "10:00", "preferredEndTime": "20:00", "publishingMode": "approval" },
-    { "destination": "facebook", "accountName": "Stashbox Facebook", "placement": "reel", "postsPerWeek": 14,
-      "preferredStartTime": "12:00", "preferredEndTime": "18:00", "publishingMode": "approval" }
+    {
+      "destination": "youtube",
+      "accountName": "@Stashboxband",
+      "placement": "short",
+      "postsPerWeek": 14,
+      "preferredStartTime": "09:00",
+      "preferredEndTime": "17:00",
+      "publishingMode": "approval"
+    },
+    {
+      "destination": "instagram",
+      "accountName": "Stashbox Instagram",
+      "placement": "reel",
+      "postsPerWeek": 14,
+      "preferredStartTime": "11:00",
+      "preferredEndTime": "19:00",
+      "publishingMode": "approval"
+    },
+    {
+      "destination": "tiktok",
+      "accountName": "Stashbox TikTok",
+      "placement": "video",
+      "postsPerWeek": 14,
+      "preferredStartTime": "10:00",
+      "preferredEndTime": "20:00",
+      "publishingMode": "approval"
+    },
+    {
+      "destination": "facebook",
+      "accountName": "Stashbox Facebook",
+      "placement": "reel",
+      "postsPerWeek": 14,
+      "preferredStartTime": "12:00",
+      "preferredEndTime": "18:00",
+      "publishingMode": "approval"
+    }
   ]
 }

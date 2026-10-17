@@ -3,7 +3,9 @@
 //   plan-week                preview (default) or apply a Mon–Sun plan as ScheduledPost rows
 //   approve-week             flip a week's planned posts to approved in one action
 import { planWeek, resolvePlannerSettings, songKeyOf, nextWeekStart, ymdInTimeZone, addDaysToYmd, localDateTimeToUtc, PLANNER_VERSION } from "./planner-v2.mjs";
-import { curateWeek } from "./curator.mjs";
+import { curateWeek, bedrockInvoke } from "./curator.mjs";
+import { buildSongFacts, fetchRadioCatalog } from "./song-facts.mjs";
+import { writeWeekCopy } from "./copywriter.mjs";
 
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
 const HHMM = /^\d{2}:\d{2}$/;
@@ -144,7 +146,22 @@ export async function runPlanWeek(event, connectDatabase, json, { modelId = proc
     const uses = used.map((u) => ({ socialAccountId: u.socialAccountId, assetId: u.assetId, at: new Date(u.at).toISOString(),
       songKey: songKeyOf(u), contentGroup: u.contentGroup, shopifyProductId: u.shopifyProductId, filename: u.filename }));
 
-    const input = { assets, accounts, settings, weekStart, timeZone, uses };
+    // Song records (titles, radio pages, streaming links) gate the radio/streaming sectors and feed captions.
+    let catalogStatus = { songs: 0 };
+    let catalog = [];
+    if (settings.sources?.radioSongsUrl) {
+      try {
+        catalog = await fetchRadioCatalog(settings.sources.radioSongsUrl);
+        catalogStatus = { songs: catalog.length };
+      } catch (error) {
+        catalogStatus = { songs: 0, error: error instanceof Error ? error.message : String(error) };
+      }
+    }
+    const songFacts = buildSongFacts(assets.map(songKeyOf).filter(Boolean), catalog, {
+      radioBaseUrl: settings.sources?.radioBaseUrl, overrides: settings.sources?.songOverrides || {}
+    });
+
+    const input = { assets, accounts, settings, weekStart, timeZone, uses, songFacts };
     let plan = planWeek(input);
     let curator = { enabled: false, reason: !modelId ? "EPE_BEDROCK_CURATOR_MODEL_ID not set" : "disabled in settings or request" };
     if (modelId && settings.curator?.enabled !== false && event.curator !== false) {
@@ -166,9 +183,29 @@ export async function runPlanWeek(event, connectDatabase, json, { modelId = proc
       Math.abs(new Date(e.scheduledFor).getTime() - new Date(slot.scheduledFor).getTime()) < 30 * 60000);
     for (const slot of plan.slots) if (occupied(slot)) slot.status = "exists";
 
+    // Captions for every slot that will be written.
+    const copyModel = settings.copy?.enabled === false || event.copyAi === false ? null : modelId;
+    const recentCaptions = (await client.query(
+      `SELECT "socialAccountId", COALESCE("generatedCaption","generatedTitle") AS "text" FROM "ScheduledPost"
+       WHERE "brandId" = $1 AND "scheduledFor" < $2 AND COALESCE("generatedCaption","generatedTitle") IS NOT NULL
+       ORDER BY "scheduledFor" DESC LIMIT 200`, [brand.id, from])).rows;
+    const recentCaptionsByAccount = {};
+    for (const r of recentCaptions.reverse()) (recentCaptionsByAccount[r.socialAccountId] = recentCaptionsByAccount[r.socialAccountId] || []).push(r.text);
+    const copies = await writeWeekCopy({
+      slots: plan.slots.filter((s) => s.status === "planned"), assetsById: new Map(assets.map((a) => [a.id, a])),
+      songFacts, links: settings.links || {}, brandSlug, modelId: copyModel, invoke: copyModel ? bedrockInvoke : null,
+      recentCaptionsByAccount, concurrency: settings.copy?.concurrency || 6
+    });
+    const copyBySlot = new Map(copies.map((c) => [c.slotId, c.copy]));
+    for (const slot of plan.slots) slot.copy = copyBySlot.get(slot.slotId) || null;
+
     const response = {
       ok: true, mode: apply ? "apply" : "preview", brand: brand.slug, weekStart, weekEnd: plan.weekEnd,
-      plannerVersion: PLANNER_VERSION, eligibleAssets: assets.length, curator,
+      plannerVersion: PLANNER_VERSION, eligibleAssets: assets.length, curator, radioCatalog: catalogStatus,
+      copyWriter: { model: copyModel || null, ai: copies.filter((c) => c.copy.source === "ai").length,
+        template: copies.filter((c) => c.copy.source === "template").length,
+        blocked: copies.filter((c) => c.copy.status !== "ready").length },
+      songsWithoutRadioPage: Object.values(songFacts).filter((f) => !f.inCatalog).map((f) => f.slug),
       summary: plan.summary, gaps: plan.gaps, sectorsWaitingForContent: plan.sectorsWaitingForContent,
       slots: plan.slots.map(({ candidates, ...s }) => ({ ...s, candidateIds: (candidates || []).map((c) => c.assetId) }))
     };
@@ -186,10 +223,11 @@ export async function runPlanWeek(event, connectDatabase, json, { modelId = proc
       let inserted = 0;
       for (const slot of plan.slots.filter((s) => s.status === "planned")) {
         const run = runFor(slot.socialAccountId);
+        const copy = slot.copy?.status === "ready" ? slot.copy : null;
         await client.query(
           `INSERT INTO "ScheduledPost" ("brandId","socialAccountId","assetId","placement","scheduledFor","status",
-             "selectionReason","scoreBreakdown","publishingMode","updatedAt")
-           VALUES ($1,$2,$3,$4,$5,'planned',$6,$7::jsonb,$8,CURRENT_TIMESTAMP)`,
+             "selectionReason","scoreBreakdown","publishingMode","generatedTitle","generatedCaption","generatedHashtags","updatedAt")
+           VALUES ($1,$2,$3,$4,$5,'planned',$6,$7::jsonb,$8,$9,$10,$11,CURRENT_TIMESTAMP)`,
           [brand.id, slot.socialAccountId, slot.assetId, slot.placement, slot.scheduledFor,
            slot.curatorReason ? `${slot.curatorReason} (${slot.reason})` : slot.reason,
            JSON.stringify({
@@ -197,9 +235,16 @@ export async function runPlanWeek(event, connectDatabase, json, { modelId = proc
              exploration: slot.exploration, songKey: slot.songKey, syntheticDisclosure: slot.synthetic,
              selectedBy: slot.selectedBy, curatorOverridden: slot.curatorOverridden, score: slot.score, breakdown: slot.breakdown,
              candidateIds: (slot.candidates || []).map((c) => c.assetId),
-             curator: run && !run.error ? { modelId: run.modelId, intelligenceVersion: run.intelligenceVersion, files: run.intelligenceFiles } : null
+             curator: run && !run.error ? { modelId: run.modelId, intelligenceVersion: run.intelligenceVersion, files: run.intelligenceFiles } : null,
+             copy: slot.copy ? {
+               source: slot.copy.source, status: slot.copy.status, angle: slot.copy.angle || null, primaryLink: slot.copy.primaryLink || null,
+               description: slot.copy.description || null, onScreenText: slot.copy.onScreenText || null,
+               intelligenceVersion: slot.copy.intelligenceVersion || null, missing: slot.copy.missing || [],
+               aiRejected: slot.copy.aiRejected || null, aiError: slot.copy.aiError || null
+             } : null
            }),
-           slot.publishingMode || "approval"]);
+           slot.publishingMode || "approval",
+           copy?.title || null, copy?.caption || copy?.description || null, copy?.hashtags || []]);
         inserted += 1;
       }
       await client.query("COMMIT");

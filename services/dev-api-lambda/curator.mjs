@@ -4,7 +4,7 @@ import { buildGuidance } from "./intelligence.mjs";
 
 const MAX_OUTPUT_TOKENS = 4000;
 
-async function bedrockInvoke({ modelId, system, user }) {
+export async function bedrockInvoke({ modelId, system, user }) {
   const { BedrockRuntimeClient, ConverseCommand } = await import("@aws-sdk/client-bedrock-runtime");
   const client = new BedrockRuntimeClient({ region: process.env.AWS_REGION || "us-east-1", maxAttempts: 2 });
   const result = await client.send(new ConverseCommand({
