@@ -35,6 +35,24 @@ Merch · Custom.**
 - **Business buyers:** bands, labels, resorts and businesses who want a music
   platform, custom music or a social system like Stashbox's.
 
+## What matters in a Stashbox asset
+
+When analyzing Stashbox media, these four facts matter most. Find them every
+time, with evidence:
+
+1. **Song**: which song is being played (radio, streaming and the 1-day
+   same-song rule all depend on it).
+2. **Session / date**: which session or show it came from (e.g. "Studio One
+   2026-10-11"), plus the capture date. New-batch boosts and session grouping
+   depend on it.
+3. **Location**: Stashbox's studio or the concert venue, from the session
+   record, GPS or visible signage.
+4. **Who's in it**: band members and guests by role from the session roster
+   (vocals, guitar, bass, drums, keys). Name them only through the roster.
+
+Also note which show it is (Does Dylan or Does Sublime & Reggae) and crowd
+presence: a live crowd is a strong signal for the live-shows sector.
+
 ## Voice
 
 *Interim, from Dean's approved materials. Replace with Dean's voice notes when

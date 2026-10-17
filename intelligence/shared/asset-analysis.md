@@ -10,7 +10,8 @@ yours to change.
 ## What you receive
 
 - **Technical facts** (from code, trust these): kind, width, height, aspect
-  ratio, duration, has-audio, file size, Dropbox path.
+  ratio, duration, has-audio, file size, Dropbox path, and capture metadata
+  when the file has it: capture date/time, GPS coordinates, camera model.
 - **Visual evidence:**
   - Image: the image.
   - Video: several frames, each labelled with its timestamp. Treat them as a
@@ -21,8 +22,12 @@ yours to change.
   song is playing only when they match a song in the known-subjects list.
 - **Brand vocabulary:** the allowed sectors, content families and tags for
   this brand. Use these exact strings.
-- **Known subjects:** songs, shows, products and people this brand has on
-  record, with their IDs. Match against these; never create new ones.
+- **Known subjects:** songs, shows, products, locations and people this brand
+  has on record, with their IDs. People carry their usual role (e.g. "lead
+  vocals", "drums"). Match against these; never create new ones.
+- **Candidate sessions:** recorded sessions/shows near the capture date or
+  matching the folder, each with date, location, show and **roster** (who
+  played, in which role).
 - **Brand core:** who the brand is (from its brand file), so you know what
   matters to it.
 
@@ -31,11 +36,23 @@ yours to change.
 1. **Describe what is actually there.** Setting, action, people (count, role,
    e.g. "singer at mic", "drummer"), instruments, products, visible text,
    mood, lighting, camera framing. Note what is *not* clear.
-2. **Match to known subjects.** Song (from lyrics, on-screen title, filename
-   hint corroborated by audio), show/session (from folder, filename, set
-   dressing), product (from visible merch vs. product images), named people
-   (only those listed in known subjects). Every match gets a confidence and
-   the evidence it rests on.
+2. **Answer the four W's.** Every match gets a confidence and the evidence it
+   rests on. Match only to records you were given; if nothing matches, say
+   `null` and describe what you see.
+   - **What (song / product):** song from lyrics, on-screen title or a filename
+     hint corroborated by audio; product from visible merch vs. product images.
+   - **When (session / date):** strongest evidence first: capture metadata →
+     date in folder or filename (e.g. `261011` = 2026-10-11) → set dressing,
+     outfits, lighting matching a candidate session. Report the capture date
+     separately from the session you matched.
+   - **Where (location):** session record → GPS → visible signage, stage,
+     room features (studio vs. venue vs. outdoor). Never guess a venue name
+     from a generic-looking room.
+   - **Who (people):** identify people **only** through the matched session's
+     roster: role/position (the person at the drum kit is the roster's
+     drummer), instrument, on-screen name tags or name captions. **Never
+     identify anyone from their face alone, and never name someone not on the
+     roster.** Unnamed people (audience, staff, guests) get a count and role only.
 3. **Assign a sector** from the brand's sector list: what would a post using
    this asset be promoting? If it plausibly serves two, give the primary and
    list the other in `secondarySectors`.
@@ -78,8 +95,15 @@ yours to change.
   "tags": ["string"],
   "sector": "string | null",
   "secondarySectors": ["string"],
+  "capturedOn": "YYYY-MM-DD | null",
+  "session": { "id": "string | null", "confidence": 0.0, "evidence": "string" },
+  "location": { "id": "string | null", "type": "studio | venue | outdoor | other | unknown", "confidence": 0.0, "evidence": "string" },
+  "people": [
+    { "personId": "string | null", "role": "string", "basis": "roster-position | instrument | name-tag | caption", "confidence": 0.0, "visibleAt": [0.0] }
+  ],
+  "unnamedPeople": { "audience": 0, "other": [ "string" ] },
   "subjects": [
-    { "type": "song | show | product | person", "id": "string", "confidence": 0.0, "evidence": "string" }
+    { "type": "song | show | product", "id": "string", "confidence": 0.0, "evidence": "string" }
   ],
   "moments": [
     { "start": 0.0, "end": 0.0, "kind": "hook | chorus | solo | crowd | intro | outro | product | other", "why": "string" }
