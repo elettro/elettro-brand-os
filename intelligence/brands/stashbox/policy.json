@@ -25,6 +25,7 @@
   "exploration": { "default": 0.25, "tiktok": 0.40 },
   "promotionalMaxShare": { "threads": 0.25, "x": 0.25 },
   "publishingMode": { "default": "approval", "reddit": "handoff" },
+  "approval": { "unit": "week", "note": "Dean approves a full week's calendar at once (with per-post edit/skip inside it), not post by post." },
   "links": {
     "booking": { "page": "https://stashbox.com/booking/", "email": "booking@stashbox.com" },
     "merchStore": "https://stashbox.ai",
