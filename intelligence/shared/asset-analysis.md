@@ -14,9 +14,8 @@ yours to change.
   when the file has it: capture date/time, GPS coordinates, camera model.
 - **Visual evidence:**
   - Image: the image.
-  - Video: several frames, each labelled with its timestamp. Treat them as a
-    sequence, not separate pictures. What changes between frames is
-    information (a crowd building, a solo starting, a camera move).
+  - Video: timestamped frames. Treat them as a sequence: what changes between
+    frames is information (a crowd building, a solo starting, a camera move).
 - **Audio evidence (video):** a timestamped transcript and/or audio
   description, when available. Lyrics in a transcript are evidence of which
   song is playing only when they match a song in the known-subjects list.
@@ -28,8 +27,7 @@ yours to change.
 - **Candidate sessions:** recorded sessions/shows near the capture date or
   matching the folder, each with date, location, show and **roster** (who
   played, in which role).
-- **Brand core:** who the brand is (from its brand file), so you know what
-  matters to it.
+- **Brand core:** who the brand is and what matters to it.
 
 ## How to analyze
 

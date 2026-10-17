@@ -1,0 +1,229 @@
+// Database wiring for Planner V2. IAM-only actions (see index.mjs):
+//   configure-planner-brand  write Brand.settings.planner + SocialAccount/CadenceRule rows
+//   plan-week                preview (default) or apply a Mon–Sun plan as ScheduledPost rows
+//   approve-week             flip a week's planned posts to approved in one action
+import { planWeek, resolvePlannerSettings, songKeyOf, nextWeekStart, ymdInTimeZone, addDaysToYmd, localDateTimeToUtc, PLANNER_VERSION } from "./planner-v2.mjs";
+import { curateWeek } from "./curator.mjs";
+
+const YMD = /^\d{4}-\d{2}-\d{2}$/;
+const HHMM = /^\d{2}:\d{2}$/;
+
+async function withClient(connectDatabase, json, label, fn) {
+  let client;
+  try {
+    client = await connectDatabase();
+    return await fn(client);
+  } catch (error) {
+    console.error(`[${label}] failed`, error);
+    return json(500, { ok: false, error: error instanceof Error ? error.message : `Unknown ${label} error` });
+  } finally {
+    if (client) { try { await client.end(); } catch {} }
+  }
+}
+
+async function loadBrand(client, brandSlug) {
+  const result = await client.query(
+    'SELECT "id","slug","timezone","settings" FROM "Brand" WHERE "slug" = $1 AND "status" = \'active\' LIMIT 1', [brandSlug]);
+  return result.rows[0] || null;
+}
+
+function weekWindow(brand, weekStartInput) {
+  const timeZone = brand.timezone || "America/New_York";
+  const weekStart = YMD.test(String(weekStartInput || "")) ? weekStartInput : nextWeekStart(ymdInTimeZone(new Date(), timeZone));
+  return {
+    timeZone,
+    weekStart,
+    from: localDateTimeToUtc(weekStart, "00:00", timeZone),
+    to: localDateTimeToUtc(addDaysToYmd(weekStart, 7), "00:00", timeZone)
+  };
+}
+
+export async function configurePlannerBrand(event, connectDatabase, json) {
+  const brandSlug = String(event.brandSlug || "").trim();
+  const settings = event.settings;
+  const accounts = Array.isArray(event.accounts) ? event.accounts : [];
+  if (!brandSlug || !settings || typeof settings !== "object" || !Array.isArray(settings.sectors)) {
+    return json(400, { ok: false, error: "brandSlug and settings (with sectors) are required" });
+  }
+  for (const a of accounts) {
+    if (!a.destination || !a.accountName || !a.placement || !(Number(a.postsPerWeek) >= 0) ||
+        (a.preferredStartTime && !HHMM.test(a.preferredStartTime)) || (a.preferredEndTime && !HHMM.test(a.preferredEndTime))) {
+      return json(400, { ok: false, error: "Each account needs destination, accountName, placement, postsPerWeek and HH:MM times" });
+    }
+  }
+  return withClient(connectDatabase, json, "configure-planner-brand", async (client) => {
+    const brand = await loadBrand(client, brandSlug);
+    if (!brand) return json(404, { ok: false, error: "Active brand not found" });
+    await client.query("BEGIN");
+    try {
+      await client.query(
+        `UPDATE "Brand" SET "settings" = jsonb_set(COALESCE("settings", '{}'::jsonb), '{planner}', $2::jsonb, true),
+                "updatedAt" = CURRENT_TIMESTAMP WHERE "id" = $1`, [brand.id, JSON.stringify(settings)]);
+      const configured = [];
+      for (const a of accounts) {
+        const destination = String(a.destination).toLowerCase();
+        const mode = a.publishingMode || "approval";
+        let account = (await client.query(
+          'SELECT "id" FROM "SocialAccount" WHERE "brandId" = $1 AND "destination" = $2 AND "accountName" = $3 LIMIT 1',
+          [brand.id, destination, a.accountName])).rows[0];
+        if (account) {
+          await client.query(
+            `UPDATE "SocialAccount" SET "publishingMode" = $2, "timezone" = $3, "status" = 'active', "updatedAt" = CURRENT_TIMESTAMP WHERE "id" = $1`,
+            [account.id, mode, brand.timezone || "America/New_York"]);
+        } else {
+          account = (await client.query(
+            `INSERT INTO "SocialAccount" ("brandId","destination","accountName","publishingMode","timezone","status","updatedAt")
+             VALUES ($1,$2,$3,$4,$5,'active',CURRENT_TIMESTAMP) RETURNING "id"`,
+            [brand.id, destination, a.accountName, mode, brand.timezone || "America/New_York"])).rows[0];
+        }
+        const rule = (await client.query(
+          'SELECT "id" FROM "CadenceRule" WHERE "socialAccountId" = $1 AND "placement" = $2 LIMIT 1', [account.id, a.placement])).rows[0];
+        const values = [Number(a.postsPerWeek), Array.isArray(a.preferredDays) ? a.preferredDays : [], a.preferredStartTime || "12:00", a.preferredEndTime || null];
+        if (rule) {
+          await client.query(
+            `UPDATE "CadenceRule" SET "postsPerWeek" = $2, "preferredDays" = $3, "preferredStartTime" = $4, "preferredEndTime" = $5,
+                    "active" = TRUE, "updatedAt" = CURRENT_TIMESTAMP WHERE "id" = $1`, [rule.id, ...values]);
+        } else {
+          await client.query(
+            `INSERT INTO "CadenceRule" ("socialAccountId","placement","postsPerWeek","preferredDays","preferredStartTime","preferredEndTime","active","updatedAt")
+             VALUES ($1,$2,$3,$4,$5,$6,TRUE,CURRENT_TIMESTAMP)`, [account.id, a.placement, ...values]);
+        }
+        configured.push({ socialAccountId: account.id, destination, accountName: a.accountName, placement: a.placement, postsPerWeek: values[0] });
+      }
+      await client.query("COMMIT");
+      return json(200, { ok: true, brandSlug, settingsVersion: settings.version ?? null, accounts: configured });
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    }
+  });
+}
+
+export async function runPlanWeek(event, connectDatabase, json, { modelId = process.env.EPE_BEDROCK_CURATOR_MODEL_ID } = {}) {
+  const brandSlug = String(event.brandSlug || "").trim();
+  const apply = event.mode === "apply";
+  if (!brandSlug) return json(400, { ok: false, error: "brandSlug is required" });
+
+  return withClient(connectDatabase, json, "plan-week", async (client) => {
+    const brand = await loadBrand(client, brandSlug);
+    if (!brand) return json(404, { ok: false, error: "Active brand not found" });
+    const settings = resolvePlannerSettings(brand.settings);
+    if (!settings.sectors.length) return json(409, { ok: false, error: "Brand has no planner settings; run configure-planner-brand first" });
+    const { timeZone, weekStart, from, to } = weekWindow(brand, event.weekStart);
+
+    const accounts = (await client.query(
+      `SELECT sa."id" AS "socialAccountId", sa."destination", sa."accountName", sa."publishingMode", sa."timezone",
+              cr."id" AS "cadenceRuleId", cr."placement", cr."postsPerWeek", cr."preferredDays", cr."preferredStartTime", cr."preferredEndTime"
+       FROM "CadenceRule" cr JOIN "SocialAccount" sa ON sa."id" = cr."socialAccountId"
+       WHERE sa."brandId" = $1 AND sa."status" = 'active' AND cr."active" = TRUE AND cr."postsPerWeek" > 0
+       ORDER BY sa."destination", cr."placement"`, [brand.id])).rows;
+    if (!accounts.length) return json(409, { ok: false, error: "No active social accounts with cadence rules" });
+
+    const assets = (await client.query(
+      `SELECT "id","filename","kind","aspectRatioLabel","durationMs","tags","title","topic","contentGroup","creativeFamily",
+              "creativeNotes","priority","eligibilityType","eligibleFrom","eligibleUntil","annualFromMmdd","annualUntilMmdd",
+              "allowedDestinations","excludedDestinations","shopifyProductId","createdAt"
+       FROM "Asset"
+       WHERE "brandId" = $1 AND "approvalStatus" = 'approved' AND "ingestStatus" = 'ready' AND "retiredAt" IS NULL
+         AND ("sourcePath" IS NOT NULL OR "sourceUrl" IS NOT NULL)`, [brand.id])).rows;
+
+    // Everything that counts against cooldowns: published history plus posts already scheduled.
+    // With replacePlanned, this week's still-unapproved posts are about to be replaced, so they don't count.
+    const replacePlanned = apply && event.replacePlanned === true;
+    const used = (await client.query(
+      `SELECT pl."socialAccountId", pl."assetId", pl."publishedAt" AS "at", a."tags", a."contentGroup", a."shopifyProductId", a."filename"
+       FROM "PublicationLedger" pl JOIN "Asset" a ON a."id" = pl."assetId"
+       WHERE pl."brandId" = $1 AND pl."publishedAt" >= $2::timestamp - INTERVAL '90 days'
+       UNION ALL
+       SELECT sp."socialAccountId", sp."assetId", sp."scheduledFor" AS "at", a."tags", a."contentGroup", a."shopifyProductId", a."filename"
+       FROM "ScheduledPost" sp JOIN "Asset" a ON a."id" = sp."assetId"
+       WHERE sp."brandId" = $1 AND sp."status" IN ('planned','approved','queued')
+         AND sp."scheduledFor" >= $2::timestamp - INTERVAL '90 days' AND sp."scheduledFor" < $3::timestamp + INTERVAL '90 days'
+         AND NOT ($4::boolean AND sp."status" = 'planned' AND sp."scheduledFor" >= $2 AND sp."scheduledFor" < $3)`,
+      [brand.id, from, to, replacePlanned])).rows;
+    const uses = used.map((u) => ({ socialAccountId: u.socialAccountId, assetId: u.assetId, at: new Date(u.at).toISOString(),
+      songKey: songKeyOf(u), contentGroup: u.contentGroup, shopifyProductId: u.shopifyProductId, filename: u.filename }));
+
+    const input = { assets, accounts, settings, weekStart, timeZone, uses };
+    let plan = planWeek(input);
+    let curator = { enabled: false, reason: !modelId ? "EPE_BEDROCK_CURATOR_MODEL_ID not set" : "disabled in settings or request" };
+    if (modelId && settings.curator?.enabled !== false && event.curator !== false) {
+      const recentByAccount = Object.fromEntries(accounts.map((a) => [a.socialAccountId, uses
+        .filter((u) => u.socialAccountId === a.socialAccountId && new Date(u.at) < from)
+        .sort((x, y) => y.at.localeCompare(x.at)).slice(0, 10)
+        .map((u) => ({ at: u.at, filename: u.filename, song: u.songKey, contentGroup: u.contentGroup }))]));
+      const curated = await curateWeek({ plan, brandSlug, accounts, recentByAccount, modelId });
+      plan = planWeek({ ...input, preferences: curated.preferences });
+      curator = { enabled: true, modelId, runs: curated.runs };
+    }
+
+    // Existing posts in the week (not being replaced) keep their slot.
+    const existing = (await client.query(
+      `SELECT "socialAccountId","scheduledFor" FROM "ScheduledPost"
+       WHERE "brandId" = $1 AND "scheduledFor" >= $2 AND "scheduledFor" < $3 AND "status" IN ('planned','approved','queued')
+         AND NOT ($4::boolean AND "status" = 'planned')`, [brand.id, from, to, replacePlanned])).rows;
+    const occupied = (slot) => existing.some((e) => e.socialAccountId === slot.socialAccountId &&
+      Math.abs(new Date(e.scheduledFor).getTime() - new Date(slot.scheduledFor).getTime()) < 30 * 60000);
+    for (const slot of plan.slots) if (occupied(slot)) slot.status = "exists";
+
+    const response = {
+      ok: true, mode: apply ? "apply" : "preview", brand: brand.slug, weekStart, weekEnd: plan.weekEnd,
+      plannerVersion: PLANNER_VERSION, eligibleAssets: assets.length, curator,
+      summary: plan.summary, gaps: plan.gaps, sectorsWaitingForContent: plan.sectorsWaitingForContent,
+      slots: plan.slots.map(({ candidates, ...s }) => ({ ...s, candidateIds: (candidates || []).map((c) => c.assetId) }))
+    };
+    if (!apply) return json(200, response);
+
+    const runFor = (id) => (curator.runs || []).find((r) => r.socialAccountId === id) || null;
+    await client.query("BEGIN");
+    try {
+      let removed = 0;
+      if (replacePlanned) {
+        removed = (await client.query(
+          `DELETE FROM "ScheduledPost" WHERE "brandId" = $1 AND "status" = 'planned' AND "scheduledFor" >= $2 AND "scheduledFor" < $3`,
+          [brand.id, from, to])).rowCount;
+      }
+      let inserted = 0;
+      for (const slot of plan.slots.filter((s) => s.status === "planned")) {
+        const run = runFor(slot.socialAccountId);
+        await client.query(
+          `INSERT INTO "ScheduledPost" ("brandId","socialAccountId","assetId","placement","scheduledFor","status",
+             "selectionReason","scoreBreakdown","publishingMode","updatedAt")
+           VALUES ($1,$2,$3,$4,$5,'planned',$6,$7::jsonb,$8,CURRENT_TIMESTAMP)`,
+          [brand.id, slot.socialAccountId, slot.assetId, slot.placement, slot.scheduledFor,
+           slot.curatorReason ? `${slot.curatorReason} (${slot.reason})` : slot.reason,
+           JSON.stringify({
+             plannerVersion: PLANNER_VERSION, weekStart, sector: slot.sector, sectorFallbackFrom: slot.sectorFallbackFrom,
+             exploration: slot.exploration, songKey: slot.songKey, syntheticDisclosure: slot.synthetic,
+             selectedBy: slot.selectedBy, curatorOverridden: slot.curatorOverridden, score: slot.score, breakdown: slot.breakdown,
+             candidateIds: (slot.candidates || []).map((c) => c.assetId),
+             curator: run && !run.error ? { modelId: run.modelId, intelligenceVersion: run.intelligenceVersion, files: run.intelligenceFiles } : null
+           }),
+           slot.publishingMode || "approval"]);
+        inserted += 1;
+      }
+      await client.query("COMMIT");
+      return json(200, { ...response, removedPlanned: removed, inserted });
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    }
+  });
+}
+
+export async function approvePlannerWeek(event, connectDatabase, json) {
+  const brandSlug = String(event.brandSlug || "").trim();
+  if (!brandSlug || !YMD.test(String(event.weekStart || ""))) {
+    return json(400, { ok: false, error: "brandSlug and weekStart (YYYY-MM-DD) are required" });
+  }
+  return withClient(connectDatabase, json, "approve-week", async (client) => {
+    const brand = await loadBrand(client, brandSlug);
+    if (!brand) return json(404, { ok: false, error: "Active brand not found" });
+    const { weekStart, from, to } = weekWindow(brand, event.weekStart);
+    const result = await client.query(
+      `UPDATE "ScheduledPost" SET "status" = 'approved', "updatedAt" = CURRENT_TIMESTAMP
+       WHERE "brandId" = $1 AND "status" = 'planned' AND "scheduledFor" >= $2 AND "scheduledFor" < $3
+       RETURNING "id"`, [brand.id, from, to]);
+    return json(200, { ok: true, brand: brand.slug, weekStart, approved: result.rowCount });
+  });
+}

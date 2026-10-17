@@ -20,10 +20,19 @@
         "brands/{brand}/brand.md#core"
       ],
       "maxGuidanceTokens": 4000,
-      "liveInputs": ["asset technical fields", "frames", "transcript", "folder path", "brand vocabulary (sectors, content families, tags)", "capture metadata (date, GPS, camera)", "known subjects (songs, shows, products, locations, people with roles)", "candidate sessions with rosters"]
+      "liveInputs": [
+        "asset technical fields",
+        "frames",
+        "transcript",
+        "folder path",
+        "brand vocabulary (sectors, content families, tags)",
+        "capture metadata (date, GPS, camera)",
+        "known subjects (songs, shows, products, locations, people with roles)",
+        "candidate sessions with rosters"
+      ]
     },
     "select_content": {
-      "consumer": "Planner V1 step 4",
+      "consumer": "Planner V2 curator (services/dev-api-lambda/curator.mjs), one call per account-week",
       "files": [
         "shared/operating-principles.md",
         "shared/creative-selection.md",
@@ -32,8 +41,12 @@
         "brands/{brand}/brand.md#{sector}",
         "brands/{brand}/platforms.md#{destination}"
       ],
-      "maxGuidanceTokens": 4000,
-      "liveInputs": ["slot", "top N candidates with score breakdown", "campaign", "recent posts on this account"]
+      "maxGuidanceTokens": 5500,
+      "liveInputs": [
+        "account and week",
+        "slots in order (sector, exploration flag) with top N candidates and score breakdown",
+        "recent posts on this account"
+      ]
     },
     "write_copy": {
       "consumer": "copy generation for ScheduledPost",
@@ -46,7 +59,13 @@
         "brands/{brand}/platforms.md#{destination}"
       ],
       "maxGuidanceTokens": 4500,
-      "liveInputs": ["selected asset", "subject facts and links", "campaign", "last 20 captions on this account", "post template copy slots (when templated)"]
+      "liveInputs": [
+        "selected asset",
+        "subject facts and links",
+        "campaign",
+        "last 20 captions on this account",
+        "post template copy slots (when templated)"
+      ]
     }
   },
   "optionalSections": [
