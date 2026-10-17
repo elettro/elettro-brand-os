@@ -99,7 +99,8 @@ const statusSummary = `SELECT b."slug", count(*)::int AS assets,
 
 export async function runBrandRootMigration(event, connectDatabase, json) {
   if (event.requestContext || event.rawPath || event.path) return json(403, {ok: false, error: "Direct IAM invocation required"});
-  const mode = event.mode === "apply" ? "apply" : event.mode === "rollback" ? "rollback" : "dry-run";
+  const mode = ["apply", "rollback", "verify"].includes(event.mode) ? event.mode : "dry-run";
+  if (mode === "verify") return verifyAgainstBackup(connectDatabase, json);
   let client, committed = false;
   try {
     client = await connectDatabase();
@@ -174,6 +175,38 @@ export async function runBrandRootMigration(event, connectDatabase, json) {
     if (client && !committed) await client.query("ROLLBACK").catch(() => {});
     console.error(`[${MIGRATION}] failed`, error);
     return json(500, {ok: false, mode, error: error instanceof Error ? error.message : "Migration failed; rolled back"});
+  } finally {
+    if (client) await client.end().catch(() => {});
+  }
+}
+
+// Read-only: compare every backed-up asset with its current row, column by column.
+const PRESERVED = ["brandId","storageRootId","collectionId","campaignId","intakeBatchId","approvalStatus","ingestStatus","enrichmentStatus",
+  "title","aiDescription","topic","contentGroup","creativeFamily","creatorNote","creativeNotes","tags","commerceLinks","priority",
+  "eligibilityType","eligibleFrom","eligibleUntil","allowedDestinations","excludedDestinations","firstApprovedAt","retiredAt","aiSuggestions"];
+async function verifyAgainstBackup(connectDatabase, json) {
+  let client;
+  try {
+    client = await connectDatabase();
+    const changed = {};
+    for (const col of PRESERVED) {
+      const r = await client.query(`SELECT a."id", s."${col}"::text AS before, a."${col}"::text AS after FROM ${T.asset} s JOIN "Asset" a ON a."id"=s."id"
+        WHERE a."${col}" IS DISTINCT FROM s."${col}" ORDER BY a."id"`);
+      if (r.rows.length) changed[col] = {count: r.rows.length, transitions: Object.entries(r.rows.reduce((m, x) => {
+        const k = `${x.before} -> ${x.after}`; m[k] = (m[k] || 0) + 1; return m; }, {})).slice(0, 10), sample: r.rows.slice(0, 3)};
+    }
+    const missing = await client.query(`SELECT count(*)::int n FROM ${T.asset} s WHERE NOT EXISTS (SELECT 1 FROM "Asset" a WHERE a."id"=s."id")`);
+    const added = await client.query(`SELECT b."slug", count(*)::int n FROM "Asset" a JOIN "Brand" b ON b."id"=a."brandId"
+      WHERE b."slug"=ANY($1::text[]) AND NOT EXISTS (SELECT 1 FROM ${T.asset} s WHERE s."id"=a."id") GROUP BY 1`, [BRANDS]);
+    const dupes = await client.query(`SELECT coalesce("sourceFileId","sourceExternalId") id, count(*)::int n FROM "Asset"
+      WHERE "sourceType"='dropbox' AND coalesce("sourceFileId","sourceExternalId") IS NOT NULL GROUP BY 1 HAVING count(*)>1`);
+    const roots = await client.query(`SELECT b."slug", r."rootPath" FROM "BrandStorageRoot" r JOIN "Brand" b ON b."id"=r."brandId" WHERE b."slug"=ANY($1::text[]) ORDER BY 1`, [BRANDS]);
+    const audited = await client.query(`SELECT count(*)::int n FROM ${T.audit}`);
+    return json(200, {ok: true, mode: "verify", backedUpAssets: (await client.query(`SELECT count(*)::int n FROM ${T.asset}`)).rows[0].n,
+      auditedRemaps: audited.rows[0].n, missingSinceBackup: missing.rows[0].n, addedSinceBackup: added.rows, duplicateDropboxIds: dupes.rows,
+      roots: roots.rows, changedPreservedColumns: changed});
+  } catch (error) {
+    return json(500, {ok: false, mode: "verify", error: error instanceof Error ? error.message : "Verify failed"});
   } finally {
     if (client) await client.end().catch(() => {});
   }
