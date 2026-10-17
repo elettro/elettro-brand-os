@@ -33,7 +33,8 @@ Sector × format, from Dean's Instagram ecosystem sheet:
 - Shorts: daily performance clips; title names the show and song, e.g.
   "Stashbox Does Dylan: Simple Twist of Fate (live)".
 - Long-form: full-song videos and full sets. Shorts point to the full video when one exists.
-- CTA: subscribe to @Stashboxband; song links in description.
+- CTA: the post's own CTA, then always close the description with the
+  subscribe reminder to @stashboxband (goal #1); song links in description.
 
 ## [facebook] Facebook
 

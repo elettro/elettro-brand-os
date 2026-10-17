@@ -110,7 +110,7 @@
       "appleMusic": "https://music.apple.com/us/artist/stashbox/1464431398",
       "amazonMusic": "https://music.amazon.com/artists/B003VPOKDO/stashbox",
       "tidal": "https://tidal.com/artist/8920712",
-      "priority": "spotify"
+      "priority": "spotify (within streaming posts only)"
     },
     "youtubeChannel": "https://youtube.com/@stashboxband"
   },
@@ -189,5 +189,22 @@
     "Default publishing mode assumed 'approval' until Dean sets per-account autonomy",
     "Per-song streaming links (Spotify first) to be added to radio song records; artist profiles are recorded in links.streaming",
     "Later phase (nice to have): Person, Location and Session records with rosters; all current shorts sessions are Studio One, Fort Lauderdale, FL"
+  ],
+  "goals": [
+    {
+      "rank": 1,
+      "goal": "subscribers",
+      "detail": "Subscribe on YouTube (@stashboxband) and register free at stashbox.com/radio"
+    },
+    {
+      "rank": 2,
+      "goal": "shows",
+      "detail": "Awareness and bookings for Stashbox Does Dylan and Stashbox Does Sublime & Reggae (South Florida)"
+    },
+    {
+      "rank": 3,
+      "goal": "merch",
+      "detail": "Feature and link stashbox.ai products"
+    }
   ]
 }

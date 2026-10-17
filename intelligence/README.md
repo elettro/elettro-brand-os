@@ -132,9 +132,9 @@ Target guidance size per call (excluding live JSON), enforced by a CI check:
 
 | Task | Max guidance tokens |
 |---|---|
-| enrich_asset | 4,000 (frames dominate this call's cost, not guidance) |
+| enrich_asset | 4,500 (frames dominate this call's cost, not guidance) |
 | select_content | 5,500 (one call sequences an account's whole week, so it carries every active sector's section) |
-| write_copy | 4,500 |
+| write_copy | 5,000 (brand core carries the top-level goals every caption serves) |
 
 ### Versioning and provenance
 

@@ -84,6 +84,21 @@ provided.*
 - **People:** name band members and guests only when the asset's linked
   subjects name them.
 
+## Top-level goals
+
+Dean, 2026-10-17. Across all posts, in this order:
+
+1. **Subscribers:** subscribe to YouTube (`@stashboxband`) and register free
+   at Stashbox Radio (`stashbox.com/radio`).
+2. **Shows:** make sure people know **Stashbox Does Dylan** and **Stashbox
+   Does Sublime & Reggae** exist and can be booked in South Florida.
+3. **Merch:** feature and link back to stashbox.ai products.
+
+Each post still has one main job (its sector). A short subscribe reminder may
+close any post where the platform sections allow it. **Spotify** leads only
+inside streaming posts, as the most common platform when mentioning our
+songs; it is not an overall priority.
+
 ## Sector priority
 
 Seven sectors, highest priority first. Shares are in `policy.json`.
@@ -161,9 +176,9 @@ Google Business Profile and X, and are rare on TikTok.
 
 - **Goal:** streams and Spotify follows.
 - **Show:** the song's official artwork, a clip, release info from the song record.
-- **CTA:** listen on your platform (song-specific streaming links from the
-  record) and follow Stashbox on Spotify (artist profile link). Use only links
-  present on the record.
+- **CTA:** listen on Spotify first (song link from the record, else the
+  Stashbox artist profile), then Apple Music, Amazon Music, TIDAL. Use only
+  links present on the record or in the brand's streaming profiles.
 - **Releases:** new releases and catalog features; licensed covers presented honestly.
 - **Success:** streaming link clicks, Spotify follows.
 

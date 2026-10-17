@@ -64,6 +64,8 @@ export function postFacts(asset, slot, songFacts = {}, links = {}) {
     songHasOwnStreamingLink: Boolean(song?.spotifyUrl || song?.appleMusicUrl || song?.youtubeMusicUrl),
     allowedLinks: [...new Set([...sectorLinks, ...artistLinks, links.youtubeChannel, links.booking?.page, links.radio, links.merchStore].filter(Boolean))],
     bookingEmail: slot.sector === "live-shows" ? links.booking?.email || null : null,
+    // Goal #1 (subscribers) closes posts where the brand allows it; radio posts already ask people to join.
+    subscribeReminder: slot.sector === "radio" ? null : (links.subscribeReminders || {})[slot.destination] || null,
     contentGroup: asset.contentGroup || null,
     notes: asset.creativeNotes ? String(asset.creativeNotes).slice(0, 500) : null
   };
@@ -82,7 +84,8 @@ function hashtagsFor(f) {
 /** Deterministic fallback copy. Returns null when the sector's required link is missing. */
 export function templateCopy(f, seed) {
   if (!f.primaryLink) return null;
-  const songLine = f.song ? (f.isCover && f.originalArtist ? `${f.song} (${f.originalArtist})` : f.song) : null;
+  const credited = f.originalArtist && f.song?.toLowerCase().includes(f.originalArtist.toLowerCase());
+  const songLine = f.song ? (f.isCover && f.originalArtist && !credited ? `${f.song} (${f.originalArtist})` : f.song) : null;
   const where = f.realFootage && f.venue ? ` at ${f.venue}${f.city ? `, ${f.city}` : ""}` : "";
   const cta = f.linksInCaptionAreClickable ? f.primaryLink : "Link in bio.";
   let hook;
@@ -109,7 +112,7 @@ export function templateCopy(f, seed) {
       : `${f.album ? `From ${f.album}. ` : ""}Follow Stashbox on Spotify: ${cta}`;
   }
   const hashtags = hashtagsFor(f).slice(0, LIMITS[f.destination]?.hashtags ?? 5);
-  const caption = `${hook}\n${body}`;
+  const caption = `${hook}\n${body}${f.subscribeReminder ? `\n${f.subscribeReminder}` : ""}`;
   return {
     status: "ready", source: "template", angle: f.sector === "live-shows" ? "moment" : "audience", hook,
     caption: f.destination === "youtube" ? null : caption,

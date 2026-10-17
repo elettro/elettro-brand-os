@@ -19,7 +19,7 @@
         "shared/asset-analysis.md",
         "brands/{brand}/brand.md#core"
       ],
-      "maxGuidanceTokens": 4000,
+      "maxGuidanceTokens": 4500,
       "liveInputs": [
         "asset technical fields",
         "frames",
@@ -58,7 +58,7 @@
         "brands/{brand}/brand.md#{sector}",
         "brands/{brand}/platforms.md#{destination}"
       ],
-      "maxGuidanceTokens": 4500,
+      "maxGuidanceTokens": 5000,
       "liveInputs": [
         "selected asset",
         "subject facts and links",

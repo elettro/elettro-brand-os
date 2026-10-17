@@ -187,7 +187,13 @@
         "amazonMusic": "https://music.amazon.com/artists/B003VPOKDO/stashbox",
         "tidal": "https://tidal.com/artist/8920712"
       },
-      "youtubeChannel": "https://youtube.com/@stashboxband"
+      "youtubeChannel": "https://youtube.com/@stashboxband",
+      "subscribeReminders": {
+        "youtube": "Subscribe to @stashboxband for more.",
+        "facebook": "Stashbox Radio is free to join: https://stashbox.com/radio/",
+        "instagram": "Stashbox Radio is free to join.",
+        "tiktok": "Stashbox Radio is free to join."
+      }
     },
     "copy": {
       "enabled": true,
