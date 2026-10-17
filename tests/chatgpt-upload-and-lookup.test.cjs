@@ -17,7 +17,7 @@ function load(file,mocks={},globals={}){
   Buffer,URL,URLSearchParams,Date,AbortSignal,Uint8Array,console,process:{env:{}},...globals},{filename:file});
  return module.exports;
 }
-const brands=[{id:'stashbox',dropboxRoot:'/1---elettro-brand-os/stashbox'},{id:'elettro',dropboxRoot:'/1---elettro-brand-os/elettro'}];
+const brands=[{id:'stashbox',dropboxRoot:'/1---elettro-brand-os/brands/stashbox'},{id:'elettro',dropboxRoot:'/1---elettro-brand-os/brands/elettro'}];
 const secretsMock={SecretsManagerClient:class{async send(){return {SecretString:JSON.stringify({refresh_token:'r',app_key:'k',app_secret:'s'})};}},GetSecretValueCommand:class{}};
 const json=(value,status=200)=>({ok:status<300,status,json:async()=>value,headers:new Map()});
 const {mcpErrorText}=load('apps/web/lib/ai-mcp-errors.ts');
@@ -26,7 +26,7 @@ const identityModule=load('apps/web/lib/ai-mcp-dropbox-identity.ts');
 
 // ---------- Wrong-brand lookups ----------
 const ELETTRO_ASSET={id:'c2ec7a41-1cb6-43d4-a25b-eae925803b23',brandSlug:'elettro',filename:'epe-web-test.png',
- sourceType:'dropbox',sourcePath:'/1---elettro-brand-os/elettro/test/epe-web-test.png',sourceFileId:'id:UM9GhyUcVDgAAAAAAAMEFg'};
+ sourceType:'dropbox',sourcePath:'/1---elettro-brand-os/brands/elettro/test/epe-web-test.png',sourceFileId:'id:UM9GhyUcVDgAAAAAAAMEFg'};
 function gateway(asset){
  return load('apps/web/lib/ai-gateway.ts',{'@aws-sdk/client-secrets-manager':secretsMock,'@/lib/brand-config':{brandConfigs:brands}},
   {fetch:async url=>url.includes('/assets?id=')?json(asset?{ok:true,asset}:{ok:true,asset:null}):json({ok:false},500)});
@@ -64,7 +64,7 @@ test('MCP route formats gateway errors with the caller\'s own brand scope',()=>{
 });
 
 // ---------- ChatGPT upload results ----------
-const FOLDER='/1---elettro-brand-os/stashbox/graphics';
+const FOLDER='/1---elettro-brand-os/brands/stashbox/graphics';
 const BYTES=Buffer.from('elettro-test-image');
 const {dropboxContentHash}=load('apps/web/lib/ai-mcp-upload.ts',uploadMocks({}));
 const HASH=dropboxContentHash(BYTES);
