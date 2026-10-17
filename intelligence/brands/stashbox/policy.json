@@ -3,7 +3,7 @@
   "approvedBy": "Dean Palermo",
   "approvedOn": "2026-10-17",
   "note": "Seed for database rules (CooldownRule, Brand.settings, SocialAccount, CadenceRule). The database is the runtime source; this file is the versioned record of approved decisions.",
-  "destinations": ["instagram", "facebook", "youtube", "tiktok", "x", "threads", "linkedin", "pinterest", "gbp", "reddit", "website", "rss"],
+  "destinations": ["instagram", "facebook", "youtube", "tiktok", "x", "threads", "linkedin", "pinterest", "gmb", "reddit", "website", "rss"],
   "sectors": [
     { "slug": "live-shows", "priority": 1, "share": 0.28 },
     { "slug": "radio", "priority": 2, "share": 0.20 },
@@ -33,7 +33,7 @@
     "x": { "originalsPerDay": 8, "originalsPerWeek": [14, 21] },
     "linkedin": { "originalsPerWeek": [2, 3] },
     "pinterest": null,
-    "gbp": null,
+    "gmb": null,
     "reddit": null
   },
   "openItems": [

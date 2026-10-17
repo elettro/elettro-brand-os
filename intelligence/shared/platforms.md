@@ -109,7 +109,7 @@ pinned comment, description) and that location must exist for the account.
 - **Best fit:** products, visual collections, artwork, gift ideas, evergreen
   content. Weak fit: time-bound announcements.
 
-## [gbp] Google Business Profile
+## [gmb] Google Business Profile
 
 - **Placements:** updates, offers, events, photos, products.
 - **Viewer:** people searching locally on Google Search and Maps, often ready to act.

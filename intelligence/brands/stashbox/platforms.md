@@ -62,7 +62,7 @@ Sector × format, from Dean's Instagram ecosystem sheet:
 - Merch (product pins with product links) and song artwork (pins to the song's
   radio link) are the natural fit; evergreen performance stills to YouTube.
 
-## [gbp] Google Business Profile
+## [gmb] Google Business Profile
 
 - Live-shows and custom-production for South Florida searchers: updates with
   a **Book** or **Learn more** button to the booking/contact record.
