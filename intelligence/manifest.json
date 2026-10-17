@@ -20,7 +20,7 @@
         "brands/{brand}/brand.md#core"
       ],
       "maxGuidanceTokens": 4000,
-      "liveInputs": ["asset technical fields", "frames", "transcript", "folder path", "brand vocabulary (sectors, content families, tags)", "known subjects (songs, shows, products)"]
+      "liveInputs": ["asset technical fields", "frames", "transcript", "folder path", "brand vocabulary (sectors, content families, tags)", "capture metadata (date, GPS, camera)", "known subjects (songs, shows, products, locations, people with roles)", "candidate sessions with rosters"]
     },
     "select_content": {
       "consumer": "Planner V1 step 4",
