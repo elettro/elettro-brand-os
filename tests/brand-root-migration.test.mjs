@@ -87,3 +87,9 @@ test("every deployed Dropbox writer uses the brands/ roots", () => {
     assert.ok(s.includes("/1---elettro-brand-os/brands/"), f);
   }
 });
+
+test("sync worker brand browse, write and upload verification use brands/ roots", () => {
+  const s = fs.readFileSync(new URL("../services/dropbox-sync-lambda/index.mjs", import.meta.url), "utf8");
+  assert.equal((s.match(/\$\{DROPBOX_ROOT\}\/brands\/\$\{brand\}/g) || []).length, 3);
+  assert.doesNotMatch(s, /\$\{DROPBOX_ROOT\}\/\$\{brand\}/);
+});
