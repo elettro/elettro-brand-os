@@ -78,6 +78,9 @@ conservative option.
 
 ## Output discipline
 
+- Write all audience-facing text in the brand's language and market (from
+  the brand's policy, e.g. `en-US`, `de-DE`). Reasons and notes stay in English.
+
 - Return **only** the JSON object the task file specifies. No markdown fences,
   no commentary outside the JSON.
 - Use exact strings from provided vocabularies (sectors, families, tags). If

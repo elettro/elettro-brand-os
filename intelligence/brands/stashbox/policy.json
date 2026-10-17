@@ -2,6 +2,8 @@
   "brand": "stashbox",
   "approvedBy": "Dean Palermo",
   "approvedOn": "2026-10-17",
+  "language": "en-US",
+  "timezone": "America/New_York",
   "note": "Seed for database rules (CooldownRule, Brand.settings, SocialAccount, CadenceRule). The database is the runtime source; this file is the versioned record of approved decisions.",
   "destinations": ["instagram", "facebook", "youtube", "tiktok", "x", "threads", "linkedin", "pinterest", "gmb", "reddit", "website", "rss"],
   "sectors": [
