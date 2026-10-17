@@ -344,7 +344,7 @@ async function listBrandFolders(token, event) {
   const roots = ["stashbox", "solarmeister", "weightlossdavie", "neckermann-strom", "therasbox", "elettro"];
   const brand = event?.brand || event?.queryStringParameters?.brand || "";
   if (!roots.includes(brand)) return json(400, { ok: false, error: "Invalid brand" });
-  const root = `${DROPBOX_ROOT}/${brand}`;
+  const root = `${DROPBOX_ROOT}/brands/${brand}`;
   const requested = event?.path || event?.queryStringParameters?.path || root;
   if (typeof requested !== "string") return json(400, { ok: false, error: "Invalid folder path" });
   const path = requested.replace(/\\/g, "/").replace(/\/+$/, "");
@@ -387,7 +387,7 @@ function authorizedDropboxPath(event, childName) {
   const brand = String(event.brand || "");
   const allowed = ["solarmeister","stashbox","weightlossdavie","neckermann-strom","therasbox","elettro"];
   if (!allowed.includes(brand)) throw new Error("Invalid brand");
-  const root = `${DROPBOX_ROOT}/${brand}`;
+  const root = `${DROPBOX_ROOT}/brands/${brand}`;
   const folder = String(event.path || root).replace(/\\/g,"/").replace(/\/+$/,"");
   if (folder.toLowerCase() !== root.toLowerCase() && !folder.toLowerCase().startsWith(root.toLowerCase()+"/"))
     throw new Error("Folder outside brand root");
@@ -420,7 +420,7 @@ async function dropboxWrite(token, event) {
 async function verifyBrandUpload(token,event){
  try {
   const brand=String(event.brand||"");
-  const root=`${DROPBOX_ROOT}/${brand}`;
+  const root=`${DROPBOX_ROOT}/brands/${brand}`;
   if(!["solarmeister","stashbox","weightlossdavie","neckermann-strom","therasbox","elettro"].includes(brand)) return json(400,{ok:false,error:"Invalid brand"});
   const path=String(event.path||"").replace(/\\/g,"/");
   if(!path.toLowerCase().startsWith(root.toLowerCase()+"/") || path.includes("\0")) return json(403,{ok:false,error:"Outside brand root"});
