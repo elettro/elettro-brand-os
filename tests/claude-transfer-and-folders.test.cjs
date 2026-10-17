@@ -131,7 +131,7 @@ test('web chunks finish a single-chunk upload and bind subsequent chunks to the 
  assert.equal(second.complete,true);
  assert.equal(calls.find(c=>c.url?.endsWith('/finish')).arg.cursor.offset,1);
 });
-function folderHarness({failUpdate=false,failCommit=false}={}){
+function folderHarness({failUpdate=false,failCommit=false,failMoveReply=false}={}){
  let moved=false;const queries=[];const operations=[];
  const asset={id:'asset',brandId:'brand',sourceFileId:'id:abcdefghijk',sourcePath:'/1---elettro-brand-os/brands/elettro/old/a.png',sourcePathLower:'/1---elettro-brand-os/brands/elettro/old/a.png',sourceUrl:null,sourceMetadata:{path:'/1---elettro-brand-os/brands/elettro/old/a.png'}};
  const client={query:async(sql,values)=>{queries.push({sql,values});
@@ -143,14 +143,19 @@ function folderHarness({failUpdate=false,failCommit=false}={}){
  let source=fs.readFileSync(path.join(root,'services/dev-api-lambda/claude-folder-ops.mjs'),'utf8').replace(/^import .*;\n/,'').replace(/export /g,'');
  source+='\nmodule.exports={moveBrandFolder,repairClaudeTestStatus};';
  const module={exports:{}};
- vm.runInNewContext(source,{module,SecretsManagerClient:class{send(){return {SecretString:JSON.stringify({refreshToken:'r',appKey:'k',appSecret:'s'})};}},GetSecretValueCommand:class{},
-  process:{env:{}},URLSearchParams,AbortSignal,fetch:async(url,options)=>{
-   if(url.endsWith('/token'))return {ok:true,json:async()=>({access_token:'t'})};
-   const body=JSON.parse(options.body);operations.push({url,body});
-   if(url.endsWith('list_folder'))return {ok:true,json:async()=>({entries:[{'.tag':'file',id:asset.sourceFileId,path_display:asset.sourcePath}],has_more:false})};
-   if(url.endsWith('move_v2')){moved=true;return {ok:true,json:async()=>({metadata:{id:'id:folderabcdefgh',path_display:body.to_path}})};}
-   return {ok:true,json:async()=>body.path==='id:abcdefghijk'?{'.tag':'file',id:body.path,path_display:asset.sourcePath}:{'.tag':'folder',id:'id:folderabcdefgh',path_display:body.path}};
-  }});
+ const workerCall=async(endpoint,body)=>{
+   const url='https://api.dropboxapi.com/2/files/'+endpoint;operations.push({url,body});
+   if(endpoint==='list_folder')return {entries:[{'.tag':'file',id:asset.sourceFileId,path_display:asset.sourcePath}],has_more:false};
+   if(endpoint==='move_v2'){moved=true;if(failMoveReply)throw Error('worker response lost');return {metadata:{id:'id:folderabcdefgh',path_display:body.to_path}};}
+   return {'.tag':'folder',id:'id:folderabcdefgh',path_display:body.path};
+ };
+ vm.runInNewContext(source,{module,Buffer,Date,console,
+  LambdaClient:class{async send(command){const event=JSON.parse(command.Payload.toString());
+   assert.equal(event.action,'claude-folder-relay-v1');assert.equal(event.brandSlug,'elettro');
+   return {Payload:Buffer.from(JSON.stringify({ok:true,result:await workerCall(event.endpoint,event.body)}))};}},
+  InvokeCommand:class{constructor(input){Object.assign(this,input);}},
+  process:{env:{DROPBOX_SYNC_FUNCTION_NAME:'worker'}},AbortSignal,
+  fetch:()=>{throw Error('VPC handler must never contact Dropbox directly');}});
  const json=(statusCode,body)=>({statusCode,body});
  return {module:module.exports,client,queries,operations,json,moved:()=>moved};
 }
@@ -178,4 +183,11 @@ test('database update failure compensates folder move; ambiguous commit reports 
  const ambiguous=folderHarness({failCommit:true});const b=await ambiguous.module.moveBrandFolder(rename,async()=>ambiguous.client,ambiguous.json);
  assert.equal(b.body.reconciliationRequired,true);
  assert.equal(ambiguous.operations.filter(o=>o.url.endsWith('move_v2')).length,1);
+});
+
+test('lost worker move response requires reconciliation without retry or compensation',async()=>{
+ const h=folderHarness({failMoveReply:true});const result=await h.module.moveBrandFolder(rename,async()=>h.client,h.json);
+ assert.equal(result.body.ok,false);assert.equal(result.body.reconciliationRequired,true);
+ assert.equal(h.operations.filter(o=>o.url.endsWith('move_v2')).length,1);
+ assert.equal(h.queries.some(q=>q.sql==='COMMIT'),false);
 });

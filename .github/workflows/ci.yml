@@ -42,7 +42,7 @@ jobs:
         run: node --test tests/brand-root-routing.test.cjs
 
       - name: Test Claude transfer and folder operations
-        run: node --test tests/claude-transfer-and-folders.test.cjs
+        run: node --test tests/claude-transfer-and-folders.test.cjs tests/claude-folder-relay.test.mjs
 
       - name: Test cross-column Dropbox ID guard
         run: node --test tests/dropbox-identity.test.mjs

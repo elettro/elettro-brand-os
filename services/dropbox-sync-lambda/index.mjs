@@ -1,3 +1,4 @@
+import { handleFolderRelay } from "./claude-folder-relay.mjs";
 import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
 import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
 import { S3Client, GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
@@ -21,8 +22,31 @@ async function getDropboxToken() {
   const result = await secrets.send(new GetSecretValueCommand({ SecretId: secretId }));
   if (!result.SecretString) throw new Error("Dropbox secret has no SecretString");
   const config = JSON.parse(result.SecretString);
-  if (!config.accessToken) throw new Error("Dropbox secret does not contain accessToken");
-  return config.accessToken;
+  const refreshToken = config.refresh_token || config.refreshToken;
+  const appKey = config.app_key || config.appKey;
+  const appSecret = config.app_secret || config.appSecret;
+  if (refreshToken && appKey && appSecret) {
+    const response = await fetch("https://api.dropbox.com/oauth2/token", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "refresh_token",
+        refresh_token: refreshToken,
+        client_id: appKey,
+        client_secret: appSecret
+      })
+    });
+    if (!response.ok) throw new Error(`Dropbox OAuth refresh failed (HTTP ${response.status})`);
+    const tokens = await response.json();
+    if (typeof tokens.access_token !== "string" || !tokens.access_token)
+      throw new Error("Dropbox OAuth refresh returned no access token");
+    return tokens.access_token;
+  }
+  if (refreshToken || appKey || appSecret)
+    throw new Error("Dropbox refresh credentials are incomplete");
+  const legacyToken = config.accessToken || config.access_token;
+  if (!legacyToken) throw new Error("Dropbox secret contains no supported credentials");
+  return legacyToken;
 }
 
 async function fetchDropboxThumbnailBytes(token, path) {
@@ -315,8 +339,102 @@ async function invokeWriter(entries, listing) {
   return writerBody;
 }
 
+
+async function listBrandFolders(token, event) {
+  const roots = ["stashbox", "solarmeister", "weightlossdavie", "neckermann-strom", "therasbox", "elettro"];
+  const brand = event?.brand || event?.queryStringParameters?.brand || "";
+  if (!roots.includes(brand)) return json(400, { ok: false, error: "Invalid brand" });
+  const root = `${DROPBOX_ROOT}/${brand}`;
+  const requested = event?.path || event?.queryStringParameters?.path || root;
+  if (typeof requested !== "string") return json(400, { ok: false, error: "Invalid folder path" });
+  const path = requested.replace(/\\/g, "/").replace(/\/+$/, "");
+  if (path.toLowerCase() !== root.toLowerCase() &&
+      !path.toLowerCase().startsWith(root.toLowerCase() + "/"))
+    return json(403, { ok: false, error: "Folder outside brand root" });
+
+  const folders = [];
+  let cursor;
+  do {
+    const url = cursor
+      ? "https://api.dropboxapi.com/2/files/list_folder/continue"
+      : "https://api.dropboxapi.com/2/files/list_folder";
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify(cursor ? { cursor } : {
+        path, recursive: false, include_deleted: false, limit: 1000
+      })
+    });
+    const data = await response.json();
+    if (!response.ok) return json(502, {
+      ok: false, error: "Dropbox folder listing failed",
+      detail: data?.error_summary || `Dropbox HTTP ${response.status}`
+    });
+    for (const entry of data.entries || []) {
+      if (entry[".tag"] === "folder") folders.push({
+        id: entry.id, name: entry.name, path: entry.path_display || entry.path_lower
+      });
+    }
+    cursor = data.has_more ? data.cursor : undefined;
+  } while (cursor);
+  folders.sort((a, b) => a.name.localeCompare(b.name));
+  return json(200, { ok: true, readOnly: true, brand, root, path, folders });
+}
+
+
+// DEV-only Dropbox write preparation. Never exposes OAuth credentials to the browser.
+function authorizedDropboxPath(event, childName) {
+  const brand = String(event.brand || "");
+  const allowed = ["solarmeister","stashbox","weightlossdavie","neckermann-strom","therasbox","elettro"];
+  if (!allowed.includes(brand)) throw new Error("Invalid brand");
+  const root = `${DROPBOX_ROOT}/${brand}`;
+  const folder = String(event.path || root).replace(/\\/g,"/").replace(/\/+$/,"");
+  if (folder.toLowerCase() !== root.toLowerCase() && !folder.toLowerCase().startsWith(root.toLowerCase()+"/"))
+    throw new Error("Folder outside brand root");
+  if (!childName || typeof childName !== "string" || childName.length > 180 || childName === "." || childName === ".." || /[\\/\x00-\x1f]/.test(childName))
+    throw new Error("Invalid name");
+  return `${folder}/${childName.trim()}`;
+}
+async function dropboxWrite(token, event) {
+  try {
+    const action = event.action;
+    const name = String(action === "create-brand-folder" ? event.name || "" : event.filename || "").trim();
+    const path = authorizedDropboxPath(event, name);
+    const endpoint = action === "create-brand-folder" ? "files/create_folder_v2" : "files/get_temporary_upload_link";
+    const request = action === "create-brand-folder"
+      ? {path, autorename:false}
+      : {commit_info:{path, mode:{".tag":"add"},autorename:false, mute:true},duration:900};
+    const response = await fetch(`https://api.dropboxapi.com/2/${endpoint}`,{
+      method:"POST",headers:{authorization:`Bearer ${token}`,"content-type":"application/json"},body:JSON.stringify(request)
+    });
+    const data = await response.json();
+    if (!response.ok) return json(response.status === 409 ? 409 : 502,{
+      ok:false,error:"Dropbox write request failed",detail:data?.error_summary || `Dropbox HTTP ${response.status}`
+    });
+    if (action === "create-brand-folder") return json(200,{ok:true,path:data.metadata?.path_display || path,id:data.metadata?.id});
+    return json(200,{ok:true,path,uploadUrl:data.link,expiresInSeconds:900});
+  } catch(e){return json(400,{ok:false,error:e instanceof Error?e.message:"Invalid Dropbox request"});}
+}
+
+// Verify a directly uploaded file before Brand OS database registration.
+async function verifyBrandUpload(token,event){
+ try {
+  const brand=String(event.brand||"");
+  const root=`${DROPBOX_ROOT}/${brand}`;
+  if(!["solarmeister","stashbox","weightlossdavie","neckermann-strom","therasbox","elettro"].includes(brand)) return json(400,{ok:false,error:"Invalid brand"});
+  const path=String(event.path||"").replace(/\\/g,"/");
+  if(!path.toLowerCase().startsWith(root.toLowerCase()+"/") || path.includes("\0")) return json(403,{ok:false,error:"Outside brand root"});
+  const response=await fetch("https://api.dropboxapi.com/2/files/get_metadata",{method:"POST",headers:{authorization:`Bearer ${token}`,"content-type":"application/json"},body:JSON.stringify({path,include_deleted:false})});
+  const data=await response.json();
+  if(!response.ok)return json(502,{ok:false,error:"Dropbox verification failed",detail:data?.error_summary||`HTTP ${response.status}`});
+  if(data[".tag"]!=="file" || !data.id || !data.path_display)return json(400,{ok:false,error:"Not a Dropbox file"});
+  return json(200,{ok:true,id:data.id,path:data.path_display,name:data.name,size:data.size,contentHash:data.content_hash||null,rev:data.rev});
+ }catch(error){return json(502,{ok:false,error:error instanceof Error?error.message:"Verification failed"});}
+}
+
 export const handler = async (event = {}) => {
   const startedAt = Date.now();
+  if(event?.action === "claude-folder-relay-v1") return handleFolderRelay(event,getDropboxToken);
 
   try {
     const token = await getDropboxToken();
@@ -335,6 +453,10 @@ export const handler = async (event = {}) => {
       const kind = event?.queryStringParameters?.kind || "image";
       return await dropboxThumbnail(token, sourcePath, kind);
     }
+
+    if (event?.action === "verify-brand-upload") return await verifyBrandUpload(token,event);
+    if (event?.action === "list-brand-folders") return await listBrandFolders(token, event);
+    if (event?.action === "create-brand-folder" || event?.action === "prepare-brand-upload") return await dropboxWrite(token,event);
 
     if (event?.action === "prewarm-thumbnails") {
       return await prewarmThumbnails(token, event, startedAt);
