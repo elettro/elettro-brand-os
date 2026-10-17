@@ -93,3 +93,12 @@ test("sync worker brand browse, write and upload verification use brands/ roots"
   assert.equal((s.match(/\$\{DROPBOX_ROOT\}\/brands\/\$\{brand\}/g) || []).length, 3);
   assert.doesNotMatch(s, /\$\{DROPBOX_ROOT\}\/\$\{brand\}/);
 });
+
+test("brand media reset is IAM-only, backs up first, and preserves publishing history", () => {
+  const api = fs.readFileSync(new URL("../services/dev-api-lambda/index.mjs", import.meta.url), "utf8");
+  const reset = fs.readFileSync(new URL("../services/dev-api-lambda/brand-media-reset.mjs", import.meta.url), "utf8");
+  assert.match(api, /event\.action === "reset-brand-media-20261017" && !event\.requestContext/);
+  assert.ok(reset.indexOf("CREATE TABLE IF NOT EXISTS") < reset.indexOf('DELETE FROM "Asset"'));
+  assert.match(reset, /AND NOT \(\$\{history\}\)/);
+  assert.match(reset, /mode === "apply" \? "apply" : "dry-run"/);
+});
