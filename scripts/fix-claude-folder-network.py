@@ -114,7 +114,7 @@ def main():
         if label == 'worker':
             probe = client.invoke(FunctionName=function, InvocationType='RequestResponse', Payload=json.dumps({
                 'action':'claude-folder-relay-v1','brandSlug':'elettro','endpoint':'get_metadata',
-                'body':{'path':'/1---elettro-brand-os/elettro'}}).encode())
+                'body':{'path':'/1---elettro-brand-os/brands/elettro'}}).encode())
             result = json.loads(probe['Payload'].read())
             if probe.get('FunctionError') or result.get('ok') is not True or result.get('result',{}).get('.tag') != 'folder':
                 raise RuntimeError('Worker read-only Dropbox check failed. API patch was not deployed: ' + str(result.get('error','unexpected response')))

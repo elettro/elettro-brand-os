@@ -2,32 +2,69 @@
 
 ## Desired layout
 
-- `/1---elettro-brand-os/brands/{brand}/`: brand media (six existing brands)
+- `/1---elettro-brand-os/brands/{brand}/`: brand media (six brands)
 - `/1---elettro-brand-os/creative-assets/`: shared stock media, **unchanged**
 - `/1---elettro-brand-os/intelligence/`: brand and platform editorial knowledge, **unchanged**
 
-## Why this is a coordinated change
+## Current Dropbox state (verified 2026-10-17, read-only)
 
-DEV web code (Amplify), DEV API Lambda (`elettro-brand-os-dev-api`), Dropbox sync Lambda, and RDS `BrandStorageRoot` rows may deploy independently. The existing connector uses runtime Lambda code, NOT the GitHub branch. A GitHub workflow builds a ZIP artifact but **does not deploy the Lambda**. Moving Dropbox files alone will temporarily break listing, ingest, upload, and folder permissions until the API Lambda is deployed.
+The `brands/{brand}` trees are **copies**, not moves. The originals at `/1---elettro-brand-os/{brand}` are untouched and remain the rollback copy until deletion is separately authorized. Copies have **new Dropbox file IDs**, so changing root paths alone would orphan every registered asset and make the next sync insert 276 duplicates.
 
-## Order of operations
+| brand | files | folders | bytes | source root id | copy root id |
+|---|---|---|---|---|---|
+| stashbox | 251 | 141 | 19,583,596,647 | `id:UM9GhyUcVDgAAAAAAAL2jg` | `id:UM9GhyUcVDgAAAAAAAMFAg` |
+| elettro | 25 | 11 | 105,042,151 | `id:UM9GhyUcVDgAAAAAAAL2kg` | `id:UM9GhyUcVDgAAAAAAAMGiw` |
+| solarmeister / neckermann-strom / weightlossdavie / therasbox | 0 | 0 | 0 | (empty, both sides) | |
 
-1. Capture a baseline: six Dropbox folder IDs, child counts, EPE list_brand_folders results, sampled asset verification, DEV API Lambda version, active RDS roots and sync cursor state. Stop intake/sync while migrating.
-2. Merge/deploy the app **and** manually deploy the DEV API Lambda package built from the same revision. Build step checks `index.mjs`, `db-main.mjs`, `dropbox-upload-session.mjs`, `dropbox-identity.mjs`, `claude-folder-ops.mjs`. Ensure the deployed Lambda reflects new `/brands/` paths, not just the source repository.
-3. Move all six *existing* Dropbox folders (never duplicate/copy, preserving IDs) from `/1---elettro-brand-os/{brand}` to `/1---elettro-brand-os/brands/{brand}`. Leave `creative-assets` and `intelligence` unmoved.
-4. Run `scripts/migrate-dropbox-brand-roots-20261017.sql` against the DEV RDS database. Transaction updates `BrandStorageRoot` in place, preserving IDs and `Asset.storageRootId`. It resets the Dropbox connection cursor for a full ID-based reconciliation; it does **not** rewrite unavailable asset paths speculatively. Execute through an authorized secure database connection.
-5. Start a **fresh full Dropbox sync**, paginate to completion, then re-verify file IDs and source paths. Check upload/browser/registration and the MCP folder listing, plus direct-upload duplicate handling. Mark unavailable originals separately for review; do not assign source files by matching filenames alone.
-6. Confirm no stale prefix remains for registered assets whose Dropbox IDs are live and within brand roots. Existing missing-ID records need human review, not silent substitution. Verify no new duplicates, statuses preserved, and brand separation.
-7. Apply equivalent changes to production **only after DEV passes**, with separate backups/credentials. Do not move production social publishing without an explicit go-live check.
+`scripts/build-dropbox-brand-id-map-20261017.py` pairs every source file to exactly one copy by relative path + `content_hash` + size and fails closed otherwise: **276/276 matched, 0 failures**.
 
-## Recovery
+## What deploys where (GitHub Actions only *builds* ZIPs; nothing is auto-deployed)
 
-If the new Lambda is not deployed, or read/ingest fails: pause intake; move the six folders back to `/1---elettro-brand-os/{brand}` (same stable folder IDs); restore matching Lambda/web code and RDS `BrandStorageRoot` paths to old roots in one controlled rollback; reset sync cursor and revalidate. Avoid rewriting asset file IDs or restoring by filename.
+| AWS function | source | why it must deploy |
+|---|---|---|
+| `elettro-brand-os-dev-api` | `services/dev-api-lambda` | new roots, ID-aware migration action, ingest cutover gate |
+| `elettro-brand-os-dev-dropbox-sync` | `services/dropbox-sync-lambda` | folder relay brand root |
+| `elettro-brand-os-dev-dropbox-upload` | `services/dropbox-upload-lambda` (imported from the deployed ZIP) | large-upload root check; otherwise every chunked upload to `brands/` is rejected |
+| Amplify `d2k28tehm1a8zw` develop | `apps/web` | browser/intake/MCP paths |
 
-## Historical source metadata
+The deployed API/sync Lambdas (2026-10-14) ran the unmerged `fix-claude-folder-network-20261014` relay; this branch merges it so deploying does not regress Claude folder operations.
 
-Prior ingestion left some source paths stale and some registered source IDs unavailable. A verified Dropbox ID is authoritative for relocation, not a filename search result. The migration must not turn those into phantom approved source files.
+## Safety properties
 
-## Git branch
+- Ingest indexes a file only if it lies under the brand's root **as registered in the database**. Before the DB migration, roots are old, so `brands/` copies are skipped; after it, the old originals are skipped. Code can therefore be deployed before the data cutover without creating duplicates.
+- Ingest matches existing assets by `sourceFileId` **or** `sourceExternalId`, so direct-uploaded assets are not re-inserted.
+- The `migrate-dropbox-brand-roots-20261017` action (IAM direct invoke only; HTTP/MCP rejected) runs in one transaction with table locks: validates the mapping, rewrites only `sourceFileId`, `sourceExternalId`, `sourcePath`, `sourcePathLower`, `sourceUrl` (path form) and `sourceMetadata` id/path/rev keys; keeps `Asset.id`, statuses, tags, notes, ledger links and `storageRootId`; updates the six `BrandStorageRoot` rows in place; clears the sync cursor. It refuses on duplicate/mixed/cross-brand IDs or unexpected roots, then re-checks inside the transaction that no source ID remains, no copy ID is shared, and per-brand counts/status/metadata fingerprints are unchanged. Defaults to dry run (rolled back).
+- Backups: first-touch copies of affected `Asset`, `BrandStorageRoot`, `StorageConnection` rows in `_mig_dropbox_brand_roots_20261017_*` tables, plus a per-asset audit table. Historical assets with unavailable source IDs are reported (`unmappedOldRootAssets`), never rematched by filename.
 
-Changes are staged on `feature/dropbox-brands-root-migration-20261017` from `develop`. Merge/deploy requires coordinating the API Lambda and RDS steps above. Do not mistake a green Lambda *build* workflow for a successful AWS deployment.
+## Cutover (DEV) — requires a deploy-capable AWS identity
+
+```bash
+export AWS_REGION=us-east-1
+# 0. Snapshot
+aws rds create-db-snapshot --db-instance-identifier elettro-brand-os-dev --db-snapshot-identifier ebos-dev-pre-brands-20261017
+# 1. Record current code for rollback
+for f in elettro-brand-os-dev-api elettro-brand-os-dev-dropbox-sync elettro-brand-os-dev-dropbox-upload; do
+  aws lambda publish-version --function-name $f --description pre-brands-20261017; done
+# 2. Deploy the three ZIPs built from this branch's merge commit, then verify CodeSha256
+aws lambda update-function-code --function-name elettro-brand-os-dev-api --zip-file fileb://elettro-brand-os-dev-api.zip --publish
+aws lambda update-function-code --function-name elettro-brand-os-dev-dropbox-sync --zip-file fileb://elettro-brand-os-dev-dropbox-sync.zip --publish
+aws lambda update-function-code --function-name elettro-brand-os-dev-dropbox-upload --zip-file fileb://elettro-brand-os-dev-dropbox-upload.zip --publish
+# 3. Build mapping (read-only) and wrap it as the invoke payload
+python scripts/build-dropbox-brand-id-map-20261017.py secret.json map.json
+python -c "import json;m=json.load(open('map.json'));json.dump({'action':'migrate-dropbox-brand-roots-20261017','mode':'dry-run','expectedMappedFiles':276,'mapping':m['mapping']},open('dry.json','w'))"
+aws lambda invoke --function-name elettro-brand-os-dev-api --payload fileb://dry.json dry-out.json   # must be ok:true, failures:[]
+# 4. Same payload with "mode":"apply"
+# 5. Trigger a full Dropbox sync; then run the verification list below
+```
+
+## Verification
+
+`elettro_list_brand_folders` reports `/1---elettro-brand-os/brands/{slug}` for all six; every mapped asset resolves by copy ID (`elettro_verify_global_dropbox_id`); asset count/status fingerprints match the dry-run `before`; no copy ID has two assets; folder browse, folder create, upload (small + chunked) and duplicate detection work per brand; ChatGPT and Claude MCP connectivity.
+
+## Rollback
+
+1. `aws lambda update-function-code` each function back to the `pre-brands-20261017` published version's code (or update alias).
+2. Invoke the API Lambda with `{"action":"migrate-dropbox-brand-roots-20261017","mode":"rollback"}`: restores only the columns the migration wrote (later approvals/edits survive), restores roots, clears cursor.
+3. Full sync. Originals were never touched. Last resort: restore the RDS snapshot.
+
+Production is a separate, later approval.

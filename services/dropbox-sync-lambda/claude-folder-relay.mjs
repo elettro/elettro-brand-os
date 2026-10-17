@@ -5,7 +5,7 @@ export async function handleFolderRelay(event,getToken){
  try{
   if(event.requestContext||event.rawPath||event.path)throw new Error('Direct IAM invocation required');
   if(!BRANDS.has(event.brandSlug)||!ENDPOINTS.has(event.endpoint))throw new Error('Invalid folder relay operation');
-  const root='/1---elettro-brand-os/'+event.brandSlug;
+  const root='/1---elettro-brand-os/brands/'+event.brandSlug;
   function checkedPath(value,allowRoot=false){
    if(typeof value!=='string'||value.length>2048||/[\\\x00-\x1f]/.test(value)||
     value.split('/').some((part,i)=>i>0&&(!part||part==='.'||part==='..'))||

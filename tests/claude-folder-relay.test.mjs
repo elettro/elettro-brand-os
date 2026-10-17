@@ -1,11 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {handleFolderRelay} from '../services/dropbox-sync-lambda/claude-folder-relay.mjs';
-const root='/1---elettro-brand-os/elettro';
+const root='/1---elettro-brand-os/brands/elettro';
 const base={action:'claude-folder-relay-v1',brandSlug:'elettro',endpoint:'move_v2',body:{from_path:'id:folder',to_path:root+'/new'}};
 test('relay rejects public calls and cross-brand paths before credential access',async()=>{
  for(const event of [{...base,requestContext:{}},{...base,brandSlug:'unknown'},
-  {...base,endpoint:'delete_v2'},{...base,body:{...base.body,to_path:'/1---elettro-brand-os/stashbox/new'}}]){
+  {...base,endpoint:'delete_v2'},{...base,body:{...base.body,to_path:'/1---elettro-brand-os/brands/stashbox/new'}}]){
   const result=await handleFolderRelay(event,()=>{throw Error('Credential access should not happen');});
   assert.equal(result.ok,false);assert.equal(result.uncertainMove,false);
   assert.notEqual(result.error,'Credential access should not happen');

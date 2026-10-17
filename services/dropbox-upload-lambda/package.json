@@ -1,0 +1,9 @@
+{
+  "name": "@elettro/dropbox-upload-lambda",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "zip -r elettro-brand-os-dev-dropbox-upload.zip index.mjs"
+  }
+}
