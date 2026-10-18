@@ -143,7 +143,7 @@ export async function runPlanWeek(event, connectDatabase, json, { modelId = proc
        UNION ALL
        SELECT sp."socialAccountId", sp."assetId", sp."scheduledFor" AS "at", a."tags", a."contentGroup", a."shopifyProductId", a."filename"
        FROM "ScheduledPost" sp JOIN "Asset" a ON a."id" = sp."assetId"
-       WHERE sp."brandId" = $1 AND sp."status" IN ('planned','approved','queued')
+       WHERE sp."brandId" = $1 AND sp."status" IN ('planned','approved','queued','publishing','processing')
          AND sp."scheduledFor" >= $2::timestamp - INTERVAL '90 days' AND sp."scheduledFor" < $3::timestamp + INTERVAL '90 days'
          AND NOT ($4::boolean AND sp."status" = 'planned' AND sp."scheduledFor" >= $2 AND sp."scheduledFor" < $3)`,
       [brand.id, from, to, replacePlanned])).rows;

@@ -16,7 +16,7 @@ const ROOTS = {
 };
 const reply = (statusCode, value) => ({ statusCode, headers: { "content-type": "application/json" }, body: JSON.stringify(value) });
 
-async function token() {
+export async function dropboxAccessToken() {
   const secret = await secrets.send(new GetSecretValueCommand({
     SecretId: process.env.DROPBOX_SECRET_NAME || "elettro-brand-os-dev/dropbox"
   }));
@@ -71,7 +71,7 @@ export async function handleDropboxUploadSession(body) {
     const isFinal = offset + bytes.length === size;
     if ((action === "finish-dropbox-upload-session") !== isFinal && action !== "start-dropbox-upload-session") return reply(400, { ok: false, error: "Incorrect final chunk action" });
     if (action === "start-dropbox-upload-session" && (offset !== 0 || isFinal)) return reply(400, { ok: false, error: "Start requires a non-final first chunk" });
-    const accessToken = await token();
+    const accessToken = await dropboxAccessToken();
     if (action === "start-dropbox-upload-session") {
       // Even for one-chunk files the caller can use an upload session.
       const started = await contentCall("start", accessToken, { close: false }, bytes);
