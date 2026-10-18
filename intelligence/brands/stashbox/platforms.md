@@ -51,6 +51,10 @@ Sector × format, from Dean's Instagram ecosystem sheet:
 ## [x] X
 
 - Short takes, song links, show clips. Promotional posts within the 25% cap (config).
+- 9:16 clips, 4 a day. `facts.promotional` says which posts may carry a link or
+  ask (about 1 in 4). When it is false: one line about the song or the moment,
+  no link, no "book us", no "link in bio", no subscribe line.
+- One line, under 240 characters. 0–2 hashtags.
 - Replies are suggested, not sent.
 
 ## [linkedin] LinkedIn

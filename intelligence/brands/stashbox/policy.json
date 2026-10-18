@@ -167,10 +167,12 @@
     },
     "x": {
       "originalsPerDay": 8,
+      "plannedPerDay": 4,
       "originalsPerWeek": [
-        14,
-        21
-      ]
+        28,
+        28
+      ],
+      "note": "Dean 2026-10-17: 4 clips a day. Promo cap 25%: 1 in 4 carries a link or ask, the rest are plain clips."
     },
     "linkedin": {
       "originalsPerWeek": [

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { buildSongFacts, matchSong } from "../services/dev-api-lambda/song-facts.mjs";
-import { postFacts, templateCopy, validateCopy, writeWeekCopy } from "../services/dev-api-lambda/copywriter.mjs";
+import { postFacts, promotionalSlotIds, templateCopy, validateCopy, writeWeekCopy } from "../services/dev-api-lambda/copywriter.mjs";
 import { planWeek, resolvePlannerSettings } from "../services/dev-api-lambda/planner-v2.mjs";
 
 const catalog = [
@@ -76,6 +76,23 @@ test("template copy credits covers, uses record links, and fits each platform", 
   }
   const radio = postFacts({ ...dylanAsset, tags: ["song:tangled-up-in-blue", "music-video"] }, { sector: "radio", destination: "instagram" }, {}, links);
   assert.equal(templateCopy(radio, "x"), null, "radio post without a song page must not be written");
+});
+
+test("X keeps 1 in 4 posts promotional; the rest are plain clips under 280 chars", () => {
+  const slots = Array.from({ length: 28 }, (_, i) => ({ socialAccountId: "x1", destination: "x", slotId: `x1:2026-10-${String(19 + Math.floor(i / 4)).padStart(2, "0")}:${["09:00", "13:00", "17:00", "21:00"][i % 4]}` }));
+  const promo = promotionalSlotIds([...slots, { socialAccountId: "ig", destination: "instagram", slotId: "ig:1" }], { x: 0.25 });
+  assert.equal([...promo].filter((id) => id.startsWith("x1:")).length, 7);
+  assert.ok(promo.has("ig:1"), "uncapped platforms are always promotional");
+  const plain = postFacts(dylanAsset, { sector: "live-shows", destination: "x", synthetic: false }, {}, links, { promotional: false });
+  const copy = templateCopy(plain, "seed-x");
+  assert.deepEqual(validateCopy(copy, plain), []);
+  assert.doesNotMatch(copy.caption, /https?:|book|link in bio/i);
+  assert.ok(copy.caption.length <= 240);
+  const ad = postFacts(dylanAsset, { sector: "live-shows", destination: "x", synthetic: false }, {}, links);
+  const adCopy = templateCopy(ad, "seed-x");
+  assert.deepEqual(validateCopy(adCopy, ad), []);
+  assert.match(adCopy.caption, /https:\/\/stashbox\.com\/booking\//);
+  assert.match(validateCopy({ caption: "Book us: https://stashbox.com/booking/", hashtags: [] }, plain).join(), /plain post/);
 });
 
 test("validation rejects invented links, prices, banned phrases and AI-as-real claims", () => {

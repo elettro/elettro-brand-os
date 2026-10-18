@@ -10,9 +10,10 @@ const LIMITS = {
   youtube: { title: 100, description: 5000, hashtags: 5 },
   instagram: { caption: 2200, hashtags: 5 },
   tiktok: { caption: 2200, hashtags: 5 },
-  facebook: { caption: 5000, hashtags: 2 }
+  facebook: { caption: 5000, hashtags: 2 },
+  x: { caption: 280, hashtags: 2 }
 };
-const CLICKABLE = new Set(["youtube", "facebook"]);
+const CLICKABLE = new Set(["youtube", "facebook", "x"]);
 const BANNED = [/\belevate\b/i, /\bunleash/i, /\bunlock/i, /\bdive into\b/i, /game[- ]changer/i, /experience the magic/i, /it'?s not just .+, it'?s/i];
 const SHOWS = { "stashbox-does-dylan": "Stashbox Does Dylan", "stashbox-does-sublime": "Stashbox Does Sublime & Reggae" };
 const ROLE_WORDS = { vocals: "vocals", guitar: "guitar", bass: "bass", drums: "drums", keyboards: "keys", keys: "keys" };
@@ -21,7 +22,7 @@ const titleCase = (slug) => String(slug).split("-").map((w) => (w ? w[0].toUpper
 const pick = (seed, list) => list[parseInt(createHash("sha256").update(seed).digest("hex").slice(0, 8), 16) % list.length];
 
 /** Everything a caption may state about this post, from records only. */
-export function postFacts(asset, slot, songFacts = {}, links = {}) {
+export function postFacts(asset, slot, songFacts = {}, links = {}, { promotional = true } = {}) {
   const tags = (asset.tags || []).map((t) => String(t).toLowerCase());
   const valueOf = (prefix) => tags.find((t) => t.startsWith(prefix + ":"))?.slice(prefix.length + 1) || null;
   const slug = songKeyOf(asset);
@@ -60,12 +61,14 @@ export function postFacts(asset, slot, songFacts = {}, links = {}) {
     realFootage: !synthetic && tags.some((t) => ["studio-session", "live", "real-footage"].includes(t)),
     aiGenerated: synthetic,
     linksInCaptionAreClickable: CLICKABLE.has(slot.destination),
+    // False on platforms with a promo cap (X) for the posts that stay a plain clip: no link, no ask.
+    promotional,
     primaryLink: sectorLinks[0] || null,
     songHasOwnStreamingLink: Boolean(song?.spotifyUrl || song?.appleMusicUrl || song?.youtubeMusicUrl),
     allowedLinks: [...new Set([...sectorLinks, ...artistLinks, links.youtubeChannel, links.booking?.page, links.radio, links.merchStore].filter(Boolean))],
-    bookingEmail: slot.sector === "live-shows" ? links.booking?.email || null : null,
+    bookingEmail: promotional && slot.sector === "live-shows" ? links.booking?.email || null : null,
     // Goal #1 (subscribers) closes posts where the brand allows it; radio posts already ask people to join.
-    subscribeReminder: slot.sector === "radio" ? null : (links.subscribeReminders || {})[slot.destination] || null,
+    subscribeReminder: !promotional || slot.sector === "radio" ? null : (links.subscribeReminders || {})[slot.destination] || null,
     contentGroup: asset.contentGroup || null,
     notes: asset.creativeNotes ? String(asset.creativeNotes).slice(0, 500) : null
   };
@@ -84,6 +87,7 @@ function hashtagsFor(f) {
 /** Deterministic fallback copy. Returns null when the sector's required link is missing. */
 export function templateCopy(f, seed) {
   if (!f.primaryLink) return null;
+  if (f.promotional === false) return plainCopy(f, seed);
   const credited = f.originalArtist && f.song?.toLowerCase().includes(f.originalArtist.toLowerCase());
   const songLine = f.song ? (f.isCover && f.originalArtist && !credited ? `${f.song} (${f.originalArtist})` : f.song) : null;
   const where = f.realFootage && f.venue ? ` at ${f.venue}${f.city ? `, ${f.city}` : ""}` : "";
@@ -122,6 +126,37 @@ export function templateCopy(f, seed) {
   };
 }
 
+/** A clip with no link or ask, for the share of X posts above the promo cap. */
+function plainCopy(f, seed) {
+  const credited = f.originalArtist && f.song?.toLowerCase().includes(f.originalArtist.toLowerCase());
+  const songLine = f.song ? (f.isCover && f.originalArtist && !credited ? `${f.song} (${f.originalArtist} cover)` : f.song) : null;
+  const where = f.realFootage && f.venue ? ` at ${f.venue}` : "";
+  const hook = pick(seed, [
+    `${songLine || "Stashbox"}${where}.`,
+    `${f.show ? `${f.show}: ` : ""}${songLine || "this one"}${where}.`,
+    `${songLine ? `${songLine}, ` : ""}Stashbox${f.realFootage ? " live" : ""}${where}.`
+  ]);
+  const hashtags = hashtagsFor(f).slice(0, LIMITS[f.destination]?.hashtags ?? 2);
+  return { status: "ready", source: "template", angle: "moment", hook, caption: hook, title: null, description: null,
+    hashtags, primaryLink: null, onScreenText: null, notes: ["plain post (promo cap)"] };
+}
+
+/** Which posts of one account-week may carry a link or ask, spread evenly (e.g. 1 in 4 at 0.25). */
+export function promotionalSlotIds(slots, maxShare = {}) {
+  const promo = new Set();
+  const byAccount = new Map();
+  for (const s of slots) (byAccount.get(s.socialAccountId) || byAccount.set(s.socialAccountId, []).get(s.socialAccountId)).push(s);
+  for (const list of byAccount.values()) {
+    const share = maxShare[list[0].destination];
+    if (share == null) { for (const s of list) promo.add(s.slotId); continue; }
+    list.sort((a, b) => a.slotId.localeCompare(b.slotId));
+    // Even spacing plus a one-step shift each time, so promos rotate through the day's times.
+    const count = Math.floor(list.length * share);
+    for (let k = 0; k < count; k++) promo.add(list[(Math.floor((k * list.length) / count) + k) % list.length].slotId);
+  }
+  return promo;
+}
+
 /** Code-side checks on any copy (AI or template). Returns a list of problems. */
 export function validateCopy(copy, f) {
   const problems = [];
@@ -139,6 +174,7 @@ export function validateCopy(copy, f) {
   if (copy.title && limits.title && copy.title.length > limits.title) problems.push("title too long");
   if (copy.description && limits.description && copy.description.length > limits.description) problems.push("description too long");
   if ((copy.hashtags || []).length > (limits.hashtags ?? 5)) problems.push("too many hashtags");
+  if (f.promotional === false && /https?:\/\/|\blink in bio\b|\bbook (us|the show)\b/i.test(text)) problems.push("link or ask in a plain post (promo cap)");
   if (f.aiGenerated && /\b(live footage|real footage|filmed live)\b/i.test(text)) problems.push("presents AI-made video as real footage");
   if (f.isCover && f.originalArtist) {
     const surname = f.originalArtist.split(" ").slice(-1)[0].toLowerCase();
@@ -167,11 +203,12 @@ async function mapLimit(items, limit, fn) {
  * Write copy for every planned slot. `invoke` is the Bedrock call (same shape as
  * the curator's); without a model, template copy is used for all posts.
  */
-export async function writeWeekCopy({ slots, assetsById, songFacts, links, brandSlug, modelId, invoke, recentCaptionsByAccount = {}, concurrency = 6, intelligenceRoot }) {
+export async function writeWeekCopy({ slots, assetsById, songFacts, links, brandSlug, modelId, invoke, recentCaptionsByAccount = {}, concurrency = 6, intelligenceRoot, promotionalMaxShare = {} }) {
   const written = [];
+  const promo = promotionalSlotIds(slots, promotionalMaxShare);
   return mapLimit(slots, concurrency, async (slot) => {
     const asset = assetsById.get(slot.assetId);
-    const f = postFacts(asset, slot, songFacts, links);
+    const f = postFacts(asset, slot, songFacts, links, { promotional: promo.has(slot.slotId) });
     const fallback = () => {
       const t = templateCopy(f, slot.slotId);
       return t ? { ...t, problems: validateCopy(t, f) } : { status: "blocked", source: "template", missing: ["primaryLink"], problems: [] };

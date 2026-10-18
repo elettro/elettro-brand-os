@@ -29,7 +29,8 @@ const songFacts = buildSongFacts(assets.map(songKeyOf).filter(Boolean), catalog,
 
 const plan = planWeek({ assets, accounts, settings, weekStart, timeZone, songFacts });
 const copies = await writeWeekCopy({ slots: plan.slots.filter((s) => s.status === "planned"),
-  assetsById: new Map(assets.map((a) => [a.id, a])), songFacts, links: settings.links || {}, brandSlug: seed.brand || "stashbox" });
+  assetsById: new Map(assets.map((a) => [a.id, a])), songFacts, links: settings.links || {}, brandSlug: seed.brand || "stashbox",
+  promotionalMaxShare: settings.promotionalMaxShare || {} });
 const copyBySlot = new Map(copies.map((c) => [c.slotId, c.copy]));
 for (const s of plan.slots) s.copy = copyBySlot.get(s.slotId) || null;
 
