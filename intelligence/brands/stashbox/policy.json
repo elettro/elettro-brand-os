@@ -1,0 +1,54 @@
+{
+  "brand": "stashbox",
+  "approvedBy": "Dean Palermo",
+  "approvedOn": "2026-10-17",
+  "language": "en-US",
+  "timezone": "America/New_York",
+  "note": "Seed for database rules (CooldownRule, Brand.settings, SocialAccount, CadenceRule). The database is the runtime source; this file is the versioned record of approved decisions.",
+  "destinations": ["instagram", "facebook", "youtube", "tiktok", "x", "threads", "linkedin", "pinterest", "gmb", "reddit", "website", "rss"],
+  "sectors": [
+    { "slug": "live-shows", "priority": 1, "share": 0.28 },
+    { "slug": "radio", "priority": 2, "share": 0.20 },
+    { "slug": "radio-blog", "priority": 3, "share": 0.14 },
+    { "slug": "merch", "priority": 4, "share": 0.13 },
+    { "slug": "streaming", "priority": 5, "share": 0.11 },
+    { "slug": "custom-production", "priority": 6, "share": 0.08 },
+    { "slug": "elettro", "priority": 7, "share": 0.06 }
+  ],
+  "campaignShare": 0.6,
+  "cooldowns": [
+    { "dimension": "asset", "days": 30, "scope": "per-account" },
+    { "dimension": "song", "days": 1, "scope": "per-account", "acrossSessions": true },
+    { "dimension": "session", "days": null, "scope": "per-account", "newBatchBoostDays": 14 },
+    { "dimension": "product", "days": 15, "scope": "per-account" }
+  ],
+  "exploration": { "default": 0.25, "tiktok": 0.40 },
+  "promotionalMaxShare": { "threads": 0.25, "x": 0.25 },
+  "publishingMode": { "default": "approval", "reddit": "handoff" },
+  "approval": { "unit": "week", "note": "Dean approves a full week's calendar at once (with per-post edit/skip inside it), not post by post." },
+  "links": {
+    "booking": { "page": "https://stashbox.com/booking/", "email": "booking@stashbox.com" },
+    "merchStore": "https://stashbox.ai",
+    "radio": "https://stashbox.com/radio/",
+    "radioBlog": "https://stashbox.com/radio/blog/"
+  },
+  "crossBrand": { "allowed": ["elettro"] },
+  "cadence": {
+    "instagram": { "reelsPerDay": 2, "feedPerWeek": [3, 4], "storiesPerDay": [3, 5] },
+    "facebook": { "reelsPerDay": 2, "feedPerWeek": [8, 10], "storiesPerDay": [4, 5] },
+    "tiktok": { "videosPerDay": 4, "videosPerWeek": [10, 14] },
+    "youtube": { "shortsPerDay": 3, "shortsPerWeek": [10, 14], "longVideosPerWeek": [2, 3] },
+    "threads": { "originalsPerDay": 5, "originalsPerWeek": [14, 21] },
+    "x": { "originalsPerDay": 8, "originalsPerWeek": [14, 21] },
+    "linkedin": { "originalsPerWeek": [2, 3] },
+    "pinterest": null,
+    "gmb": null,
+    "reddit": null
+  },
+  "openItems": [
+    "Cadence for pinterest, gmb, reddit not yet set",
+    "Default publishing mode assumed 'approval' until Dean sets per-account autonomy",
+    "Spotify artist URL, per-song streaming links, contact links to be added as records",
+    "Later phase (nice to have): Person, Location and Session records with rosters; all current shorts sessions are Studio One, Fort Lauderdale, FL"
+  ]
+}
