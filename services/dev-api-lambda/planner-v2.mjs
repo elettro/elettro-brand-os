@@ -191,7 +191,8 @@ export function buildSlots(account, weekStart, timeZone) {
   days.forEach((ymd, dayIndex) => {
     const count = Math.floor((total * (dayIndex + 1)) / days.length) - Math.floor((total * dayIndex) / days.length);
     for (let k = 0; k < count; k += 1) {
-      const minute = count === 1 ? start : Math.round(start + (k * (end - start)) / (count - 1));
+      // Even spacing, rounded to the quarter hour so post times read like a schedule.
+      const minute = count === 1 ? start : Math.round((start + (k * (end - start)) / (count - 1)) / 15) * 15;
       const local = hhmmOf(minute);
       slots.push({
         slotId: `${account.socialAccountId}:${ymd}:${local}`,

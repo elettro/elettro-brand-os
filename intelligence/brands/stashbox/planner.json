@@ -242,27 +242,27 @@
       "destination": "youtube",
       "accountName": "@Stashboxband",
       "placement": "short",
-      "postsPerWeek": 14,
+      "postsPerWeek": 21,
       "preferredStartTime": "09:00",
-      "preferredEndTime": "17:00",
+      "preferredEndTime": "19:00",
       "publishingMode": "approval"
     },
     {
       "destination": "instagram",
       "accountName": "Stashbox Instagram",
       "placement": "reel",
-      "postsPerWeek": 14,
+      "postsPerWeek": 21,
       "preferredStartTime": "11:00",
-      "preferredEndTime": "19:00",
+      "preferredEndTime": "20:00",
       "publishingMode": "approval"
     },
     {
       "destination": "tiktok",
       "accountName": "Stashbox TikTok",
       "placement": "video",
-      "postsPerWeek": 14,
-      "preferredStartTime": "10:00",
-      "preferredEndTime": "20:00",
+      "postsPerWeek": 42,
+      "preferredStartTime": "08:00",
+      "preferredEndTime": "22:00",
       "publishingMode": "approval"
     },
     {

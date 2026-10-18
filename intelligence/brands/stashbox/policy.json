@@ -121,7 +121,7 @@
   },
   "cadence": {
     "instagram": {
-      "reelsPerDay": 2,
+      "reelsPerDay": 3,
       "feedPerWeek": [
         3,
         4
@@ -143,18 +143,16 @@
       ]
     },
     "tiktok": {
-      "videosPerDay": 4,
-      "videosPerWeek": [
-        10,
-        14
-      ]
+      "videosPerDay": [
+        4,
+        8
+      ],
+      "plannedPerDay": 6,
+      "videosPerWeek": 42
     },
     "youtube": {
       "shortsPerDay": 3,
-      "shortsPerWeek": [
-        10,
-        14
-      ],
+      "shortsPerWeek": 21,
       "longVideosPerWeek": [
         2,
         3
@@ -206,5 +204,6 @@
       "goal": "merch",
       "detail": "Feature and link stashbox.ai products"
     }
-  ]
+  ],
+  "cadenceApprovedOn": "2026-10-17"
 }
