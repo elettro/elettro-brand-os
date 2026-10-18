@@ -391,7 +391,7 @@ export function AssetDetailClient({ asset }: { asset: ApiAsset }) {
                 boxShadow: "0 1px 2px rgba(0,0,0,.05)"
               }}
             >
-              <span style={{ fontSize: 16 }}>{asset.kind === "video" ? "▶" : asset.kind === "image" ? "▣" : "▦"}</span>
+              <span style={{ fontSize: 16 }}>{asset.kind === "video" ? "▶" : asset.kind === "image" ? "▣" : asset.kind === "audio" ? "♪" : "▦"}</span>
               <span style={{ display: "grid", lineHeight: 1.05 }}>
                 <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: ".09em", textTransform: "uppercase", color: "var(--muted)" }}>
                   Media
@@ -448,7 +448,12 @@ export function AssetDetailClient({ asset }: { asset: ApiAsset }) {
       <section style={{ display: "grid", gridTemplateColumns: "minmax(260px,420px) minmax(0,1fr)", gap: 20, marginTop: 20, alignItems: "start" }}>
         <div className="card">
           <div style={{ minHeight: 320, maxHeight: 560, display: "grid", placeItems: "center", background: "var(--panel-soft)", borderRadius: 12, overflow: "hidden" }}>
-            {thumbnail ? (
+            {asset.kind === "audio" && thumbnail ? (
+              <div style={{ display: "grid", gap: 12, placeItems: "center", width: "100%", padding: 16 }}>
+                <span style={{ fontSize: 64 }} aria-hidden>♪</span>
+                <audio controls preload="none" src={thumbnail} style={{ width: "100%" }} />
+              </div>
+            ) : thumbnail ? (
               <button
                 type="button"
                 onClick={() => setPreviewOpen(true)}

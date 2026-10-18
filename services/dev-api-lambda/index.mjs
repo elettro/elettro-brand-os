@@ -2,6 +2,7 @@ import {moveBrandFolder,repairClaudeTestStatus} from "./claude-folder-ops.mjs";
 import {runBrandMediaReset} from "./brand-media-reset.mjs";
 import {runBrandRootMigration} from "./brand-root-migration.mjs";
 import { configurePlannerBrand, runPlanWeek, runPlanWeeks, approvePlannerWeek } from "./planner-v2-db.mjs";
+import {runSharedAudioLibrarySetup,LIBRARY_SLUG,LIBRARY_AUDIO_ROOT} from "./shared-audio-library.mjs";
 import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
 import { S3Client, PutObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
@@ -23,7 +24,9 @@ const DROPBOX_BRAND_ROOTS = [
   ["weightlossdavie", "/1---elettro-brand-os/brands/weightlossdavie"],
   ["neckermann-strom", "/1---elettro-brand-os/brands/neckermann-strom"],
   ["therasbox", "/1---elettro-brand-os/brands/therasbox"],
-  ["elettro", "/1---elettro-brand-os/brands/elettro"]
+  ["elettro", "/1---elettro-brand-os/brands/elettro"],
+  // Shared library: only the audio subtree is indexed (see shared-audio-library.mjs).
+  [LIBRARY_SLUG, LIBRARY_AUDIO_ROOT]
 ];
 
 function json(statusCode, body) {
@@ -38,6 +41,7 @@ function assetKindFromName(name = "") {
   const lower = name.toLowerCase();
   if (/\.(mp4|mov|m4v|avi|webm|mkv)$/i.test(lower)) return "video";
   if (/\.(jpg|jpeg|png|webp|gif|tif|tiff|heic|avif)$/i.test(lower)) return "image";
+  if (/\.(wav|mp3|m4a|aac|flac|aif|aiff|ogg)$/i.test(lower)) return "audio";
   return null;
 }
 
@@ -95,7 +99,9 @@ async function connectDatabase() {
 function folderHintsFromPath(sourcePath = "", brandSlug = "") {
   const normalized = String(sourcePath || "").replace(/\\/g, "/");
   const lower = normalized.toLowerCase();
-  const root = `/1---elettro-brand-os/brands/${brandSlug.toLowerCase()}/`;
+  const root = brandSlug.toLowerCase() === LIBRARY_SLUG
+    ? `${LIBRARY_AUDIO_ROOT.toLowerCase()}/`
+    : `/1---elettro-brand-os/brands/${brandSlug.toLowerCase()}/`;
   const start = lower.indexOf(root);
   const relative = start >= 0 ? normalized.slice(start + root.length) : normalized.replace(/^\/+/, "");
   const parts = relative.split("/").filter(Boolean);
@@ -181,6 +187,16 @@ function normalizeBulkMetadata(input = {}) {
   };
 
   ["title", "topic", "contentGroup", "creativeFamily", "priority", "eligibilityType", "creativeNotes"].forEach(copy);
+
+  if (Object.prototype.hasOwnProperty.call(input, "allowedBrandSlugs")) {
+    clean.allowedBrandSlugs = Array.isArray(input.allowedBrandSlugs)
+      ? [...new Set(input.allowedBrandSlugs.filter((v) => typeof v === "string" && v.trim()).map((v) => v.trim().toLowerCase()))]
+      : [];
+  }
+  if (Object.prototype.hasOwnProperty.call(input, "durationMs")) {
+    const ms = Number(input.durationMs);
+    clean.durationMs = Number.isFinite(ms) && ms >= 0 ? Math.round(ms) : null;
+  }
 
   if (Object.prototype.hasOwnProperty.call(input, "tags")) {
     const seen = new Set();
@@ -293,6 +309,8 @@ async function bulkUpdateAssets(event) {
     if (Object.prototype.hasOwnProperty.call(metadata, "containsSpecificPricing")) addSet("containsSpecificPricing", metadata.containsSpecificPricing);
     if (Object.prototype.hasOwnProperty.call(metadata, "allowedDestinations")) addSet("allowedDestinations", metadata.allowedDestinations);
     if (Object.prototype.hasOwnProperty.call(metadata, "excludedDestinations")) addSet("excludedDestinations", metadata.excludedDestinations);
+    if (Object.prototype.hasOwnProperty.call(metadata, "allowedBrandSlugs")) addSet("allowedBrandSlugs", metadata.allowedBrandSlugs);
+    if (Object.prototype.hasOwnProperty.call(metadata, "durationMs")) addSet("durationMs", metadata.durationMs);
 
     // Metadata-only AI edits must not advance ingest/enrichment workflow.
     // Existing dashboard review and mark-ready behavior remains the default.
@@ -1536,6 +1554,8 @@ export const handler = async (event = {}) => {
   // Month = 4 weeks planned in sequence; approve-month approves all of them at once.
   if (iamOnly && event.action === "plan-month") return runPlanWeeks({ weeks: 4, ...event }, connectDatabase, json);
   if (iamOnly && event.action === "approve-month") return approvePlannerWeek({ weeks: 4, ...event }, connectDatabase, json);
+  // IAM-only shared audio library setup (dry-run unless mode:"apply"); never exposed through HTTP or MCP.
+  if(event.action === "setup-shared-audio-library-20261017" && !event.requestContext && !event.rawPath && !event.path) return runSharedAudioLibrarySetup(event,connectDatabase,json);
   const requestPath =
     event?.rawPath ||
     event?.requestContext?.http?.path ||

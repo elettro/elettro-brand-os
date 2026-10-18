@@ -589,6 +589,7 @@ export const handler = async (event = {}) => {
             a."createdAt",
             a."updatedAt",
             (SELECT MAX(pl."publishedAt") FROM "PublicationLedger" pl WHERE pl."assetId" = a."id") AS "lastUsedAt",
+            to_jsonb(a)->'allowedBrandSlugs' AS "allowedBrandSlugs",
             b."slug" AS "brandSlug",
             b."name" AS "brandName"
           FROM "Asset" a
@@ -622,12 +623,13 @@ export const handler = async (event = {}) => {
           a."priority",
           a."createdAt",
           (SELECT MAX(pl."publishedAt") FROM "PublicationLedger" pl WHERE pl."assetId" = a."id") AS "lastUsedAt",
+          to_jsonb(a)->'allowedBrandSlugs' AS "allowedBrandSlugs",
           b."slug" AS "brandSlug",
           b."name" AS "brandName"
         FROM "Asset" a
         JOIN "Brand" b ON b."id" = a."brandId"
         ORDER BY a."createdAt" DESC
-        LIMIT 500
+        LIMIT 2000
       `);
       return json(200, { ok: true, assets: result.rows });
     }

@@ -19,6 +19,7 @@ enum AssetKind {
   video
   image
   carousel
+  audio
 }
 
 enum AssetSourceType {
@@ -337,6 +338,7 @@ model Asset {
   priority                String             @default("normal")
   allowedDestinations     String[]           @default([])
   excludedDestinations    String[]           @default([])
+  allowedBrandSlugs       String[]           @default([])
   approvalStatus          ApprovalStatus     @default(approved)
   producedAt              DateTime?
   firstApprovedAt         DateTime?
