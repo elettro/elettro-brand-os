@@ -192,7 +192,7 @@ function formatBytes(value: ApiAsset["fileSizeBytes"]) {
 }
 
 function kindGlyph(kind: string) {
-  return kind === "video" ? "▶" : "▧";
+  return kind === "video" ? "▶" : kind === "audio" ? "♪" : "▧";
 }
 
 export function AssetLibraryClient({ assets }: { assets: ApiAsset[] }) {
@@ -226,6 +226,7 @@ export function AssetLibraryClient({ assets }: { assets: ApiAsset[] }) {
 
   const imageCount = assets.filter((asset) => asset.kind === "image").length;
   const videoCount = assets.filter((asset) => asset.kind === "video").length;
+  const audioCount = assets.filter((asset) => asset.kind === "audio").length;
   const rawCount = assets.filter((asset) => asset.ingestStatus === "raw").length;
 
   const folderView = useMemo(
@@ -241,6 +242,7 @@ export function AssetLibraryClient({ assets }: { assets: ApiAsset[] }) {
         <div className="card"><div className="metric">Indexed assets</div><div className="metric-value">{assets.length}</div></div>
         <div className="card"><div className="metric">Images</div><div className="metric-value">{imageCount}</div></div>
         <div className="card"><div className="metric">Videos</div><div className="metric-value">{videoCount}</div></div>
+        <div className="card"><div className="metric">Songs</div><div className="metric-value">{audioCount}</div></div>
         <div className="card"><div className="metric">Awaiting enrichment</div><div className="metric-value">{rawCount}</div></div>
       </div>
 
@@ -260,6 +262,7 @@ export function AssetLibraryClient({ assets }: { assets: ApiAsset[] }) {
           <option value="all">All types</option>
           <option value="image">Images</option>
           <option value="video">Videos</option>
+          <option value="audio">Audio</option>
         </select>
         <select value={status} onChange={(event) => setStatus(event.target.value)} aria-label="Filter by status">
           <option value="all">All statuses</option>
@@ -329,7 +332,7 @@ export function AssetLibraryClient({ assets }: { assets: ApiAsset[] }) {
         {(viewMode === "folders" ? folderView.files : filtered).map((asset) => (
           <Link href={`/assets/${asset.id}`} className="asset-tile" key={asset.id}>
             <div className={`asset-preview asset-preview-${asset.kind}`}>
-              {asset.sourceType === "dropbox" && asset.sourcePath ? (
+              {asset.sourceType === "dropbox" && asset.sourcePath && asset.kind !== "audio" ? (
                 <AssetThumbnail
                   sourcePath={asset.sourcePath}
                   kind={asset.kind}

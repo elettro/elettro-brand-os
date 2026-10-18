@@ -4,7 +4,7 @@ DO $$ BEGIN
   CREATE TYPE "BrandRole" AS ENUM ('owner','admin','editor','approver','viewer');
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
-  CREATE TYPE "AssetKind" AS ENUM ('video','image','carousel');
+  CREATE TYPE "AssetKind" AS ENUM ('video','image','carousel','audio');
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
   CREATE TYPE "AssetSourceType" AS ENUM ('dropbox','shopify','direct_upload');
@@ -226,6 +226,7 @@ CREATE TABLE IF NOT EXISTS "Asset" (
   "priority" TEXT NOT NULL DEFAULT 'normal',
   "allowedDestinations" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
   "excludedDestinations" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+  "allowedBrandSlugs" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
   "approvalStatus" "ApprovalStatus" NOT NULL DEFAULT 'approved',
   "producedAt" TIMESTAMP(3),
   "firstApprovedAt" TIMESTAMP(3),

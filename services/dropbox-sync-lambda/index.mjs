@@ -128,6 +128,8 @@ async function dropboxThumbnail(token, path, kind = "image") {
   const key = thumbnailCacheKey(path);
 
   try {
+    // Audio has no thumbnail; go straight to the temporary-link redirect so the dashboard can play it.
+    if (kind === "audio") throw new Error("Audio has no thumbnail");
     const cached = await getCachedThumbnail(bucket, key);
     if (cached) return imageResponse(cached, "HIT");
 
@@ -135,7 +137,7 @@ async function dropboxThumbnail(token, path, kind = "image") {
     await putCachedThumbnail(bucket, key, bytes);
     return imageResponse(bytes, bucket ? "MISS" : "BYPASS");
   } catch (thumbnailError) {
-    if (kind !== "video") {
+    if (kind !== "video" && kind !== "audio") {
       return {
         statusCode: thumbnailError?.statusCode === 409 ? 404 : 502,
         headers: { "content-type": "application/json", "cache-control": "no-store" },
