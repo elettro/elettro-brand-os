@@ -132,9 +132,9 @@ Target guidance size per call (excluding live JSON), enforced by a CI check:
 
 | Task | Max guidance tokens |
 |---|---|
-| enrich_asset | 4,000 (frames dominate this call's cost, not guidance) |
-| select_content | 4,000 |
-| write_copy | 4,500 |
+| enrich_asset | 4,500 (frames dominate this call's cost, not guidance) |
+| select_content | 5,500 (one call sequences an account's whole week, so it carries every active sector's section) |
+| write_copy | 5,000 (brand core carries the top-level goals every caption serves) |
 
 ### Versioning and provenance
 
@@ -165,8 +165,10 @@ Planner (code)
      (asset 30d · song 1d · product 15d · session none) · daily max
   4. Score: new-batch boost · time since last use · priority · campaign (60/40) ·
      subject balance · (later) performance
-  5. Top N (default 5) → AI select_content          ← creative-selection.md
-     0 candidates → empty slot + pool gap logged
+  5. Top N (default 5) per slot → AI select_content, one call per account-week
+     (the curator sequences the week like a DJ)     ← creative-selection.md
+     Code re-runs steps 3–4 with the curator's picks; any pick that is no
+     longer valid falls back to the rules' #1. 0 candidates → empty slot + gap logged
 AI write_copy                                       ← copywriting.md
 Validation (code): schema · length per platform · link is a real record URL ·
   no price unless from live Shopify data · banned claims · cooldown re-check

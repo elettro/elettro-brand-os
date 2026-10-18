@@ -6,6 +6,7 @@ on:
       - develop
     paths:
       - "services/dev-api-lambda/**"
+      - "intelligence/**"
       - ".github/workflows/build-dev-api-lambda.yml"
   workflow_dispatch:
 
@@ -28,7 +29,7 @@ jobs:
         run: npm install --omit=dev --workspaces=false
 
       - name: Package Lambda
-        run: node --check index.mjs && node --check dropbox-upload-session.mjs && node --check dropbox-identity.mjs && node --check claude-folder-ops.mjs && node --check brand-root-migration.mjs && node --check brand-media-reset.mjs && node --check shared-audio-library.mjs && zip -r elettro-brand-os-dev-api.zip index.mjs db-main.mjs dropbox-upload-session.mjs dropbox-identity.mjs claude-folder-ops.mjs brand-root-migration.mjs brand-media-reset.mjs shared-audio-library.mjs init.sql node_modules package.json
+        run: node --check index.mjs && node --check dropbox-upload-session.mjs && node --check dropbox-identity.mjs && node --check claude-folder-ops.mjs && node --check brand-root-migration.mjs && node --check brand-media-reset.mjs && node --check shared-audio-library.mjs && node --check planner-v2.mjs && node --check planner-v2-db.mjs && node --check curator.mjs && node --check intelligence.mjs && node --check song-facts.mjs && node --check copywriter.mjs && rm -rf intelligence && cp -r ../../intelligence ./intelligence && zip -r elettro-brand-os-dev-api.zip index.mjs db-main.mjs dropbox-upload-session.mjs dropbox-identity.mjs claude-folder-ops.mjs brand-root-migration.mjs brand-media-reset.mjs planner-v2.mjs planner-v2-db.mjs curator.mjs intelligence.mjs song-facts.mjs copywriter.mjs intelligence shared-audio-library.mjs init.sql node_modules package.json
 
       - name: Verify packaged handler loads
         run: node --input-type=module -e 'await import("./index.mjs")'

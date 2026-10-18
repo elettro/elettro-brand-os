@@ -11,3 +11,6 @@ packages/database/prisma/dev.db
 
 # Downloaded live DEV Lambda archives are for local rollback only.
 elettro-dev-lambda-patch/
+
+# Build-time copy of /intelligence packaged into the DEV API Lambda
+services/dev-api-lambda/intelligence/

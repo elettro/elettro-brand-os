@@ -33,7 +33,8 @@ Sector × format, from Dean's Instagram ecosystem sheet:
 - Shorts: daily performance clips; title names the show and song, e.g.
   "Stashbox Does Dylan: Simple Twist of Fate (live)".
 - Long-form: full-song videos and full sets. Shorts point to the full video when one exists.
-- CTA: subscribe to @Stashboxband; song links in description.
+- CTA: the post's own CTA, then always close the description with the
+  subscribe reminder to @stashboxband (goal #1); song links in description.
 
 ## [facebook] Facebook
 
@@ -50,6 +51,10 @@ Sector × format, from Dean's Instagram ecosystem sheet:
 ## [x] X
 
 - Short takes, song links, show clips. Promotional posts within the 25% cap (config).
+- 9:16 clips, 4 a day. `facts.promotional` says which posts may carry a link or
+  ask (about 1 in 4). When it is false: one line about the song or the moment,
+  no link, no "book us", no "link in bio", no subscribe line.
+- One line, under 240 characters. 0–2 hashtags.
 - Replies are suggested, not sent.
 
 ## [linkedin] LinkedIn

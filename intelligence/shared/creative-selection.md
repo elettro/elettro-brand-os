@@ -1,20 +1,27 @@
 # Creative Selection
 
-Task: `select_content`. Choose the single best candidate for one publishing
-slot, or decline all of them.
+Task: `select_content`. For each publishing slot, choose the best candidate
+or decline all of them. You usually receive one account's whole week: sequence
+it like a DJ builds a set, so the week flows and never feels repetitive.
 
 ## What you receive
 
-- **Slot:** date, brand, destination, placement (e.g. TikTok video, Instagram
-  Reel, Facebook feed), assigned **sector**, whether it is an **exploration
-  slot**, and the active **campaign** if any.
-- **Candidates:** the planner's top N (usually 5). Every one has already passed
-  approval, eligibility, rights, format, cooldown and cadence rules. Each
-  includes its metadata, analyzed moments, quality, linked subjects and the
-  planner's **score breakdown** (new-batch boost, time since last use,
-  priority, campaign, balance, later performance).
-- **Recent posts on this account:** the last ~10, with asset, sector, subject
-  and visual summary.
+- **Account and week:** brand, destination, placement (e.g. TikTok video,
+  Instagram Reel), week dates.
+- **Slots, in posting order:** each with its id, date/time, assigned
+  **sector**, whether it is an **exploration slot**, and the active
+  **campaign** if any.
+- **Candidates per slot:** the planner's top N (usually 5). Every one has
+  already passed approval, eligibility, rights, format, cooldown and cadence
+  rules. Each includes its metadata (song, content group, tags, notes), any
+  analyzed moments and quality, and the planner's **score breakdown**
+  (freshness, new-batch boost, priority, song/group variety, readiness,
+  duration fit, exploration).
+- **Recent posts on this account:** the last ~10, with asset, song and group.
+
+The same asset can appear as a candidate in several slots. Choose it at most
+once in the week. Your earlier picks in the week count as "recent posts" for
+later slots.
 
 ## How to choose
 
@@ -67,20 +74,29 @@ were Dylan."
 
 ## Output
 
+One decision per slot, in slot order:
+
 ```json
 {
-  "status": "selected | declined",
-  "selectedAssetId": "string | null",
-  "moment": { "start": 0.0, "end": 0.0 },
-  "decidingFactor": "sector | native | hook | variety | quality | completeness | exploration",
-  "reason": "string (one or two sentences, specific)",
-  "ranking": [ { "assetId": "string", "why": "string" } ],
-  "explorationLearning": "string | null",
-  "gap": "string | null",
+  "decisions": [
+    {
+      "slotId": "string (copied exactly)",
+      "status": "selected | declined",
+      "selectedAssetId": "string | null",
+      "moment": { "start": 0.0, "end": 0.0 },
+      "decidingFactor": "sector | native | hook | variety | quality | completeness | exploration",
+      "reason": "string (one or two sentences, specific)",
+      "explorationLearning": "string | null",
+      "gap": "string | null"
+    }
+  ],
+  "weekNotes": "string (one or two sentences on how the week flows)",
   "notes": ["string"]
 }
 ```
 
+- `selectedAssetId` must be one of that slot's candidate ids, copied exactly.
 - `moment` only for video, and only when a segment should be used rather than
   the whole asset; otherwise `null`.
-- `ranking` lists every candidate, best first, with a few words each.
+- Code re-checks every pick against the rules. A pick that breaks one is
+  replaced by the planner's #1 and the replacement is logged.

@@ -1,6 +1,7 @@
 import {moveBrandFolder,repairClaudeTestStatus} from "./claude-folder-ops.mjs";
 import {runBrandMediaReset} from "./brand-media-reset.mjs";
 import {runBrandRootMigration} from "./brand-root-migration.mjs";
+import { configurePlannerBrand, runPlanWeek, runPlanWeeks, approvePlannerWeek } from "./planner-v2-db.mjs";
 import {runSharedAudioLibrarySetup,LIBRARY_SLUG,LIBRARY_AUDIO_ROOT} from "./shared-audio-library.mjs";
 import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
 import { S3Client, PutObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
@@ -966,8 +967,8 @@ async function runPlannerV1(event) {
         }
 
         const reason =
-          `Selected \${winner.asset.filename} with score \${winner.score.toFixed(2)}. ` +
-          `Last use: \${winner.lastUsedAt || "never"}; priority: \${winner.asset.priority || "normal"}.`;
+          `Selected ${winner.asset.filename} with score ${winner.score.toFixed(2)}. ` +
+          `Last use: ${winner.lastUsedAt || "never"}; priority: ${winner.asset.priority || "normal"}.`;
 
         const inserted = await client.query(
           `INSERT INTO "ScheduledPost"
@@ -1545,6 +1546,14 @@ export const handler = async (event = {}) => {
   if(event.action === "migrate-dropbox-brand-roots-20261017" && !event.requestContext && !event.rawPath && !event.path) return runBrandRootMigration(event,connectDatabase,json);
   // IAM-only one-time brand media reset (dry-run unless mode:"apply"); never exposed through HTTP or MCP.
   if(event.action === "reset-brand-media-20261017" && !event.requestContext && !event.rawPath && !event.path) return runBrandMediaReset(event,connectDatabase,json);
+  // IAM-only Planner V2: configure rules/accounts, plan a Mon–Sun week (preview unless mode:"apply"), approve a whole week, or 4 weeks with plan-month / approve-month.
+  const iamOnly = !event.requestContext && !event.rawPath && !event.path;
+  if (iamOnly && event.action === "configure-planner-brand") return configurePlannerBrand(event, connectDatabase, json);
+  if (iamOnly && event.action === "plan-week") return runPlanWeek(event, connectDatabase, json);
+  if (iamOnly && event.action === "approve-week") return approvePlannerWeek(event, connectDatabase, json);
+  // Month = 4 weeks planned in sequence; approve-month approves all of them at once.
+  if (iamOnly && event.action === "plan-month") return runPlanWeeks({ weeks: 4, ...event }, connectDatabase, json);
+  if (iamOnly && event.action === "approve-month") return approvePlannerWeek({ weeks: 4, ...event }, connectDatabase, json);
   // IAM-only shared audio library setup (dry-run unless mode:"apply"); never exposed through HTTP or MCP.
   if(event.action === "setup-shared-audio-library-20261017" && !event.requestContext && !event.rawPath && !event.path) return runSharedAudioLibrarySetup(event,connectDatabase,json);
   const requestPath =
