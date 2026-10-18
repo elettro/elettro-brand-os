@@ -2,6 +2,7 @@
 //   configure-planner-brand  write Brand.settings.planner + SocialAccount/CadenceRule rows
 //   plan-week                preview (default) or apply a Mon–Sun plan as ScheduledPost rows
 //   approve-week             flip a week's planned posts to approved in one action
+//   plan-month/approve-month the same for 4 consecutive weeks (Stashbox's approval unit)
 import { planWeek, resolvePlannerSettings, songKeyOf, nextWeekStart, ymdInTimeZone, addDaysToYmd, localDateTimeToUtc, PLANNER_VERSION } from "./planner-v2.mjs";
 import { curateWeek, bedrockInvoke } from "./curator.mjs";
 import { buildSongFacts, fetchRadioCatalog } from "./song-facts.mjs";
@@ -29,16 +30,19 @@ async function loadBrand(client, brandSlug) {
   return result.rows[0] || null;
 }
 
-function weekWindow(brand, weekStartInput) {
+function weekWindow(brand, weekStartInput, weeks = 1) {
   const timeZone = brand.timezone || "America/New_York";
   const weekStart = YMD.test(String(weekStartInput || "")) ? weekStartInput : nextWeekStart(ymdInTimeZone(new Date(), timeZone));
   return {
     timeZone,
     weekStart,
     from: localDateTimeToUtc(weekStart, "00:00", timeZone),
-    to: localDateTimeToUtc(addDaysToYmd(weekStart, 7), "00:00", timeZone)
+    to: localDateTimeToUtc(addDaysToYmd(weekStart, 7 * weeks), "00:00", timeZone)
   };
 }
+
+const MAX_WEEKS = 4;
+const weeksOf = (event) => Math.min(MAX_WEEKS, Math.max(1, Math.floor(Number(event.weeks) || 1)));
 
 export async function configurePlannerBrand(event, connectDatabase, json) {
   const brandSlug = String(event.brandSlug || "").trim();
@@ -145,6 +149,8 @@ export async function runPlanWeek(event, connectDatabase, json, { modelId = proc
       [brand.id, from, to, replacePlanned])).rows;
     const uses = used.map((u) => ({ socialAccountId: u.socialAccountId, assetId: u.assetId, at: new Date(u.at).toISOString(),
       songKey: songKeyOf(u), contentGroup: u.contentGroup, shopifyProductId: u.shopifyProductId, filename: u.filename }));
+    // In a multi-week preview, the earlier weeks' picks exist only in memory; they count like scheduled posts.
+    if (Array.isArray(event.priorUses)) uses.push(...event.priorUses);
 
     // Song records (titles, radio pages, streaming links) gate the radio/streaming sectors and feed captions.
     let catalogStatus = { songs: 0 };
@@ -256,6 +262,37 @@ export async function runPlanWeek(event, connectDatabase, json, { modelId = proc
   });
 }
 
+/**
+ * Plan several consecutive weeks (the brand's approval unit, e.g. Stashbox reviews a month).
+ * Weeks run in order; each one counts the earlier weeks' picks against cooldowns, from the
+ * database in apply mode and from memory in preview mode.
+ */
+export async function runPlanWeeks(event, connectDatabase, json, options) {
+  const weeks = weeksOf(event);
+  const raw = (status, body) => ({ status, body });
+  const firstWeek = YMD.test(String(event.weekStart || "")) ? event.weekStart : null;
+  const results = [];
+  const priorUses = [];
+  let weekStart = firstWeek;
+  for (let i = 0; i < weeks; i++) {
+    const r = await runPlanWeek({ ...event, weekStart, priorUses: event.mode === "apply" ? undefined : priorUses }, connectDatabase, raw, options);
+    if (r.status !== 200) return json(r.status, { ...r.body, failedWeek: i + 1, completedWeeks: results.map((w) => w.weekStart) });
+    results.push(r.body);
+    for (const s of r.body.slots.filter((x) => x.status === "planned")) {
+      priorUses.push({ socialAccountId: s.socialAccountId, assetId: s.assetId, at: s.scheduledFor, songKey: s.songKey,
+        contentGroup: s.contentGroup || null, shopifyProductId: null, filename: s.filename });
+    }
+    weekStart = addDaysToYmd(r.body.weekStart, 7);
+  }
+  return json(200, {
+    ok: true, mode: results[0].mode, brand: results[0].brand, weeks, weekStart: results[0].weekStart, weekEnd: results.at(-1).weekEnd,
+    planned: results.reduce((n, w) => n + w.slots.filter((s) => s.status === "planned").length, 0),
+    gaps: results.reduce((n, w) => n + w.gaps.length, 0),
+    inserted: results.reduce((n, w) => n + (w.inserted || 0), 0),
+    perWeek: results
+  });
+}
+
 export async function approvePlannerWeek(event, connectDatabase, json) {
   const brandSlug = String(event.brandSlug || "").trim();
   if (!brandSlug || !YMD.test(String(event.weekStart || ""))) {
@@ -264,11 +301,12 @@ export async function approvePlannerWeek(event, connectDatabase, json) {
   return withClient(connectDatabase, json, "approve-week", async (client) => {
     const brand = await loadBrand(client, brandSlug);
     if (!brand) return json(404, { ok: false, error: "Active brand not found" });
-    const { weekStart, from, to } = weekWindow(brand, event.weekStart);
+    const weeks = weeksOf(event);
+    const { weekStart, from, to } = weekWindow(brand, event.weekStart, weeks);
     const result = await client.query(
       `UPDATE "ScheduledPost" SET "status" = 'approved', "updatedAt" = CURRENT_TIMESTAMP
        WHERE "brandId" = $1 AND "status" = 'planned' AND "scheduledFor" >= $2 AND "scheduledFor" < $3
        RETURNING "id"`, [brand.id, from, to]);
-    return json(200, { ok: true, brand: brand.slug, weekStart, approved: result.rowCount });
+    return json(200, { ok: true, brand: brand.slug, weekStart, weeks, approved: result.rowCount });
   });
 }

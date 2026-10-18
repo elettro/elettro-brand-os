@@ -94,8 +94,9 @@
     "reddit": "handoff"
   },
   "approval": {
-    "unit": "week",
-    "note": "Dean approves a full week's calendar at once (with per-post edit/skip inside it), not post by post."
+    "unit": "month",
+    "weeks": 4,
+    "note": "Dean 2026-10-17: reviews and approves four weeks at once (plan-month / approve-month), with per-post edit/skip inside it, not week by week or post by post."
   },
   "links": {
     "booking": {

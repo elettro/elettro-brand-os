@@ -48,7 +48,7 @@ jobs:
         run: node --test tests/dropbox-identity.test.mjs
 
       - name: Test Planner V2, curator and intelligence budgets
-        run: node --test tests/planner-v2.test.mjs tests/copy-and-song-facts.test.mjs
+        run: node --test tests/planner-v2.test.mjs tests/copy-and-song-facts.test.mjs tests/plan-month.test.mjs
 
       - name: Validate Step 9 Windows PowerShell setup script syntax
         shell: pwsh
