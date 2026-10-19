@@ -66,7 +66,8 @@ test("feed: system milestone (meta) reaches IG + FB, brand milestone only its pr
       query: async (sql) => {
         if (sql.includes('FROM "Brand"')) return { rows: [{ id: "b1", slug: "stashbox", name: "Stashbox" }] };
         if (sql.includes('FROM "SocialAccount"')) return { rows: [{ id: "a1", destination: "instagram", accountName: "@stashboxmusic",
-          publishingMode: "handoff", postsPerWeek: 21, captionedPosts: 10, approvedPosts: 10, apiPublishCount: 0, lastApiPublishAt: null }] };
+          publishingMode: "handoff", postsPerWeek: 21, captionedPosts: 10, approvedPosts: 10, apiPublishCount: 0, lastApiPublishAt: null,
+          tokenExpiresAt: new Date("2026-12-18T12:00:00Z") }] };
         if (sql.includes('FROM "Asset"')) return { rows: [{ destination: "instagram", n: 120 }, { destination: "facebook", n: 120 }] };
         if (sql.includes('FROM "PlatformMilestone"')) return { rows: [
           { brandId: null, destination: "meta", key: "api", value: 0.33, note: "Meta app created" },
@@ -86,6 +87,8 @@ test("feed: system milestone (meta) reaches IG + FB, brand milestone only its pr
     assert.equal(p.facebook.done.oauth, 1);
     assert.equal(p.instagram.done.oauth, 0);
     assert.equal(p.instagram.pct, 55);
+    assert.equal(p.instagram.tokenExpiresAt, "2026-12-18T12:00:00.000Z");
+    assert.equal(p.facebook.tokenExpiresAt, null);
     await connectionStatusFeed(fake, { root, now: t + 30_000 });
     assert.equal(connects, 1);
   } finally { rmSync(root, { recursive: true, force: true }); }

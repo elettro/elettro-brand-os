@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { BrandSwitcher } from "@/components/brand-switcher";
+import { ReconnectBanner } from "@/components/reconnect-banner";
 import { brandConfigs } from "@/lib/brand-config";
 
 // One frame for every logged-in page: header on top, grouped rail on the left.
@@ -73,7 +74,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
           ))}
         </nav>
-        <div className="app-content">{children}</div>
+        <div className="app-content"><ReconnectBanner />{children}</div>
       </div>
     </div>
   );

@@ -592,3 +592,44 @@ button:disabled {
   font-size: 12px;
   margin-top: 2px;
 }
+
+/* Reconnect reminders: live countdown next to Connect, banner on every page within 14 days. */
+.connect-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.countdown {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 5px 9px;
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  background: #ecfdf3;
+  color: var(--success);
+}
+
+.countdown-soon { background: #fffaeb; color: #b54708; }
+.countdown-urgent,
+.countdown-expired { background: #fef3f2; color: #b42318; }
+
+.reconnect-banner {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.reconnect-banner-row {
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 13px;
+}
+
+.reconnect-banner-row a {
+  color: inherit;
+  font-weight: 700;
+}
