@@ -5,6 +5,8 @@ import { LINKEDIN_BRANDS, calendarReminderUrl } from "@/lib/linkedin-connect";
 import { ReconnectCountdown } from "@/components/reconnect-countdown";
 import { redirect } from "next/navigation";
 
+const TEST_POST = "Testing Elettro OS on LinkedIn. Our in-house publishing system now posts here directly; this one went out through the LinkedIn API. More from Elettro and Stashbox soon.";
+
 const apiBaseUrl =
   process.env.BRAND_OS_API_BASE_URL ||
   process.env.NEXT_PUBLIC_BRAND_OS_API_BASE_URL ||
@@ -33,7 +35,7 @@ async function connectionStatus(): Promise<Record<string, Record<string, Linked>
 
 export default async function ConnectionsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   if (!(await authenticated())) redirect("/api/auth/login");
-  const [{ brand, connected, error, network, expires }, status] = await Promise.all([searchParams, connectionStatus()]);
+  const [{ brand, connected, error, network, expires, posted }, status] = await Promise.all([searchParams, connectionStatus()]);
   const brands = brandConfigs.filter((b) => YOUTUBE_BRANDS.includes(b.id));
   const linkedinBrands = brandConfigs.filter((b) => LINKEDIN_BRANDS.includes(b.id));
   const youtube = status.youtube || {};
@@ -45,7 +47,8 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
     <h1>Connections</h1>
     <p className="muted">Connect each brand&apos;s accounts to Elettro OS. Google asks which YouTube channel to use; pick the one that belongs to the brand. LinkedIn logins last 60 days, so each one counts down to its reconnect date.</p>
     {connected && <p className="card" style={{ marginTop: 16 }}>Connected <b>{connected}</b> to {brand}.</p>}
-    {error && <p className="card" style={{ marginTop: 16 }}>Could not connect{brand ? ` ${brand}` : ""}: {error}</p>}
+    {posted && <p className="card" style={{ marginTop: 16 }}>Posted to LinkedIn. <a href={posted} target="_blank" rel="noreferrer">See the post</a></p>}
+    {error && <p className="card" style={{ marginTop: 16 }}>{network === "linkedin" ? "LinkedIn post not sent" : `Could not connect${brand ? ` ${brand}` : ""}`}: {error}</p>}
     <div className="grid" style={{ marginTop: 20 }}>
       {brands.map((b) => {
         const handle = youtube[b.id]?.handle;
@@ -82,6 +85,14 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
                 Expires {new Date(linked.expiresAt).toLocaleDateString("en-US", { dateStyle: "medium", timeZone: "America/New_York" })} ·{" "}
                 <a href={calendarReminderUrl(linked.expiresAt)} target="_blank" rel="noreferrer">Add reminder to Google Calendar</a>
               </p>
+            )}
+            {linked && (
+              <form method="post" action="/api/connections/linkedin/test-post" className="test-post">
+                <input type="hidden" name="brand" value={b.id} />
+                <label className="muted" htmlFor={`li-text-${b.id}`}>Test post (goes live on LinkedIn when you click)</label>
+                <textarea id={`li-text-${b.id}`} name="text" rows={4} maxLength={3000} required defaultValue={TEST_POST} />
+                <button type="submit" className="status-chip">Post to LinkedIn now</button>
+              </form>
             )}
           </article>
         );
