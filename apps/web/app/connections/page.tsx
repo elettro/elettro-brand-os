@@ -2,6 +2,7 @@ import { authenticated } from "@/lib/cognito-auth";
 import { brandConfigs } from "@/lib/brand-config";
 import { YOUTUBE_BRANDS } from "@/lib/youtube-connect";
 import { LINKEDIN_BRANDS, calendarReminderUrl } from "@/lib/linkedin-connect";
+import { META_BRANDS } from "@/lib/meta-connect";
 import { ReconnectCountdown } from "@/components/reconnect-countdown";
 import { redirect } from "next/navigation";
 
@@ -38,8 +39,11 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
   const [{ brand, connected, error, network, expires, posted }, status] = await Promise.all([searchParams, connectionStatus()]);
   const brands = brandConfigs.filter((b) => YOUTUBE_BRANDS.includes(b.id));
   const linkedinBrands = brandConfigs.filter((b) => LINKEDIN_BRANDS.includes(b.id));
+  const metaBrands = brandConfigs.filter((b) => META_BRANDS.includes(b.id));
   const youtube = status.youtube || {};
   const linkedin = status.linkedin || {};
+  const facebook = status.facebook || {};
+  const instagram = status.instagram || {};
   // The feed caches for 60s; right after a connect, trust the expiry the callback just reported.
   if (network === "linkedin" && brand && connected && expires && !Number.isNaN(Date.parse(expires))) linkedin[brand] = { handle: connected, expiresAt: expires };
   return <main className="main">
@@ -60,6 +64,24 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
               {handle ? <>● Connected · <b>{handle}</b></> : "○ Not connected"}
             </p>
             <a className="status-chip" href={`/api/connections/youtube/start?brand=${b.id}`}>{handle ? "Reconnect" : "Connect YouTube"}</a>
+          </article>
+        );
+      })}
+    </div>
+    <h2 style={{ marginTop: 32 }}>Facebook + Instagram</h2>
+    <p className="muted">One Meta login per brand: Facebook asks which Pages and Instagram accounts Elettro OS may use; tick only the brand&apos;s Page and the Instagram account linked to it. Page tokens do not expire.</p>
+    <div className="grid" style={{ marginTop: 20 }}>
+      {metaBrands.map((b) => {
+        const page = facebook[b.id]?.handle;
+        const ig = instagram[b.id]?.handle;
+        return (
+          <article className="card" key={b.id}>
+            <div className="eyebrow">Meta · Facebook Page + Instagram</div>
+            <h2>{b.name}</h2>
+            <p className="muted" style={{ margin: "0 0 12px" }}>
+              {page ? <>● Facebook · <b>{page}</b>{ig ? <><br />● Instagram · <b>{ig}</b></> : <><br />○ No Instagram linked to this Page</>}</> : "○ Not connected"}
+            </p>
+            <a className="status-chip" href={`/api/connections/meta/start?brand=${b.id}`}>{page ? "Reconnect" : "Connect Facebook + Instagram"}</a>
           </article>
         );
       })}
