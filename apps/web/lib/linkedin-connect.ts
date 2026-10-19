@@ -22,3 +22,11 @@ export function calendarReminderUrl(expiresAt: string | Date) {
   url.searchParams.set("details", `The LinkedIn login expires ${new Date(expiresAt).toUTCString()}. Reconnect: ${DEV_ORIGIN}/connections`);
   return url.toString();
 }
+
+// Posts API version header (YYYYMM); LinkedIn keeps each version for about a year.
+export const LINKEDIN_API_VERSION = process.env.LINKEDIN_API_VERSION || "202608";
+
+// Posts "commentary" uses LinkedIn's little text format, where these characters are markup unless escaped.
+export function littleText(text: string) {
+  return text.replace(/[\\|{}@[\]()<>#*_~]/g, (c) => "\\" + c);
+}

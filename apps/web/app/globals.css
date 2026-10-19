@@ -633,3 +633,27 @@ button:disabled {
   color: inherit;
   font-weight: 700;
 }
+
+.test-post {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.test-post textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 10px 11px;
+  font: inherit;
+  color: var(--text);
+  resize: vertical;
+}
+
+.test-post button {
+  justify-self: start;
+  border: 0;
+  cursor: pointer;
+}
