@@ -44,8 +44,9 @@ export function profileStatus(facts, now = new Date()) {
     content: facts.readyAssets >= MIN_READY_ASSETS ? 1 : facts.readyAssets > 0 ? 0.5 : 0,
     copy: facts.captionedPosts > 0 ? 1 : 0,
     plan: facts.approvedPosts > 0 ? 1 : 0,
-    api: m.api || 0,
-    oauth: m.oauth || 0,
+    // A linked channel/page proves the app works in testing mode; full api credit still needs the platform's review milestone.
+    api: Math.max(m.api || 0, facts.connected ? 0.5 : 0),
+    oauth: facts.connected ? 1 : m.oauth || 0,
     test: facts.apiPublishCount > 0 ? 1 : 0,
     live: facts.publishingMode === "auto" && facts.lastApiPublishAt && new Date(facts.lastApiPublishAt) >= liveSince ? 1 : 0
   };
@@ -76,7 +77,7 @@ export async function ensureMilestoneTable(client) {
 async function loadBrandFacts(client, brand, root) {
   const playbook = playbookDestinations(brand.slug, root);
   const accounts = (await client.query(
-    `SELECT sa."id", sa."destination", sa."accountName", sa."publishingMode",
+    `SELECT sa."id", sa."destination", sa."accountName", sa."publishingMode", sa."externalAccountId",
             COALESCE((SELECT SUM(cr."postsPerWeek") FROM "CadenceRule" cr WHERE cr."socialAccountId" = sa."id" AND cr."active"), 0)::int AS "postsPerWeek",
             (SELECT COUNT(*) FROM "ScheduledPost" sp WHERE sp."socialAccountId" = sa."id" AND sp."generatedCaption" IS NOT NULL)::int AS "captionedPosts",
             (SELECT COUNT(*) FROM "ScheduledPost" sp WHERE sp."socialAccountId" = sa."id" AND sp."status" IN ('approved','queued','publishing','processing','published'))::int AS "approvedPosts",
@@ -106,6 +107,7 @@ async function loadBrandFacts(client, brand, root) {
     }
     const facts = {
       hasPlaybook: playbook.has(destination), accountName: account.accountName || null,
+      connected: Boolean(account.externalAccountId),
       postsPerWeek: account.postsPerWeek || 0, readyAssets: readyBy[destination] || 0,
       captionedPosts: account.captionedPosts || 0, approvedPosts: account.approvedPosts || 0,
       apiPublishCount: account.apiPublishCount || 0, lastApiPublishAt: account.lastApiPublishAt || null,

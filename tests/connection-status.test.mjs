@@ -91,6 +91,13 @@ test("feed: system milestone (meta) reaches IG + FB, brand milestone only its pr
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
+test("a linked account counts as oauth connected and half api credit", () => {
+  const { done } = profileStatus({ ...base, connected: true, milestones: {} }, NOW);
+  assert.equal(done.oauth, 1);
+  assert.equal(done.api, 0.5);
+  assert.equal(profileStatus({ ...base, connected: true, milestones: { api: 1 } }, NOW).done.api, 1);
+});
+
 test("feed response is public-readable JSON", () => {
   const r = feedResponse(200, { ok: true });
   assert.equal(r.headers["access-control-allow-origin"], "*");
