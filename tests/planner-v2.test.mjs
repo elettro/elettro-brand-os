@@ -77,6 +77,24 @@ test("pool rules drop wrong aspect, excluded tags and over-length clips", () => 
   assert.equal(poolRejection(library.find((a) => a.tags.includes("3min-plus")), tiktok, settings), "duration");
 });
 
+test("a placement can override the brand pool: long YouTube video takes 16x9 3min-plus only", () => {
+  const withLong = resolvePlannerSettings({ planner: {
+    pool: { kinds: ["video"], aspectRatios: ["9x16"], excludeTagsAny: [] },
+    placements: { "youtube:video": { aspectRatios: ["16x9"], minDurationBucket: "3min-plus" } },
+    sectors: [{ slug: "live-shows", priority: 1, share: 1, match: { tagsAny: ["studio-session"] } }]
+  } });
+  const long = account("youtube", "video", 5);
+  const short = account("youtube", "short", 21);
+  const wide = asset(["studio-session", "3min-plus"], { aspectRatioLabel: "16x9" });
+  const wideShort = asset(["studio-session", "30-60s"], { aspectRatioLabel: "16x9" });
+  const vertical = asset(["studio-session", "15-30s"]);
+  assert.equal(poolRejection(wide, long, withLong), null);
+  assert.equal(poolRejection(wideShort, long, withLong), "duration");
+  assert.equal(poolRejection(vertical, long, withLong), "aspect");
+  assert.equal(poolRejection(wide, short, withLong), "aspect");
+  assert.equal(poolRejection(vertical, short, withLong), null);
+});
+
 test("every slot fills, sectors without enough content wait, and the same song never repeats within a day per account", () => {
   const plan = run();
   assert.equal(plan.slots.filter((s) => s.status === "planned").length, 28);

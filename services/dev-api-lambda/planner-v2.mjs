@@ -160,16 +160,21 @@ export function poolRejection(asset, account, settings) {
   const tags = tagsOf(asset);
   const { pool } = settings;
   const dest = String(account.destination).toLowerCase();
-  if (pool.kinds.length && !pool.kinds.includes(asset.kind)) return "kind";
-  if (pool.aspectRatios.length && !pool.aspectRatios.includes(asset.aspectRatioLabel)) return "aspect";
+  const rule = settings.placements[`${dest}:${String(account.placement).toLowerCase()}`] || {};
+  // A placement may override the brand pool, e.g. youtube:video takes 16x9 long-form while Shorts stay 9x16.
+  const kinds = rule.kinds || pool.kinds;
+  const aspectRatios = rule.aspectRatios || pool.aspectRatios;
+  if (kinds.length && !kinds.includes(asset.kind)) return "kind";
+  if (aspectRatios.length && !aspectRatios.includes(asset.aspectRatioLabel)) return "aspect";
   if (hasAny(tags, pool.excludeTagsAny)) return "excluded-tag";
   const allowed = Array.isArray(asset.allowedDestinations) ? asset.allowedDestinations : [];
   const excluded = Array.isArray(asset.excludedDestinations) ? asset.excludedDestinations : [];
   if (excluded.includes(dest) || (allowed.length && !allowed.includes(dest))) return "destination";
-  const rule = settings.placements[`${dest}:${String(account.placement).toLowerCase()}`] || {};
   const bucket = durationBucketOf(asset);
   if (rule.maxDurationBucket && bucket &&
       DURATION_BUCKETS.indexOf(bucket) > DURATION_BUCKETS.indexOf(rule.maxDurationBucket)) return "duration";
+  if (rule.minDurationBucket && (!bucket ||
+      DURATION_BUCKETS.indexOf(bucket) < DURATION_BUCKETS.indexOf(rule.minDurationBucket))) return "duration";
   return null;
 }
 

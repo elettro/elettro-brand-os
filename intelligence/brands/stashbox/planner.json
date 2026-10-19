@@ -52,6 +52,33 @@
           "15-30s",
           "30-60s"
         ]
+      },
+      "instagram:story": {
+        "maxDurationBucket": "30-60s",
+        "preferredDurationBuckets": [
+          "under-15s",
+          "15-30s"
+        ]
+      },
+      "facebook:story": {
+        "maxDurationBucket": "30-60s",
+        "preferredDurationBuckets": [
+          "under-15s",
+          "15-30s"
+        ]
+      },
+      "youtube:video": {
+        "aspectRatios": [
+          "16x9"
+        ],
+        "minDurationBucket": "3min-plus"
+      },
+      "threads:post": {
+        "maxDurationBucket": "1-3min",
+        "preferredDurationBuckets": [
+          "15-30s",
+          "30-60s"
+        ]
       }
     },
     "sectors": [
@@ -251,7 +278,7 @@
   "accounts": [
     {
       "destination": "youtube",
-      "accountName": "@Stashboxband",
+      "accountName": "@stashboxband",
       "placement": "short",
       "postsPerWeek": 21,
       "preferredStartTime": "09:00",
@@ -291,6 +318,49 @@
       "placement": "video",
       "postsPerWeek": 28,
       "preferredStartTime": "09:00",
+      "preferredEndTime": "21:00",
+      "publishingMode": "approval"
+    },
+    {
+      "destination": "instagram",
+      "accountName": "Stashbox Instagram",
+      "placement": "story",
+      "postsPerWeek": 42,
+      "preferredStartTime": "07:00",
+      "preferredEndTime": "23:30",
+      "publishingMode": "approval"
+    },
+    {
+      "destination": "facebook",
+      "accountName": "Stashbox Facebook",
+      "placement": "story",
+      "postsPerWeek": 42,
+      "preferredStartTime": "07:00",
+      "preferredEndTime": "23:30",
+      "publishingMode": "approval"
+    },
+    {
+      "destination": "youtube",
+      "accountName": "@stashboxband",
+      "placement": "video",
+      "postsPerWeek": 5,
+      "preferredDays": [
+        "Mon",
+        "Tue",
+        "Wed",
+        "Thu",
+        "Fri"
+      ],
+      "preferredStartTime": "16:00",
+      "preferredEndTime": "16:00",
+      "publishingMode": "approval"
+    },
+    {
+      "destination": "threads",
+      "accountName": "Stashbox Threads",
+      "placement": "post",
+      "postsPerWeek": 21,
+      "preferredStartTime": "10:00",
       "preferredEndTime": "21:00",
       "publishingMode": "approval"
     }
