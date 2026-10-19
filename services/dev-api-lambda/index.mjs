@@ -3,6 +3,7 @@ import {runBrandMediaReset} from "./brand-media-reset.mjs";
 import {runBrandRootMigration} from "./brand-root-migration.mjs";
 import { configurePlannerBrand, runPlanWeek, runPlanWeeks, approvePlannerWeek } from "./planner-v2-db.mjs";
 import {runSharedAudioLibrarySetup,LIBRARY_SLUG,LIBRARY_AUDIO_ROOT} from "./shared-audio-library.mjs";
+import { handleConnectionStatus, setPlatformMilestone } from "./connection-status.mjs";
 import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
 import { S3Client, PutObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
@@ -1555,6 +1556,8 @@ export const handler = async (event = {}) => {
   // Month = 4 weeks planned in sequence; approve-month approves all of them at once.
   if (iamOnly && event.action === "plan-month") return runPlanWeeks({ weeks: 4, ...event }, connectDatabase, json);
   if (iamOnly && event.action === "approve-month") return approvePlannerWeek({ weeks: 4, ...event }, connectDatabase, json);
+  // IAM-only: record a milestone the database can't see yet (developer app review, OAuth) for the /status/connections feed.
+  if (iamOnly && event.action === "set-platform-milestone") return setPlatformMilestone(event, connectDatabase, json);
   // IAM-only shared audio library setup (dry-run unless mode:"apply"); never exposed through HTTP or MCP.
   if(event.action === "setup-shared-audio-library-20261017" && !event.requestContext && !event.rawPath && !event.path) return runSharedAudioLibrarySetup(event,connectDatabase,json);
   const requestPath =
@@ -1563,6 +1566,8 @@ export const handler = async (event = {}) => {
     event?.path ||
     "";
 
+  // Public, read-only: connection race feed for elettro.com/dash (counts only).
+  if (requestPath === "/status/connections" && (event?.requestContext?.http?.method || "GET") === "GET") return handleConnectionStatus(connectDatabase);
   if (
     event?.action === "ingest-dropbox-page" ||
     requestPath === "/dropbox/ingest-page"
