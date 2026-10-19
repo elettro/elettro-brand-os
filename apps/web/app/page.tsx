@@ -1,7 +1,5 @@
-import Link from "next/link";
 import { authenticated } from "@/lib/cognito-auth";
 import { redirect } from "next/navigation";
-import { BrandSwitcher } from "@/components/brand-switcher";
 import { sprintOneBrands } from "@/lib/brands";
 import { getBrands, getDashboard } from "@/lib/dev-api";
 
@@ -29,42 +27,12 @@ export default async function DashboardPage() {
     ? dashboardResponse.value.dashboard
     : { brands: 6, dropboxAccounts: 0, assetsIndexed: 0, approvedInPool: 0 };
   return (
-    <div className="shell">
-      <aside className="sidebar">
-        <div className="brandmark">Elettro <span>Brand OS</span></div>
-
-        <div className="nav-section">
-          <div className="nav-label">Workspace</div>
-          <Link className="nav-item active" href="/">Dashboard</Link>
-          <Link className="nav-item" href="/assets">Assets</Link>
-          <Link className="nav-item" href="/content-pool">Content Pool</Link>
-          <a className="nav-item" href="#">Calendar</a>
-        </div>
-
-        <div className="nav-section">
-          <div className="nav-label">Publishing</div>
-          <a className="nav-item" href="#">Planner</a>
-          <a className="nav-item" href="#">Review</a>
-          <a className="nav-item" href="#">History</a>
-          <Link className="nav-item" href="/connections">Connections</Link>
-        </div>
-
-        <div className="nav-section">
-          <div className="nav-label">Intelligence</div>
-          <a className="nav-item" href="#">Chat</a>
-          <Link className="nav-item" href="/ai-gateway">AI Gateway Lab</Link>
-          <a className="nav-item" href="#">Analytics</a>
-          <a className="nav-item" href="#">Knowledge</a>
-        </div>
-      </aside>
-
       <main className="main">
         <div className="topbar">
           <div>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}><div className="eyebrow">Publishing Engine · Sprint 1</div><a href="/api/auth/logout" style={{padding:"8px 12px",border:"1px solid #94a3b8",borderRadius:8,textDecoration:"none",fontWeight:700}}>Log out</a></div>
+            <div className="eyebrow">Publishing Engine · Sprint 1</div>
             <h1>Create. Approve. The engine distributes.</h1>
           </div>
-          <BrandSwitcher brands={brands} />
         </div>
 
         <div className="grid stats">
@@ -103,6 +71,5 @@ export default async function DashboardPage() {
           </aside>
         </div>
       </main>
-    </div>
   );
 }
