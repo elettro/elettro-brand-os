@@ -289,7 +289,7 @@
       "destination": "instagram",
       "accountName": "Stashbox Instagram",
       "placement": "reel",
-      "postsPerWeek": 21,
+      "postsPerWeek": 35,
       "preferredStartTime": "11:00",
       "preferredEndTime": "20:00",
       "publishingMode": "approval"
@@ -307,7 +307,7 @@
       "destination": "facebook",
       "accountName": "Stashbox Facebook",
       "placement": "reel",
-      "postsPerWeek": 14,
+      "postsPerWeek": 21,
       "preferredStartTime": "12:00",
       "preferredEndTime": "18:00",
       "publishingMode": "approval"
