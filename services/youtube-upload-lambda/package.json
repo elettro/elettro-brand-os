@@ -1,0 +1,12 @@
+{
+  "name": "@elettro/youtube-upload-lambda",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "zip -r elettro-brand-os-dev-youtube-upload.zip index.mjs"
+  },
+  "dependencies": {
+    "@aws-sdk/client-secrets-manager": "^3.910.0"
+  }
+}
