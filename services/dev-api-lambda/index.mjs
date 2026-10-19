@@ -13,6 +13,7 @@ import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
 import { withDropboxIdentityTransaction, DropboxIdentityConflict } from "./dropbox-identity.mjs";
 import { handler as existingHandler } from "./db-main.mjs";
 import { handleDropboxUploadSession } from "./dropbox-upload-session.mjs";
+import { completeYoutubeConnect } from "./youtube-connect.mjs";
 
 const { Client } = pg;
 const secrets = new SecretsManagerClient({});
@@ -1730,6 +1731,11 @@ export const handler = async (event = {}) => {
   }
 
 
+
+  // "Connect YouTube": the web app forwards Google's one-time code with the shared connect key.
+  if (requestPath === "/connections/youtube/complete" && event?.requestContext?.http?.method === "POST") {
+    return completeYoutubeConnect(event, parseJsonBody(event), connectDatabase, json);
+  }
 
   const routedBody = requestPath === "/assets/bulk-update" ? parseJsonBody(event) : {};
   const dropboxAction = event.action || routedBody.action;
