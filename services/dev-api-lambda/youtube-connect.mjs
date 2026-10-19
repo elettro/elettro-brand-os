@@ -1,18 +1,15 @@
 /**
  * "Connect YouTube" completion for Elettro OS (Google Cloud project elettro-os).
- * The web app sends the one-time Google code here; this Lambda trades it for a
- * refresh token, finds the channel that was picked, keeps the token in Secrets
- * Manager (never in Postgres) and links the channel to the brand's YouTube
- * SocialAccount. publishingMode is left as-is until a first test post succeeds.
+ * The web app trades Google's one-time code and reads the picked channel (this
+ * Lambda runs in a VPC without internet egress), then sends both here. This
+ * Lambda keeps the refresh token in Secrets Manager (never in Postgres) and
+ * links the channel to the brand's YouTube SocialAccount. publishingMode is
+ * left as-is until a first test post succeeds.
  */
 import { timingSafeEqual } from "node:crypto";
-import {
-  SecretsManagerClient, GetSecretValueCommand, PutSecretValueCommand, CreateSecretCommand
-} from "@aws-sdk/client-secrets-manager";
+import { SecretsManagerClient, PutSecretValueCommand, CreateSecretCommand } from "@aws-sdk/client-secrets-manager";
 
 const secrets = new SecretsManagerClient({});
-const REDIRECT_URI = "https://develop.d2k28tehm1a8zw.amplifyapp.com/api/connections/youtube/callback";
-const GOOGLE_SECRET = process.env.GOOGLE_OAUTH_SECRET_NAME || "elettro-brand-os-dev/google-oauth";
 const TOKEN_SECRET_PREFIX = "elettro-brand-os-dev/youtube/";
 
 class ConnectError extends Error {
@@ -26,44 +23,10 @@ function keyMatches(given) {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-async function googleClient() {
-  const response = await secrets.send(new GetSecretValueCommand({ SecretId: GOOGLE_SECRET }));
-  const value = JSON.parse(response.SecretString || "{}");
-  if (!value.clientId || !value.clientSecret) throw new ConnectError(503, "Google OAuth client is not configured");
-  return value;
-}
-
-async function exchangeCode(code, { clientId, clientSecret }) {
-  const response = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "authorization_code", code, redirect_uri: REDIRECT_URI,
-      client_id: clientId, client_secret: clientSecret
-    })
-  });
-  const token = await response.json().catch(() => ({}));
-  if (!response.ok) throw new ConnectError(400, `Google rejected the code: ${token.error || response.status}`);
-  if (!token.refresh_token) throw new ConnectError(400, "Google returned no refresh token; remove Elettro OS from the account's third-party access and connect again");
-  return token;
-}
-
-async function pickedChannel(accessToken) {
-  const response = await fetch("https://www.googleapis.com/youtube/v3/channels?part=snippet&mine=true", {
-    headers: { authorization: `Bearer ${accessToken}` }
-  });
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new ConnectError(502, `YouTube channel lookup failed: ${body.error?.message || response.status}`);
-  const channel = body.items?.[0];
-  if (!channel) throw new ConnectError(400, "That Google account has no YouTube channel; pick the channel when Google asks");
-  return { id: channel.id, title: channel.snippet?.title || channel.id, handle: channel.snippet?.customUrl || null };
-}
-
-async function storeRefreshToken(channel, token, brand) {
+async function storeRefreshToken(channel, refreshToken, scope, brand) {
   const SecretId = TOKEN_SECRET_PREFIX + channel.id;
   const SecretString = JSON.stringify({
-    refreshToken: token.refresh_token, scope: token.scope, channelId: channel.id,
-    brand, connectedAt: new Date().toISOString()
+    refreshToken, scope, channelId: channel.id, brand, connectedAt: new Date().toISOString()
   });
   try {
     await secrets.send(new PutSecretValueCommand({ SecretId, SecretString }));
@@ -102,15 +65,17 @@ export async function completeYoutubeConnect(event, body, connectDatabase, json)
   const headers = event?.headers || {};
   if (!keyMatches(headers["x-elettro-connect-key"])) return json(401, { ok: false, error: "Connect key required" });
   const brand = String(body?.brand || "");
-  const code = String(body?.code || "");
-  if (!/^[a-z0-9-]{2,40}$/.test(brand) || !code) return json(400, { ok: false, error: "brand and code are required" });
+  const raw = body?.channel || {};
+  const refreshToken = String(body?.refreshToken || "");
+  if (!/^[a-z0-9-]{2,40}$/.test(brand) || !/^UC[A-Za-z0-9_-]{10,40}$/.test(String(raw.id || "")) || !refreshToken) {
+    return json(400, { ok: false, error: "brand, channel and refreshToken are required" });
+  }
+  const channel = { id: String(raw.id), title: String(raw.title || raw.id), handle: raw.handle ? String(raw.handle) : null };
   let client;
   try {
-    const token = await exchangeCode(code, await googleClient());
-    const channel = await pickedChannel(token.access_token);
     client = await connectDatabase();
     const socialAccountId = await linkSocialAccount(client, brand, channel);
-    await storeRefreshToken(channel, token, brand);
+    await storeRefreshToken(channel, refreshToken, body?.scope || null, brand);
     return json(200, { ok: true, brand, socialAccountId, channel });
   } catch (error) {
     console.error("[youtube-connect] failed", error?.name, error?.message);
