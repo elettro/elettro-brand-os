@@ -50,6 +50,9 @@ jobs:
       - name: Test Planner V2, curator and intelligence budgets
         run: node --test tests/planner-v2.test.mjs tests/copy-and-song-facts.test.mjs tests/plan-month.test.mjs
 
+      - name: Test connection status feed and LinkedIn connect
+        run: node --test tests/connection-status.test.mjs tests/linkedin-connect.test.mjs
+
       - name: Validate Step 9 Windows PowerShell setup script syntax
         shell: pwsh
         run: |

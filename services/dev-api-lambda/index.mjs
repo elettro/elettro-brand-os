@@ -14,6 +14,7 @@ import { withDropboxIdentityTransaction, DropboxIdentityConflict } from "./dropb
 import { handler as existingHandler } from "./db-main.mjs";
 import { handleDropboxUploadSession } from "./dropbox-upload-session.mjs";
 import { completeYoutubeConnect } from "./youtube-connect.mjs";
+import { completeLinkedinConnect } from "./linkedin-connect.mjs";
 
 const { Client } = pg;
 const secrets = new SecretsManagerClient({});
@@ -1735,6 +1736,11 @@ export const handler = async (event = {}) => {
   // "Connect YouTube": the web app forwards Google's one-time code with the shared connect key.
   if (requestPath === "/connections/youtube/complete" && event?.requestContext?.http?.method === "POST") {
     return completeYoutubeConnect(event, parseJsonBody(event), connectDatabase, json);
+  }
+
+  // "Connect LinkedIn": same handshake; the token expires, so the row carries tokenExpiresAt.
+  if (requestPath === "/connections/linkedin/complete" && event?.requestContext?.http?.method === "POST") {
+    return completeLinkedinConnect(event, parseJsonBody(event), connectDatabase, json);
   }
 
   const routedBody = requestPath === "/assets/bulk-update" ? parseJsonBody(event) : {};

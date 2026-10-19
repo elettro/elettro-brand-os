@@ -74,10 +74,20 @@ export async function ensureMilestoneTable(client) {
     ON "PlatformMilestone"(COALESCE("brandId", '00000000-0000-0000-0000-000000000000'::uuid), "destination", "key")`);
 }
 
+// Networks without refresh tokens (LinkedIn members, Meta long-lived tokens) expire; the feed carries the
+// date so Elettro OS can count down and remind Dean to reconnect in time.
+// ALTER locks the table even when the column exists, so run it once per Lambda container.
+let tokenExpiryColumnReady = false;
+export async function ensureTokenExpiryColumn(client) {
+  if (tokenExpiryColumnReady) return;
+  await client.query('ALTER TABLE "SocialAccount" ADD COLUMN IF NOT EXISTS "tokenExpiresAt" TIMESTAMP(3)');
+  tokenExpiryColumnReady = true;
+}
+
 async function loadBrandFacts(client, brand, root) {
   const playbook = playbookDestinations(brand.slug, root);
   const accounts = (await client.query(
-    `SELECT sa."id", sa."destination", sa."accountName", sa."publishingMode", sa."externalAccountId",
+    `SELECT sa."id", sa."destination", sa."accountName", sa."publishingMode", sa."externalAccountId", sa."tokenExpiresAt",
             COALESCE((SELECT SUM(cr."postsPerWeek") FROM "CadenceRule" cr WHERE cr."socialAccountId" = sa."id" AND cr."active"), 0)::int AS "postsPerWeek",
             (SELECT COUNT(*) FROM "ScheduledPost" sp WHERE sp."socialAccountId" = sa."id" AND sp."generatedCaption" IS NOT NULL)::int AS "captionedPosts",
             (SELECT COUNT(*) FROM "ScheduledPost" sp WHERE sp."socialAccountId" = sa."id" AND sp."status" IN ('approved','queued','publishing','processing','published'))::int AS "approvedPosts",
@@ -113,8 +123,9 @@ async function loadBrandFacts(client, brand, root) {
       apiPublishCount: account.apiPublishCount || 0, lastApiPublishAt: account.lastApiPublishAt || null,
       publishingMode: account.publishingMode || "handoff", milestones: mine
     };
+    const tokenExpiresAt = account.tokenExpiresAt ? new Date(account.tokenExpiresAt).toISOString() : null;
     return { destination, handle: facts.accountName, publishingMode: facts.publishingMode, readyAssets: facts.readyAssets,
-      ...profileStatus(facts), note: notes.join(" ") || null };
+      tokenExpiresAt, ...profileStatus(facts), note: notes.join(" ") || null };
   });
 }
 
@@ -125,6 +136,7 @@ export async function connectionStatusFeed(connectDatabase, { root = defaultInte
   const client = await connectDatabase();
   try {
     await ensureMilestoneTable(client);
+    await ensureTokenExpiryColumn(client);
     const brands = (await client.query(`SELECT "id", "slug", "name" FROM "Brand" WHERE "status" = 'active' AND "slug" <> $1 ORDER BY "name"`, [LIBRARY_SLUG])).rows;
     const out = [];
     for (const brand of brands) {

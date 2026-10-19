@@ -366,6 +366,8 @@ model SocialAccount {
   publishingMode    String              @default("handoff")
   timezone          String              @default("America/New_York")
   status            String              @default("active")
+  // Set for networks whose tokens expire without a refresh token (LinkedIn members); the Connections page counts down to it.
+  tokenExpiresAt    DateTime?
   cadenceRules      CadenceRule[]
   scheduledPosts    ScheduledPost[]
   publicationLedger PublicationLedger[]
