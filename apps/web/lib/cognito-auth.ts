@@ -10,7 +10,7 @@ const PREFIX = "elettro_dev_";
 
 const ssm = new SSMClient({region:"us-east-1"});
 const SECRET_PATH="/amplify/d2k28tehm1a8zw/develop-branch-b11b55647b/";
-export async function serverSetting(name: "ELETTRO_AUTH_SESSION_SECRET" | "ELETTRO_COGNITO_CLIENT_SECRET"): Promise<string> {
+export async function serverSetting(name: "ELETTRO_AUTH_SESSION_SECRET" | "ELETTRO_COGNITO_CLIENT_SECRET" | "CONNECTIONS_API_SHARED_SECRET"): Promise<string> {
   if (process.env[name]) return process.env[name]!;
   if (process.env.AWS_BRANCH && process.env.AWS_BRANCH !== "develop") throw Error("Authentication is configured for DEV only");
   const result=await ssm.send(new GetParameterCommand({Name: SECRET_PATH+name, WithDecryption:true}));

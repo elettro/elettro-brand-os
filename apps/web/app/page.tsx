@@ -46,6 +46,7 @@ export default async function DashboardPage() {
           <a className="nav-item" href="#">Planner</a>
           <a className="nav-item" href="#">Review</a>
           <a className="nav-item" href="#">History</a>
+          <Link className="nav-item" href="/connections">Connections</Link>
         </div>
 
         <div className="nav-section">
