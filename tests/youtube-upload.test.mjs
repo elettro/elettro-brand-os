@@ -44,6 +44,12 @@ test("a scheduled post becomes a clean upload: planner title, caption plus hasht
   assert.equal(uploadRequest(fields).privacyStatus, "private");
 });
 
+test("AI-made posts are declared to YouTube as altered or synthetic content; others are not", () => {
+  const post = { channelId: valid.channelId, dropboxPath: valid.dropboxPath, title: "Help Jamaica Now" };
+  assert.equal(uploadRequest(uploadFromPost({ ...post, synthetic: true }, "private")).containsSyntheticMedia, true);
+  assert.equal(uploadRequest(uploadFromPost(post, "private")).containsSyntheticMedia, false);
+});
+
 test("with no planner title the asset title, then the filename, is used", () => {
   assert.equal(uploadFromPost({ assetTitle: "Dirty Bird", filename: "x.mp4" }, "private").title, "Dirty Bird");
   assert.equal(uploadFromPost({ filename: "stashbox-dirty-bird-9x16.mp4" }, "private").title, "stashbox-dirty-bird-9x16");

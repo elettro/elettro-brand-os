@@ -87,6 +87,11 @@ test("a planner post becomes a request for its account with caption and hashtags
   assert.equal(requestFromPost({ channelId: "x", dropboxPath: post.dropboxPath, caption: "y".repeat(3000) }, "direct").caption.length, 2200);
 });
 
+test("an AI-made planner post carries TikTok's AI-generated label; others don't", () => {
+  assert.equal(requestFromPost({ channelId: "x", dropboxPath: post.dropboxPath, synthetic: true }, "direct").aigc, true);
+  assert.equal(requestFromPost({ channelId: "x", dropboxPath: post.dropboxPath }, "direct").aigc, false);
+});
+
 test("a planner post with a file outside the brand Dropbox is refused", () => {
   assert.throws(() => requestFromPost({ channelId: "x", dropboxPath: "/Personal/a.mp4" }, "draft"), /brands/);
 });

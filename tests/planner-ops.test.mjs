@@ -87,6 +87,25 @@ test("claim-due-posts only marks missed or stuck posts for its own destination",
   }
 });
 
+test("claimed posts carry the AI flag from the clip's own tags, or from the planner", async () => {
+  const rows = [
+    { id: "p1", brandId: "b1", assetTags: ["seedance", "AI-Generated"], plannedSynthetic: "false" },
+    { id: "p2", brandId: "b1", assetTags: ["studio-session"], plannedSynthetic: "true" },
+    { id: "p3", brandId: "b1", assetTags: ["studio-session"], plannedSynthetic: null }
+  ];
+  const client = {
+    query: async (text) => {
+      if (text.includes("RETURNING sp.\"id\"")) return { rowCount: 3, rows };
+      if (text.includes('FROM "Brand"')) return { rows: [{ settings: { planner: { syntheticTagsAny: ["ai-generated"] } } }] };
+      return { rowCount: 0, rows: [] };
+    },
+    end: async () => {}
+  };
+  const r = await handlePlannerOps({ action: "claim-due-posts", destination: "youtube" }, async () => client, json);
+  assert.deepEqual(r.body.posts.map((p) => [p.id, p.synthetic]), [["p1", true], ["p2", true], ["p3", false]]);
+  assert.ok(!("assetTags" in r.body.posts[0]) && !("brandId" in r.body.posts[0]));
+});
+
 test("finish-post without a video id marks the post failed and keeps the error", async () => {
   let params;
   const client = { query: async (_text, values) => { params = values; return { rowCount: 1, rows: [] }; }, end: async () => {} };
