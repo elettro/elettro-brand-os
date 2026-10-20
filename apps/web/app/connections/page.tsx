@@ -5,6 +5,7 @@ import { LINKEDIN_BRANDS, calendarReminderUrl } from "@/lib/linkedin-connect";
 import { META_BRANDS } from "@/lib/meta-connect";
 import { MetaTestPosts } from "@/components/meta-test-posts";
 import { THREADS_BRANDS } from "@/lib/threads-connect";
+import { TIKTOK_BRANDS } from "@/lib/tiktok-connect";
 import { ReconnectCountdown } from "@/components/reconnect-countdown";
 import { redirect } from "next/navigation";
 
@@ -48,10 +49,13 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
   const facebook = status.facebook || {};
   const instagram = status.instagram || {};
   const threads = status.threads || {};
+  const tiktokBrands = brandConfigs.filter((b) => TIKTOK_BRANDS.includes(b.id));
+  const tiktok = status.tiktok || {};
   // The feed caches for 60s; right after a connect, trust the expiry the callback just reported.
   if (brand && connected && expires && !Number.isNaN(Date.parse(expires))) {
     if (network === "linkedin") linkedin[brand] = { handle: connected, expiresAt: expires };
     if (network === "threads") threads[brand] = { handle: connected, expiresAt: expires };
+    if (network === "tiktok") tiktok[brand] = { handle: connected, expiresAt: expires };
   }
   return <main className="main">
     <div className="eyebrow">Publishing · Social connections</div>
@@ -108,6 +112,26 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
             </p>
             <div className="connect-row">
               <a className="status-chip" href={`/api/connections/threads/start?brand=${b.id}`}>{linked ? "Reconnect" : "Connect Threads"}</a>
+              {linked?.expiresAt && <ReconnectCountdown expiresAt={linked.expiresAt} />}
+            </div>
+          </article>
+        );
+      })}
+    </div>
+    <h2 style={{ marginTop: 32 }}>TikTok</h2>
+    <p className="muted">Sign in to the brand&apos;s TikTok account when asked. Until TikTok approves the Elettro OS app, only sandbox target users can connect and posts go out private. A login lasts a year, so each one counts down to its reconnect date.</p>
+    <div className="grid" style={{ marginTop: 20 }}>
+      {tiktokBrands.map((b) => {
+        const linked = tiktok[b.id];
+        return (
+          <article className="card" key={b.id}>
+            <div className="eyebrow">TikTok</div>
+            <h2>{b.name}</h2>
+            <p className="muted" style={{ margin: "0 0 12px" }}>
+              {linked ? <>● Connected · <b>{linked.handle}</b></> : "○ Not connected"}
+            </p>
+            <div className="connect-row">
+              <a className="status-chip" href={`/api/connections/tiktok/start?brand=${b.id}`}>{linked ? "Reconnect" : "Connect TikTok"}</a>
               {linked?.expiresAt && <ReconnectCountdown expiresAt={linked.expiresAt} />}
             </div>
           </article>

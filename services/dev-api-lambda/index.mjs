@@ -18,6 +18,7 @@ import { completeLinkedinConnect } from "./linkedin-connect.mjs";
 import { completeMetaConnect } from "./meta-connect.mjs";
 import { handlePlannerWeb, handlePlannerOps } from "./planner-ops.mjs";
 import { completeThreadsConnect } from "./threads-connect.mjs";
+import { completeTiktokConnect } from "./tiktok-connect.mjs";
 import { handlePlannerReview } from "./planner-review.mjs";
 
 const { Client } = pg;
@@ -1762,6 +1763,11 @@ export const handler = async (event = {}) => {
   // "Connect Threads": same handshake; one Threads profile per brand, 60-day token with an expiry date.
   if (requestPath === "/connections/threads/complete" && event?.requestContext?.http?.method === "POST") {
     return completeThreadsConnect(event, parseJsonBody(event), connectDatabase, json);
+  }
+
+  // "Connect TikTok": same handshake; one TikTok account per brand, refresh-token expiry as the reconnect date.
+  if (requestPath === "/connections/tiktok/complete" && event?.requestContext?.http?.method === "POST") {
+    return completeTiktokConnect(event, parseJsonBody(event), connectDatabase, json);
   }
 
   // Review page (web /review): list, approve, skip, edit, swap and plan posts; same shared key as the connect routes.
