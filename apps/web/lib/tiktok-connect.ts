@@ -15,9 +15,10 @@ export const TIKTOK_SCOPES = [
   "video.publish"
 ];
 export const TIKTOK_STATE_COOKIE = "elettro_dev_tiktok_state";
-// Stashbox (@stashboxmusic) first. While the app is unaudited each account must be a sandbox
+// Stashbox (@stashboxmusic) first. SolarMeister (@solarmeistershop, private) is the account for
+// unaudited direct posts and the review demo. While the app is unaudited each account must be a sandbox
 // Target User, and posts can only go out as SELF_ONLY (private).
-export const TIKTOK_BRANDS = ["stashbox", "elettro", "therasbox"];
+export const TIKTOK_BRANDS = ["stashbox", "elettro", "therasbox", "solarmeister"];
 export const TIKTOK_OAUTH_SECRET = "elettro-brand-os-dev/tiktok-oauth";
 
 const secrets = new SecretsManagerClient({ region: "us-east-1" });
