@@ -1,7 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import type { ReviewPost, TiktokCreator, TiktokSettings } from "@/lib/planner-review";
+import type { TiktokCreator, TiktokSettings } from "@/lib/planner-review";
+
+// What the card needs from a post: its saved TikTok settings (if any), status and clip length.
+export type TiktokCardPost = { tiktok: TiktokSettings | null; status: string; asset: { durationMs: number | null } };
 
 const PRIVACY: Record<string, string> = {
   PUBLIC_TO_EVERYONE: "Everyone",
@@ -13,9 +16,9 @@ const PRIVACY: Record<string, string> = {
 // TikTok's Content Posting rules, shown before every TikTok approval: the account it posts to,
 // who can view (no default), comments/duet/stitch, the commercial content disclosure and the
 // consent line. Approving sends these settings with the post.
-export function TiktokCard({ post, creator, creatorError, busy, onApprove }: {
-  post: ReviewPost; creator: TiktokCreator | null; creatorError: string | null; busy: boolean;
-  onApprove: (settings: TiktokSettings & { disclose: boolean }) => void;
+export function TiktokCard({ post, creator, creatorError, busy, onApprove, actionLabel }: {
+  post: TiktokCardPost; creator: TiktokCreator | null; creatorError: string | null; busy: boolean;
+  onApprove: (settings: TiktokSettings & { disclose: boolean }) => void; actionLabel?: string;
 }) {
   const saved = post.tiktok;
   const [privacyLevel, setPrivacy] = useState(saved?.privacyLevel || "");
@@ -71,7 +74,7 @@ export function TiktokCard({ post, creator, creatorError, busy, onApprove }: {
       <button className="status-chip" disabled={busy || !ready} onClick={() => onApprove({
         privacyLevel, allowComment: allowComment && !creator.commentDisabled, allowDuet: allowDuet && !creator.duetDisabled,
         allowStitch: allowStitch && !creator.stitchDisabled, yourBrand, brandedContent, disclose
-      })}>{post.status === "approved" ? "Update TikTok settings" : "Approve for TikTok"}</button>
+      })}>{actionLabel || (post.status === "approved" ? "Update TikTok settings" : "Approve for TikTok")}</button>
     </div>
   </div>;
 }

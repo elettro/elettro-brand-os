@@ -6,6 +6,7 @@ import { META_BRANDS } from "@/lib/meta-connect";
 import { MetaTestPosts } from "@/components/meta-test-posts";
 import { THREADS_BRANDS } from "@/lib/threads-connect";
 import { TIKTOK_BRANDS } from "@/lib/tiktok-connect";
+import { TiktokPost } from "@/components/tiktok-post";
 import { ReconnectCountdown } from "@/components/reconnect-countdown";
 import { redirect } from "next/navigation";
 
@@ -134,6 +135,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
               <a className="status-chip" href={`/api/connections/tiktok/start?brand=${b.id}`}>{linked ? "Reconnect" : "Connect TikTok"}</a>
               {linked?.expiresAt && <ReconnectCountdown expiresAt={linked.expiresAt} />}
             </div>
+            {linked && <TiktokPost brand={b.id} />}
           </article>
         );
       })}
