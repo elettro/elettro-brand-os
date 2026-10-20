@@ -136,6 +136,24 @@ export function balanceValueOf(asset, group) {
   return hit ? hit[0] : null;
 }
 
+// A clip's spoken/sung language: English unless a tag names another one ("german", "lang:de",
+// "language:spanish"). Bare two-letter tags don't count; they are too easy to hit by accident.
+const LANGUAGES = {
+  en: ["english"], de: ["german", "deutsch"], es: ["spanish", "espanol", "español"], fr: ["french", "francais", "français"],
+  it: ["italian", "italiano"], pt: ["portuguese", "portugues", "português"], nl: ["dutch"], ja: ["japanese"], ko: ["korean"],
+  zh: ["chinese", "mandarin"], hi: ["hindi"], ar: ["arabic"], ru: ["russian"], he: ["hebrew"]
+};
+const LANGUAGE_BY_NAME = new Map(Object.entries(LANGUAGES).flatMap(([code, names]) => names.map((n) => [n, code])));
+
+export function languageOf(asset) {
+  for (const tag of tagsOf(asset)) {
+    const prefixed = tag.match(/^(?:lang|language)[:\-_](.+)$/)?.[1];
+    const code = prefixed ? (LANGUAGES[prefixed] ? prefixed : LANGUAGE_BY_NAME.get(prefixed)) : LANGUAGE_BY_NAME.get(tag);
+    if (code && code !== "en") return code;
+  }
+  return "en";
+}
+
 export function isSynthetic(asset, settings) {
   return hasAny(tagsOf(asset), settings.syntheticTagsAny);
 }

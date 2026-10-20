@@ -40,9 +40,12 @@ export function uploadRequest(event) {
   if (tags.join(",").length > 500) throw new Error("tags add up to more than 500 characters");
   const privacyStatus = event.privacyStatus || "private";
   if (!PRIVACY.includes(privacyStatus)) throw new Error(`privacyStatus must be one of ${PRIVACY.join(", ")}`);
+  // Title/description language and spoken language; English unless the post says otherwise.
+  const language = String(event.language || "en");
+  if (!/^[a-z]{2}(-[A-Z]{2})?$/.test(language)) throw new Error("language must be a code such as en or de");
   return {
     channelId, dropboxPath, privacyStatus,
-    snippet: { title, description, tags, categoryId: String(event.categoryId || "10") },
+    snippet: { title, description, tags, categoryId: String(event.categoryId || "10"), defaultLanguage: language, defaultAudioLanguage: language },
     madeForKids: event.madeForKids === true,
     // YouTube's "altered or synthetic content" disclosure, required for realistic AI-made video.
     containsSyntheticMedia: event.containsSyntheticMedia === true
@@ -165,7 +168,8 @@ export function uploadFromPost(post, privacyStatus) {
     description: clean([post.caption, hashtagLine].filter(Boolean).join("\n\n"), 5000),
     tags,
     privacyStatus,
-    containsSyntheticMedia: post.synthetic === true
+    containsSyntheticMedia: post.synthetic === true,
+    language: post.language || "en"
   };
 }
 
