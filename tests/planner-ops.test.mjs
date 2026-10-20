@@ -12,14 +12,40 @@ const brand = { id: "b1", slug: "stashbox", timezone: "America/New_York", settin
 const nextWeek = weekWindow(brand, null).weekStart;
 
 test("the tick plans next week first, then the week after, then rests", () => {
-  assert.deepEqual(weekToPlan(brand, []), { weekStart: nextWeek, replace: false });
-  assert.deepEqual(weekToPlan(brand, [nextWeek]), { weekStart: addDaysToYmd(nextWeek, 7), replace: false });
-  assert.equal(weekToPlan(brand, [nextWeek, addDaysToYmd(nextWeek, 7)]), null);
+  const weekAfter = addDaysToYmd(nextWeek, 7);
+  assert.deepEqual(weekToPlan(brand, { youtube: [] }), { weekStart: nextWeek, replace: false, destinations: ["youtube"] });
+  assert.deepEqual(weekToPlan(brand, { youtube: [nextWeek] }), { weekStart: weekAfter, replace: false, destinations: ["youtube"] });
+  assert.equal(weekToPlan(brand, { youtube: [nextWeek, weekAfter] }), null);
+  assert.equal(weekToPlan(brand, {}), null);
 });
 
-test("a re-plan the page asked for wins, and replaces that week's unapproved posts", () => {
+test("a week planned for some networks is still planned for the others, and only for them", () => {
+  // The Review page planned next week for Instagram + Facebook; YouTube and TikTok still need it.
+  const planned = { instagram: [nextWeek], facebook: [nextWeek], youtube: [], tiktok: [] };
+  assert.deepEqual(weekToPlan(brand, planned), { weekStart: nextWeek, replace: false, destinations: ["tiktok", "youtube"] });
+});
+
+test("the tick asks the planner for just the networks missing from the week", async () => {
+  let cadenceParams;
+  const db = async () => ({
+    async query(sql, params) {
+      if (sql.includes('SELECT DISTINCT b."slug"')) return { rows: [{ slug: "stashbox" }] };
+      if (sql.includes('FROM "Brand"')) return { rows: [{ ...brand, settings: { planner: { sectors: [{ id: "live" }] } } }] };
+      if (sql.includes('SELECT DISTINCT sa."destination" FROM')) return { rows: [{ destination: "instagram" }, { destination: "youtube" }] };
+      if (sql.includes('AS "week"')) return { rows: [{ destination: "instagram", week: nextWeek }] };
+      if (sql.includes('FROM "CadenceRule" cr JOIN')) { cadenceParams = params; return { rows: [] }; }
+      return { rows: [], rowCount: 0 };
+    },
+    async end() {}
+  });
+  const r = await handlePlannerOps({ action: "planner-tick" }, db, json);
+  assert.deepEqual(cadenceParams?.[1], ["youtube"]);
+  assert.deepEqual(r.body.destinations, ["youtube"]);
+});
+
+test("a re-plan the page asked for wins, and replaces that week's unapproved posts on every network", () => {
   const asked = { ...brand, settings: { plannerRuntime: { replanWeek: "2026-11-02" } } };
-  assert.deepEqual(weekToPlan(asked, [nextWeek]), { weekStart: "2026-11-02", replace: true });
+  assert.deepEqual(weekToPlan(asked, { youtube: [nextWeek] }), { weekStart: "2026-11-02", replace: true, destinations: null });
 });
 
 test("the planner page needs the owner key", async () => {

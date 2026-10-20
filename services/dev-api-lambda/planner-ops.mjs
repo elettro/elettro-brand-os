@@ -87,13 +87,17 @@ export async function handlePlannerWeb(event, body, connectDatabase, json) {
   return json(400, { ok: false, error: "Unknown planner action" });
 }
 
-// Which week, if any, needs planning now: a requested re-plan first, then the first empty week ahead.
-export function weekToPlan(brand, plannedWeeks) {
+// Which week, if any, needs planning now: a requested re-plan first (every network), then the first
+// week ahead that some network has no posts in, planned for just those networks. A week the Review
+// page planned for Instagram + Facebook still gets YouTube, TikTok and the rest.
+// plannedByDestination: { destination: [weekStart, ...] } with an entry for every active destination.
+export function weekToPlan(brand, plannedByDestination) {
   const requested = brand.settings?.plannerRuntime?.replanWeek;
-  if (YMD.test(String(requested || ""))) return { weekStart: requested, replace: true };
+  if (YMD.test(String(requested || ""))) return { weekStart: requested, replace: true, destinations: null };
   let week = weekWindow(brand, null).weekStart;
   for (let i = 0; i < WEEKS_AHEAD; i++, week = addDaysToYmd(week, 7)) {
-    if (!plannedWeeks.includes(week)) return { weekStart: week, replace: false };
+    const missing = Object.keys(plannedByDestination).filter((d) => !plannedByDestination[d].includes(week)).sort();
+    if (missing.length) return { weekStart: week, replace: false, destinations: missing };
   }
   return null;
 }
@@ -108,18 +112,25 @@ async function plannerTick(connectDatabase, json) {
     for (const { slug } of brands) {
       const brand = await loadBrand(client, slug);
       const window = weekWindow(brand, null, WEEKS_AHEAD);
+      const active = (await client.query(
+        `SELECT DISTINCT sa."destination" FROM "SocialAccount" sa
+         JOIN "CadenceRule" cr ON cr."socialAccountId" = sa."id" AND cr."active" = TRUE AND cr."postsPerWeek" > 0
+         WHERE sa."brandId" = $1 AND sa."status" = 'active'`, [brand.id])).rows.map((r) => r.destination);
+      const plannedByDestination = Object.fromEntries(active.map((d) => [d, []]));
       const planned = (await client.query(
-        `SELECT DISTINCT to_char(("scheduledFor" AT TIME ZONE 'UTC' AT TIME ZONE $2)::date
-                 - (EXTRACT(ISODOW FROM ("scheduledFor" AT TIME ZONE 'UTC' AT TIME ZONE $2)::date)::int - 1), 'YYYY-MM-DD') AS "week"
-         FROM "ScheduledPost" WHERE "brandId" = $1 AND "scheduledFor" >= $3 AND "scheduledFor" < $4`,
-        [brand.id, window.timeZone, window.from, window.to])).rows.map((r) => r.week);
-      const next = weekToPlan(brand, planned);
+        `SELECT DISTINCT sa."destination", to_char((sp."scheduledFor" AT TIME ZONE 'UTC' AT TIME ZONE $2)::date
+                 - (EXTRACT(ISODOW FROM (sp."scheduledFor" AT TIME ZONE 'UTC' AT TIME ZONE $2)::date)::int - 1), 'YYYY-MM-DD') AS "week"
+         FROM "ScheduledPost" sp JOIN "SocialAccount" sa ON sa."id" = sp."socialAccountId"
+         WHERE sp."brandId" = $1 AND sp."scheduledFor" >= $3 AND sp."scheduledFor" < $4`,
+        [brand.id, window.timeZone, window.from, window.to])).rows;
+      for (const r of planned) plannedByDestination[r.destination]?.push(r.week);
+      const next = weekToPlan(brand, plannedByDestination);
       if (!next) continue;
       // runPlanWeek opens its own connection; release ours first so the tick holds one at a time.
       await client.end();
       const raw = (status, body) => ({ status, body });
-      const result = await runPlanWeek({ brandSlug: slug, weekStart: next.weekStart, mode: "apply", replacePlanned: next.replace },
-        connectDatabase, raw);
+      const result = await runPlanWeek({ brandSlug: slug, weekStart: next.weekStart, mode: "apply", replacePlanned: next.replace,
+        destinations: next.destinations || undefined }, connectDatabase, raw);
       if (next.replace) {
         const again = await connectDatabase();
         try {
@@ -127,6 +138,7 @@ async function plannerTick(connectDatabase, json) {
         } finally { await again.end(); }
       }
       return json(result.status, { ok: result.status === 200, brand: slug, weekStart: next.weekStart, replaced: next.replace,
+        destinations: next.destinations || "all",
         inserted: result.body.inserted ?? 0, gaps: result.body.gaps?.length ?? 0, error: result.body.error });
     }
     return json(200, { ok: true, planned: null });
