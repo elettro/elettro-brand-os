@@ -106,3 +106,9 @@ test("feed response is public-readable JSON", () => {
   assert.equal(r.headers["access-control-allow-origin"], "*");
   assert.match(r.headers["cache-control"], /max-age=60/);
 });
+
+test("milestones lift any checkpoint but never lower derived ones", () => {
+  const { done } = profileStatus({ ...base, connected: true, milestones: { test: 1, oauth: 0 } }, NOW);
+  assert.equal(done.test, 1);
+  assert.equal(done.oauth, 1);
+});

@@ -50,6 +50,8 @@ export function profileStatus(facts, now = new Date()) {
     test: facts.apiPublishCount > 0 ? 1 : 0,
     live: facts.publishingMode === "auto" && facts.lastApiPublishAt && new Date(facts.lastApiPublishAt) >= liveSince ? 1 : 0
   };
+  // Milestones can lift any checkpoint (e.g. a test post made by a worker outside the ledger), never lower it.
+  for (const key of Object.keys(done)) done[key] = Math.max(done[key], m[key] || 0);
   return { done, pct: scoreOf(done) };
 }
 
