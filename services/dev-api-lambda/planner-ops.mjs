@@ -5,7 +5,7 @@
 //     claim-due-posts  hand out approved posts whose time has come, marked 'publishing'
 //     finish-post      record the outcome: 'published' + a PublicationLedger row, or 'failed'
 import { withClient, loadBrand, weekWindow, runPlanWeek, approvePlannerWeek } from "./planner-v2-db.mjs";
-import { addDaysToYmd } from "./planner-v2.mjs";
+import { addDaysToYmd, isSynthetic, resolvePlannerSettings } from "./planner-v2.mjs";
 import { keyMatches } from "./youtube-connect.mjs";
 
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
@@ -174,8 +174,19 @@ async function claimDuePosts(event, connectDatabase, json) {
        WHERE sp."id" = due."id" AND sa."id" = sp."socialAccountId" AND a."id" = sp."assetId"
        RETURNING sp."id", sp."placement", sp."scheduledFor", sp."generatedTitle" AS "title", sp."generatedCaption" AS "caption",
                  sp."generatedHashtags" AS "hashtags", sa."externalAccountId" AS "channelId", a."sourcePath" AS "dropboxPath",
-                 a."filename", a."title" AS "assetTitle", sp."scoreBreakdown"->'tiktok' AS "tiktok"`, [destination, limit])).rows;
-    return json(200, { ok: true, missed, stuck, posts });
+                 a."filename", a."title" AS "assetTitle", sp."scoreBreakdown"->'tiktok' AS "tiktok", a."tags" AS "assetTags", sp."brandId",
+                 sp."scoreBreakdown"->>'syntheticDisclosure' AS "plannedSynthetic"`, [destination, limit])).rows;
+    // AI-made content must be declared to the network. Judged from the clip being posted (it may have
+    // been swapped since planning) with the brand's own AI tags; the planner's flag can only add to it.
+    const settingsByBrand = new Map();
+    for (const brandId of new Set(posts.map((p) => p.brandId))) {
+      const row = (await client.query('SELECT "settings" FROM "Brand" WHERE "id" = $1', [brandId])).rows[0];
+      settingsByBrand.set(brandId, resolvePlannerSettings(row?.settings));
+    }
+    const out = posts.map(({ assetTags, brandId, plannedSynthetic, ...p }) => ({
+      ...p, synthetic: plannedSynthetic === "true" || isSynthetic({ tags: assetTags }, settingsByBrand.get(brandId))
+    }));
+    return json(200, { ok: true, missed, stuck, posts: out });
   });
 }
 

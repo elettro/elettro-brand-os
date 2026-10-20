@@ -43,7 +43,9 @@ export function uploadRequest(event) {
   return {
     channelId, dropboxPath, privacyStatus,
     snippet: { title, description, tags, categoryId: String(event.categoryId || "10") },
-    madeForKids: event.madeForKids === true
+    madeForKids: event.madeForKids === true,
+    // YouTube's "altered or synthetic content" disclosure, required for realistic AI-made video.
+    containsSyntheticMedia: event.containsSyntheticMedia === true
   };
 }
 
@@ -110,7 +112,7 @@ async function startSession(accessToken, request, size) {
     },
     body: JSON.stringify({
       snippet: request.snippet,
-      status: { privacyStatus: request.privacyStatus, selfDeclaredMadeForKids: request.madeForKids }
+      status: { privacyStatus: request.privacyStatus, selfDeclaredMadeForKids: request.madeForKids, containsSyntheticMedia: request.containsSyntheticMedia }
     }),
     signal: AbortSignal.timeout(30000)
   });
@@ -162,7 +164,8 @@ export function uploadFromPost(post, privacyStatus) {
     title: clean(post.title, 100) || clean(post.assetTitle, 100) || clean(String(post.filename || "").replace(/\.[^.]+$/, ""), 100),
     description: clean([post.caption, hashtagLine].filter(Boolean).join("\n\n"), 5000),
     tags,
-    privacyStatus
+    privacyStatus,
+    containsSyntheticMedia: post.synthetic === true
   };
 }
 

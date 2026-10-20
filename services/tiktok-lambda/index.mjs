@@ -252,6 +252,8 @@ async function postVideo(request) {
     if (creator.comment_disabled) post_info.disable_comment = true;
     if (creator.duet_disabled) post_info.disable_duet = true;
     if (creator.stitch_disabled) post_info.disable_stitch = true;
+    // TikTok's "AI-generated content" label, required for realistic AI-made video.
+    if (request.aigc === true) post_info.is_aigc = true;
     init = await tiktok("/post/publish/video/init/", account.accessToken, { post_info, source_info });
   } else {
     init = await tiktok("/post/publish/inbox/video/init/", account.accessToken, { source_info });
@@ -277,7 +279,7 @@ export function requestFromPost(post, mode) {
   const caption = [post.caption, tags.map((t) => `#${t}`).join(" ")].map((p) => String(p || "").trim()).filter(Boolean).join("\n\n");
   return {
     ...postRequest({ brand: "planner", dropboxPath: post.dropboxPath, caption: caption.slice(0, 2200), mode }),
-    openId: String(post.channelId || ""), settings: post.tiktok || null
+    openId: String(post.channelId || ""), settings: post.tiktok || null, aigc: post.synthetic === true
   };
 }
 
