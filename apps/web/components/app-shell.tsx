@@ -18,7 +18,7 @@ const NAV: Array<{ label: string; items: Array<{ label: string; href?: string }>
   ] },
   { label: "Publishing", items: [
     { label: "Planner" },
-    { label: "Review" },
+    { label: "Review", href: "/review" },
     { label: "Calendar" },
     { label: "Connections", href: "/connections" }
   ] },
