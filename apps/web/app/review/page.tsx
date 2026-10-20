@@ -20,7 +20,7 @@ export default async function ReviewPage({ searchParams }: { searchParams: Promi
   return <main className="main">
     <div className="eyebrow">Publishing · Review</div>
     <h1>Review</h1>
-    <p className="muted">This week and the next two months of Facebook and Instagram posts. Click a week&apos;s strip to open or close it. Approve what should go out, skip what shouldn&apos;t, fix captions or swap a clip. Nothing posts until it is approved, and only the next seven days are ever handed to the publisher.</p>
+    <p className="muted">This week and the next two months of Facebook, Instagram and TikTok posts. Click a week&apos;s strip to open or close it. Approve what should go out, skip what shouldn&apos;t, fix captions or swap a clip. TikTok posts are approved one at a time from their TikTok card. Nothing posts until it is approved, and only the next seven days are ever handed to the publisher.</p>
     <nav className="review-brands" aria-label="Brand">
       {brands.map((b) => <a key={b.id} href={`/review?brand=${b.id}`} className={b.id === brand ? "active" : undefined}>{b.name}</a>)}
     </nav>

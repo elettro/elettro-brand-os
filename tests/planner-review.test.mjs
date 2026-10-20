@@ -84,3 +84,35 @@ test("cadence needs a connected account", async () => {
     async () => fakeClient(), json);
   assert.equal(r.statusCode, 409);
 });
+
+const POST_ID = "0f8c2c62-6c5e-4a8e-9a0f-0b7f5a1d2e3f";
+
+test("TikTok settings need an explicit privacy choice and follow TikTok's disclosure rules", async () => {
+  const { tiktokSettings } = await import("../services/dev-api-lambda/planner-review.mjs");
+  assert.throws(() => tiktokSettings({}), /who can view/);
+  assert.deepEqual(tiktokSettings({ privacyLevel: "PUBLIC_TO_EVERYONE", allowComment: true }),
+    { privacyLevel: "PUBLIC_TO_EVERYONE", allowComment: true, allowDuet: false, allowStitch: false, yourBrand: false, brandedContent: false });
+  assert.throws(() => tiktokSettings({ privacyLevel: "PUBLIC_TO_EVERYONE", disclose: true }), /pick Your brand/);
+  assert.throws(() => tiktokSettings({ privacyLevel: "SELF_ONLY", disclose: true, brandedContent: true }), /can't be private/);
+});
+
+test("tiktok-approve stores the settings and approves only TikTok posts", async () => {
+  process.env.CONNECTIONS_API_SHARED_SECRET = KEY;
+  const client = fakeClient([['UPDATE "ScheduledPost"', { rows: [{ id: POST_ID }], rowCount: 1 }]]);
+  const missing = await handlePlannerReview(event, { brand: "stashbox", action: "tiktok-approve", id: POST_ID }, async () => client, json);
+  assert.equal(missing.statusCode, 400);
+  const r = await handlePlannerReview(event, { brand: "stashbox", action: "tiktok-approve", id: POST_ID, privacyLevel: "FOLLOWER_OF_CREATOR", allowComment: true },
+    async () => client, json);
+  assert.equal(r.statusCode, 200);
+  const update = client.seen.find((q) => q.sql.includes('UPDATE "ScheduledPost"'));
+  assert.match(update.sql, /destination" = 'tiktok'/);
+  assert.equal(JSON.parse(update.params[2]).privacyLevel, "FOLLOWER_OF_CREATOR");
+});
+
+test("plain approval refuses TikTok posts that have no TikTok settings", async () => {
+  process.env.CONNECTIONS_API_SHARED_SECRET = KEY;
+  const client = fakeClient([['UPDATE "ScheduledPost"', { rows: [], rowCount: 0 }]]);
+  const r = await handlePlannerReview(event, { brand: "stashbox", action: "set-status", ids: [POST_ID], status: "approved" }, async () => client, json);
+  assert.equal(r.statusCode, 409);
+  assert.match(client.seen.find((q) => q.sql.includes('UPDATE "ScheduledPost"')).sql, /scoreBreakdown" \? 'tiktok'/);
+});

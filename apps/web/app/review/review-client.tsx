@@ -1,11 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import type { ReviewList, ReviewPost } from "@/lib/planner-review";
+import { useEffect, useMemo, useState } from "react";
+import type { ReviewList, ReviewPost, TiktokCreator } from "@/lib/planner-review";
 import { AssetThumb as Thumb } from "@/components/asset-thumb";
+import { TiktokCard } from "./tiktok-card";
 
-const NETWORK: Record<string, string> = { instagram: "Instagram", facebook: "Facebook" };
-const PLACEMENT = "reel";
+const NETWORK: Record<string, string> = { instagram: "Instagram", facebook: "Facebook", tiktok: "TikTok" };
+const NETWORKS = ["instagram", "facebook", "tiktok"] as const;
+// Reels on Instagram and Facebook; TikTok's planner placement is "video".
+const PLACEMENT: Record<string, string> = { instagram: "reel", facebook: "reel", tiktok: "video" };
 
 function addDays(ymd: string, days: number) {
   const d = new Date(ymd + "T12:00:00Z");
@@ -49,7 +52,7 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
   }), [list]);
 
   const perDay = (destination: string) => {
-    const rule = list.accounts.find((a) => a.destination === destination && a.placement === PLACEMENT && a.active);
+    const rule = list.accounts.find((a) => a.destination === destination && a.placement === PLACEMENT[destination] && a.active);
     return rule?.postsPerWeek ? Math.round(rule.postsPerWeek / 7) : 0;
   };
   const connected = (destination: string) => list.accounts.find((a) => a.destination === destination && a.externalAccountId);
@@ -60,7 +63,18 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
     if (next.has(start)) next.delete(start); else next.add(start);
     return next;
   });
-  const [cadence, setCadence] = useState({ instagram: perDay("instagram"), facebook: perDay("facebook") });
+  const [cadence, setCadence] = useState({ instagram: perDay("instagram"), facebook: perDay("facebook"), tiktok: perDay("tiktok") });
+  // TikTok's card needs the account's current settings from TikTok, fetched once per page load.
+  const hasTiktok = list.posts.some((p) => p.destination === "tiktok" && reviewable(p));
+  const [creator, setCreator] = useState<TiktokCreator | null>(null);
+  const [creatorError, setCreatorError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!hasTiktok || creator || creatorError) return;
+    fetch(`/api/tiktok/creator?brand=${brand}`).then(async (r) => {
+      const data = await r.json().catch(() => ({})) as TiktokCreator & { ok?: boolean; error?: string };
+      if (r.ok && data.ok) setCreator(data); else setCreatorError(data.error || `HTTP ${r.status}`);
+    }).catch(() => setCreatorError("Elettro OS could not reach TikTok"));
+  }, [hasTiktok, brand, creator, creatorError]);
 
   async function run(label: string, body: Record<string, unknown>, done?: string) {
     setBusy(label);
@@ -79,18 +93,18 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
   }
 
   async function saveCadence() {
-    for (const destination of ["instagram", "facebook"] as const) {
+    for (const destination of NETWORKS) {
       if (!connected(destination)) continue;
-      await run("cadence", { action: "cadence", destination, placement: PLACEMENT, postsPerWeek: cadence[destination] * 7 });
+      await run("cadence", { action: "cadence", destination, placement: PLACEMENT[destination], postsPerWeek: cadence[destination] * 7 });
     }
-    setNotice(`Saved: ${cadence.instagram}/day on Instagram, ${cadence.facebook}/day on Facebook. Plan a week to use it.`);
+    setNotice(`Saved: ${NETWORKS.filter((d) => connected(d)).map((d) => `${cadence[d]}/day on ${NETWORK[d]}`).join(", ")}. Plan a week to use it.`);
   }
 
   return <div className="review">
     <section className="card review-settings">
       <div>
-        <div className="eyebrow">Posts per day (Reels)</div>
-        {(["instagram", "facebook"] as const).map((d) => (
+        <div className="eyebrow">Posts per day</div>
+        {NETWORKS.map((d) => (
           <label key={d} className="review-cadence">
             {NETWORK[d]} {connected(d) ? <b>{connected(d)!.accountName}</b> : <span className="muted">not connected</span>}
             <input type="number" min={0} max={10} value={cadence[d]} disabled={!connected(d)}
@@ -123,7 +137,8 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
           <span className="muted">{w.posts.length ? `${approved} approved · ${planned} to review · ${skipped} skipped` : "Nothing planned yet"}</span>
           <div className="review-actions">
             {planned > 0 && <button className="status-chip" disabled={!!busy}
-              onClick={() => run("week", { action: "approve-range", from: w.start, to: w.end }, `Approved ${planned} posts for the week of ${w.start}.`)}>Approve week</button>}
+              title="TikTok posts are approved one at a time from their TikTok card"
+              onClick={() => run("week", { action: "approve-range", from: w.start, to: w.end }, "Approved the week's Facebook and Instagram posts. TikTok posts need their TikTok card.")}>Approve week</button>}
             {w.end >= today && <button className="status-chip" disabled={!!busy || !list.accounts.some((a) => a.active && a.postsPerWeek)}
               title={list.accounts.some((a) => a.active && a.postsPerWeek) ? "" : "Set posts per day first"}
               onClick={() => run("plan", { action: "plan", weekStart: w.start }, `Planning ${underway ? "the rest of " : ""}the week of ${w.start}. Refresh in a minute or two.`)}>
@@ -156,8 +171,10 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
                 </div> : <p className="review-caption">{p.caption || <span className="muted">No caption yet</span>}
                   {p.hashtags.length > 0 && <span className="review-tags"> {p.hashtags.map(tag).join(" ")}</span>}</p>}
                 <p className="muted review-file">{p.asset.title || p.asset.filename}{p.sector ? ` · ${p.sector}` : ""}</p>
+                {reviewable(p) && p.destination === "tiktok" && p.status !== "skipped" && <TiktokCard post={p} creator={creator} creatorError={creatorError} busy={!!busy}
+                  onApprove={(settings) => run(p.id, { action: "tiktok-approve", id: p.id, ...settings }, "Approved for TikTok with these settings.")} />}
                 {reviewable(p) && <div className="review-actions">
-                  {p.status !== "approved" && <button className="status-chip" disabled={!!busy} onClick={() => run(p.id, { action: "set-status", ids: [p.id], status: "approved" })}>Approve</button>}
+                  {p.status !== "approved" && p.destination !== "tiktok" && <button className="status-chip" disabled={!!busy} onClick={() => run(p.id, { action: "set-status", ids: [p.id], status: "approved" })}>Approve</button>}
                   {p.status !== "skipped" && <button className="status-chip" disabled={!!busy} onClick={() => run(p.id, { action: "set-status", ids: [p.id], status: "skipped" })}>Skip</button>}
                   {p.status !== "planned" && <button className="status-chip" disabled={!!busy} onClick={() => run(p.id, { action: "set-status", ids: [p.id], status: "planned" })}>Undo</button>}
                   {editing !== p.id && <button className="status-chip" disabled={!!busy} onClick={() => {

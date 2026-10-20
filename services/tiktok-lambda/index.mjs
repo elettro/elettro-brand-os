@@ -12,6 +12,8 @@ import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
 //                                             mode "draft" (default) lands in the creator's TikTok
 //                                             inbox to finish in the app; "direct" posts it
 //   { action: "status", brand, publishId }    where a post is in TikTok's pipeline
+//   { action: "creator-info", brand }         the account's name, avatar and allowed settings,
+//                                             fresh from TikTok, for the Review page's TikTok card
 // TikTok access tokens last 24 hours; the 365-day refresh token renews them, and each refresh
 // can hand back a new refresh token, so the whole token record is rewritten every time.
 
@@ -29,8 +31,9 @@ const API = "https://open.tiktokapis.com/v2";
 const TOKEN_URL = `${API}/oauth/token/`;
 // Renew when less than this is left; with a 6-hour schedule every token gets two tries.
 const RENEW_WITHIN_MS = 12 * 3600 * 1000;
-// Until TikTok audits the app, direct posts can only be private (SELF_ONLY).
-const DIRECT_PRIVACY = process.env.TIKTOK_PRIVACY || "SELF_ONLY";
+// Until TikTok audits the app, direct posts can only be private: TIKTOK_PRIVACY=SELF_ONLY forces
+// that over the reviewer's choice. Unset, posts use the privacy picked on the Review page.
+const PRIVACY_OVERRIDE = process.env.TIKTOK_PRIVACY || "";
 const BRANDS_ROOT = "/1---elettro-brand-os/brands/";
 const MB = 1024 * 1024;
 // TikTok chunks: 5-64 MB each, the last one may run up to 128 MB; videos up to 64 MB go in one piece.
@@ -213,6 +216,26 @@ async function sendChunks(uploadUrl, file, plan) {
   }
 }
 
+// post_info for a direct post from the settings the creator picked on the Review page.
+export function postInfo(settings, caption, override = PRIVACY_OVERRIDE) {
+  if (!settings?.privacyLevel) throw new Error("No TikTok settings: approve this post from its TikTok card on the Review page");
+  return {
+    title: caption, privacy_level: override || settings.privacyLevel,
+    disable_comment: settings.allowComment !== true, disable_duet: settings.allowDuet !== true, disable_stitch: settings.allowStitch !== true,
+    brand_organic_toggle: settings.yourBrand === true, brand_content_toggle: settings.brandedContent === true
+  };
+}
+
+async function creatorInfo(brand) {
+  const account = await brandAccount(String(brand || ""));
+  const c = await tiktok("/post/publish/creator_info/query/", account.accessToken);
+  return {
+    username: c.creator_username || account.username || null, nickname: c.creator_nickname || null, avatarUrl: c.creator_avatar_url || null,
+    privacyLevelOptions: c.privacy_level_options || [], commentDisabled: c.comment_disabled === true,
+    duetDisabled: c.duet_disabled === true, stitchDisabled: c.stitch_disabled === true, maxVideoPostDurationSec: c.max_video_post_duration_sec || null
+  };
+}
+
 async function postVideo(request) {
   const [account, file] = await Promise.all([brandAccount(request.brand, request.openId), dropboxFile(request.dropboxPath)]);
   const plan = chunkPlan(file.size);
@@ -221,13 +244,15 @@ async function postVideo(request) {
   if (request.mode === "direct") {
     // TikTok requires a fresh creator_info query before every direct post.
     const creator = await tiktok("/post/publish/creator_info/query/", account.accessToken);
-    if (!(creator.privacy_level_options || []).includes(DIRECT_PRIVACY)) {
-      throw new Error(`TikTok does not allow ${DIRECT_PRIVACY} for ${account.username || account.openId} (options: ${(creator.privacy_level_options || []).join(", ")})`);
+    const post_info = postInfo(request.settings, request.caption);
+    if (!(creator.privacy_level_options || []).includes(post_info.privacy_level)) {
+      throw new Error(`TikTok does not allow ${post_info.privacy_level} for ${account.username || account.openId} (options: ${(creator.privacy_level_options || []).join(", ")})`);
     }
-    init = await tiktok("/post/publish/video/init/", account.accessToken, {
-      post_info: { title: request.caption, privacy_level: DIRECT_PRIVACY, disable_duet: false, disable_comment: false, disable_stitch: false },
-      source_info
-    });
+    // Interactions the creator turned off in the TikTok app stay off.
+    if (creator.comment_disabled) post_info.disable_comment = true;
+    if (creator.duet_disabled) post_info.disable_duet = true;
+    if (creator.stitch_disabled) post_info.disable_stitch = true;
+    init = await tiktok("/post/publish/video/init/", account.accessToken, { post_info, source_info });
   } else {
     init = await tiktok("/post/publish/inbox/video/init/", account.accessToken, { source_info });
   }
@@ -250,7 +275,10 @@ async function postStatus(brand, publishId) {
 export function requestFromPost(post, mode) {
   const tags = (post.hashtags || []).map((h) => String(h).replace(/^#/, "").trim()).filter(Boolean);
   const caption = [post.caption, tags.map((t) => `#${t}`).join(" ")].map((p) => String(p || "").trim()).filter(Boolean).join("\n\n");
-  return { ...postRequest({ brand: "planner", dropboxPath: post.dropboxPath, caption: caption.slice(0, 2200), mode }), openId: String(post.channelId || "") };
+  return {
+    ...postRequest({ brand: "planner", dropboxPath: post.dropboxPath, caption: caption.slice(0, 2200), mode }),
+    openId: String(post.channelId || ""), settings: post.tiktok || null
+  };
 }
 
 async function api(payload) {
@@ -305,12 +333,19 @@ export async function handler(event = {}) {
     let request;
     try { request = postRequest(event); } catch (error) { return result(400, { ok: false, error: error.message }); }
     try {
-      const posted = await postVideo(request);
+      // A manual direct post (testing) defaults to private with interactions on.
+      const settings = { privacyLevel: String(event.privacyLevel || "SELF_ONLY"), allowComment: true, allowDuet: true, allowStitch: true };
+      const posted = await postVideo({ ...request, settings });
       console.log("TikTok post", JSON.stringify(posted));
       return result(200, { ok: true, ...posted });
     } catch (error) {
       console.error("TikTok post failed:", error?.message);
       return result(502, { ok: false, error: error?.message || "Post failed" });
+    }
+  }
+  if (event.action === "creator-info") {
+    try { return result(200, { ok: true, ...(await creatorInfo(event.brand)) }); } catch (error) {
+      return result(502, { ok: false, error: error?.message || "TikTok account lookup failed" });
     }
   }
   if (event.action === "status") {

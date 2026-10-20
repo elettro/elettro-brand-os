@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { needsRefresh, refreshRecord, postRequest, chunkPlan, requestFromPost, handler } from "../services/tiktok-lambda/index.mjs";
+import { needsRefresh, refreshRecord, postRequest, chunkPlan, requestFromPost, postInfo, handler } from "../services/tiktok-lambda/index.mjs";
 
 const NOW = new Date("2026-10-21T00:00:00Z");
 const app = { clientKey: "key", clientSecret: "secret" };
@@ -89,4 +89,18 @@ test("a planner post becomes a request for its account with caption and hashtags
 
 test("a planner post with a file outside the brand Dropbox is refused", () => {
   assert.throws(() => requestFromPost({ channelId: "x", dropboxPath: "/Personal/a.mp4" }, "draft"), /brands/);
+});
+
+test("direct posts carry the creator's Review-page choices; none means no post", () => {
+  const info = postInfo({ privacyLevel: "FOLLOWER_OF_CREATOR", allowComment: true, allowDuet: false, allowStitch: true, yourBrand: true }, "hi", "");
+  assert.deepEqual(info, { title: "hi", privacy_level: "FOLLOWER_OF_CREATOR", disable_comment: false, disable_duet: true, disable_stitch: false,
+    brand_organic_toggle: true, brand_content_toggle: false });
+  assert.equal(postInfo({ privacyLevel: "PUBLIC_TO_EVERYONE" }, "hi", "SELF_ONLY").privacy_level, "SELF_ONLY");
+  assert.throws(() => postInfo(null, "hi", ""), /TikTok card/);
+});
+
+test("a planner post brings its TikTok settings along", () => {
+  const settings = { privacyLevel: "PUBLIC_TO_EVERYONE", allowComment: true };
+  assert.deepEqual(requestFromPost({ channelId: "x", dropboxPath: post.dropboxPath, tiktok: settings }, "direct").settings, settings);
+  assert.equal(requestFromPost({ channelId: "x", dropboxPath: post.dropboxPath }, "direct").settings, null);
 });
