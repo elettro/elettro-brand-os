@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
-import { authenticated } from "@/lib/cognito-auth";
+import { authenticated, allowedOrigin } from "@/lib/cognito-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -51,7 +51,7 @@ export async function GET(request:NextRequest) {
 /** Create a user-selected size or category folder inside shared Creative Assets. */
 export async function POST(request:NextRequest) {
   if (!(await authenticated())) return NextResponse.json({error:"Login required"},{status:401});
-  if (request.headers.get("origin") !== "https://develop.d2k28tehm1a8zw.amplifyapp.com")
+  if (!allowedOrigin(request.headers.get("origin")))
     return NextResponse.json({error:"Invalid request origin"},{status:403});
   const body=await request.json().catch(()=>null) as {path?:unknown;name?:unknown}|null;
   const path=typeof body?.path==="string"?body.path.replace(/\\/g,"/").replace(/\/+$/,""):"";

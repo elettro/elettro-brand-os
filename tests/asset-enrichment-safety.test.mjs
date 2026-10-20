@@ -40,7 +40,7 @@ test("AI enrichment is owner-only, gated, non-destructive and scoped to brand ro
   assert.match(helper, /latest\.sourcePath !== path/);
   assert.match(helper, /update_asset_metadata/);
   assert.match(route, /await authenticated\(\)/);
-  assert.match(route, /request\.headers\.get\("origin"\) !== DEV_ORIGIN/);
+  assert.match(route, /!allowedOrigin\(request\.headers\.get\("origin"\)\)/);
   assert.match(intake, /NEXT_PUBLIC_EPE_AUTO_ENRICH_ENABLED === "true"/);
   assert.match(intake, /report\.registered\+\+;/);
   assert.match(intake, /auto-enrich/);

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GetParameterCommand, SSMClient } from "@aws-sdk/client-ssm";
-import { authenticated } from "@/lib/cognito-auth";
+import { authenticated, allowedOrigin } from "@/lib/cognito-auth";
 
 export const runtime = "nodejs";
 
@@ -24,7 +24,7 @@ const apiBaseUrl =
 
 export async function POST(request: NextRequest) {
   if (!(await authenticated())) return NextResponse.json({error:"Login required"},{status:401});
-  if (request.headers.get("origin") !== "https://develop.d2k28tehm1a8zw.amplifyapp.com") return NextResponse.json({error:"Invalid request origin"},{status:403});
+  if (!allowedOrigin(request.headers.get("origin"))) return NextResponse.json({error:"Invalid request origin"},{status:403});
   const body = await request.text();
 
   let action = "";
