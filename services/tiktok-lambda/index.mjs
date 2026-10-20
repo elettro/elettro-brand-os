@@ -1,9 +1,12 @@
 import { SecretsManagerClient, GetSecretValueCommand, ListSecretsCommand, PutSecretValueCommand } from "@aws-sdk/client-secrets-manager";
+import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
 
 // TikTok worker for Elettro OS. Runs outside the VPC (it needs open.tiktokapis.com) and is only
 // invoked directly through IAM: no HTTP route points at it. Ways in:
-//   an EventBridge schedule (every 6 hours)  renew access tokens that expire within 12 hours
-//   { action: "refresh" }                     the same, on demand
+//   an EventBridge schedule (every 15 min)   the tick: renew access tokens that expire within
+//                                             12 hours, then send approved TikTok posts whose time
+//                                             has come (planner claim-due-posts / finish-post)
+//   { action: "refresh" }                     renew tokens only, on demand
 //   { action: "post", brand, dropboxPath, caption?, mode? }
 //                                             send a Dropbox video to the brand's TikTok:
 //                                             mode "draft" (default) lands in the creator's TikTok
@@ -13,6 +16,12 @@ import { SecretsManagerClient, GetSecretValueCommand, ListSecretsCommand, PutSec
 // can hand back a new refresh token, so the whole token record is rewritten every time.
 
 const secrets = new SecretsManagerClient({});
+const lambda = new LambdaClient({});
+const API_FUNCTION = process.env.API_FUNCTION_NAME || "elettro-brand-os-dev-api";
+// Until TikTok audits the app, scheduled posts go to the creator's inbox as drafts; set
+// TIKTOK_TICK_MODE=direct once the audit passes. Drafts are capped by TikTok, so one per tick.
+const TICK_MODE = process.env.TIKTOK_TICK_MODE || "draft";
+const POSTS_PER_TICK = 1;
 const APP_SECRET = process.env.TIKTOK_OAUTH_SECRET_NAME || "elettro-brand-os-dev/tiktok-oauth";
 const TOKEN_PREFIX = process.env.TIKTOK_TOKEN_SECRET_PREFIX || "elettro-brand-os-dev/tiktok/";
 const DROPBOX_SECRET = process.env.DROPBOX_SECRET_NAME || "elettro-brand-os-dev/dropbox";
@@ -141,18 +150,20 @@ async function tiktok(path, accessToken, body) {
   return out.data || {};
 }
 
-// The brand's token record, renewed first when it is close to expiring.
-async function brandAccount(brand) {
-  for (const SecretId of await tokenSecretNames()) {
+// The token record for a brand (manual posts) or an open_id (planner posts), renewed first when
+// it is close to expiring.
+async function brandAccount(brand, openId) {
+  const names = await tokenSecretNames();
+  for (const SecretId of openId ? names.filter((n) => n === TOKEN_PREFIX + openId) : names) {
     let record = await secretJson(SecretId);
-    if (record.brand !== brand) continue;
+    if (!openId && record.brand !== brand) continue;
     if (needsRefresh(record)) {
       record = await refreshRecord(record, await secretJson(APP_SECRET));
       await secrets.send(new PutSecretValueCommand({ SecretId, SecretString: JSON.stringify(record) }));
     }
     return record;
   }
-  throw new Error(`No TikTok account is connected for ${brand}`);
+  throw new Error(`No TikTok account is connected for ${openId || brand}`);
 }
 
 async function dropboxAccessToken() {
@@ -203,7 +214,7 @@ async function sendChunks(uploadUrl, file, plan) {
 }
 
 async function postVideo(request) {
-  const [account, file] = await Promise.all([brandAccount(request.brand), dropboxFile(request.dropboxPath)]);
+  const [account, file] = await Promise.all([brandAccount(request.brand, request.openId), dropboxFile(request.dropboxPath)]);
   const plan = chunkPlan(file.size);
   const source_info = { source: "FILE_UPLOAD", video_size: file.size, chunk_size: plan.chunkSize, total_chunk_count: plan.count };
   let init;
@@ -235,9 +246,56 @@ async function postStatus(brand, publishId) {
   return { publishId, status: status.status, failReason: status.fail_reason || undefined, postIds: status.publicaly_available_post_id || [] };
 }
 
+// A planner post as a post request: caption plus hashtags, TikTok's 2200-character limit.
+export function requestFromPost(post, mode) {
+  const tags = (post.hashtags || []).map((h) => String(h).replace(/^#/, "").trim()).filter(Boolean);
+  const caption = [post.caption, tags.map((t) => `#${t}`).join(" ")].map((p) => String(p || "").trim()).filter(Boolean).join("\n\n");
+  return { ...postRequest({ brand: "planner", dropboxPath: post.dropboxPath, caption: caption.slice(0, 2200), mode }), openId: String(post.channelId || "") };
+}
+
+async function api(payload) {
+  const response = await lambda.send(new InvokeCommand({ FunctionName: API_FUNCTION, Payload: Buffer.from(JSON.stringify(payload)) }));
+  const out = JSON.parse(Buffer.from(response.Payload || []).toString() || "{}");
+  if (response.FunctionError) throw new Error(`${payload.action} crashed: ${out.errorMessage || response.FunctionError}`);
+  return { statusCode: out.statusCode, ...JSON.parse(out.body || "{}") };
+}
+
+async function publishingTick() {
+  const claimed = await api({ action: "claim-due-posts", destination: "tiktok", limit: POSTS_PER_TICK });
+  if (!claimed.ok) throw new Error(`claim-due-posts failed: ${claimed.error}`);
+  const published = [];
+  for (const post of claimed.posts) {
+    let outcome;
+    try {
+      const sent = await postVideo(requestFromPost(post, TICK_MODE));
+      // TikTok gives a publish_id at once; the public post id only exists after the creator
+      // finishes a draft (or after a direct post is processed), so the ledger keeps the publish_id.
+      outcome = { externalPostId: sent.publishId };
+    } catch (error) {
+      console.error("Scheduled TikTok post failed:", post.id, error?.message);
+      outcome = { error: error?.message || "Post failed" };
+    }
+    await api({ action: "finish-post", id: post.id, ...outcome });
+    published.push({ id: post.id, ...outcome });
+  }
+  return { missed: claimed.missed, stuck: claimed.stuck, published };
+}
+
 export async function handler(event = {}) {
   if (event.requestContext || event.rawPath) return result(403, { ok: false, error: "Direct invoke only" });
-  if (event.source === "aws.events" || event.action === "refresh") {
+  if (event.source === "aws.events" || event.action === "tick") {
+    // Tokens first, so a post never goes out on an expired token; a refresh failure doesn't stop posting.
+    const refresh = await refreshAll().catch((error) => ({ ok: false, error: error?.message }));
+    try {
+      const tick = await publishingTick();
+      console.log("TikTok tick", JSON.stringify(tick));
+      return result(200, { ok: refresh.ok !== false, refresh, ...tick });
+    } catch (error) {
+      console.error("TikTok tick failed:", error?.message);
+      return result(502, { ok: false, refresh, error: error?.message || "Tick failed" });
+    }
+  }
+  if (event.action === "refresh") {
     try { return result(200, await refreshAll()); } catch (error) {
       console.error("TikTok refresh run failed:", error?.message);
       return result(502, { ok: false, error: error?.message || "Refresh failed" });
