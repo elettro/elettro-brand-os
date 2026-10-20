@@ -3,7 +3,8 @@ import { DEV_ORIGIN, authenticated } from "@/lib/cognito-auth";
 import { REVIEW_BRANDS, reviewCall } from "@/lib/planner-review";
 export const runtime = "nodejs";
 
-const ACTIONS = ["list", "set-status", "approve-range", "edit", "swap", "cadence", "plan"];
+// "asset" and "record-publication" stay server-only (test-post route), so the browser cannot forge the publication log.
+const ACTIONS = ["list", "set-status", "approve-range", "edit", "swap", "cadence", "plan", "assets", "recent-publications"];
 
 // Same-origin proxy for the Review page; the browser never sees the connect key.
 export async function POST(request: NextRequest) {
