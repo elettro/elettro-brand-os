@@ -1,6 +1,6 @@
 import {prepareClaudeTransfer,completeClaudeTransfer,prepareClaudeUploadPage} from "@/lib/ai-mcp-claude-upload";
 import {NextRequest,NextResponse} from "next/server";
-import {DEV_ORIGIN} from "@/lib/cognito-auth";
+import {DEV_ORIGIN,LEGACY_ORIGIN} from "@/lib/cognito-auth";
 import {executeAiGateway,GatewayError} from "@/lib/ai-gateway";
 import {batchUpdateAssetMetadata} from "@/lib/ai-gateway-batch";
 import {prepareChatFileIntake} from "@/lib/ai-mcp-intake";
@@ -17,7 +17,7 @@ const headers={"cache-control":"no-store","mcp-protocol-version":"2025-06-18"};
 // An Origin is an advisory CSRF/DNS-rebinding signal, never authentication.
 // Cloud MCP hosts may send their own Origin; all requests still require a
 // valid independently scoped Bearer credential from AWS SSM.
-const allowedMcpOrigins=new Set([DEV_ORIGIN,"https://claude.ai","https://chatgpt.com"]);
+const allowedMcpOrigins=new Set([DEV_ORIGIN,LEGACY_ORIGIN,"https://claude.ai","https://chatgpt.com"]);
 // Diagnostic logging is metadata-only. Never log Authorization headers,
 // bearer values, JWT claims, email addresses, OAuth codes or tool parameters.
 function logOAuthDiscoveryFailure(operation:"GET"|"POST",error:unknown){

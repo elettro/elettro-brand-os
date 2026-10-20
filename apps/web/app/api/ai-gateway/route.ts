@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authenticated, DEV_ORIGIN } from "@/lib/cognito-auth";
+import { authenticated, allowedOrigin } from "@/lib/cognito-auth";
 import { executeAiGateway, GatewayError } from "@/lib/ai-gateway";
 import { batchUpdateAssetMetadata } from "@/lib/ai-gateway-batch";
 import { runMetadataWriteSmokeTest } from "@/lib/ai-gateway-write-test";
@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "AI Gateway is DEV-only" }, { status: 404 });
   if (!(await authenticated()))
     return NextResponse.json({ ok: false, error: "Login required" }, { status: 401 });
-  if (request.headers.get("origin") !== DEV_ORIGIN)
+  if (!allowedOrigin(request.headers.get("origin")))
     return NextResponse.json({ ok: false, error: "Invalid request origin" }, { status: 403 });
   if (!(request.headers.get("content-type") || "").startsWith("application/json"))
     return NextResponse.json({ ok: false, error: "Expected application/json" }, { status: 415 });

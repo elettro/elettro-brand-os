@@ -4,7 +4,10 @@ import { SSMClient, GetParameterCommand } from "@aws-sdk/client-ssm";
 
 export const COGNITO_DOMAIN = "https://us-east-1ydbehb7ps.auth.us-east-1.amazoncognito.com";
 export const COGNITO_CLIENT_ID = "34u0cdg0b3tl2mv6qti19e09oq";
-export const DEV_ORIGIN = "https://develop.d2k28tehm1a8zw.amplifyapp.com";
+export const DEV_ORIGIN = "https://os.elettro.com";
+// The original Amplify address keeps answering while bookmarks and MCP connectors move over.
+export const LEGACY_ORIGIN = "https://develop.d2k28tehm1a8zw.amplifyapp.com";
+export function allowedOrigin(origin: string | null): boolean { return origin === DEV_ORIGIN || origin === LEGACY_ORIGIN; }
 export const CALLBACK = DEV_ORIGIN + "/api/auth/callback";
 const PREFIX = "elettro_dev_";
 

@@ -1,5 +1,5 @@
 import {createPublicKey,verify,type JsonWebKey as NodeJsonWebKey} from "node:crypto";
-import {COGNITO_DOMAIN,DEV_ORIGIN} from "@/lib/cognito-auth";
+import {COGNITO_DOMAIN,LEGACY_ORIGIN} from "@/lib/cognito-auth";
 import {brandConfigs} from "@/lib/brand-config";
 import {isVerifiedCognitoOwner} from "@/lib/ai-mcp-userinfo";
 import {loadMcpAuthSettings,McpAuthorizationError,type McpIdentity} from "@/lib/ai-mcp-auth";
@@ -14,11 +14,11 @@ import {loadMcpAuthSettings,McpAuthorizationError,type McpIdentity} from "@/lib/
  * Unless the dedicated Cognito configuration is explicitly provisioned in
  * the already encrypted SSM MCP parameter, OAuth fails closed.
  */
-export const MCP_OAUTH_RESOURCE=DEV_ORIGIN+"/api/mcp";
+export const MCP_OAUTH_RESOURCE=LEGACY_ORIGIN+"/api/mcp";
 // ChatGPT discovers PKCE-capable metadata from our DEV web origin while
 // all authentication and token verification remain at the configured Cognito issuer.
-export const MCP_OAUTH_AUTHORIZATION_SERVER=DEV_ORIGIN;
-export const MCP_OAUTH_METADATA=DEV_ORIGIN+"/.well-known/oauth-protected-resource";
+export const MCP_OAUTH_AUTHORIZATION_SERVER=LEGACY_ORIGIN;
+export const MCP_OAUTH_METADATA=LEGACY_ORIGIN+"/.well-known/oauth-protected-resource";
 // Cognito resource binding (RFC 8707) requires scopes registered under the
 // exact requested resource URI. A legacy "elettro-mcp/read" scope belongs to a
 // different resource server and is deliberately not accepted here.

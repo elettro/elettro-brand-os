@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SecretsManagerClient, GetSecretValueCommand, ListSecretsCommand } from "@aws-sdk/client-secrets-manager";
-import { DEV_ORIGIN, authenticated } from "@/lib/cognito-auth";
+import { DEV_ORIGIN, authenticated, allowedOrigin } from "@/lib/cognito-auth";
 import { LINKEDIN_API_VERSION, LINKEDIN_BRANDS, littleText } from "@/lib/linkedin-connect";
 export const runtime = "nodejs";
 
@@ -29,7 +29,7 @@ async function brandToken(brand: string): Promise<MemberToken | null> {
 // "Post to LinkedIn now" from the Connections page: a text-only post Dean writes and sends himself.
 export async function POST(request: NextRequest) {
   // Same-origin form only, so another site can't post on Dean's behalf with his session cookie.
-  if (request.headers.get("origin") !== DEV_ORIGIN) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!allowedOrigin(request.headers.get("origin"))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   if (!(await authenticated())) return done({ error: "Log in to Elettro OS first" });
   const form = await request.formData();
   const brand = String(form.get("brand") || "");

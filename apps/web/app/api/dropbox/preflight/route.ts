@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
-import { authenticated } from "@/lib/cognito-auth";
+import { authenticated, allowedOrigin } from "@/lib/cognito-auth";
 import { brandConfigs } from "@/lib/brand-config";
 export const runtime="nodejs";
 export const dynamic="force-dynamic";
 const secrets=new SecretsManagerClient({region:"us-east-1"});
 export async function POST(request:NextRequest) {
   if(!(await authenticated()))return NextResponse.json({error:"Login required"},{status:401});
-  if(request.headers.get("origin")!=="https://develop.d2k28tehm1a8zw.amplifyapp.com")return NextResponse.json({error:"Invalid origin"},{status:403});
+  if(!allowedOrigin(request.headers.get("origin")))return NextResponse.json({error:"Invalid origin"},{status:403});
   const body=await request.json().catch(()=>null) as {brand?:string;folder?:string;names?:string[];files?:Array<{name:string;size:number;contentHash:string}>}|null;
   const config=brandConfigs.find(b=>b.id===body?.brand);
   const folder=String(body?.folder||"").replace(/\\/g,"/").replace(/\/+$/,"");

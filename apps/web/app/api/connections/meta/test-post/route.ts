@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { DEV_ORIGIN, authenticated } from "@/lib/cognito-auth";
+import { authenticated, allowedOrigin } from "@/lib/cognito-auth";
 import { META_BRANDS } from "@/lib/meta-connect";
 import { reviewCall } from "@/lib/planner-review";
 import {
@@ -15,7 +15,7 @@ const fail = (error: string, status = 400) => NextResponse.json({ ok: false, err
 // steps (start → status until FINISHED → publish) so a Reel's processing never hits a timeout.
 export async function POST(request: NextRequest) {
   // Same-origin only, so another site can't post on Dean's behalf with his session cookie.
-  if (request.headers.get("origin") !== DEV_ORIGIN) return fail("Forbidden", 403);
+  if (!allowedOrigin(request.headers.get("origin"))) return fail("Forbidden", 403);
   if (!(await authenticated())) return fail("Log in to Elettro OS first", 401);
   const body = await request.json().catch(() => ({})) as Body;
   const brand = String(body.brand || "");

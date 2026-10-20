@@ -75,7 +75,7 @@ test("MCP route forces brand scope independent of agent-supplied fields",()=>{
 
 test("remote MCP origin allowlist never bypasses the mandatory bearer credential",()=>{
  const route=readFileSync(new URL("../apps/web/app/api/mcp/route.ts",import.meta.url),"utf8");
- assert.match(route,/allowedMcpOrigins=new Set\(\[DEV_ORIGIN,"https:\/\/claude\.ai","https:\/\/chatgpt\.com"\]\)/);
+ assert.match(route,/allowedMcpOrigins=new Set\(\[DEV_ORIGIN,LEGACY_ORIGIN,"https:\/\/claude\.ai","https:\/\/chatgpt\.com"\]\)/);
  assert.match(route,/if\(origin&&!allowedMcpOrigins\.has\(origin\)\)/);
  assert.match(route,/await authorizeMcp\(bearer\)/);
  assert.match(route,/await authorizeChatGptOauth\(bearer\)/);
@@ -380,7 +380,7 @@ test("DEV ChatGPT OAuth discovery facade advertises S256 while Cognito token che
  const oauth=readFileSync(new URL("../apps/web/lib/ai-mcp-oauth.ts",import.meta.url),"utf8");
  const mcp=readFileSync(new URL("../apps/web/app/api/mcp/route.ts",import.meta.url),"utf8");
  assert.match(resource,/authorization_servers:\[MCP_OAUTH_AUTHORIZATION_SERVER\]/);
- assert.match(oauth,/MCP_OAUTH_AUTHORIZATION_SERVER=DEV_ORIGIN/);
+ assert.match(oauth,/MCP_OAUTH_AUTHORIZATION_SERVER=LEGACY_ORIGIN/);
  assert.match(discovery,/issuer:MCP_OAUTH_AUTHORIZATION_SERVER/);
  assert.match(discovery,/code_challenge_methods_supported:\["S256"\]/);
  assert.match(discovery,/token_endpoint_auth_methods_supported:\["none","client_secret_basic","client_secret_post"\]/);

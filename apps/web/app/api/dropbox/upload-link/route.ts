@@ -1,12 +1,12 @@
 import {NextRequest,NextResponse} from "next/server";
 import {brandConfigs} from "@/lib/brand-config";
-import {authenticated} from "@/lib/cognito-auth";
+import {authenticated, allowedOrigin} from "@/lib/cognito-auth";
 export const dynamic="force-dynamic";
 const API_BASE=process.env.BRAND_OS_API_BASE_URL||process.env.NEXT_PUBLIC_BRAND_OS_API_BASE_URL||"https://zkjngy7rdd.execute-api.us-east-1.amazonaws.com";
 // Obtain a one-time Dropbox upload link; OAuth credentials remain on AWS.
 export async function POST(request:NextRequest){
  if(!(await authenticated())) return NextResponse.json({error:"Login required"},{status:401});
- if(request.headers.get("origin") !== "https://develop.d2k28tehm1a8zw.amplifyapp.com")return NextResponse.json({error:"Invalid request origin"},{status:403});
+ if(!allowedOrigin(request.headers.get("origin")))return NextResponse.json({error:"Invalid request origin"},{status:403});
  const body=await request.json().catch(()=>({})) as Record<string,unknown>;
  const brand=String(body.brand||"");const config=brandConfigs.find(x=>x.id===brand);
  if(!config)return NextResponse.json({ok:false,error:"Invalid brand"},{status:400});
