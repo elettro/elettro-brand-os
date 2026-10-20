@@ -5,7 +5,7 @@
 //     claim-due-posts  hand out approved posts whose time has come, marked 'publishing'
 //     finish-post      record the outcome: 'published' + a PublicationLedger row, or 'failed'
 import { withClient, loadBrand, weekWindow, runPlanWeek, approvePlannerWeek } from "./planner-v2-db.mjs";
-import { addDaysToYmd, isSynthetic, languageOf, resolvePlannerSettings } from "./planner-v2.mjs";
+import { addDaysToYmd, brandLanguage, isSynthetic, languageOf, resolvePlannerSettings } from "./planner-v2.mjs";
 import { keyMatches } from "./youtube-connect.mjs";
 
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
@@ -178,14 +178,15 @@ async function claimDuePosts(event, connectDatabase, json) {
                  sp."scoreBreakdown"->>'syntheticDisclosure' AS "plannedSynthetic"`, [destination, limit])).rows;
     // AI-made content must be declared to the network. Judged from the clip being posted (it may have
     // been swapped since planning) with the brand's own AI tags; the planner's flag can only add to it.
-    const settingsByBrand = new Map();
+    // Language: the clip's tags, else the brand's language (SolarMeister and Neckermann Strom are German).
+    const brands = new Map();
     for (const brandId of new Set(posts.map((p) => p.brandId))) {
-      const row = (await client.query('SELECT "settings" FROM "Brand" WHERE "id" = $1', [brandId])).rows[0];
-      settingsByBrand.set(brandId, resolvePlannerSettings(row?.settings));
+      const row = (await client.query('SELECT "slug", "settings" FROM "Brand" WHERE "id" = $1', [brandId])).rows[0];
+      brands.set(brandId, { settings: resolvePlannerSettings(row?.settings), language: brandLanguage(row?.slug, row?.settings) });
     }
     const out = posts.map(({ assetTags, brandId, plannedSynthetic, ...p }) => ({
-      ...p, synthetic: plannedSynthetic === "true" || isSynthetic({ tags: assetTags }, settingsByBrand.get(brandId)),
-      language: languageOf({ tags: assetTags })
+      ...p, synthetic: plannedSynthetic === "true" || isSynthetic({ tags: assetTags }, brands.get(brandId).settings),
+      language: languageOf({ tags: assetTags }, brands.get(brandId).language)
     }));
     return json(200, { ok: true, missed, stuck, posts: out });
   });

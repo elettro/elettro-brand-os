@@ -136,8 +136,16 @@ export function balanceValueOf(asset, group) {
   return hit ? hit[0] : null;
 }
 
-// A clip's spoken/sung language: English unless a tag names another one ("german", "lang:de",
-// "language:spanish"). Bare two-letter tags don't count; they are too easy to hit by accident.
+// A clip's spoken/sung language: a tag naming one ("german", "lang:de", "language:spanish") wins;
+// otherwise the brand's language, which is English unless listed here or set as Brand.settings.language.
+// Bare two-letter tags don't count; they are too easy to hit by accident.
+const BRAND_LANGUAGES = { solarmeister: "de", "neckermann-strom": "de" };
+
+export function brandLanguage(slug, settings) {
+  const set = settings && typeof settings === "object" ? settings.language : null;
+  return typeof set === "string" && /^[a-z]{2}$/.test(set) ? set : BRAND_LANGUAGES[slug] || "en";
+}
+
 const LANGUAGES = {
   en: ["english"], de: ["german", "deutsch"], es: ["spanish", "espanol", "español"], fr: ["french", "francais", "français"],
   it: ["italian", "italiano"], pt: ["portuguese", "portugues", "português"], nl: ["dutch"], ja: ["japanese"], ko: ["korean"],
@@ -145,13 +153,13 @@ const LANGUAGES = {
 };
 const LANGUAGE_BY_NAME = new Map(Object.entries(LANGUAGES).flatMap(([code, names]) => names.map((n) => [n, code])));
 
-export function languageOf(asset) {
+export function languageOf(asset, fallback = "en") {
   for (const tag of tagsOf(asset)) {
     const prefixed = tag.match(/^(?:lang|language)[:\-_](.+)$/)?.[1];
     const code = prefixed ? (LANGUAGES[prefixed] ? prefixed : LANGUAGE_BY_NAME.get(prefixed)) : LANGUAGE_BY_NAME.get(tag);
-    if (code && code !== "en") return code;
+    if (code) return code;
   }
-  return "en";
+  return fallback;
 }
 
 export function isSynthetic(asset, settings) {
