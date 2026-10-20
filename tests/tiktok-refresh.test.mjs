@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { needsRefresh, refreshRecord, postRequest, chunkPlan, handler } from "../services/tiktok-lambda/index.mjs";
+import { needsRefresh, refreshRecord, postRequest, chunkPlan, requestFromPost, handler } from "../services/tiktok-lambda/index.mjs";
 
 const NOW = new Date("2026-10-21T00:00:00Z");
 const app = { clientKey: "key", clientSecret: "secret" };
@@ -75,4 +75,18 @@ test("videos up to 64 MB go in one chunk; bigger ones in 10 MB chunks with the r
 test("a bad post request is refused before any TikTok or Dropbox call", async () => {
   const r = await handler({ action: "post", brand: "stashbox", dropboxPath: "/elsewhere/clip.mp4" });
   assert.equal(r.statusCode, 400);
+});
+
+test("a planner post becomes a request for its account with caption and hashtags", () => {
+  const r = requestFromPost({
+    channelId: "-0001abc", dropboxPath: post.dropboxPath, caption: "Angel In Your Bed, live", hashtags: ["#stashbox", "livemusic", " "]
+  }, "draft");
+  assert.equal(r.openId, "-0001abc");
+  assert.equal(r.mode, "draft");
+  assert.equal(r.caption, "Angel In Your Bed, live\n\n#stashbox #livemusic");
+  assert.equal(requestFromPost({ channelId: "x", dropboxPath: post.dropboxPath, caption: "y".repeat(3000) }, "direct").caption.length, 2200);
+});
+
+test("a planner post with a file outside the brand Dropbox is refused", () => {
+  assert.throws(() => requestFromPost({ channelId: "x", dropboxPath: "/Personal/a.mp4" }, "draft"), /brands/);
 });
