@@ -3,6 +3,7 @@ import { brandConfigs } from "@/lib/brand-config";
 import { YOUTUBE_BRANDS } from "@/lib/youtube-connect";
 import { LINKEDIN_BRANDS, calendarReminderUrl } from "@/lib/linkedin-connect";
 import { META_BRANDS } from "@/lib/meta-connect";
+import { THREADS_BRANDS } from "@/lib/threads-connect";
 import { ReconnectCountdown } from "@/components/reconnect-countdown";
 import { redirect } from "next/navigation";
 
@@ -40,12 +41,17 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
   const brands = brandConfigs.filter((b) => YOUTUBE_BRANDS.includes(b.id));
   const linkedinBrands = brandConfigs.filter((b) => LINKEDIN_BRANDS.includes(b.id));
   const metaBrands = brandConfigs.filter((b) => META_BRANDS.includes(b.id));
+  const threadsBrands = brandConfigs.filter((b) => THREADS_BRANDS.includes(b.id));
   const youtube = status.youtube || {};
   const linkedin = status.linkedin || {};
   const facebook = status.facebook || {};
   const instagram = status.instagram || {};
+  const threads = status.threads || {};
   // The feed caches for 60s; right after a connect, trust the expiry the callback just reported.
-  if (network === "linkedin" && brand && connected && expires && !Number.isNaN(Date.parse(expires))) linkedin[brand] = { handle: connected, expiresAt: expires };
+  if (brand && connected && expires && !Number.isNaN(Date.parse(expires))) {
+    if (network === "linkedin") linkedin[brand] = { handle: connected, expiresAt: expires };
+    if (network === "threads") threads[brand] = { handle: connected, expiresAt: expires };
+  }
   return <main className="main">
     <div className="eyebrow">Publishing · Social connections</div>
     <h1>Connections</h1>
@@ -82,6 +88,26 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
               {page ? <>● Facebook · <b>{page}</b>{ig ? <><br />● Instagram · <b>{ig}</b></> : <><br />○ No Instagram linked to this Page</>}</> : "○ Not connected"}
             </p>
             <a className="status-chip" href={`/api/connections/meta/start?brand=${b.id}`}>{page ? "Reconnect" : "Connect Facebook + Instagram"}</a>
+          </article>
+        );
+      })}
+    </div>
+    <h2 style={{ marginTop: 32 }}>Threads</h2>
+    <p className="muted">Threads has its own login, separate from Facebook. Sign in to the brand&apos;s Threads profile when asked. Logins last 60 days, so each one counts down to its reconnect date.</p>
+    <div className="grid" style={{ marginTop: 20 }}>
+      {threadsBrands.map((b) => {
+        const linked = threads[b.id];
+        return (
+          <article className="card" key={b.id}>
+            <div className="eyebrow">Threads</div>
+            <h2>{b.name}</h2>
+            <p className="muted" style={{ margin: "0 0 12px" }}>
+              {linked ? <>● Connected · <b>{linked.handle}</b></> : "○ Not connected"}
+            </p>
+            <div className="connect-row">
+              <a className="status-chip" href={`/api/connections/threads/start?brand=${b.id}`}>{linked ? "Reconnect" : "Connect Threads"}</a>
+              {linked?.expiresAt && <ReconnectCountdown expiresAt={linked.expiresAt} />}
+            </div>
           </article>
         );
       })}
