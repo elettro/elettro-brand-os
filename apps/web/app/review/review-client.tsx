@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ReviewAsset, ReviewList, ReviewPost } from "@/lib/planner-review";
 import { getAssetThumbnailUrl } from "@/lib/dev-api";
 
@@ -20,13 +20,63 @@ async function act(body: Record<string, unknown>) {
   return data;
 }
 
+// The thumbnail service runs ~10 at a time and answers 503 beyond that, so previews load
+// through a small queue and retry with backoff; a week of posts asks for well over 100.
+const THUMB_CONCURRENCY = 4;
+const THUMB_RETRIES = 6;
+let thumbsRunning = 0;
+const thumbQueue: Array<() => void> = [];
+function nextThumb() {
+  while (thumbsRunning < THUMB_CONCURRENCY && thumbQueue.length) { thumbsRunning += 1; thumbQueue.shift()!(); }
+}
+function loadImage(src: string) {
+  return new Promise<void>((resolve, reject) => {
+    thumbQueue.push(() => {
+      const img = new Image();
+      const finish = (ok: boolean) => { thumbsRunning -= 1; nextThumb(); if (ok) resolve(); else reject(Error("thumbnail")); };
+      img.onload = () => finish(true);
+      img.onerror = () => finish(false);
+      img.src = src;
+    });
+    nextThumb();
+  });
+}
+
 function Thumb({ asset, size = 120 }: { asset: ReviewAsset; size?: number }) {
   const url = getAssetThumbnailUrl(asset.sourcePath, asset.kind);
+  const [src, setSrc] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    if (!url) return;
+    let cancelled = false;
+    (async () => {
+      for (let i = 0; i < THUMB_RETRIES && !cancelled; i += 1) {
+        // A fresh query string per try so the browser does not reuse the failed response.
+        const tryUrl = i || attempt ? `${url}&try=${attempt}-${i}` : url;
+        try {
+          await loadImage(tryUrl);
+          if (!cancelled) { setSrc(tryUrl); setFailed(false); }
+          return;
+        } catch {
+          await new Promise((r) => setTimeout(r, 800 * 2 ** i));
+        }
+      }
+      if (!cancelled) setFailed(true);
+    })();
+    return () => { cancelled = true; };
+  }, [url, attempt]);
   return <div className="review-thumb" style={{ width: size, height: size * 16 / 9 }} title={asset.filename}>
-    {url ? <img src={url} alt={asset.title || asset.filename} loading="lazy" /> : <span>{asset.kind}</span>}
+    {src ? <img src={src} alt={asset.title || asset.filename} />
+      : !url ? <span>{asset.kind}</span>
+      : failed ? <button type="button" className="review-thumb-retry" onClick={() => { setFailed(false); setAttempt(attempt + 1); }}>Preview failed · Retry</button>
+      : <span>Loading preview…</span>}
     {asset.durationMs ? <em>{Math.round(asset.durationMs / 1000)}s</em> : null}
   </div>;
 }
+
+// The planner stores hashtags with their "#"; edited ones are stored without. Show exactly one.
+const tag = (h: string) => "#" + h.replace(/^#+/, "");
 
 export function ReviewClient({ initial }: { initial: ReviewList }) {
   const [list, setList] = useState(initial);
@@ -146,7 +196,7 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
                     <button className="status-chip" onClick={() => setEditing(null)}>Cancel</button>
                   </div>
                 </div> : <p className="review-caption">{p.caption || <span className="muted">No caption yet</span>}
-                  {p.hashtags.length > 0 && <span className="review-tags"> {p.hashtags.map((h) => "#" + h).join(" ")}</span>}</p>}
+                  {p.hashtags.length > 0 && <span className="review-tags"> {p.hashtags.map(tag).join(" ")}</span>}</p>}
                 <p className="muted review-file">{p.asset.title || p.asset.filename}{p.sector ? ` · ${p.sector}` : ""}</p>
                 {reviewable(p) && <div className="review-actions">
                   {p.status !== "approved" && <button className="status-chip" disabled={!!busy} onClick={() => run(p.id, { action: "set-status", ids: [p.id], status: "approved" })}>Approve</button>}
@@ -154,7 +204,7 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
                   {p.status !== "planned" && <button className="status-chip" disabled={!!busy} onClick={() => run(p.id, { action: "set-status", ids: [p.id], status: "planned" })}>Undo</button>}
                   {editing !== p.id && <button className="status-chip" disabled={!!busy} onClick={() => {
                     setEditing(p.id);
-                    setDraft([p.caption || "", p.hashtags.map((h) => "#" + h).join(" ")].filter(Boolean).join("\n\n"));
+                    setDraft([p.caption || "", p.hashtags.map(tag).join(" ")].filter(Boolean).join("\n\n"));
                   }}>Edit caption</button>}
                   {p.candidates.length > 0 && <button className="status-chip" disabled={!!busy} onClick={() => setSwapping(swapping === p.id ? null : p.id)}>Swap clip</button>}
                 </div>}
