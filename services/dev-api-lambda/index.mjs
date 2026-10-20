@@ -3,7 +3,7 @@ import {runBrandMediaReset} from "./brand-media-reset.mjs";
 import {runBrandRootMigration} from "./brand-root-migration.mjs";
 import { configurePlannerBrand, runPlanWeek, runPlanWeeks, approvePlannerWeek } from "./planner-v2-db.mjs";
 import {runSharedAudioLibrarySetup,LIBRARY_SLUG,LIBRARY_AUDIO_ROOT} from "./shared-audio-library.mjs";
-import { handleConnectionStatus, setPlatformMilestone } from "./connection-status.mjs";
+import { handleConnectionStatus, setPlatformMilestone, setTokenExpiry } from "./connection-status.mjs";
 import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
 import { S3Client, PutObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
@@ -1566,6 +1566,8 @@ export const handler = async (event = {}) => {
   // IAM-only publishing loop, called by the YouTube upload worker every 15 minutes.
   if (iamOnly && ["planner-tick", "claim-due-posts", "finish-post"].includes(event.action)) return handlePlannerOps(event, connectDatabase, json);
   if (iamOnly && event.action === "set-platform-milestone") return setPlatformMilestone(event, connectDatabase, json);
+  // IAM-only: a token worker renewed an account's token (Threads every ~30 days); move its reconnect countdown.
+  if (iamOnly && event.action === "set-token-expiry") return setTokenExpiry(event, connectDatabase, json);
   // IAM-only shared audio library setup (dry-run unless mode:"apply"); never exposed through HTTP or MCP.
   if(event.action === "setup-shared-audio-library-20261017" && !event.requestContext && !event.rawPath && !event.path) return runSharedAudioLibrarySetup(event,connectDatabase,json);
   const requestPath =

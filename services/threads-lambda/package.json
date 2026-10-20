@@ -1,0 +1,13 @@
+{
+  "name": "@elettro/threads-lambda",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "zip -r elettro-brand-os-dev-threads.zip index.mjs"
+  },
+  "dependencies": {
+    "@aws-sdk/client-secrets-manager": "^3.910.0",
+    "@aws-sdk/client-lambda": "^3.910.0"
+  }
+}
