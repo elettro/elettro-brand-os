@@ -11,7 +11,7 @@ import { writeWeekCopy } from "./copywriter.mjs";
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
 const HHMM = /^\d{2}:\d{2}$/;
 
-async function withClient(connectDatabase, json, label, fn) {
+export async function withClient(connectDatabase, json, label, fn) {
   let client;
   try {
     client = await connectDatabase();
@@ -24,13 +24,13 @@ async function withClient(connectDatabase, json, label, fn) {
   }
 }
 
-async function loadBrand(client, brandSlug) {
+export async function loadBrand(client, brandSlug) {
   const result = await client.query(
     'SELECT "id","slug","timezone","settings" FROM "Brand" WHERE "slug" = $1 AND "status" = \'active\' LIMIT 1', [brandSlug]);
   return result.rows[0] || null;
 }
 
-function weekWindow(brand, weekStartInput, weeks = 1) {
+export function weekWindow(brand, weekStartInput, weeks = 1) {
   const timeZone = brand.timezone || "America/New_York";
   const weekStart = YMD.test(String(weekStartInput || "")) ? weekStartInput : nextWeekStart(ymdInTimeZone(new Date(), timeZone));
   return {
@@ -95,6 +95,15 @@ export async function configurePlannerBrand(event, connectDatabase, json) {
              VALUES ($1,$2,$3,$4,$5,$6,TRUE,CURRENT_TIMESTAMP)`, [account.id, a.placement, ...values]);
         }
         configured.push({ socialAccountId: account.id, destination, accountName: a.accountName, placement: a.placement, postsPerWeek: values[0] });
+      }
+      // The seed is the whole cadence: rules it no longer lists (an old "shorts" placement, say) stop planning.
+      if (accounts.length) {
+        await client.query(
+          `UPDATE "CadenceRule" cr SET "active" = FALSE, "updatedAt" = CURRENT_TIMESTAMP
+           FROM "SocialAccount" sa
+           WHERE sa."id" = cr."socialAccountId" AND sa."brandId" = $1 AND cr."active" = TRUE
+             AND NOT ((cr."socialAccountId"::text || ':' || cr."placement") = ANY($2::text[]))`,
+          [brand.id, configured.map((c) => `${c.socialAccountId}:${c.placement}`)]);
       }
       await client.query("COMMIT");
       return json(200, { ok: true, brandSlug, settingsVersion: settings.version ?? null, accounts: configured });

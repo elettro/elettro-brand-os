@@ -16,7 +16,7 @@ class ConnectError extends Error {
   constructor(statusCode, message) { super(message); this.statusCode = statusCode; }
 }
 
-function keyMatches(given) {
+export function keyMatches(given) {
   const expected = process.env.CONNECTIONS_API_SHARED_SECRET || "";
   if (expected.length < 32 || typeof given !== "string") return false;
   const a = Buffer.from(given), b = Buffer.from(expected);

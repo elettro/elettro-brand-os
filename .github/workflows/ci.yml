@@ -53,6 +53,9 @@ jobs:
       - name: Test connection status feed and LinkedIn connect
         run: node --test tests/connection-status.test.mjs tests/linkedin-connect.test.mjs
 
+      - name: Test YouTube upload worker and publishing loop
+        run: node --test tests/youtube-upload.test.mjs tests/planner-ops.test.mjs
+
       - name: Validate Step 9 Windows PowerShell setup script syntax
         shell: pwsh
         run: |

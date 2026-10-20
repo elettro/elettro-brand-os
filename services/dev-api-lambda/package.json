@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "build": "npm install --omit=dev --workspaces=false && rm -rf intelligence && cp -r ../../intelligence ./intelligence && zip -r elettro-brand-os-dev-api.zip index.mjs db-main.mjs dropbox-identity.mjs claude-folder-ops.mjs dropbox-upload-session.mjs brand-root-migration.mjs brand-media-reset.mjs planner-v2.mjs planner-v2-db.mjs curator.mjs intelligence.mjs song-facts.mjs copywriter.mjs intelligence connection-status.mjs youtube-connect.mjs linkedin-connect.mjs meta-connect.mjs threads-connect.mjs planner-review.mjs library-publications.mjs shared-audio-library.mjs init.sql node_modules package.json",
+    "build": "npm install --omit=dev --workspaces=false && rm -rf intelligence && cp -r ../../intelligence ./intelligence && zip -r elettro-brand-os-dev-api.zip index.mjs db-main.mjs dropbox-identity.mjs claude-folder-ops.mjs dropbox-upload-session.mjs brand-root-migration.mjs brand-media-reset.mjs planner-v2.mjs planner-v2-db.mjs curator.mjs intelligence.mjs song-facts.mjs copywriter.mjs intelligence connection-status.mjs youtube-connect.mjs linkedin-connect.mjs meta-connect.mjs threads-connect.mjs planner-review.mjs library-publications.mjs planner-ops.mjs shared-audio-library.mjs init.sql node_modules package.json",
     "simulate-week": "node scripts/simulate-week.mjs"
   },
   "dependencies": {
