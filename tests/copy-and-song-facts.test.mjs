@@ -126,3 +126,12 @@ test("AI copy is used when valid and replaced by the template when it breaks a r
   assert.equal(out[1].copy.source, "template");
   assert.ok(out[1].copy.aiRejected.some((p) => p.includes("link not from records")));
 });
+
+test("LinkedIn copy is held to LinkedIn's limits and links are clickable there", () => {
+  const f = postFacts({ tags: ["radio-blog"] }, { sector: "radio-blog", destination: "linkedin" }, {}, links);
+  assert.equal(f.linksInCaptionAreClickable, true);
+  assert.deepEqual(validateCopy({ caption: "Short post.", hashtags: ["#a", "#b", "#c"] }, f), []);
+  const problems = validateCopy({ caption: "x".repeat(3001), hashtags: ["#a", "#b", "#c", "#d"] }, f).join(" | ");
+  assert.match(problems, /caption too long/);
+  assert.match(problems, /too many hashtags/);
+});

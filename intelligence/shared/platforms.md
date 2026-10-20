@@ -92,8 +92,21 @@ pinned comment, description) and that location must exist for the account.
 - **Placements:** text, image, video, document carousels, articles.
 - **Viewer:** business decision-makers. Reads for usefulness, credibility and
   outcomes.
-- **Copy:** lead with the business problem or result, then how it was done,
-  then the invitation to talk. Short paragraphs, plain language, no fan-speak.
+- **Copy:** every post is **problem → solution → facts/estimates** (Dean,
+  2026-10-19):
+  1. **Problem:** the specific business problem, in the reader's words
+     (e.g. "posting to 6 networks by hand eats a day a week").
+  2. **Solution:** what was built or done about it, concretely: the system,
+     the steps, the tool. Not a pitch; show how it works.
+  3. **Facts and estimates:** the numbers that prove it. Facts come only from
+     the input (records, metrics, the asset's notes). An estimate is allowed
+     when the input gives its basis, and it must say so: "about", "an
+     estimated", "roughly", with the basis in a few words ("based on 4 posts
+     a day across 6 networks"). No number without a source in the input; if
+     there is none, describe the result in words or return `blocked` with
+     `missing: ["facts"]`.
+  Then one invitation to talk or read more. Short paragraphs (1–2 sentences),
+  plain language, no fan-speak, no hype.
 - **Fit:** only business-audience sectors belong here (services, case studies,
   the business behind the brand), unless the brand section says otherwise.
 - **Hashtags:** 0–3, professional.

@@ -11,9 +11,10 @@ const LIMITS = {
   instagram: { caption: 2200, hashtags: 5 },
   tiktok: { caption: 2200, hashtags: 5 },
   facebook: { caption: 5000, hashtags: 2 },
-  x: { caption: 280, hashtags: 2 }
+  x: { caption: 280, hashtags: 2 },
+  linkedin: { caption: 3000, hashtags: 3 }
 };
-const CLICKABLE = new Set(["youtube", "facebook", "x"]);
+const CLICKABLE = new Set(["youtube", "facebook", "x", "linkedin"]);
 const BANNED = [/\belevate\b/i, /\bunleash/i, /\bunlock/i, /\bdive into\b/i, /game[- ]changer/i, /experience the magic/i, /it'?s not just .+, it'?s/i];
 const SHOWS = { "stashbox-does-dylan": "Stashbox Does Dylan", "stashbox-does-sublime": "Stashbox Does Sublime & Reggae" };
 const ROLE_WORDS = { vocals: "vocals", guitar: "guitar", bass: "bass", drums: "drums", keyboards: "keys", keys: "keys" };
