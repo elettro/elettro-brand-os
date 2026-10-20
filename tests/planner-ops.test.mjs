@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { weekToPlan, handlePlannerWeb, handlePlannerOps } from "../services/dev-api-lambda/planner-ops.mjs";
 import { weekWindow } from "../services/dev-api-lambda/planner-v2-db.mjs";
-import { addDaysToYmd, languageOf } from "../services/dev-api-lambda/planner-v2.mjs";
+import { addDaysToYmd, brandLanguage, languageOf } from "../services/dev-api-lambda/planner-v2.mjs";
 
 const json = (statusCode, body) => ({ statusCode, body });
 const KEY = "k".repeat(40);
@@ -115,6 +115,15 @@ test("a clip is English unless a tag names another language; bare two-letter tag
   assert.equal(languageOf({ tags: ["language-deutsch"] }), "de");
   assert.equal(languageOf({ tags: ["de", "es"] }), "en");
   assert.equal(languageOf({ tags: ["lang:xx"] }), "en");
+});
+
+test("German brands default to German, and a clip tag still overrides the brand", () => {
+  assert.equal(brandLanguage("solarmeister", {}), "de");
+  assert.equal(brandLanguage("neckermann-strom", null), "de");
+  assert.equal(brandLanguage("stashbox", {}), "en");
+  assert.equal(brandLanguage("stashbox", { language: "es" }), "es");
+  assert.equal(languageOf({ tags: ["solar"] }, "de"), "de");
+  assert.equal(languageOf({ tags: ["english"] }, "de"), "en");
 });
 
 test("finish-post without a video id marks the post failed and keeps the error", async () => {
