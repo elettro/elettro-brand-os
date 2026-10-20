@@ -10,6 +10,6 @@ export async function threadsSignedRequest(request: NextRequest) {
   const signed = String(form?.get("signed_request") || "");
   if (!signed) return null;
   const secret = await secrets.send(new GetSecretValueCommand({ SecretId: THREADS_OAUTH_SECRET }));
-  const { clientSecret } = JSON.parse(secret.SecretString || "{}");
+  const { clientSecret } = JSON.parse(secret.SecretString || "{}") as { clientSecret?: string };
   return verifySignedRequest(signed, clientSecret || "");
 }
