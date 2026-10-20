@@ -16,6 +16,7 @@ import { handleDropboxUploadSession } from "./dropbox-upload-session.mjs";
 import { completeYoutubeConnect } from "./youtube-connect.mjs";
 import { completeLinkedinConnect } from "./linkedin-connect.mjs";
 import { completeMetaConnect } from "./meta-connect.mjs";
+import { handlePlannerWeb, handlePlannerOps } from "./planner-ops.mjs";
 
 const { Client } = pg;
 const secrets = new SecretsManagerClient({});
@@ -1559,6 +1560,8 @@ export const handler = async (event = {}) => {
   if (iamOnly && event.action === "plan-month") return runPlanWeeks({ weeks: 4, ...event }, connectDatabase, json);
   if (iamOnly && event.action === "approve-month") return approvePlannerWeek({ weeks: 4, ...event }, connectDatabase, json);
   // IAM-only: record a milestone the database can't see yet (developer app review, OAuth) for the /status/connections feed.
+  // IAM-only publishing loop, called by the YouTube upload worker every 15 minutes.
+  if (iamOnly && ["planner-tick", "claim-due-posts", "finish-post"].includes(event.action)) return handlePlannerOps(event, connectDatabase, json);
   if (iamOnly && event.action === "set-platform-milestone") return setPlatformMilestone(event, connectDatabase, json);
   // IAM-only shared audio library setup (dry-run unless mode:"apply"); never exposed through HTTP or MCP.
   if(event.action === "setup-shared-audio-library-20261017" && !event.requestContext && !event.rawPath && !event.path) return runSharedAudioLibrarySetup(event,connectDatabase,json);
@@ -1737,6 +1740,11 @@ export const handler = async (event = {}) => {
   // "Connect YouTube": the web app forwards Google's one-time code with the shared connect key.
   if (requestPath === "/connections/youtube/complete" && event?.requestContext?.http?.method === "POST") {
     return completeYoutubeConnect(event, parseJsonBody(event), connectDatabase, json);
+  }
+
+  // Planner page (owner only): view a week, edit cadence, approve, or ask the next tick to re-plan.
+  if (requestPath === "/planner" && event?.requestContext?.http?.method === "POST") {
+    return handlePlannerWeb(event, parseJsonBody(event), connectDatabase, json);
   }
 
   // "Connect LinkedIn": same handshake; the token expires, so the row carries tokenExpiresAt.

@@ -1,10 +1,19 @@
 import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
+import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
 
-// Uploads one video from the brand Dropbox to a connected YouTube channel.
+// Uploads videos from the brand Dropbox to connected YouTube channels.
 // Runs outside the VPC (it needs Google and Dropbox) and is only invoked directly
-// through IAM: no HTTP route points at it.
+// through IAM: no HTTP route points at it. Two ways in:
+//   { channelId, dropboxPath, title, ... }  upload one video now
+//   an EventBridge schedule (every 15 min)  the publishing tick: keep the plan filled,
+//                                           then upload approved posts whose time has come
 
 const secrets = new SecretsManagerClient({});
+const lambda = new LambdaClient({});
+const API_FUNCTION = process.env.API_FUNCTION_NAME || "elettro-brand-os-dev-api";
+// Until Google's audit passes, YouTube forces API uploads to private anyway.
+const SCHEDULED_PRIVACY = process.env.YOUTUBE_PRIVACY || "private";
+const POSTS_PER_TICK = 3;
 const GOOGLE_SECRET = process.env.GOOGLE_OAUTH_SECRET_NAME || "elettro-brand-os-dev/google-oauth";
 const TOKEN_PREFIX = process.env.YOUTUBE_TOKEN_SECRET_PREFIX || "elettro-brand-os-dev/youtube/";
 const DROPBOX_SECRET = process.env.DROPBOX_SECRET_NAME || "elettro-brand-os-dev/dropbox";
@@ -130,19 +139,74 @@ async function sendChunks(session, file) {
   throw new Error("YouTube never confirmed the upload");
 }
 
+async function uploadVideo(request) {
+  const [accessToken, file] = await Promise.all([googleAccessToken(request.channelId), dropboxFile(request.dropboxPath)]);
+  const session = await startSession(accessToken, request, file.size);
+  const video = await sendChunks(session, file);
+  console.log("Uploaded", file.name, "to", request.channelId, "as", video.id);
+  return {
+    videoId: video.id, url: `https://youtu.be/${video.id}`,
+    privacyStatus: video.status?.privacyStatus, uploadStatus: video.status?.uploadStatus, bytes: file.size
+  };
+}
+
+const clean = (text, max) => String(text || "").replace(/[<>]/g, "").trim().slice(0, max);
+
+// A claimed ScheduledPost turned into upload fields: planner copy first, then the asset's own title.
+export function uploadFromPost(post, privacyStatus) {
+  const tags = (post.hashtags || []).map((h) => String(h).replace(/^#/, "")).filter(Boolean);
+  const hashtagLine = tags.map((t) => `#${t}`).join(" ");
+  return {
+    channelId: post.channelId,
+    dropboxPath: post.dropboxPath,
+    title: clean(post.title, 100) || clean(post.assetTitle, 100) || clean(String(post.filename || "").replace(/\.[^.]+$/, ""), 100),
+    description: clean([post.caption, hashtagLine].filter(Boolean).join("\n\n"), 5000),
+    tags,
+    privacyStatus
+  };
+}
+
+async function api(payload) {
+  const response = await lambda.send(new InvokeCommand({ FunctionName: API_FUNCTION, Payload: Buffer.from(JSON.stringify(payload)) }));
+  const out = JSON.parse(Buffer.from(response.Payload || []).toString() || "{}");
+  if (response.FunctionError) throw new Error(`${payload.action} crashed: ${out.errorMessage || response.FunctionError}`);
+  return { statusCode: out.statusCode, ...JSON.parse(out.body || "{}") };
+}
+
+async function publishingTick() {
+  const planning = await api({ action: "planner-tick" }).catch((error) => ({ ok: false, error: error.message }));
+  const claimed = await api({ action: "claim-due-posts", destination: "youtube", limit: POSTS_PER_TICK });
+  if (!claimed.ok) throw new Error(`claim-due-posts failed: ${claimed.error}`);
+  const published = [];
+  for (const post of claimed.posts) {
+    let outcome;
+    try {
+      const video = await uploadVideo(uploadRequest(uploadFromPost(post, SCHEDULED_PRIVACY)));
+      outcome = { externalPostId: video.videoId, externalUrl: video.url };
+    } catch (error) {
+      console.error("Scheduled upload failed:", post.id, error?.message);
+      outcome = { error: error?.message || "Upload failed" };
+    }
+    await api({ action: "finish-post", id: post.id, ...outcome });
+    published.push({ id: post.id, ...outcome });
+  }
+  const summary = { ok: true, planning, missed: claimed.missed, stuck: claimed.stuck, published };
+  console.log("Tick", JSON.stringify(summary));
+  return result(200, summary);
+}
+
 export async function handler(event = {}) {
   if (event.requestContext || event.rawPath) return result(403, { ok: false, error: "Direct invoke only" });
+  if (event.source === "aws.events" || event.action === "tick") {
+    try { return await publishingTick(); } catch (error) {
+      console.error("Tick failed:", error?.message);
+      return result(502, { ok: false, error: error?.message || "Tick failed" });
+    }
+  }
   let request;
   try { request = uploadRequest(event); } catch (error) { return result(400, { ok: false, error: error.message }); }
   try {
-    const [accessToken, file] = await Promise.all([googleAccessToken(request.channelId), dropboxFile(request.dropboxPath)]);
-    const session = await startSession(accessToken, request, file.size);
-    const video = await sendChunks(session, file);
-    console.log("Uploaded", file.name, "to", request.channelId, "as", video.id);
-    return result(200, {
-      ok: true, videoId: video.id, url: `https://youtu.be/${video.id}`,
-      privacyStatus: video.status?.privacyStatus, uploadStatus: video.status?.uploadStatus, bytes: file.size
-    });
+    return result(200, { ok: true, ...(await uploadVideo(request)) });
   } catch (error) {
     console.error("YouTube upload failed:", error?.message || "Unknown error");
     return result(502, { ok: false, error: error?.message || "Upload failed" });

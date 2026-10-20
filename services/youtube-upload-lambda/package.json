@@ -7,6 +7,7 @@
     "build": "zip -r elettro-brand-os-dev-youtube-upload.zip index.mjs"
   },
   "dependencies": {
-    "@aws-sdk/client-secrets-manager": "^3.910.0"
+    "@aws-sdk/client-secrets-manager": "^3.910.0",
+    "@aws-sdk/client-lambda": "^3.910.0"
   }
 }

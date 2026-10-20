@@ -17,14 +17,13 @@ const NAV: Array<{ label: string; items: Array<{ label: string; href?: string }>
     { label: "Upload", href: "/epe-upload" }
   ] },
   { label: "Publishing", items: [
-    { label: "Planner" },
+    { label: "Planner", href: "/planner" },
     { label: "Review" },
     { label: "Calendar" },
     { label: "Connections", href: "/connections" }
   ] },
   { label: "Intelligence", items: [
     { label: "AI Gateway", href: "/ai-gateway" },
-    { label: "Decision Brain", href: "/decision-brain" },
     { label: "Analytics" }
   ] },
   { label: "Settings", items: [

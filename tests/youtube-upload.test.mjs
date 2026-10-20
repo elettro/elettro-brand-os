@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { uploadRequest, handler } from "../services/youtube-upload-lambda/index.mjs";
+import { uploadRequest, uploadFromPost, handler } from "../services/youtube-upload-lambda/index.mjs";
 
 const valid = {
   channelId: "UC6C6Z_erONmKW67pF5AyYkA",
@@ -31,4 +31,20 @@ test("bad channel ids, titles and privacy values are refused", () => {
 test("HTTP events are turned away; the worker is invoke-only", async () => {
   const response = await handler({ ...valid, requestContext: { http: { method: "POST" } } });
   assert.equal(response.statusCode, 403);
+});
+
+test("a scheduled post becomes a clean upload: planner title, caption plus hashtags, tags without #", () => {
+  const fields = uploadFromPost({
+    channelId: valid.channelId, dropboxPath: valid.dropboxPath, filename: "clip-07.mp4",
+    title: "Get Up <Stand Up> live", caption: "Front row at Jupiter Farms.", hashtags: ["#reggae", "stashbox"]
+  }, "private");
+  assert.equal(fields.title, "Get Up Stand Up live");
+  assert.equal(fields.description, "Front row at Jupiter Farms.\n\n#reggae #stashbox");
+  assert.deepEqual(fields.tags, ["reggae", "stashbox"]);
+  assert.equal(uploadRequest(fields).privacyStatus, "private");
+});
+
+test("with no planner title the asset title, then the filename, is used", () => {
+  assert.equal(uploadFromPost({ assetTitle: "Dirty Bird", filename: "x.mp4" }, "private").title, "Dirty Bird");
+  assert.equal(uploadFromPost({ filename: "stashbox-dirty-bird-9x16.mp4" }, "private").title, "stashbox-dirty-bird-9x16");
 });
