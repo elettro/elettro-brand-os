@@ -9,7 +9,9 @@
  *   recent-publications  the brand's latest API posts, newest first
  */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const LIBRARY_COLUMNS = `"id","filename","kind","sourcePath","title","aspectRatioLabel","durationMs","mimeType","width","height"`;
+// Assets registered by the intake page kept their Dropbox path only in "sourceUrl" until it also
+// filled "sourcePath", so the path falls back to it.
+const LIBRARY_COLUMNS = `"id","filename","kind",COALESCE("sourcePath","sourceUrl") AS "sourcePath","title","aspectRatioLabel","durationMs","mimeType","width","height"`;
 const PUBLISH_DESTINATIONS = ["instagram", "facebook", "youtube", "linkedin", "threads", "tiktok", "x", "pinterest", "gmb"];
 
 export async function searchLibrary(client, brand, body) {
@@ -19,7 +21,7 @@ export async function searchLibrary(client, brand, body) {
   const offset = Math.max(0, Math.floor(Number(body.offset) || 0));
   const rows = (await client.query(`
     SELECT ${LIBRARY_COLUMNS} FROM "Asset"
-    WHERE "brandId"=$1 AND "approvalStatus"='approved' AND "ingestStatus"='ready' AND "retiredAt" IS NULL AND "sourcePath" IS NOT NULL
+    WHERE "brandId"=$1 AND "approvalStatus"='approved' AND "ingestStatus"='ready' AND "retiredAt" IS NULL AND COALESCE("sourcePath","sourceUrl") IS NOT NULL
       AND "kind" IN ('image','video') AND ($2::text IS NULL OR "kind"::text=$2)
       AND ($3::text = '' OR "filename" ILIKE '%' || $3 || '%' OR COALESCE("title",'') ILIKE '%' || $3 || '%')
     ORDER BY "updatedAt" DESC LIMIT $4 OFFSET $5`, [brand.id, kind, q, limit + 1, offset])).rows;
