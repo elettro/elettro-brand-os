@@ -6,9 +6,15 @@ import { AssetThumb as Thumb } from "@/components/asset-thumb";
 import { TiktokCard } from "./tiktok-card";
 
 const NETWORK: Record<string, string> = { instagram: "Instagram", facebook: "Facebook", tiktok: "TikTok" };
-const NETWORKS = ["instagram", "facebook", "tiktok"] as const;
-// Reels on Instagram and Facebook; TikTok's planner placement is "video".
-const PLACEMENT: Record<string, string> = { instagram: "reel", facebook: "reel", tiktok: "video" };
+// One posts-per-day setting per network and placement; TikTok's planner placement is "video".
+const SLOTS = [
+  { destination: "instagram", placement: "reel", label: "Reels" },
+  { destination: "instagram", placement: "story", label: "Stories" },
+  { destination: "facebook", placement: "reel", label: "Reels" },
+  { destination: "facebook", placement: "story", label: "Stories" },
+  { destination: "tiktok", placement: "video", label: "Videos" }
+] as const;
+const slotKey = (s: { destination: string; placement: string }) => `${s.destination}:${s.placement}`;
 
 function addDays(ymd: string, days: number) {
   const d = new Date(ymd + "T12:00:00Z");
@@ -51,8 +57,8 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
     return { start, end, posts, days: [...days.entries()] };
   }), [list]);
 
-  const perDay = (destination: string) => {
-    const rule = list.accounts.find((a) => a.destination === destination && a.placement === PLACEMENT[destination] && a.active);
+  const perDay = (destination: string, placement: string) => {
+    const rule = list.accounts.find((a) => a.destination === destination && a.placement === placement && a.active);
     return rule?.postsPerWeek ? Math.round(rule.postsPerWeek / 7) : 0;
   };
   const connected = (destination: string) => list.accounts.find((a) => a.destination === destination && a.externalAccountId);
@@ -63,7 +69,8 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
     if (next.has(start)) next.delete(start); else next.add(start);
     return next;
   });
-  const [cadence, setCadence] = useState({ instagram: perDay("instagram"), facebook: perDay("facebook"), tiktok: perDay("tiktok") });
+  const [cadence, setCadence] = useState<Record<string, number>>(() =>
+    Object.fromEntries(SLOTS.map((s) => [slotKey(s), perDay(s.destination, s.placement)])));
   // TikTok's card needs the account's current settings from TikTok, fetched once per page load.
   const hasTiktok = list.posts.some((p) => p.destination === "tiktok" && reviewable(p));
   const [creator, setCreator] = useState<TiktokCreator | null>(null);
@@ -93,22 +100,22 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
   }
 
   async function saveCadence() {
-    for (const destination of NETWORKS) {
-      if (!connected(destination)) continue;
-      await run("cadence", { action: "cadence", destination, placement: PLACEMENT[destination], postsPerWeek: cadence[destination] * 7 });
+    const saved = SLOTS.filter((s) => connected(s.destination));
+    for (const s of saved) {
+      await run("cadence", { action: "cadence", destination: s.destination, placement: s.placement, postsPerWeek: cadence[slotKey(s)] * 7 });
     }
-    setNotice(`Saved: ${NETWORKS.filter((d) => connected(d)).map((d) => `${cadence[d]}/day on ${NETWORK[d]}`).join(", ")}. Plan a week to use it.`);
+    setNotice(`Saved: ${saved.map((s) => `${NETWORK[s.destination]} ${s.label} ${cadence[slotKey(s)]}/day`).join(", ")}. Plan a week to use it.`);
   }
 
   return <div className="review">
     <section className="card review-settings">
       <div>
         <div className="eyebrow">Posts per day</div>
-        {NETWORKS.map((d) => (
-          <label key={d} className="review-cadence">
-            {NETWORK[d]} {connected(d) ? <b>{connected(d)!.accountName}</b> : <span className="muted">not connected</span>}
-            <input type="number" min={0} max={10} value={cadence[d]} disabled={!connected(d)}
-              onChange={(e) => setCadence({ ...cadence, [d]: Math.max(0, Math.min(10, Number(e.target.value) || 0)) })} />
+        {SLOTS.map((s) => (
+          <label key={slotKey(s)} className="review-cadence">
+            {NETWORK[s.destination]} {s.label} {connected(s.destination) ? <b>{connected(s.destination)!.accountName}</b> : <span className="muted">not connected</span>}
+            <input type="number" min={0} max={10} value={cadence[slotKey(s)]} disabled={!connected(s.destination)}
+              onChange={(e) => setCadence({ ...cadence, [slotKey(s)]: Math.max(0, Math.min(10, Number(e.target.value) || 0)) })} />
           </label>
         ))}
         <button className="status-chip" disabled={!!busy} onClick={saveCadence}>Save</button>

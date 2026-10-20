@@ -183,7 +183,8 @@ async function tiktokApprove(client, brand, body) {
   return r.rowCount ? { code: 200, body: { ok: true, status: "approved" } } : { code: 404, body: { ok: false, error: "TikTok post not found or already queued" } };
 }
 
-// One rule per connected account: the requested placement gets postsPerWeek, other placements pause.
+// One rule per placement of the connected account (e.g. Instagram reel and story); setting one
+// placement leaves the others as they are. 0 per week pauses that placement.
 async function setCadence(client, brand, body) {
   const destination = String(body.destination || "").toLowerCase();
   const placement = String(body.placement || "").toLowerCase();
@@ -195,21 +196,15 @@ async function setCadence(client, brand, body) {
     SELECT "id" FROM "SocialAccount" WHERE "brandId"=$1 AND "destination"=$2 AND "status"='active' AND "externalAccountId" IS NOT NULL
     ORDER BY "updatedAt" DESC LIMIT 1`, [brand.id, destination])).rows[0];
   if (!account) return { code: 409, body: { ok: false, error: `Connect ${destination} for ${brand.slug} first` } };
-  await client.query("BEGIN");
-  try {
-    await client.query('UPDATE "CadenceRule" SET "active"=FALSE, "updatedAt"=CURRENT_TIMESTAMP WHERE "socialAccountId"=$1 AND "placement"<>$2', [account.id, placement]);
-    const rule = (await client.query('SELECT "id" FROM "CadenceRule" WHERE "socialAccountId"=$1 AND "placement"=$2 LIMIT 1', [account.id, placement])).rows[0];
-    if (rule) {
-      await client.query('UPDATE "CadenceRule" SET "postsPerWeek"=$2, "active"=TRUE, "updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$1', [rule.id, postsPerWeek]);
-    } else {
-      await client.query(
-        `INSERT INTO "CadenceRule" ("socialAccountId","placement","postsPerWeek","preferredDays","preferredStartTime","preferredEndTime","active","updatedAt")
-         VALUES ($1,$2,$3,'{}','12:00','18:00',TRUE,CURRENT_TIMESTAMP)`, [account.id, placement, postsPerWeek]);
-    }
-    await client.query("COMMIT");
-  } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
+  const rule = (await client.query('SELECT "id" FROM "CadenceRule" WHERE "socialAccountId"=$1 AND "placement"=$2 LIMIT 1', [account.id, placement])).rows[0];
+  if (rule) {
+    await client.query('UPDATE "CadenceRule" SET "postsPerWeek"=$2, "active"=$3, "updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$1', [rule.id, postsPerWeek, postsPerWeek > 0]);
+  } else {
+    // Stories run all day; feed posts keep the afternoon window.
+    const [start, end] = placement === "story" ? ["07:00", "23:30"] : ["12:00", "18:00"];
+    await client.query(
+      `INSERT INTO "CadenceRule" ("socialAccountId","placement","postsPerWeek","preferredDays","preferredStartTime","preferredEndTime","active","updatedAt")
+       VALUES ($1,$2,$3,'{}',$4,$5,$6,CURRENT_TIMESTAMP)`, [account.id, placement, postsPerWeek, start, end, postsPerWeek > 0]);
   }
   return { code: 200, body: { ok: true, destination, placement, postsPerWeek } };
 }
