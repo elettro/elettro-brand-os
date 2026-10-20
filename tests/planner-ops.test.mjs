@@ -48,6 +48,19 @@ test("finish-post with a video id publishes and writes the ledger in one transac
   assert.deepEqual(sql, ["BEGIN", "UPDATE \"ScheduledPost\" SET", "INSERT INTO \"PublicationLedger\"", "COMMIT"]);
 });
 
+test("claim-due-posts only marks missed or stuck posts for its own destination", async () => {
+  const queries = [];
+  const client = { query: async (text, values) => { queries.push({ text, values }); return { rowCount: 0, rows: [] }; }, end: async () => {} };
+  const r = await handlePlannerOps({ action: "claim-due-posts", destination: "youtube" }, async () => client, json);
+  assert.equal(r.statusCode, 200);
+  const updates = queries.filter((q) => /SET "status" = '(missed|failed)'/.test(q.text));
+  assert.equal(updates.length, 2);
+  for (const q of updates) {
+    assert.match(q.text, /sa\."destination" = \$1/);
+    assert.deepEqual(q.values, ["youtube"]);
+  }
+});
+
 test("finish-post without a video id marks the post failed and keeps the error", async () => {
   let params;
   const client = { query: async (_text, values) => { params = values; return { rowCount: 1, rows: [] }; }, end: async () => {} };
