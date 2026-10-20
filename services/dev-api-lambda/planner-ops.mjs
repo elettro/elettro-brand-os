@@ -5,7 +5,7 @@
 //     claim-due-posts  hand out approved posts whose time has come, marked 'publishing'
 //     finish-post      record the outcome: 'published' + a PublicationLedger row, or 'failed'
 import { withClient, loadBrand, weekWindow, runPlanWeek, approvePlannerWeek } from "./planner-v2-db.mjs";
-import { addDaysToYmd, isSynthetic, resolvePlannerSettings } from "./planner-v2.mjs";
+import { addDaysToYmd, isSynthetic, languageOf, resolvePlannerSettings } from "./planner-v2.mjs";
 import { keyMatches } from "./youtube-connect.mjs";
 
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
@@ -184,7 +184,8 @@ async function claimDuePosts(event, connectDatabase, json) {
       settingsByBrand.set(brandId, resolvePlannerSettings(row?.settings));
     }
     const out = posts.map(({ assetTags, brandId, plannedSynthetic, ...p }) => ({
-      ...p, synthetic: plannedSynthetic === "true" || isSynthetic({ tags: assetTags }, settingsByBrand.get(brandId))
+      ...p, synthetic: plannedSynthetic === "true" || isSynthetic({ tags: assetTags }, settingsByBrand.get(brandId)),
+      language: languageOf({ tags: assetTags })
     }));
     return json(200, { ok: true, missed, stuck, posts: out });
   });
