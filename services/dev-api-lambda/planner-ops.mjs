@@ -173,7 +173,7 @@ async function claimDuePosts(event, connectDatabase, json) {
        FROM due, "SocialAccount" sa, "Asset" a
        WHERE sp."id" = due."id" AND sa."id" = sp."socialAccountId" AND a."id" = sp."assetId"
        RETURNING sp."id", sp."placement", sp."scheduledFor", sp."generatedTitle" AS "title", sp."generatedCaption" AS "caption",
-                 sp."generatedHashtags" AS "hashtags", sa."externalAccountId" AS "channelId", a."sourcePath" AS "dropboxPath",
+                 sp."generatedHashtags" AS "hashtags", sa."externalAccountId" AS "channelId", COALESCE(a."sourcePath", a."sourceUrl") AS "dropboxPath",
                  a."filename", a."title" AS "assetTitle", sp."scoreBreakdown"->'tiktok' AS "tiktok", a."tags" AS "assetTags", sp."brandId",
                  sp."scoreBreakdown"->>'syntheticDisclosure' AS "plannedSynthetic"`, [destination, limit])).rows;
     // AI-made content must be declared to the network. Judged from the clip being posted (it may have
