@@ -135,3 +135,12 @@ test("LinkedIn copy is held to LinkedIn's limits and links are clickable there",
   assert.match(problems, /caption too long/);
   assert.match(problems, /too many hashtags/);
 });
+
+test("Threads copy is held to 500 characters and one topic tag; links are clickable there", () => {
+  const f = postFacts({ tags: ["radio-blog"] }, { sector: "radio-blog", destination: "threads" }, {}, links);
+  assert.equal(f.linksInCaptionAreClickable, true);
+  assert.deepEqual(validateCopy({ caption: "x".repeat(500), hashtags: ["#stashbox"] }, f), []);
+  const problems = validateCopy({ caption: "x".repeat(501), hashtags: ["#a", "#b"] }, f).join(" | ");
+  assert.match(problems, /caption too long/);
+  assert.match(problems, /too many hashtags/);
+});
