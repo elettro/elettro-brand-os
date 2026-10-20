@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
 import { DEV_ORIGIN, authenticated, serverSetting, unseal } from "@/lib/cognito-auth";
-import { THREADS_CALLBACK, THREADS_OAUTH_SECRET, THREADS_STATE_COOKIE } from "@/lib/threads-connect";
+import { THREADS_APP_ID, THREADS_CALLBACK, THREADS_OAUTH_SECRET, THREADS_STATE_COOKIE } from "@/lib/threads-connect";
 export const runtime = "nodejs";
 
 const apiBaseUrl =
@@ -27,7 +27,10 @@ async function threadsJson<T>(response: Response, what: string): Promise<T> {
 // Code → 1-hour token → 60-day token (refreshable with th_refresh_token before it lapses).
 async function longLivedToken(code: string) {
   const secret = await secrets.send(new GetSecretValueCommand({ SecretId: THREADS_OAUTH_SECRET }));
-  const { clientId, clientSecret } = JSON.parse(secret.SecretString || "{}");
+  // The Threads app ID is public, so it comes from code; only the app secret is read from Secrets Manager.
+  const { clientSecret } = JSON.parse(secret.SecretString || "{}") as { clientSecret?: string };
+  if (!clientSecret) throw Error(`Threads app secret missing: ${THREADS_OAUTH_SECRET} needs a "clientSecret" key`);
+  const clientId = THREADS_APP_ID;
   const short = await threadsJson<{ access_token?: string }>(await fetch(`${graph}/oauth/access_token`, {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
