@@ -696,3 +696,14 @@ button:disabled {
 @media (max-width: 640px) { .review-posts { grid-template-columns: 1fr; } .review-post { flex-direction: column; } }
 .review-thumb > span { padding: 6px; text-align: center; }
 .review-thumb-retry { border: 1px solid var(--line); border-radius: 8px; background: var(--panel); padding: 6px 8px; font-size: 12px; cursor: pointer; color: var(--accent); }
+
+/* Connections: Facebook + Instagram test posts with a library picker. */
+.picker { display: grid; gap: 8px; }
+.picker-bar { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.picker-bar .status-chip.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.picker-bar input { padding: 4px 8px; border: 1px solid var(--line); border-radius: 8px; min-width: 200px; }
+.picker-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; max-height: 360px; overflow-y: auto; }
+.picker-item { display: grid; gap: 4px; justify-items: center; padding: 4px; border: 2px solid transparent; border-radius: 10px; background: none; cursor: pointer; font-size: 11px; color: var(--muted); text-align: center; }
+.picker-item span { overflow-wrap: anywhere; max-height: 2.6em; overflow: hidden; }
+.picker-item.selected { border-color: var(--accent); background: var(--accent-soft); }
+.picker-item:disabled { opacity: .4; cursor: not-allowed; }

@@ -3,6 +3,7 @@ import { brandConfigs } from "@/lib/brand-config";
 import { YOUTUBE_BRANDS } from "@/lib/youtube-connect";
 import { LINKEDIN_BRANDS, calendarReminderUrl } from "@/lib/linkedin-connect";
 import { META_BRANDS } from "@/lib/meta-connect";
+import { MetaTestPosts } from "@/components/meta-test-posts";
 import { THREADS_BRANDS } from "@/lib/threads-connect";
 import { ReconnectCountdown } from "@/components/reconnect-countdown";
 import { redirect } from "next/navigation";
@@ -88,6 +89,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
               {page ? <>● Facebook · <b>{page}</b>{ig ? <><br />● Instagram · <b>{ig}</b></> : <><br />○ No Instagram linked to this Page</>}</> : "○ Not connected"}
             </p>
             <a className="status-chip" href={`/api/connections/meta/start?brand=${b.id}`}>{page ? "Reconnect" : "Connect Facebook + Instagram"}</a>
+            {page && <MetaTestPosts brand={b.id} page={page} instagram={ig || null} />}
           </article>
         );
       })}

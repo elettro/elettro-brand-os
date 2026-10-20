@@ -9,6 +9,7 @@
  *   swap        replace a post's clip with another approved clip of the brand
  *   cadence     posts per week for one destination+placement on the connected account
  *   plan        start the week planner in the background (async self-invoke of plan-week)
+ *   assets, asset, record-publication, recent-publications  test posts (library-publications.mjs)
  *
  * Planning runs async because curator + captions can outlast API Gateway's 30 s limit.
  */
@@ -16,6 +17,7 @@ import { timingSafeEqual } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
 import { nextWeekStart, ymdInTimeZone, addDaysToYmd, localDateTimeToUtc } from "./planner-v2.mjs";
+import { searchLibrary, libraryAsset, recordPublication, recentPublications } from "./library-publications.mjs";
 
 const lambda = new LambdaClient({});
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
@@ -204,7 +206,12 @@ export async function handlePlannerReview(event, body, connectDatabase, json, de
     edit: (c, b) => editCaption(c, b, body),
     swap: (c, b) => swapAsset(c, b, body),
     cadence: (c, b) => setCadence(c, b, body),
-    plan: (c, b) => startPlanning(c, b, body, { invoke: deps.invoke || selfInvoke, readSeed: deps.readSeed || readRepoSeed })
+    plan: (c, b) => startPlanning(c, b, body, { invoke: deps.invoke || selfInvoke, readSeed: deps.readSeed || readRepoSeed }),
+    // Connections page test posts: library picker + publication log (library-publications.mjs).
+    assets: (c, b) => searchLibrary(c, b, body),
+    asset: (c, b) => libraryAsset(c, b, body),
+    "record-publication": (c, b) => recordPublication(c, b, body),
+    "recent-publications": (c, b) => recentPublications(c, b)
   };
   const handler = handlers[action];
   if (!handler) return json(400, { ok: false, error: "Unknown review action" });
