@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { needsRefresh, refreshRecord, handler } from "../services/tiktok-lambda/index.mjs";
+import { needsRefresh, refreshRecord, postRequest, chunkPlan, handler } from "../services/tiktok-lambda/index.mjs";
 
 const NOW = new Date("2026-10-21T00:00:00Z");
 const app = { clientKey: "key", clientSecret: "secret" };
@@ -45,5 +45,34 @@ test("TikTok errors surface with their description", async () => {
 
 test("the worker refuses HTTP events and unknown actions", async () => {
   assert.equal((await handler({ rawPath: "/x" })).statusCode, 403);
-  assert.equal((await handler({ action: "post" })).statusCode, 400);
+  assert.equal((await handler({ action: "delete-everything" })).statusCode, 400);
+});
+
+const MB = 1024 * 1024;
+const post = { brand: "stashbox", dropboxPath: "/1---elettro-brand-os/brands/stashbox/shorts/clip.mp4", caption: "Live at Studio One" };
+
+test("a post request defaults to draft mode and keeps the caption", () => {
+  assert.deepEqual(postRequest(post), { ...post, mode: "draft" });
+  assert.equal(postRequest({ ...post, mode: "direct" }).mode, "direct");
+});
+
+test("post requests outside the brand Dropbox, non-videos, long captions and odd modes are refused", () => {
+  assert.throws(() => postRequest({ ...post, dropboxPath: "/Personal/clip.mp4" }), /brands/);
+  assert.throws(() => postRequest({ ...post, dropboxPath: "/1---elettro-brand-os/brands/stashbox/../x/clip.mp4" }), /brands/);
+  assert.throws(() => postRequest({ ...post, dropboxPath: "/1---elettro-brand-os/brands/stashbox/cover.jpg" }), /video/);
+  assert.throws(() => postRequest({ ...post, caption: "x".repeat(2201) }), /2200/);
+  assert.throws(() => postRequest({ ...post, mode: "public" }), /mode/);
+  assert.throws(() => postRequest({ ...post, brand: "Stash Box" }), /brand/);
+});
+
+test("videos up to 64 MB go in one chunk; bigger ones in 10 MB chunks with the remainder on the last", () => {
+  assert.deepEqual(chunkPlan(3 * MB), { chunkSize: 3 * MB, count: 1 });
+  assert.deepEqual(chunkPlan(64 * MB), { chunkSize: 64 * MB, count: 1 });
+  assert.deepEqual(chunkPlan(95 * MB), { chunkSize: 10 * MB, count: 9 });
+  assert.throws(() => chunkPlan(0), /empty/);
+});
+
+test("a bad post request is refused before any TikTok or Dropbox call", async () => {
+  const r = await handler({ action: "post", brand: "stashbox", dropboxPath: "/elsewhere/clip.mp4" });
+  assert.equal(r.statusCode, 400);
 });
