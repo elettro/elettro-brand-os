@@ -109,6 +109,8 @@ export async function runPlanWeek(event, connectDatabase, json, { modelId = proc
   const brandSlug = String(event.brandSlug || "").trim();
   const apply = event.mode === "apply";
   if (!brandSlug) return json(400, { ok: false, error: "brandSlug is required" });
+  // Optional scope (the Review page plans only instagram + facebook); other destinations' posts stay untouched.
+  const destinations = Array.isArray(event.destinations) && event.destinations.length ? event.destinations.map((d) => String(d).toLowerCase()) : null;
 
   return withClient(connectDatabase, json, "plan-week", async (client) => {
     const brand = await loadBrand(client, brandSlug);
@@ -122,7 +124,8 @@ export async function runPlanWeek(event, connectDatabase, json, { modelId = proc
               cr."id" AS "cadenceRuleId", cr."placement", cr."postsPerWeek", cr."preferredDays", cr."preferredStartTime", cr."preferredEndTime"
        FROM "CadenceRule" cr JOIN "SocialAccount" sa ON sa."id" = cr."socialAccountId"
        WHERE sa."brandId" = $1 AND sa."status" = 'active' AND cr."active" = TRUE AND cr."postsPerWeek" > 0
-       ORDER BY sa."destination", cr."placement"`, [brand.id])).rows;
+         AND ($2::text[] IS NULL OR sa."destination" = ANY($2::text[]))
+       ORDER BY sa."destination", cr."placement"`, [brand.id, destinations])).rows;
     if (!accounts.length) return json(409, { ok: false, error: "No active social accounts with cadence rules" });
 
     const assets = (await client.query(
@@ -223,8 +226,9 @@ export async function runPlanWeek(event, connectDatabase, json, { modelId = proc
       let removed = 0;
       if (replacePlanned) {
         removed = (await client.query(
-          `DELETE FROM "ScheduledPost" WHERE "brandId" = $1 AND "status" = 'planned' AND "scheduledFor" >= $2 AND "scheduledFor" < $3`,
-          [brand.id, from, to])).rowCount;
+          `DELETE FROM "ScheduledPost" WHERE "brandId" = $1 AND "status" = 'planned' AND "scheduledFor" >= $2 AND "scheduledFor" < $3
+             AND "socialAccountId" = ANY($4::uuid[])`,
+          [brand.id, from, to, [...new Set(accounts.map((a) => a.socialAccountId))]])).rowCount;
       }
       let inserted = 0;
       for (const slot of plan.slots.filter((s) => s.status === "planned")) {
