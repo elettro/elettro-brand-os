@@ -7,6 +7,7 @@ import { MetaTestPosts } from "@/components/meta-test-posts";
 import { THREADS_BRANDS } from "@/lib/threads-connect";
 import { TIKTOK_BRANDS } from "@/lib/tiktok-connect";
 import { TiktokPost } from "@/components/tiktok-post";
+import { PINTEREST_BRANDS } from "@/lib/pinterest-connect";
 import { ReconnectCountdown } from "@/components/reconnect-countdown";
 import { redirect } from "next/navigation";
 
@@ -52,11 +53,14 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
   const threads = status.threads || {};
   const tiktokBrands = brandConfigs.filter((b) => TIKTOK_BRANDS.includes(b.id));
   const tiktok = status.tiktok || {};
+  const pinterestBrands = brandConfigs.filter((b) => PINTEREST_BRANDS.includes(b.id));
+  const pinterest = status.pinterest || {};
   // The feed caches for 60s; right after a connect, trust the expiry the callback just reported.
   if (brand && connected && expires && !Number.isNaN(Date.parse(expires))) {
     if (network === "linkedin") linkedin[brand] = { handle: connected, expiresAt: expires };
     if (network === "threads") threads[brand] = { handle: connected, expiresAt: expires };
     if (network === "tiktok") tiktok[brand] = { handle: connected, expiresAt: expires };
+    if (network === "pinterest") pinterest[brand] = { handle: connected, expiresAt: expires };
   }
   return <main className="main">
     <div className="eyebrow">Publishing · Social connections</div>
@@ -136,6 +140,26 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
               {linked?.expiresAt && <ReconnectCountdown expiresAt={linked.expiresAt} />}
             </div>
             {linked && <TiktokPost brand={b.id} />}
+          </article>
+        );
+      })}
+    </div>
+    <h2 style={{ marginTop: 32 }}>Pinterest</h2>
+    <p className="muted">One Pinterest business account for now: pinterest.com/elettro. While the Elettro OS app has Trial access, Pins it creates are visible only to that account. The login renews itself each time it is used; the countdown shows when it lapses if unused.</p>
+    <div className="grid" style={{ marginTop: 20 }}>
+      {pinterestBrands.map((b) => {
+        const linked = pinterest[b.id];
+        return (
+          <article className="card" key={b.id}>
+            <div className="eyebrow">Pinterest</div>
+            <h2>{b.name}</h2>
+            <p className="muted" style={{ margin: "0 0 12px" }}>
+              {linked ? <>● Connected · <b>{linked.handle}</b></> : "○ Not connected"}
+            </p>
+            <div className="connect-row">
+              <a className="status-chip" href={`/api/connections/pinterest/start?brand=${b.id}`}>{linked ? "Reconnect" : "Connect Pinterest"}</a>
+              {linked?.expiresAt && <ReconnectCountdown expiresAt={linked.expiresAt} />}
+            </div>
           </article>
         );
       })}
