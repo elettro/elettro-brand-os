@@ -6,6 +6,9 @@
  *   set-status  approve, skip or un-approve posts (never touches queued/published ones)
  *   approve-range  approve every planned post in a date range (e.g. a whole week)
  *   edit        rewrite a post's caption and hashtags
+ *   tiktok-approve  approve one TikTok post with the settings TikTok requires the creator to pick
+ *              (who can view, comments/duet/stitch, content disclosure); TikTok posts can't be
+ *              approved any other way
  *   swap        replace a post's clip with another approved clip of the brand
  *   cadence     posts per week for one destination+placement on the connected account
  *   plan        start the week planner in the background (async self-invoke of plan-week)
@@ -22,9 +25,14 @@ import { searchLibrary, libraryAsset, recordPublication, recentPublications } fr
 const lambda = new LambdaClient({});
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-export const REVIEW_DESTINATIONS = ["instagram", "facebook"];
+export const REVIEW_DESTINATIONS = ["instagram", "facebook", "tiktok"];
 // Statuses a reviewer may move between; queued and later belong to the publisher.
 const REVIEWABLE = ["planned", "approved", "skipped"];
+// TikTok's Content Posting API privacy levels; the creator picks one per post, there is no default.
+export const TIKTOK_PRIVACY = ["PUBLIC_TO_EVERYONE", "MUTUAL_FOLLOW_FRIENDS", "FOLLOWER_OF_CREATOR", "SELF_ONLY"];
+// A TikTok post may only be approved once its TikTok settings are stored (tiktok-approve).
+const TIKTOK_READY = `(NOT EXISTS (SELECT 1 FROM "SocialAccount" t WHERE t."id" = sp."socialAccountId" AND t."destination" = 'tiktok')
+  OR sp."scoreBreakdown" ? 'tiktok')`;
 
 function keyMatches(given) {
   const expected = process.env.CONNECTIONS_API_SHARED_SECRET || "";
@@ -84,6 +92,7 @@ async function listPosts(client, brand, body) {
       scheduledFor: new Date(p.scheduledFor).toISOString(), status: p.status,
       title: p.generatedTitle, caption: p.generatedCaption, hashtags: p.generatedHashtags || [], reason: p.selectionReason,
       sector: p.scoreBreakdown?.sector || null, copyStatus: p.scoreBreakdown?.copy?.status || null,
+      tiktok: p.scoreBreakdown?.tiktok || null,
       captionStale: Boolean(p.scoreBreakdown?.swappedFrom) && !p.scoreBreakdown?.captionEditedAfterSwap,
       asset: assetCard({ id: p.assetId, filename: p.filename, kind: p.kind, sourcePath: p.sourcePath, title: p.title, durationMs: p.durationMs }),
       candidates: (p.scoreBreakdown?.candidateIds || []).filter((id) => id !== p.assetId && byId.has(id)).slice(0, 6).map((id) => assetCard(byId.get(id)))
@@ -96,8 +105,12 @@ async function setStatus(client, brand, body) {
   const status = String(body.status || "");
   if (!ids.length || !REVIEWABLE.includes(status)) return { code: 400, body: { ok: false, error: "ids and status (planned, approved or skipped) are required" } };
   const r = await client.query(
-    `UPDATE "ScheduledPost" SET "status"=$3, "updatedAt"=CURRENT_TIMESTAMP
-     WHERE "brandId"=$1 AND "id" = ANY($2::uuid[]) AND "status" = ANY($4) RETURNING "id"`, [brand.id, ids, status, REVIEWABLE]);
+    `UPDATE "ScheduledPost" sp SET "status"=$3, "updatedAt"=CURRENT_TIMESTAMP
+     WHERE sp."brandId"=$1 AND sp."id" = ANY($2::uuid[]) AND sp."status" = ANY($4)
+       AND ($3 <> 'approved' OR ${TIKTOK_READY}) RETURNING sp."id"`, [brand.id, ids, status, REVIEWABLE]);
+  if (status === "approved" && r.rowCount < ids.length) {
+    return { code: 409, body: { ok: false, error: "TikTok posts are approved from their TikTok card (who can view, comments, disclosure)", updated: r.rowCount } };
+  }
   return { code: 200, body: { ok: true, status, updated: r.rowCount } };
 }
 
@@ -108,7 +121,7 @@ async function approveRange(client, brand, body) {
     UPDATE "ScheduledPost" sp SET "status"='approved', "updatedAt"=CURRENT_TIMESTAMP
     FROM "SocialAccount" sa
     WHERE sa."id" = sp."socialAccountId" AND sp."brandId"=$1 AND sp."status"='planned'
-      AND sp."scheduledFor" >= $2 AND sp."scheduledFor" < $3 AND sa."destination" = ANY($4)
+      AND sp."scheduledFor" >= $2 AND sp."scheduledFor" < $3 AND sa."destination" = ANY($4) AND ${TIKTOK_READY}
     RETURNING sp."id"`, [brand.id, localDateTimeToUtc(body.from, "00:00", tz), localDateTimeToUtc(addDaysToYmd(body.to, 1), "00:00", tz), destinationsOf(body)]);
   return { code: 200, body: { ok: true, approved: r.rowCount } };
 }
@@ -137,6 +150,37 @@ async function swapAsset(client, brand, body) {
       "assetId"=$3, "updatedAt"=CURRENT_TIMESTAMP
     WHERE "brandId"=$1 AND "id"=$2 AND "status" = ANY($4) AND "assetId" <> $3 RETURNING "id"`, [brand.id, body.id, body.assetId, REVIEWABLE]);
   return r.rowCount ? { code: 200, body: { ok: true } } : { code: 404, body: { ok: false, error: "Post not found, already queued, or already using that clip" } };
+}
+
+// TikTok's posting rules: the creator picks who can view (no default), interactions and the
+// commercial content disclosure; branded content (a paid partnership) can't be private.
+export function tiktokSettings(body) {
+  const privacyLevel = String(body?.privacyLevel || "");
+  if (!TIKTOK_PRIVACY.includes(privacyLevel)) throw new Error("Choose who can view this TikTok post");
+  const settings = {
+    privacyLevel,
+    allowComment: body.allowComment === true, allowDuet: body.allowDuet === true, allowStitch: body.allowStitch === true,
+    yourBrand: body.yourBrand === true, brandedContent: body.brandedContent === true
+  };
+  if (body.disclose === true && !settings.yourBrand && !settings.brandedContent) {
+    throw new Error("Content disclosure is on: pick Your brand, Branded content, or both");
+  }
+  if (settings.brandedContent && privacyLevel === "SELF_ONLY") throw new Error("Branded content can't be private");
+  return settings;
+}
+
+async function tiktokApprove(client, brand, body) {
+  if (!UUID.test(String(body.id || ""))) return { code: 400, body: { ok: false, error: "id is required" } };
+  let settings;
+  try { settings = tiktokSettings(body); } catch (error) { return { code: 400, body: { ok: false, error: error.message } }; }
+  const r = await client.query(`
+    UPDATE "ScheduledPost" sp SET "status"='approved', "updatedAt"=CURRENT_TIMESTAMP,
+      "scoreBreakdown" = COALESCE(sp."scoreBreakdown",'{}'::jsonb) || jsonb_build_object('tiktok', $3::jsonb)
+    FROM "SocialAccount" sa
+    WHERE sa."id" = sp."socialAccountId" AND sa."destination" = 'tiktok'
+      AND sp."brandId"=$1 AND sp."id"=$2 AND sp."status" = ANY($4) RETURNING sp."id"`,
+    [brand.id, body.id, JSON.stringify({ ...settings, approvedAt: new Date().toISOString() }), REVIEWABLE]);
+  return r.rowCount ? { code: 200, body: { ok: true, status: "approved" } } : { code: 404, body: { ok: false, error: "TikTok post not found or already queued" } };
 }
 
 // One rule per connected account: the requested placement gets postsPerWeek, other placements pause.
@@ -210,6 +254,7 @@ export async function handlePlannerReview(event, body, connectDatabase, json, de
     "set-status": (c, b) => setStatus(c, b, body),
     "approve-range": (c, b) => approveRange(c, b, body),
     edit: (c, b) => editCaption(c, b, body),
+    "tiktok-approve": (c, b) => tiktokApprove(c, b, body),
     swap: (c, b) => swapAsset(c, b, body),
     cadence: (c, b) => setCadence(c, b, body),
     plan: (c, b) => startPlanning(c, b, body, { invoke: deps.invoke || selfInvoke, readSeed: deps.readSeed || readRepoSeed, now: deps.now }),

@@ -174,7 +174,7 @@ async function claimDuePosts(event, connectDatabase, json) {
        WHERE sp."id" = due."id" AND sa."id" = sp."socialAccountId" AND a."id" = sp."assetId"
        RETURNING sp."id", sp."placement", sp."scheduledFor", sp."generatedTitle" AS "title", sp."generatedCaption" AS "caption",
                  sp."generatedHashtags" AS "hashtags", sa."externalAccountId" AS "channelId", a."sourcePath" AS "dropboxPath",
-                 a."filename", a."title" AS "assetTitle"`, [destination, limit])).rows;
+                 a."filename", a."title" AS "assetTitle", sp."scoreBreakdown"->'tiktok' AS "tiktok"`, [destination, limit])).rows;
     return json(200, { ok: true, missed, stuck, posts });
   });
 }

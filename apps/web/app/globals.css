@@ -700,6 +700,15 @@ button:disabled {
 @media (max-width: 640px) { .review-posts { grid-template-columns: 1fr; } .review-post { flex-direction: column; } }
 .review-thumb > span { padding: 6px; text-align: center; }
 .review-thumb-retry { border: 1px solid var(--line); border-radius: 8px; background: var(--panel); padding: 6px 8px; font-size: 12px; cursor: pointer; color: var(--accent); }
+/* Review: TikTok's required posting controls on each TikTok post. */
+.tiktok-card { display: grid; gap: 8px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-soft); font-size: 13px; }
+.tiktok-account { display: flex; gap: 8px; align-items: center; }
+.tiktok-account img { border-radius: 50%; }
+.tiktok-field { display: grid; gap: 4px; }
+.tiktok-field select { padding: 6px; border: 1px solid var(--line); border-radius: 8px; font: inherit; background: var(--panel); color: inherit; }
+.tiktok-toggles { display: flex; flex-wrap: wrap; gap: 12px; }
+.tiktok-disclosure { display: grid; gap: 4px; padding-left: 22px; }
+.tiktok-consent, .tiktok-label { margin: 0; font-size: 12px; }
 
 /* Connections: Facebook + Instagram test posts with a library picker. */
 .picker { display: grid; gap: 8px; }
