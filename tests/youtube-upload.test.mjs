@@ -50,6 +50,14 @@ test("AI-made posts are declared to YouTube as altered or synthetic content; oth
   assert.equal(uploadRequest(uploadFromPost(post, "private")).containsSyntheticMedia, false);
 });
 
+test("videos are English unless the post names another language", () => {
+  const post = { channelId: valid.channelId, dropboxPath: valid.dropboxPath, title: "Podcast" };
+  assert.equal(uploadRequest(uploadFromPost(post, "private")).snippet.defaultAudioLanguage, "en");
+  const de = uploadRequest(uploadFromPost({ ...post, language: "de" }, "private")).snippet;
+  assert.deepEqual([de.defaultLanguage, de.defaultAudioLanguage], ["de", "de"]);
+  assert.throws(() => uploadRequest({ ...valid, language: "German" }), /language/);
+});
+
 test("with no planner title the asset title, then the filename, is used", () => {
   assert.equal(uploadFromPost({ assetTitle: "Dirty Bird", filename: "x.mp4" }, "private").title, "Dirty Bird");
   assert.equal(uploadFromPost({ filename: "stashbox-dirty-bird-9x16.mp4" }, "private").title, "stashbox-dirty-bird-9x16");
