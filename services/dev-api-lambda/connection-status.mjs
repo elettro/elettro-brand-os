@@ -203,3 +203,27 @@ export async function setPlatformMilestone(event, connectDatabase, json) {
     try { await client.end(); } catch {}
   }
 }
+
+// IAM-only, called by token workers after a renewal: { destination: "threads", externalAccountId, tokenExpiresAt }.
+// Moves the reconnect countdown so a renewed account doesn't keep warning.
+export async function setTokenExpiry(event, connectDatabase, json) {
+  const destination = String(event.destination || "").toLowerCase();
+  const externalAccountId = String(event.externalAccountId || "");
+  const expires = Date.parse(event.tokenExpiresAt || "");
+  if (!DESTINATIONS.includes(destination) || !externalAccountId || !Number.isFinite(expires)) {
+    return json(400, { ok: false, error: "Need destination, externalAccountId and tokenExpiresAt" });
+  }
+  const client = await connectDatabase();
+  try {
+    await ensureTokenExpiryColumn(client);
+    const updated = await client.query(
+      `UPDATE "SocialAccount" SET "tokenExpiresAt"=$3, "updatedAt"=CURRENT_TIMESTAMP
+       WHERE "destination"=$1 AND "externalAccountId"=$2 RETURNING "id"`,
+      [destination, externalAccountId, new Date(expires)]);
+    if (!updated.rows.length) return json(404, { ok: false, error: "No connected account with that id" });
+    cache = null;
+    return json(200, { ok: true, destination, externalAccountId, tokenExpiresAt: new Date(expires).toISOString() });
+  } finally {
+    try { await client.end(); } catch {}
+  }
+}
