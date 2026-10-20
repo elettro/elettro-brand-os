@@ -138,14 +138,19 @@ async function claimDuePosts(event, connectDatabase, json) {
   const limit = Math.min(5, Math.max(1, Number(event.limit) || 2));
   return withClient(connectDatabase, json, "claim-due-posts", async (client) => {
     // A slot more than a day late is skipped, and an upload that never reported back is not retried
-    // (it may have gone through), so nothing is ever posted twice.
+    // (it may have gone through), so nothing is ever posted twice. Both only touch this worker's
+    // destination: other networks' approved posts wait for their own publisher.
     const missed = (await client.query(
-      `UPDATE "ScheduledPost" SET "status" = 'missed', "updatedAt" = CURRENT_TIMESTAMP
-       WHERE "status" = 'approved' AND "scheduledFor" < CURRENT_TIMESTAMP - INTERVAL '24 hours'`)).rowCount;
+      `UPDATE "ScheduledPost" sp SET "status" = 'missed', "updatedAt" = CURRENT_TIMESTAMP
+       FROM "SocialAccount" sa
+       WHERE sa."id" = sp."socialAccountId" AND sa."destination" = $1
+         AND sp."status" = 'approved' AND sp."scheduledFor" < CURRENT_TIMESTAMP - INTERVAL '24 hours'`, [destination])).rowCount;
     const stuck = (await client.query(
-      `UPDATE "ScheduledPost" SET "status" = 'failed', "updatedAt" = CURRENT_TIMESTAMP,
-              "scoreBreakdown" = jsonb_set("scoreBreakdown", '{publish}', '{"error":"Upload never reported back; check the channel before retrying"}'::jsonb, true)
-       WHERE "status" = 'publishing' AND "updatedAt" < CURRENT_TIMESTAMP - INTERVAL '30 minutes'`)).rowCount;
+      `UPDATE "ScheduledPost" sp SET "status" = 'failed', "updatedAt" = CURRENT_TIMESTAMP,
+              "scoreBreakdown" = jsonb_set(sp."scoreBreakdown", '{publish}', '{"error":"Upload never reported back; check the channel before retrying"}'::jsonb, true)
+       FROM "SocialAccount" sa
+       WHERE sa."id" = sp."socialAccountId" AND sa."destination" = $1
+         AND sp."status" = 'publishing' AND sp."updatedAt" < CURRENT_TIMESTAMP - INTERVAL '30 minutes'`, [destination])).rowCount;
     const posts = (await client.query(
       `WITH due AS (
          SELECT sp."id" FROM "ScheduledPost" sp JOIN "SocialAccount" sa ON sa."id" = sp."socialAccountId"
