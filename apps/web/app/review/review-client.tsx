@@ -53,6 +53,13 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
     return rule?.postsPerWeek ? Math.round(rule.postsPerWeek / 7) : 0;
   };
   const connected = (destination: string) => list.accounts.find((a) => a.destination === destination && a.externalAccountId);
+  // Weeks fold so one can be read on its own; the current week starts open.
+  const [open, setOpen] = useState(() => new Set([list.weekStart]));
+  const toggle = (start: string) => setOpen((prev) => {
+    const next = new Set(prev);
+    if (next.has(start)) next.delete(start); else next.add(start);
+    return next;
+  });
   const [cadence, setCadence] = useState({ instagram: perDay("instagram"), facebook: perDay("facebook") });
 
   async function run(label: string, body: Record<string, unknown>, done?: string) {
@@ -104,21 +111,27 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
       const planned = w.posts.filter((p) => p.status === "planned").length;
       const approved = w.posts.filter((p) => p.status === "approved").length;
       const skipped = w.posts.filter((p) => p.status === "skipped").length;
-      return <section key={w.start} className="review-week">
-        <header>
-          <h2>Week of {new Date(w.start + "T12:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}</h2>
+      const isOpen = open.has(w.start);
+      // The week under way plans only its remaining days; the planner skips slots already past.
+      const underway = w.start <= today;
+      return <section key={w.start} className={`review-week${isOpen ? " open" : ""}`}>
+        <header onClick={(e) => { if (!(e.target as HTMLElement).closest(".review-actions")) toggle(w.start); }}>
+          <button type="button" className="review-week-toggle" aria-expanded={isOpen}>
+            <span className="review-chevron" aria-hidden="true">▸</span>
+            <h2>Week of {new Date(w.start + "T12:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}</h2>
+          </button>
           <span className="muted">{w.posts.length ? `${approved} approved · ${planned} to review · ${skipped} skipped` : "Nothing planned yet"}</span>
           <div className="review-actions">
             {planned > 0 && <button className="status-chip" disabled={!!busy}
               onClick={() => run("week", { action: "approve-range", from: w.start, to: w.end }, `Approved ${planned} posts for the week of ${w.start}.`)}>Approve week</button>}
-            {w.start > today && <button className="status-chip" disabled={!!busy || !list.accounts.some((a) => a.active && a.postsPerWeek)}
+            {w.end >= today && <button className="status-chip" disabled={!!busy || !list.accounts.some((a) => a.active && a.postsPerWeek)}
               title={list.accounts.some((a) => a.active && a.postsPerWeek) ? "" : "Set posts per day first"}
-              onClick={() => run("plan", { action: "plan", weekStart: w.start }, `Planning the week of ${w.start}. Refresh in a minute or two.`)}>
-              {w.posts.length ? "Replan unapproved" : "Plan this week"}
+              onClick={() => run("plan", { action: "plan", weekStart: w.start }, `Planning ${underway ? "the rest of " : ""}the week of ${w.start}. Refresh in a minute or two.`)}>
+              {underway ? (w.posts.length ? "Replan rest of week" : "Plan rest of week") : (w.posts.length ? "Replan unapproved" : "Plan this week")}
             </button>}
           </div>
         </header>
-        {w.days.map(([day, posts]) => <div key={day} className="review-day">
+        {isOpen && w.days.map(([day, posts]) => <div key={day} className="review-day">
           <h3>{fmtDay(posts[0].scheduledFor)}</h3>
           <div className="review-posts">
             {posts.map((p) => <article key={p.id} className={`review-post status-${p.status}`}>

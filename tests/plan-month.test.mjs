@@ -31,7 +31,8 @@ const json = (status, body) => ({ status, body });
 
 test("plan-month previews 4 weeks in order and never reuses a clip across them", async () => {
   const log = [];
-  const r = await runPlanWeeks({ brandSlug: "stashbox", weekStart: "2026-10-19", weeks: 4, copyAi: false }, fakeDb(log), json, { modelId: null });
+  const r = await runPlanWeeks({ brandSlug: "stashbox", weekStart: "2026-10-19", weeks: 4, copyAi: false }, fakeDb(log), json,
+    { modelId: null, now: new Date("2026-10-01T12:00:00Z") });
   assert.equal(r.status, 200, JSON.stringify(r.body).slice(0, 300));
   assert.equal(r.body.weeks, 4);
   assert.deepEqual(r.body.perWeek.map((w) => w.weekStart), ["2026-10-19", "2026-10-26", "2026-11-02", "2026-11-09"]);
@@ -39,6 +40,22 @@ test("plan-month previews 4 weeks in order and never reuses a clip across them",
   assert.equal(picks.length, 12);
   assert.equal(new Set(picks).size, 12, "the 30-day clip cooldown holds across the month");
   assert.ok(!log.some((q) => q.startsWith("INSERT")), "preview writes nothing");
+});
+
+test("a week under way plans only its remaining slots and replaces only future unapproved posts", async () => {
+  const log = [];
+  const sqls = [];
+  const db = fakeDb(log);
+  const spy = async () => { const c = await db(); return { ...c, query: (sql, params) => { sqls.push({ sql, params }); return c.query(sql, params); } }; };
+  // Wednesday 12:00 ET of the week of Oct 19.
+  const now = new Date("2026-10-21T16:00:00Z");
+  const r = await runPlanWeeks({ brandSlug: "stashbox", weekStart: "2026-10-19", weeks: 1, mode: "apply", replacePlanned: true, copyAi: false }, spy, json, { modelId: null, now });
+  assert.equal(r.status, 200, JSON.stringify(r.body).slice(0, 300));
+  const slots = r.body.perWeek[0].slots;
+  assert.ok(slots.some((s) => s.status === "past"), "earlier slots are marked past");
+  for (const s of slots.filter((x) => x.status === "planned")) assert.ok(new Date(s.scheduledFor) > now, `${s.scheduledFor} is in the future`);
+  const del = sqls.find((q) => q.sql.trim().startsWith('DELETE FROM "ScheduledPost"'));
+  assert.ok(new Date(del.params[1]) > now, "replacing starts after now, not at Monday");
 });
 
 test("approve-month approves the whole 4-week window in one update", async () => {

@@ -105,7 +105,10 @@ export async function configurePlannerBrand(event, connectDatabase, json) {
   });
 }
 
-export async function runPlanWeek(event, connectDatabase, json, { modelId = process.env.EPE_BEDROCK_CURATOR_MODEL_ID } = {}) {
+// Slots this close to now (or earlier) are left out: the week may already be under way.
+const PAST_SLOT_LEAD_MS = 15 * 60000;
+
+export async function runPlanWeek(event, connectDatabase, json, { modelId = process.env.EPE_BEDROCK_CURATOR_MODEL_ID, now = new Date() } = {}) {
   const brandSlug = String(event.brandSlug || "").trim();
   const apply = event.mode === "apply";
   if (!brandSlug) return json(400, { ok: false, error: "brandSlug is required" });
@@ -118,6 +121,8 @@ export async function runPlanWeek(event, connectDatabase, json, { modelId = proc
     const settings = resolvePlannerSettings(brand.settings);
     if (!settings.sectors.length) return json(409, { ok: false, error: "Brand has no planner settings; run configure-planner-brand first" });
     const { timeZone, weekStart, from, to } = weekWindow(brand, event.weekStart);
+    // In a week that has started, only slots from here on are planned or replaced.
+    const notBefore = new Date(Math.max(new Date(from).getTime(), new Date(now).getTime() + PAST_SLOT_LEAD_MS));
 
     const accounts = (await client.query(
       `SELECT sa."id" AS "socialAccountId", sa."destination", sa."accountName", sa."publishingMode", sa."timezone",
@@ -148,8 +153,8 @@ export async function runPlanWeek(event, connectDatabase, json, { modelId = proc
        FROM "ScheduledPost" sp JOIN "Asset" a ON a."id" = sp."assetId"
        WHERE sp."brandId" = $1 AND sp."status" IN ('planned','approved','queued','publishing','processing')
          AND sp."scheduledFor" >= $2::timestamp - INTERVAL '90 days' AND sp."scheduledFor" < $3::timestamp + INTERVAL '90 days'
-         AND NOT ($4::boolean AND sp."status" = 'planned' AND sp."scheduledFor" >= $2 AND sp."scheduledFor" < $3)`,
-      [brand.id, from, to, replacePlanned])).rows;
+         AND NOT ($4::boolean AND sp."status" = 'planned' AND sp."scheduledFor" >= $5 AND sp."scheduledFor" < $3)`,
+      [brand.id, from, to, replacePlanned, notBefore])).rows;
     const uses = used.map((u) => ({ socialAccountId: u.socialAccountId, assetId: u.assetId, at: new Date(u.at).toISOString(),
       songKey: songKeyOf(u), contentGroup: u.contentGroup, shopifyProductId: u.shopifyProductId, filename: u.filename }));
     // In a multi-week preview, the earlier weeks' picks exist only in memory; they count like scheduled posts.
@@ -187,10 +192,13 @@ export async function runPlanWeek(event, connectDatabase, json, { modelId = proc
     const existing = (await client.query(
       `SELECT "socialAccountId","scheduledFor" FROM "ScheduledPost"
        WHERE "brandId" = $1 AND "scheduledFor" >= $2 AND "scheduledFor" < $3 AND "status" IN ('planned','approved','queued')
-         AND NOT ($4::boolean AND "status" = 'planned')`, [brand.id, from, to, replacePlanned])).rows;
+         AND NOT ($4::boolean AND "status" = 'planned' AND "scheduledFor" >= $5)`, [brand.id, from, to, replacePlanned, notBefore])).rows;
     const occupied = (slot) => existing.some((e) => e.socialAccountId === slot.socialAccountId &&
       Math.abs(new Date(e.scheduledFor).getTime() - new Date(slot.scheduledFor).getTime()) < 30 * 60000);
-    for (const slot of plan.slots) if (occupied(slot)) slot.status = "exists";
+    for (const slot of plan.slots) {
+      if (new Date(slot.scheduledFor) < notBefore) slot.status = "past";
+      else if (occupied(slot)) slot.status = "exists";
+    }
 
     // Captions for every slot that will be written.
     const copyModel = settings.copy?.enabled === false || event.copyAi === false ? null : modelId;
@@ -228,7 +236,7 @@ export async function runPlanWeek(event, connectDatabase, json, { modelId = proc
         removed = (await client.query(
           `DELETE FROM "ScheduledPost" WHERE "brandId" = $1 AND "status" = 'planned' AND "scheduledFor" >= $2 AND "scheduledFor" < $3
              AND "socialAccountId" = ANY($4::uuid[])`,
-          [brand.id, from, to, [...new Set(accounts.map((a) => a.socialAccountId))]])).rowCount;
+          [brand.id, notBefore, to, [...new Set(accounts.map((a) => a.socialAccountId))]])).rowCount;
       }
       let inserted = 0;
       for (const slot of plan.slots.filter((s) => s.status === "planned")) {

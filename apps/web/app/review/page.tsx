@@ -11,7 +11,7 @@ export default async function ReviewPage({ searchParams }: { searchParams: Promi
   let list: ReviewList | null = null;
   let error: string | null = null;
   try {
-    const { data } = await reviewCall<ReviewList>({ brand, action: "list", weeks: 4 });
+    const { data } = await reviewCall<ReviewList>({ brand, action: "list", weeks: 9 });
     if (data.ok) list = data; else error = data.error || "The planner did not answer";
   } catch {
     error = "Elettro OS could not reach the planner";
@@ -20,7 +20,7 @@ export default async function ReviewPage({ searchParams }: { searchParams: Promi
   return <main className="main">
     <div className="eyebrow">Publishing · Review</div>
     <h1>Review</h1>
-    <p className="muted">The next four weeks of Facebook and Instagram posts. Approve what should go out, skip what shouldn&apos;t, fix captions or swap a clip. Nothing posts until it is approved, and only the next seven days are ever handed to the publisher.</p>
+    <p className="muted">This week and the next two months of Facebook and Instagram posts. Click a week&apos;s strip to open or close it. Approve what should go out, skip what shouldn&apos;t, fix captions or swap a clip. Nothing posts until it is approved, and only the next seven days are ever handed to the publisher.</p>
     <nav className="review-brands" aria-label="Brand">
       {brands.map((b) => <a key={b.id} href={`/review?brand=${b.id}`} className={b.id === brand ? "active" : undefined}>{b.name}</a>)}
     </nav>
