@@ -38,10 +38,13 @@ const destinationsOf = (body) => {
   return list.filter((d) => REVIEW_DESTINATIONS.includes(d));
 };
 
+// The current week plus two months ahead.
+export const REVIEW_MAX_WEEKS = 9;
+
 // Monday of the brand's current week, and the UTC window covering `weeks` weeks from it.
 export function reviewWindow(timeZone, weekStart, weeks, now = new Date()) {
   const start = YMD.test(String(weekStart || "")) ? weekStart : addDaysToYmd(nextWeekStart(ymdInTimeZone(now, timeZone)), -7);
-  const count = Math.min(8, Math.max(1, Math.floor(Number(weeks) || 4)));
+  const count = Math.min(REVIEW_MAX_WEEKS, Math.max(1, Math.floor(Number(weeks) || 4)));
   return { weekStart: start, weeks: count, from: localDateTimeToUtc(start, "00:00", timeZone), to: localDateTimeToUtc(addDaysToYmd(start, 7 * count), "00:00", timeZone) };
 }
 
@@ -181,10 +184,13 @@ async function ensurePlannerSettings(client, brand, readSeed) {
 
 const readRepoSeed = (slug) => readFileSync(new URL(`./intelligence/brands/${slug}/planner.json`, import.meta.url), "utf8");
 
-async function startPlanning(client, brand, body, { invoke, readSeed }) {
+async function startPlanning(client, brand, body, { invoke, readSeed, now = new Date() }) {
   if (body.weekStart && !YMD.test(String(body.weekStart))) return { code: 400, body: { ok: false, error: "weekStart must be YYYY-MM-DD" } };
   if (!(await ensurePlannerSettings(client, brand, readSeed))) return { code: 409, body: { ok: false, error: "This brand has no planner settings yet" } };
-  const weekStart = body.weekStart || nextWeekStart(ymdInTimeZone(new Date(), brand.timezone || "America/New_York"));
+  const today = ymdInTimeZone(now, brand.timezone || "America/New_York");
+  const weekStart = body.weekStart || nextWeekStart(today);
+  // A week under way plans only its remaining days (plan-week skips past slots); a finished one can't be planned.
+  if (addDaysToYmd(weekStart, 6) < today) return { code: 400, body: { ok: false, error: "That week is already over" } };
   // IAM-style event (no requestContext) so index.mjs routes it to the existing plan-week action.
   await invoke({ action: "plan-week", brandSlug: brand.slug, weekStart, mode: "apply", replacePlanned: true, destinations: destinationsOf(body) });
   return { code: 202, body: { ok: true, planning: true, weekStart } };
@@ -206,7 +212,7 @@ export async function handlePlannerReview(event, body, connectDatabase, json, de
     edit: (c, b) => editCaption(c, b, body),
     swap: (c, b) => swapAsset(c, b, body),
     cadence: (c, b) => setCadence(c, b, body),
-    plan: (c, b) => startPlanning(c, b, body, { invoke: deps.invoke || selfInvoke, readSeed: deps.readSeed || readRepoSeed }),
+    plan: (c, b) => startPlanning(c, b, body, { invoke: deps.invoke || selfInvoke, readSeed: deps.readSeed || readRepoSeed, now: deps.now }),
     // Connections page test posts: library picker + publication log (library-publications.mjs).
     assets: (c, b) => searchLibrary(c, b, body),
     asset: (c, b) => libraryAsset(c, b, body),

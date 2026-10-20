@@ -56,11 +56,26 @@ test("plan seeds missing planner settings and starts plan-week for instagram + f
   const r = await handlePlannerReview(event, { brand: "stashbox", action: "plan", weekStart: "2026-10-26", destinations: ["instagram", "youtube"] },
     async () => client, json, {
       invoke: async (payload) => { invoked.push(payload); },
-      readSeed: () => JSON.stringify({ settings: { sectors: [{ id: "live" }] } })
+      readSeed: () => JSON.stringify({ settings: { sectors: [{ id: "live" }] } }),
+      now: new Date("2026-10-20T15:00:00Z")
     });
   assert.equal(r.statusCode, 202);
   assert.ok(client.seen.some((q) => q.sql.includes("jsonb_set") && q.params[1].includes('"sectors"')));
   assert.deepEqual(invoked, [{ action: "plan-week", brandSlug: "stashbox", weekStart: "2026-10-26", mode: "apply", replacePlanned: true, destinations: ["instagram"] }]);
+});
+
+test("plan accepts the week under way but not a finished one", async () => {
+  process.env.CONNECTIONS_API_SHARED_SECRET = KEY;
+  const deps = { invoke: async () => {}, readSeed: () => JSON.stringify({ settings: { sectors: [{ id: "live" }] } }), now: new Date("2026-10-20T15:00:00Z") };
+  const underway = await handlePlannerReview(event, { brand: "stashbox", action: "plan", weekStart: "2026-10-19" }, async () => fakeClient(), json, deps);
+  assert.equal(underway.statusCode, 202);
+  const over = await handlePlannerReview(event, { brand: "stashbox", action: "plan", weekStart: "2026-10-12" }, async () => fakeClient(), json, deps);
+  assert.equal(over.statusCode, 400);
+});
+
+test("the review window reaches nine weeks: this week plus two months", () => {
+  assert.equal(reviewWindow("America/New_York", "2026-10-19", 9).weeks, 9);
+  assert.equal(reviewWindow("America/New_York", "2026-10-19", 20).weeks, 9);
 });
 
 test("cadence needs a connected account", async () => {
