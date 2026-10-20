@@ -17,6 +17,8 @@ import { completeYoutubeConnect } from "./youtube-connect.mjs";
 import { completeLinkedinConnect } from "./linkedin-connect.mjs";
 import { completeMetaConnect } from "./meta-connect.mjs";
 import { handlePlannerWeb, handlePlannerOps } from "./planner-ops.mjs";
+import { completeThreadsConnect } from "./threads-connect.mjs";
+import { handlePlannerReview } from "./planner-review.mjs";
 
 const { Client } = pg;
 const secrets = new SecretsManagerClient({});
@@ -1755,6 +1757,16 @@ export const handler = async (event = {}) => {
   // "Connect Meta": same handshake; one Facebook Page per brand plus the Instagram account linked to it.
   if (requestPath === "/connections/meta/complete" && event?.requestContext?.http?.method === "POST") {
     return completeMetaConnect(event, parseJsonBody(event), connectDatabase, json);
+  }
+
+  // "Connect Threads": same handshake; one Threads profile per brand, 60-day token with an expiry date.
+  if (requestPath === "/connections/threads/complete" && event?.requestContext?.http?.method === "POST") {
+    return completeThreadsConnect(event, parseJsonBody(event), connectDatabase, json);
+  }
+
+  // Review page (web /review): list, approve, skip, edit, swap and plan posts; same shared key as the connect routes.
+  if (requestPath === "/planner/review" && event?.requestContext?.http?.method === "POST") {
+    return handlePlannerReview(event, parseJsonBody(event), connectDatabase, json);
   }
 
   const routedBody = requestPath === "/assets/bulk-update" ? parseJsonBody(event) : {};

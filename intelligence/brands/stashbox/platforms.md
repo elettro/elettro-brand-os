@@ -61,6 +61,9 @@ Sector × format, from Dean's Instagram ecosystem sheet:
 
 - Business development only: radio-blog, custom-production and elettro
   sectors. The angle is "here's what we built and what it does for a business."
+- Problem → solution → facts/estimates (shared LinkedIn section). Stashbox is
+  the case study: the problem a band, venue or business has, what Elettro OS
+  and Stashbox Radio do about it, and the numbers from records.
 
 ## [pinterest] Pinterest
 

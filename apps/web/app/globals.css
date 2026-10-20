@@ -658,6 +658,56 @@ button:disabled {
   cursor: pointer;
 }
 
+/* Review page: four weeks of Facebook + Instagram posts to approve, skip, edit or swap. */
+.review-brands { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.review-brands a { padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; color: var(--text); text-decoration: none; }
+.review-brands a.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.review-settings { display: grid; gap: 12px; margin-top: 20px; }
+.review-settings > div { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
+.review-cadence { display: flex; gap: 8px; align-items: center; }
+.review-cadence input { width: 64px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 8px; }
+.review-notice { margin-top: 16px; }
+.review-week { margin-top: 32px; }
+.review-week > header { display: flex; flex-wrap: wrap; gap: 12px; align-items: baseline; border-bottom: 1px solid var(--line); padding-bottom: 8px; }
+.review-week > header h2 { margin: 0; }
+.review-day h3 { margin: 20px 0 8px; font-size: 15px; color: var(--muted); }
+.review-posts { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); }
+.review-post { display: flex; gap: 12px; padding: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
+.review-post.status-approved { border-color: var(--success); }
+.review-post.status-skipped { opacity: .55; }
+.review-thumb { position: relative; flex: none; border-radius: 8px; overflow: hidden; background: var(--panel-soft); display: grid; place-items: center; color: var(--muted); font-size: 12px; }
+.review-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.review-thumb em { position: absolute; right: 4px; bottom: 4px; padding: 1px 5px; border-radius: 4px; background: rgba(0,0,0,.6); color: #fff; font-style: normal; font-size: 11px; }
+.review-body { min-width: 0; flex: 1; display: grid; gap: 6px; align-content: start; }
+.review-meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 13px; }
+.review-status { margin-left: auto; padding: 1px 8px; border-radius: 999px; font-size: 12px; background: var(--panel-soft); border: 1px solid var(--line); }
+.review-status.approved { color: var(--success); border-color: var(--success); }
+.review-status.planned { color: var(--accent); border-color: var(--accent); }
+.review-caption { margin: 0; white-space: pre-wrap; font-size: 14px; }
+.review-tags { color: var(--muted); }
+.review-file { margin: 0; font-size: 12px; overflow-wrap: anywhere; }
+.review-warn { margin: 0; font-size: 12px; color: var(--accent); }
+.review-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.review-actions button { cursor: pointer; }
+.review-edit textarea { width: 100%; padding: 8px; border: 1px solid var(--line); border-radius: 8px; font: inherit; }
+.review-swap { display: flex; gap: 8px; flex-wrap: wrap; }
+.review-swap button { padding: 0; border: 2px solid transparent; border-radius: 10px; background: none; cursor: pointer; }
+.review-swap button:hover { border-color: var(--accent); }
+@media (max-width: 640px) { .review-posts { grid-template-columns: 1fr; } .review-post { flex-direction: column; } }
+.review-thumb > span { padding: 6px; text-align: center; }
+.review-thumb-retry { border: 1px solid var(--line); border-radius: 8px; background: var(--panel); padding: 6px 8px; font-size: 12px; cursor: pointer; color: var(--accent); }
+
+/* Connections: Facebook + Instagram test posts with a library picker. */
+.picker { display: grid; gap: 8px; }
+.picker-bar { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.picker-bar .status-chip.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.picker-bar input { padding: 4px 8px; border: 1px solid var(--line); border-radius: 8px; min-width: 200px; }
+.picker-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; max-height: 360px; overflow-y: auto; }
+.picker-item { display: grid; gap: 4px; justify-items: center; padding: 4px; border: 2px solid transparent; border-radius: 10px; background: none; cursor: pointer; font-size: 11px; color: var(--muted); text-align: center; }
+.picker-item span { overflow-wrap: anywhere; max-height: 2.6em; overflow: hidden; }
+.picker-item.selected { border-color: var(--accent); background: var(--accent-soft); }
+.picker-item:disabled { opacity: .4; cursor: not-allowed; }
+
 /* Planner: brand tabs, a week of posts by day, and the cadence table. */
 .planner-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 16px 0; }
 .planner-tabs a { padding: 7px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--text); text-decoration: none; font-size: 14px; }
