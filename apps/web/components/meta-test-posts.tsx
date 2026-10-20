@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { AssetThumb } from "@/components/asset-thumb";
 
 type Asset = { id: string; filename: string; kind: string; sourcePath: string | null; title: string | null; aspectRatioLabel: string | null; durationMs: number | null; mimeType: string | null };
-type Network = "instagram" | "facebook";
+type Network = "instagram" | "facebook" | "tiktok";
 
 const DEFAULT_CAPTION = "Testing Elettro OS: this post went out through our own publishing system. More from Stashbox soon.";
 const isJpeg = (a: Asset) => /\.jpe?g$/i.test(a.filename) || a.mimeType === "image/jpeg";
@@ -17,7 +17,7 @@ async function call<T>(url: string, body: Record<string, unknown>): Promise<T> {
 }
 
 // Library picker: the brand's approved, ready photos and videos, 36 at a time.
-function Picker({ brand, network, selected, onSelect, blockedId }: {
+export function Picker({ brand, network, selected, onSelect, blockedId }: {
   brand: string; network: Network; selected: Asset | null; onSelect: (a: Asset) => void; blockedId: string | null;
 }) {
   const [kind, setKind] = useState<"video" | "image">("video");
@@ -36,7 +36,9 @@ function Picker({ brand, network, selected, onSelect, blockedId }: {
     }
   }
   useEffect(() => { load(0); }, [kind]);
-  const why = (a: Asset) => a.id === blockedId ? "Just posted to Instagram" : network === "instagram" && a.kind === "image" && !isJpeg(a) ? "Instagram needs a JPEG" : null;
+  const why = (a: Asset) => a.id === blockedId ? "Just posted to Instagram"
+    : network === "instagram" && a.kind === "image" && !isJpeg(a) ? "Instagram needs a JPEG"
+    : network === "tiktok" && a.kind !== "video" ? "TikTok posts videos" : null;
   return <div className="picker">
     <div className="picker-bar">
       <button type="button" className={`status-chip ${kind === "video" ? "on" : ""}`} onClick={() => setKind("video")}>Videos</button>

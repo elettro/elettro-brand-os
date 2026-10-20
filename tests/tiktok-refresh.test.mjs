@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { needsRefresh, refreshRecord, postRequest, chunkPlan, requestFromPost, postInfo, handler } from "../services/tiktok-lambda/index.mjs";
+import { needsRefresh, refreshRecord, postRequest, chunkPlan, requestFromPost, postInfo, manualSettings, handler } from "../services/tiktok-lambda/index.mjs";
 
 const NOW = new Date("2026-10-21T00:00:00Z");
 const app = { clientKey: "key", clientSecret: "secret" };
@@ -108,4 +108,12 @@ test("a planner post brings its TikTok settings along", () => {
   const settings = { privacyLevel: "PUBLIC_TO_EVERYONE", allowComment: true };
   assert.deepEqual(requestFromPost({ channelId: "x", dropboxPath: post.dropboxPath, tiktok: settings }, "direct").settings, settings);
   assert.equal(requestFromPost({ channelId: "x", dropboxPath: post.dropboxPath }, "direct").settings, null);
+});
+
+test("a manual post uses the TikTok card's choices, or private for a bare console test", () => {
+  assert.equal(manualSettings({}).privacyLevel, "SELF_ONLY");
+  assert.deepEqual(manualSettings({ settings: { privacyLevel: "FOLLOWER_OF_CREATOR", allowComment: true, yourBrand: true } }),
+    { privacyLevel: "FOLLOWER_OF_CREATOR", allowComment: true, allowDuet: false, allowStitch: false, yourBrand: true, brandedContent: false });
+  assert.throws(() => manualSettings({ settings: {} }), /who can view/);
+  assert.throws(() => manualSettings({ settings: { privacyLevel: "SELF_ONLY", brandedContent: true } }), /can't be private/);
 });

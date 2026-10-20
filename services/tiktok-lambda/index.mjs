@@ -226,6 +226,22 @@ export function postInfo(settings, caption, override = PRIVACY_OVERRIDE) {
   };
 }
 
+const PRIVACY_LEVELS = ["PUBLIC_TO_EVERYONE", "MUTUAL_FOLLOW_FRIENDS", "FOLLOWER_OF_CREATOR", "SELF_ONLY"];
+
+// A manual post: the TikTok card's choices from the Connections page ({ settings }), or for a bare
+// console test a private post with interactions on.
+export function manualSettings(event) {
+  const s = event.settings && typeof event.settings === "object" ? event.settings : null;
+  if (!s) return { privacyLevel: String(event.privacyLevel || "SELF_ONLY"), allowComment: true, allowDuet: true, allowStitch: true };
+  if (!PRIVACY_LEVELS.includes(s.privacyLevel)) throw new Error("Choose who can view this TikTok post");
+  const settings = {
+    privacyLevel: s.privacyLevel, allowComment: s.allowComment === true, allowDuet: s.allowDuet === true, allowStitch: s.allowStitch === true,
+    yourBrand: s.yourBrand === true, brandedContent: s.brandedContent === true
+  };
+  if (settings.brandedContent && settings.privacyLevel === "SELF_ONLY") throw new Error("Branded content can't be private");
+  return settings;
+}
+
 async function creatorInfo(brand) {
   const account = await brandAccount(String(brand || ""));
   const c = await tiktok("/post/publish/creator_info/query/", account.accessToken);
@@ -335,9 +351,7 @@ export async function handler(event = {}) {
     let request;
     try { request = postRequest(event); } catch (error) { return result(400, { ok: false, error: error.message }); }
     try {
-      // A manual direct post (testing) defaults to private with interactions on.
-      const settings = { privacyLevel: String(event.privacyLevel || "SELF_ONLY"), allowComment: true, allowDuet: true, allowStitch: true };
-      const posted = await postVideo({ ...request, settings });
+      const posted = await postVideo({ ...request, settings: manualSettings(event) });
       console.log("TikTok post", JSON.stringify(posted));
       return result(200, { ok: true, ...posted });
     } catch (error) {
