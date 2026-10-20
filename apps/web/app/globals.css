@@ -694,3 +694,5 @@ button:disabled {
 .review-swap button { padding: 0; border: 2px solid transparent; border-radius: 10px; background: none; cursor: pointer; }
 .review-swap button:hover { border-color: var(--accent); }
 @media (max-width: 640px) { .review-posts { grid-template-columns: 1fr; } .review-post { flex-direction: column; } }
+.review-thumb > span { padding: 6px; text-align: center; }
+.review-thumb-retry { border: 1px solid var(--line); border-radius: 8px; background: var(--panel); padding: 6px 8px; font-size: 12px; cursor: pointer; color: var(--accent); }
