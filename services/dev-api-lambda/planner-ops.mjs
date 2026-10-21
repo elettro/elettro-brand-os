@@ -262,7 +262,8 @@ async function claimDuePosts(event, connectDatabase, json) {
                  sp."generatedHashtags" AS "hashtags", sa."externalAccountId" AS "channelId", COALESCE(a."sourcePath", a."sourceUrl") AS "dropboxPath",
                  a."filename", a."title" AS "assetTitle", sp."scoreBreakdown"->'tiktok' AS "tiktok", a."tags" AS "assetTags", sp."brandId",
                  sp."scoreBreakdown"->>'syntheticDisclosure' AS "plannedSynthetic", sp."scoreBreakdown"->>'sector' AS "sector",
-                 a."topic" AS "assetTopic"`, [destination, limit])).rows;
+                 a."topic" AS "assetTopic", sp."scoreBreakdown"->'copy'->>'primaryLink' AS "primaryLink",
+                 a."kind" AS "assetKind"`, [destination, limit])).rows;
     // AI-made content must be declared to the network. Judged from the clip being posted (it may have
     // been swapped since planning) with the brand's own AI tags; the planner's flag can only add to it.
     // Language: the clip's tags, else the brand's language (SolarMeister and Neckermann Strom are German).
@@ -276,7 +277,8 @@ async function claimDuePosts(event, connectDatabase, json) {
       });
     }
     const out = posts.map(({ assetTags, brandId, plannedSynthetic, sector, assetTopic, ...p }) => ({
-      ...p, synthetic: plannedSynthetic === "true" || isSynthetic({ tags: assetTags }, brands.get(brandId).settings),
+      // Pinterest picks the brand's board; one Pinterest account serves several brands.
+      ...p, brand: brands.get(brandId).slug, synthetic: plannedSynthetic === "true" || isSynthetic({ tags: assetTags }, brands.get(brandId).settings),
       language: languageOf({ tags: assetTags }, brands.get(brandId).language),
       // Sponsored content must be declared; no brand has any yet, so only a "paid-promotion" clip tag says yes.
       paidPromotion: (assetTags || []).some((t) => String(t).toLowerCase() === "paid-promotion"),

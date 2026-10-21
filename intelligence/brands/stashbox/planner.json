@@ -363,6 +363,24 @@
       "preferredStartTime": "10:00",
       "preferredEndTime": "21:00",
       "publishingMode": "approval"
+    },
+    {
+      "destination": "pinterest",
+      "accountName": "@elettro",
+      "placement": "pin",
+      "postsPerWeek": 7,
+      "preferredStartTime": "10:00",
+      "preferredEndTime": "21:00",
+      "publishingMode": "approval"
+    },
+    {
+      "destination": "pinterest",
+      "accountName": "@elettro",
+      "placement": "video",
+      "postsPerWeek": 0,
+      "preferredStartTime": "10:00",
+      "preferredEndTime": "21:00",
+      "publishingMode": "approval"
     }
   ]
 }

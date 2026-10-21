@@ -25,11 +25,11 @@ test("completion rejects a bad brand, user or missing tokens before touching the
 
 test("a Pinterest account links to the brand's pinterest row; reconnect date = refresh token expiry", async () => {
   process.env.CONNECTIONS_API_SHARED_SECRET = KEY;
-  const writes = [];
+  const writes = [], updates = [];
   const client = {
     async query(sql, params) {
       if (sql.includes('FROM "Brand"')) return { rows: [{ id: "brand-1" }] };
-      if (sql.includes('"brandId"<>')) { assert.match(sql, /'pinterest'/); return { rows: [] }; }
+      if (sql.includes('"id"<>')) { updates.push(params); return { rows: [] }; }
       if (sql.startsWith("ALTER TABLE")) return { rows: [] };
       if (sql.startsWith("\n    SELECT")) return { rows: [] };
       if (sql.includes("INSERT INTO")) { writes.push(params); return { rows: [{ id: "sa-pinterest" }] }; }
@@ -45,6 +45,25 @@ test("a Pinterest account links to the brand's pinterest row; reconnect date = r
   assert.equal(stored[0][1].accessExpiresAt.toISOString(), "2026-11-19T00:00:00.000Z");
   assert.equal(r.body.expiresAt, "2026-12-19T00:00:00.000Z");
   assert.deepEqual(writes.map((p) => [p[1], p[2]]), [["@elettro", "549755885175"]]);
+  // Other brands on the same account get the new reconnect date.
+  assert.deepEqual(updates.map((p) => [p[0], p[2]]), [["549755885175", "sa-pinterest"]]);
+});
+
+test("a second brand on the same Pinterest account keeps the first one in the token's brand list", async () => {
+  process.env.CONNECTIONS_API_SHARED_SECRET = KEY;
+  const client = {
+    async query(sql) {
+      if (sql.includes('FROM "Brand"')) return { rows: [{ id: "brand-2" }] };
+      if (sql.includes("INSERT INTO")) return { rows: [{ id: "sa-stashbox" }] };
+      return { rows: [] };
+    },
+    async end() {}
+  };
+  const stored = [];
+  const r = await completePinterestConnect(event, { brand: "stashbox", brands: ["elettro", "Bad Slug"], user, ...tokens },
+    async () => client, json, NOW, async (...args) => { stored.push(args); });
+  assert.equal(r.statusCode, 200);
+  assert.deepEqual(stored[0][3], ["elettro", "stashbox"]);
 });
 
 test("a username stands in for the account id when Pinterest returns none", async () => {

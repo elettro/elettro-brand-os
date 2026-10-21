@@ -11,7 +11,12 @@ const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 export const DEFAULT_PLANNER_SETTINGS = {
   version: 1,
   pool: { aspectRatios: [], kinds: [], excludeTagsAny: [] },
-  placements: {},
+  // Placements every brand gets unless its own settings define them. Pinterest pins photos
+  // (2:3 is Pinterest's ideal, 4:5 and 1:1 also work) and 9:16 clips as video Pins.
+  placements: {
+    "pinterest:pin": { kinds: ["image"], aspectRatios: ["2x3", "4x5", "1x1"] },
+    "pinterest:video": { kinds: ["video"], aspectRatios: ["9x16"], maxDurationBucket: "1-3min", preferredDurationBuckets: ["15-30s", "30-60s"] }
+  },
   sectors: [],
   minPoolForSector: 3,
   exploration: { default: 0 },
@@ -28,6 +33,7 @@ export function resolvePlannerSettings(brandSettings) {
     ...DEFAULT_PLANNER_SETTINGS,
     ...raw,
     pool: { ...DEFAULT_PLANNER_SETTINGS.pool, ...(raw.pool || {}) },
+    placements: { ...DEFAULT_PLANNER_SETTINGS.placements, ...(raw.placements || {}) },
     exploration: { ...DEFAULT_PLANNER_SETTINGS.exploration, ...(raw.exploration || {}) },
     cooldowns: { ...DEFAULT_PLANNER_SETTINGS.cooldowns, ...(raw.cooldowns || {}) }
   };

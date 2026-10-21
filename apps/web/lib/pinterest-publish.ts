@@ -7,7 +7,7 @@ const secrets = new SecretsManagerClient({ region: "us-east-1" });
 const TOKEN_PREFIX = "elettro-brand-os-dev/pinterest/";
 const api = "https://api.pinterest.com/v5";
 
-type Token = { accessToken: string; accessExpiresAt: string; userId: string; username: string | null; brand: string };
+type Token = { accessToken: string; accessExpiresAt: string; userId: string; username: string | null; brand: string; brands?: string[] };
 export type Board = { id: string; name: string; privacy: string };
 
 export async function brandPinterestToken(brand: string): Promise<Token> {
@@ -16,7 +16,7 @@ export async function brandPinterestToken(brand: string): Promise<Token> {
     if (!entry.Name?.startsWith(TOKEN_PREFIX)) continue;
     const value = await secrets.send(new GetSecretValueCommand({ SecretId: entry.Name }));
     const token = JSON.parse(value.SecretString || "{}") as Token;
-    if (token.brand !== brand || !token.accessToken) continue;
+    if (!(token.brands || [token.brand]).includes(brand) || !token.accessToken) continue;
     // Access tokens last 30 days; renewing them (refresh token) is the token worker's job.
     if (Date.parse(token.accessExpiresAt) <= Date.now()) throw new PublishError("The Pinterest login expired; click Reconnect");
     return token;

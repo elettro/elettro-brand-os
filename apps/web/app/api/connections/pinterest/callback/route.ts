@@ -45,6 +45,17 @@ async function exchangeCode(code: string): Promise<Token> {
   return body;
 }
 
+// Brands already sharing this account's token, so a second brand's connect keeps the first one.
+async function connectedBrands(userId: string): Promise<string[]> {
+  try {
+    const secret = await secrets.send(new GetSecretValueCommand({ SecretId: `elettro-brand-os-dev/pinterest/${userId}` }));
+    const record = JSON.parse(secret.SecretString || "{}") as { brand?: string; brands?: string[] };
+    return [...(record.brands || []), ...(record.brand ? [record.brand] : [])];
+  } catch {
+    return [];
+  }
+}
+
 async function profile(accessToken: string) {
   const response = await fetch(`${api}/user_account`, { headers: { authorization: `Bearer ${accessToken}` }, cache: "no-store" });
   const body = await response.json().catch(() => ({})) as { id?: string; username?: string; business_name?: string; message?: string };
@@ -69,7 +80,7 @@ export async function GET(request: NextRequest) {
       method: "POST",
       headers: { "content-type": "application/json", "x-elettro-connect-key": key },
       body: JSON.stringify({
-        brand, user: who, accessToken: token.access_token, expiresIn: token.expires_in,
+        brand, brands: await connectedBrands(who.id), user: who, accessToken: token.access_token, expiresIn: token.expires_in,
         refreshToken: token.refresh_token, refreshExpiresIn: token.refresh_token_expires_in, scope: token.scope
       }),
       cache: "no-store"

@@ -17,10 +17,10 @@ async function call<T>(body: Record<string, unknown>): Promise<T> {
 }
 
 // Post one approved library image or video as a Pin to a board on the brand's Pinterest account.
-export function PinterestPost({ brand }: { brand: string }) {
+export function PinterestPost({ brand, boardName }: { brand: string; boardName: string }) {
   const [boards, setBoards] = useState<Board[]>([]);
   const [boardId, setBoardId] = useState("");
-  const [newBoard, setNewBoard] = useState("Elettro");
+  const [newBoard, setNewBoard] = useState(boardName);
   const [asset, setAsset] = useState<Asset | null>(null);
   const [title, setTitle] = useState(DEFAULT_TITLE);
   const [description, setDescription] = useState(DEFAULT_DESCRIPTION);
@@ -31,9 +31,9 @@ export function PinterestPost({ brand }: { brand: string }) {
 
   useEffect(() => {
     call<{ boards: Board[] }>({ brand, step: "boards" })
-      .then((d) => { setBoards(d.boards); if (d.boards[0]) setBoardId(d.boards[0].id); })
+      .then((d) => { setBoards(d.boards); setBoardId((d.boards.find((b) => b.name === boardName) || d.boards[0])?.id || ""); })
       .catch((e) => setResult({ error: e instanceof Error ? e.message : "Could not load boards" }));
-  }, [brand]);
+  }, [brand, boardName]);
 
   async function addBoard() {
     setBusy(true); setResult(null);
