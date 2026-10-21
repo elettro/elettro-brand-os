@@ -48,7 +48,9 @@ export function uploadRequest(event) {
     snippet: { title, description, tags, categoryId: String(event.categoryId || "10"), defaultLanguage: language, defaultAudioLanguage: language },
     madeForKids: event.madeForKids === true,
     // YouTube's "altered or synthetic content" disclosure, required for realistic AI-made video.
-    containsSyntheticMedia: event.containsSyntheticMedia === true
+    containsSyntheticMedia: event.containsSyntheticMedia === true,
+    // YouTube's "paid promotion" question; always answered, No unless the post says otherwise.
+    paidPromotion: event.paidPromotion === true
   };
 }
 
@@ -105,7 +107,7 @@ async function dropboxFile(path) {
 }
 
 async function startSession(accessToken, request, size) {
-  const response = await fetch("https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status", {
+  const response = await fetch("https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status,paidProductPlacementDetails", {
     method: "POST",
     headers: {
       authorization: `Bearer ${accessToken}`,
@@ -115,7 +117,8 @@ async function startSession(accessToken, request, size) {
     },
     body: JSON.stringify({
       snippet: request.snippet,
-      status: { privacyStatus: request.privacyStatus, selfDeclaredMadeForKids: request.madeForKids, containsSyntheticMedia: request.containsSyntheticMedia }
+      status: { privacyStatus: request.privacyStatus, selfDeclaredMadeForKids: request.madeForKids, containsSyntheticMedia: request.containsSyntheticMedia },
+      paidProductPlacementDetails: { hasPaidProductPlacement: request.paidPromotion }
     }),
     signal: AbortSignal.timeout(30000)
   });
@@ -169,6 +172,7 @@ export function uploadFromPost(post, privacyStatus) {
     tags,
     privacyStatus,
     containsSyntheticMedia: post.synthetic === true,
+    paidPromotion: post.paidPromotion === true,
     language: post.language || "en"
   };
 }

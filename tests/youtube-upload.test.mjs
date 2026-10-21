@@ -50,6 +50,13 @@ test("AI-made posts are declared to YouTube as altered or synthetic content; oth
   assert.equal(uploadRequest(uploadFromPost(post, "private")).containsSyntheticMedia, false);
 });
 
+test("the paid-promotion question is always answered: No unless the post says Yes", () => {
+  const post = { channelId: valid.channelId, dropboxPath: valid.dropboxPath, title: "Help Jamaica Now" };
+  assert.equal(uploadRequest(uploadFromPost(post, "private")).paidPromotion, false);
+  assert.equal(uploadRequest(uploadFromPost({ ...post, paidPromotion: true }, "private")).paidPromotion, true);
+  assert.equal(uploadRequest(valid).paidPromotion, false);
+});
+
 test("videos are English unless the post names another language", () => {
   const post = { channelId: valid.channelId, dropboxPath: valid.dropboxPath, title: "Podcast" };
   assert.equal(uploadRequest(uploadFromPost(post, "private")).snippet.defaultAudioLanguage, "en");
