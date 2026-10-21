@@ -16,7 +16,7 @@ async function call<T>(body: Record<string, unknown>): Promise<T> {
   return data;
 }
 
-// Post one approved library image as a Pin to a board on the brand's Pinterest account.
+// Post one approved library image or video as a Pin to a board on the brand's Pinterest account.
 export function PinterestPost({ brand }: { brand: string }) {
   const [boards, setBoards] = useState<Board[]>([]);
   const [boardId, setBoardId] = useState("");
@@ -27,6 +27,7 @@ export function PinterestPost({ brand }: { brand: string }) {
   const [link, setLink] = useState("https://elettro.com");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ url?: string; error?: string; logged?: boolean } | null>(null);
+  const [step, setStep] = useState<string | null>(null);
 
   useEffect(() => {
     call<{ boards: Board[] }>({ brand, step: "boards" })
@@ -50,11 +51,26 @@ export function PinterestPost({ brand }: { brand: string }) {
     if (!asset || !boardId) return;
     setBusy(true); setResult(null);
     try {
-      setResult(await call<{ url: string; logged: boolean }>({ brand, step: "pin", boardId, assetId: asset.id, title, description, link }));
+      let mediaId: string | undefined;
+      if (asset.kind === "video") {
+        setStep("Uploading the video to Pinterest…");
+        mediaId = (await call<{ mediaId: string }>({ brand, step: "video", assetId: asset.id })).mediaId;
+        // Pinterest processes the upload before it can be pinned; it reports "succeeded" when ready.
+        for (let i = 0; ; i += 1) {
+          const { status } = await call<{ status: string }>({ brand, step: "media", mediaId });
+          if (status === "succeeded") break;
+          if (status === "failed") throw Error("Pinterest could not process the video");
+          if (i === 60) throw Error("Pinterest is still processing after 5 minutes; try again later");
+          setStep(`Pinterest is processing the video… (${(i + 1) * 5}s)`);
+          await new Promise((r) => setTimeout(r, 5000));
+        }
+      }
+      setStep("Pinning…");
+      setResult(await call<{ url: string; logged: boolean }>({ brand, step: "pin", boardId, assetId: asset.id, mediaId, title, description, link }));
     } catch (e) {
       setResult({ error: e instanceof Error ? e.message : "Pin failed" });
     } finally {
-      setBusy(false);
+      setBusy(false); setStep(null);
     }
   }
 
@@ -71,7 +87,7 @@ export function PinterestPost({ brand }: { brand: string }) {
       <button type="button" className="status-chip" disabled={busy || !newBoard.trim()} onClick={addBoard}>Create board</button>
     </div>
     <Picker brand={brand} network="pinterest" selected={asset} onSelect={setAsset} blockedId={null} />
-    {asset && <p className="muted" style={{ margin: 0 }}>Selected: <b>{asset.title || asset.filename}</b></p>}
+    {asset && <p className="muted" style={{ margin: 0 }}>Selected: <b>{asset.title || asset.filename}</b> · posts as a {asset.kind === "video" ? "video Pin" : "Pin"}</p>}
     <label className="muted" htmlFor={`pin-title-${brand}`}>Title</label>
     <input id={`pin-title-${brand}`} value={title} maxLength={100} onChange={(e) => setTitle(e.target.value)} />
     <label className="muted" htmlFor={`pin-desc-${brand}`}>Description</label>
@@ -79,7 +95,7 @@ export function PinterestPost({ brand }: { brand: string }) {
     <label className="muted" htmlFor={`pin-link-${brand}`}>Link</label>
     <input id={`pin-link-${brand}`} value={link} onChange={(e) => setLink(e.target.value)} />
     <button type="button" className="status-chip" disabled={!asset || !boardId || !title.trim() || busy} onClick={post}>
-      {busy ? "Working…" : "Post to Pinterest now"}
+      {busy ? step || "Working…" : "Post to Pinterest now"}
     </button>
     {result?.url && <p className="card">Pinned. <a href={result.url} target="_blank" rel="noreferrer">See the Pin</a>
       {result.logged === false && <span className="muted"> (live, but not logged for the dashboard)</span>}</p>}
