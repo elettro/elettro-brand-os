@@ -103,6 +103,7 @@ test("claimed posts carry the AI flag from the clip's own tags, or from the plan
   };
   const r = await handlePlannerOps({ action: "claim-due-posts", destination: "youtube" }, async () => client, json);
   assert.deepEqual(r.body.posts.map((p) => [p.id, p.synthetic]), [["p1", true], ["p2", true], ["p3", false]]);
+  assert.ok(r.body.posts.every((p) => p.paidPromotion === false), "no clip is tagged paid-promotion");
   assert.ok(!("assetTags" in r.body.posts[0]) && !("brandId" in r.body.posts[0]));
 });
 

@@ -186,7 +186,9 @@ async function claimDuePosts(event, connectDatabase, json) {
     }
     const out = posts.map(({ assetTags, brandId, plannedSynthetic, ...p }) => ({
       ...p, synthetic: plannedSynthetic === "true" || isSynthetic({ tags: assetTags }, brands.get(brandId).settings),
-      language: languageOf({ tags: assetTags }, brands.get(brandId).language)
+      language: languageOf({ tags: assetTags }, brands.get(brandId).language),
+      // Sponsored content must be declared; no brand has any yet, so only a "paid-promotion" clip tag says yes.
+      paidPromotion: (assetTags || []).some((t) => String(t).toLowerCase() === "paid-promotion")
     }));
     return json(200, { ok: true, missed, stuck, posts: out });
   });
