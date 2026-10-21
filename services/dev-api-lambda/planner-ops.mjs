@@ -87,10 +87,6 @@ export async function handlePlannerWeb(event, body, connectDatabase, json) {
   return json(400, { ok: false, error: "Unknown planner action" });
 }
 
-// Which week, if any, needs planning now: a requested re-plan first (every network), then the first
-// week ahead that some network has no posts in, planned for just those networks. A week the Review
-// page planned for Instagram + Facebook still gets YouTube, TikTok and the rest.
-// plannedByDestination: { destination: [weekStart, ...] } with an entry for every active destination.
 // When a clip was recorded: the YYMMDD session date that starts its filename (261011-…), else today.
 export function recordingDateOf(filename, today) {
   const m = String(filename || "").match(/^(\d{2})(\d{2})(\d{2})[-_]/);
@@ -109,6 +105,78 @@ export function brandLocation(settings) {
     ? { latitude: loc.latitude, longitude: loc.longitude, description: String(loc.description || "") } : null;
 }
 
+// YouTube tags: as many relevant ones as fit just under YouTube's 500-character limit, most specific first:
+// the post's hashtags, then the clip's own metadata (song, artist, show, genre, players), then the pillar,
+// then the brand's keyword bank. Brand.settings.youtubeKeywords replaces the built-in bank for a brand.
+export const YOUTUBE_TAG_BUDGET = 490;
+const MAX_TAG_CHARS = 30;
+const BRAND_KEYWORDS = {
+  stashbox: ["stashbox", "stashbox band", "stashbox music", "south florida band", "fort lauderdale band",
+    "miami live music", "fort lauderdale live music", "south florida live music", "live band", "cover band",
+    "tribute band", "band for hire", "private event band", "corporate event band", "wedding band",
+    "live music", "original music", "indie band", "new music", "davie florida"],
+  solarmeister: ["solarmeister", "solaranlage", "photovoltaik", "balkonkraftwerk", "solarstrom", "stromspeicher",
+    "pv anlage", "solarmodule", "wechselrichter", "erneuerbare energie", "solar"],
+  "neckermann-strom": ["neckermann strom", "strom", "ökostrom", "stromanbieter", "stromtarif", "strom sparen", "energie"]
+};
+const SHOW_KEYWORDS = {
+  "stashbox-does-dylan": ["stashbox does dylan", "bob dylan", "bob dylan cover", "dylan covers", "bob dylan tribute",
+    "dylan tribute band", "folk rock", "classic rock"],
+  "stashbox-does-sublime": ["stashbox does sublime", "sublime", "sublime tribute", "sublime tribute band", "sublime covers",
+    "reggae", "reggae band", "ska punk", "reggae rock"]
+};
+const PILLAR_KEYWORDS = {
+  "live-shows": ["book a band", "live band for hire", "event entertainment"],
+  radio: ["stashbox radio", "free music", "internet radio", "listen free"],
+  streaming: ["spotify", "apple music", "new release", "stream now"]
+};
+const GENRES = ["reggae", "rock", "blues", "folk", "ska", "dub", "funk", "soul", "jazz", "pop", "hip hop", "uk garage", "psychedelic"];
+
+// How YouTube counts the tag box: commas between tags, and quotes around a tag that contains a space.
+export function youtubeTagLength(tags) {
+  return tags.reduce((n, t) => n + t.length + (t.includes(" ") ? 2 : 0), 0) + Math.max(0, tags.length - 1);
+}
+
+const words = (slug) => String(slug || "").replace(/[-_]+/g, " ").replace(/\s+/g, " ").trim().toLowerCase();
+const cleanTag = (t) => String(t || "").replace(/[<>,#"]/g, "").replace(/\s+/g, " ").trim().toLowerCase();
+
+export function youtubeTagsFor({ hashtags = [], assetTags = [], topic = null, sector = null, brandSlug = null, brandKeywords = null }) {
+  const tags = assetTags.map((t) => String(t).toLowerCase());
+  const valueOf = (prefix) => tags.filter((t) => t.startsWith(prefix)).map((t) => words(t.slice(prefix.length)));
+  // A topic like "Get Up, Stand Up (Toots and the Maytals)" gives the song title without the artist.
+  const topicSong = topic ? cleanTag(String(topic).replace(/\s*\(.*\)\s*$/, "")) : null;
+  const songs = [...new Set([topicSong, ...valueOf("song:")].filter(Boolean))];
+  const artists = valueOf("original-artist:");
+  const shows = Object.keys(SHOW_KEYWORDS).filter((s) => tags.includes(s));
+  const candidates = [
+    ...hashtags.map((h) => cleanTag(String(h).replace(/^#+/, ""))),
+    ...songs,
+    ...songs.flatMap((s) => artists.map((a) => `${s} ${a}`)),
+    ...artists,
+    ...(tags.includes("cover") || tags.includes("licensed-cover") ? songs.map((s) => `${s} cover`) : []),
+    ...shows.flatMap((s) => SHOW_KEYWORDS[s]),
+    ...GENRES.filter((g) => tags.includes(g.replace(/ /g, "-"))),
+    ...valueOf("album:"),
+    ...valueOf("player:"),
+    ...(PILLAR_KEYWORDS[sector] || []),
+    ...(Array.isArray(brandKeywords) ? brandKeywords : BRAND_KEYWORDS[brandSlug] || [])
+  ];
+  const out = [];
+  const seen = new Set();
+  for (const raw of candidates) {
+    const tag = cleanTag(raw);
+    if (!tag || tag.length > MAX_TAG_CHARS || seen.has(tag)) continue;
+    if (youtubeTagLength([...out, tag]) > YOUTUBE_TAG_BUDGET) continue;
+    seen.add(tag);
+    out.push(tag);
+  }
+  return out;
+}
+
+// Which week, if any, needs planning now: a requested re-plan first (every network), then the first
+// week ahead that some network has no posts in, planned for just those networks. A week the Review
+// page planned for Instagram + Facebook still gets YouTube, TikTok and the rest.
+// plannedByDestination: { destination: [weekStart, ...] } with an entry for every active destination.
 export function weekToPlan(brand, plannedByDestination) {
   const requested = brand.settings?.plannerRuntime?.replanWeek;
   if (YMD.test(String(requested || ""))) return { weekStart: requested, replace: true, destinations: null };
@@ -193,7 +261,8 @@ async function claimDuePosts(event, connectDatabase, json) {
        RETURNING sp."id", sp."placement", sp."scheduledFor", sp."generatedTitle" AS "title", sp."generatedCaption" AS "caption",
                  sp."generatedHashtags" AS "hashtags", sa."externalAccountId" AS "channelId", COALESCE(a."sourcePath", a."sourceUrl") AS "dropboxPath",
                  a."filename", a."title" AS "assetTitle", sp."scoreBreakdown"->'tiktok' AS "tiktok", a."tags" AS "assetTags", sp."brandId",
-                 sp."scoreBreakdown"->>'syntheticDisclosure' AS "plannedSynthetic"`, [destination, limit])).rows;
+                 sp."scoreBreakdown"->>'syntheticDisclosure' AS "plannedSynthetic", sp."scoreBreakdown"->>'sector' AS "sector",
+                 a."topic" AS "assetTopic"`, [destination, limit])).rows;
     // AI-made content must be declared to the network. Judged from the clip being posted (it may have
     // been swapped since planning) with the brand's own AI tags; the planner's flag can only add to it.
     // Language: the clip's tags, else the brand's language (SolarMeister and Neckermann Strom are German).
@@ -202,16 +271,19 @@ async function claimDuePosts(event, connectDatabase, json) {
       const row = (await client.query('SELECT "slug", "timezone", "settings" FROM "Brand" WHERE "id" = $1', [brandId])).rows[0];
       brands.set(brandId, {
         settings: resolvePlannerSettings(row?.settings), language: brandLanguage(row?.slug, row?.settings),
-        today: ymdInTimeZone(new Date(), row?.timezone || "America/New_York"), location: brandLocation(row?.settings)
+        today: ymdInTimeZone(new Date(), row?.timezone || "America/New_York"), location: brandLocation(row?.settings),
+        slug: row?.slug || null, keywords: row?.settings?.youtubeKeywords || null
       });
     }
-    const out = posts.map(({ assetTags, brandId, plannedSynthetic, ...p }) => ({
+    const out = posts.map(({ assetTags, brandId, plannedSynthetic, sector, assetTopic, ...p }) => ({
       ...p, synthetic: plannedSynthetic === "true" || isSynthetic({ tags: assetTags }, brands.get(brandId).settings),
       language: languageOf({ tags: assetTags }, brands.get(brandId).language),
       // Sponsored content must be declared; no brand has any yet, so only a "paid-promotion" clip tag says yes.
       paidPromotion: (assetTags || []).some((t) => String(t).toLowerCase() === "paid-promotion"),
       recordingDate: recordingDateOf(p.filename, brands.get(brandId).today),
-      location: brands.get(brandId).location
+      location: brands.get(brandId).location,
+      ...(destination === "youtube" ? { youtubeTags: youtubeTagsFor({ hashtags: p.hashtags || [], assetTags: assetTags || [],
+        topic: assetTopic, sector, brandSlug: brands.get(brandId).slug, brandKeywords: brands.get(brandId).keywords }) } : {})
     }));
     return json(200, { ok: true, missed, stuck, posts: out });
   });

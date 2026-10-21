@@ -37,7 +37,9 @@ export function uploadRequest(event) {
   const description = String(event.description || "");
   if (description.length > 5000 || /[<>]/.test(description)) throw new Error("description allows up to 5000 characters and no < or >");
   const tags = Array.isArray(event.tags) ? event.tags.map(String) : [];
-  if (tags.join(",").length > 500) throw new Error("tags add up to more than 500 characters");
+  // YouTube counts the commas between tags and the quotes it adds around tags with spaces.
+  const tagChars = tags.reduce((n, t) => n + t.length + (t.includes(" ") ? 2 : 0), 0) + Math.max(0, tags.length - 1);
+  if (tagChars > 500) throw new Error("tags add up to more than 500 characters");
   const privacyStatus = event.privacyStatus || "private";
   if (!PRIVACY.includes(privacyStatus)) throw new Error(`privacyStatus must be one of ${PRIVACY.join(", ")}`);
   // Title/description language and spoken language; English unless the post says otherwise.
@@ -187,7 +189,8 @@ export function uploadFromPost(post, privacyStatus) {
     dropboxPath: post.dropboxPath,
     title: clean(post.title, 100) || clean(post.assetTitle, 100) || clean(String(post.filename || "").replace(/\.[^.]+$/, ""), 100),
     description: clean([post.caption, hashtagLine].filter(Boolean).join("\n\n"), 5000),
-    tags,
+    // The planner fills the tag box just under 500 characters; the hashtags alone are the fallback.
+    tags: Array.isArray(post.youtubeTags) && post.youtubeTags.length ? post.youtubeTags.map(String) : tags,
     privacyStatus,
     containsSyntheticMedia: post.synthetic === true,
     paidPromotion: post.paidPromotion === true,
