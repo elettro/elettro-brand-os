@@ -50,6 +50,18 @@ test("AI-made posts are declared to YouTube as altered or synthetic content; oth
   assert.equal(uploadRequest(uploadFromPost(post, "private")).containsSyntheticMedia, false);
 });
 
+test("recording date comes from the post, else today; location only when given", () => {
+  const post = { channelId: valid.channelId, dropboxPath: valid.dropboxPath, title: "Tangled Up in Blue" };
+  assert.equal(uploadRequest(uploadFromPost({ ...post, recordingDate: "2026-10-11" }, "private")).recordingDetails.recordingDate, "2026-10-11T12:00:00.000Z");
+  const today = new Date().toISOString().slice(0, 10);
+  const plain = uploadRequest(uploadFromPost(post, "private")).recordingDetails;
+  assert.equal(plain.recordingDate, `${today}T12:00:00.000Z`);
+  assert.ok(!("location" in plain), "no location unless the brand has one");
+  const located = uploadRequest(uploadFromPost({ ...post, location: { latitude: 26.07, longitude: -80.27, description: "Stashbox" } }, "private")).recordingDetails;
+  assert.deepEqual([located.location, located.locationDescription], [{ latitude: 26.07, longitude: -80.27 }, "Stashbox"]);
+  assert.throws(() => uploadRequest({ ...valid, recordingDate: "10/11/2026" }), /recordingDate/);
+});
+
 test("the paid-promotion question is always answered: No unless the post says Yes", () => {
   const post = { channelId: valid.channelId, dropboxPath: valid.dropboxPath, title: "Help Jamaica Now" };
   assert.equal(uploadRequest(uploadFromPost(post, "private")).paidPromotion, false);

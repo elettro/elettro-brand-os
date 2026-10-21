@@ -5,7 +5,7 @@
 //     claim-due-posts  hand out approved posts whose time has come, marked 'publishing'
 //     finish-post      record the outcome: 'published' + a PublicationLedger row, or 'failed'
 import { withClient, loadBrand, weekWindow, runPlanWeek, approvePlannerWeek } from "./planner-v2-db.mjs";
-import { addDaysToYmd, brandLanguage, isSynthetic, languageOf, resolvePlannerSettings } from "./planner-v2.mjs";
+import { addDaysToYmd, brandLanguage, isSynthetic, languageOf, resolvePlannerSettings, ymdInTimeZone } from "./planner-v2.mjs";
 import { keyMatches } from "./youtube-connect.mjs";
 
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
@@ -91,6 +91,24 @@ export async function handlePlannerWeb(event, body, connectDatabase, json) {
 // week ahead that some network has no posts in, planned for just those networks. A week the Review
 // page planned for Instagram + Facebook still gets YouTube, TikTok and the rest.
 // plannedByDestination: { destination: [weekStart, ...] } with an entry for every active destination.
+// When a clip was recorded: the YYMMDD session date that starts its filename (261011-…), else today.
+export function recordingDateOf(filename, today) {
+  const m = String(filename || "").match(/^(\d{2})(\d{2})(\d{2})[-_]/);
+  if (m) {
+    const ymd = `20${m[1]}-${m[2]}-${m[3]}`;
+    const d = new Date(ymd + "T12:00:00Z");
+    if (!Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === ymd && ymd <= today) return ymd;
+  }
+  return today;
+}
+
+// A brand's recording location for uploads, from Brand.settings.location {latitude, longitude, description}.
+export function brandLocation(settings) {
+  const loc = settings && typeof settings === "object" ? settings.location : null;
+  return loc && Number.isFinite(loc.latitude) && Number.isFinite(loc.longitude)
+    ? { latitude: loc.latitude, longitude: loc.longitude, description: String(loc.description || "") } : null;
+}
+
 export function weekToPlan(brand, plannedByDestination) {
   const requested = brand.settings?.plannerRuntime?.replanWeek;
   if (YMD.test(String(requested || ""))) return { weekStart: requested, replace: true, destinations: null };
@@ -181,14 +199,19 @@ async function claimDuePosts(event, connectDatabase, json) {
     // Language: the clip's tags, else the brand's language (SolarMeister and Neckermann Strom are German).
     const brands = new Map();
     for (const brandId of new Set(posts.map((p) => p.brandId))) {
-      const row = (await client.query('SELECT "slug", "settings" FROM "Brand" WHERE "id" = $1', [brandId])).rows[0];
-      brands.set(brandId, { settings: resolvePlannerSettings(row?.settings), language: brandLanguage(row?.slug, row?.settings) });
+      const row = (await client.query('SELECT "slug", "timezone", "settings" FROM "Brand" WHERE "id" = $1', [brandId])).rows[0];
+      brands.set(brandId, {
+        settings: resolvePlannerSettings(row?.settings), language: brandLanguage(row?.slug, row?.settings),
+        today: ymdInTimeZone(new Date(), row?.timezone || "America/New_York"), location: brandLocation(row?.settings)
+      });
     }
     const out = posts.map(({ assetTags, brandId, plannedSynthetic, ...p }) => ({
       ...p, synthetic: plannedSynthetic === "true" || isSynthetic({ tags: assetTags }, brands.get(brandId).settings),
       language: languageOf({ tags: assetTags }, brands.get(brandId).language),
       // Sponsored content must be declared; no brand has any yet, so only a "paid-promotion" clip tag says yes.
-      paidPromotion: (assetTags || []).some((t) => String(t).toLowerCase() === "paid-promotion")
+      paidPromotion: (assetTags || []).some((t) => String(t).toLowerCase() === "paid-promotion"),
+      recordingDate: recordingDateOf(p.filename, brands.get(brandId).today),
+      location: brands.get(brandId).location
     }));
     return json(200, { ok: true, missed, stuck, posts: out });
   });
