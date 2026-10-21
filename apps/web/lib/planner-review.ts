@@ -22,7 +22,7 @@ export type ReviewPost = {
 };
 export type ReviewAccount = { destination: string; accountName: string; externalAccountId: string | null; publishingMode: string; placement: string | null; postsPerWeek: number | null; active: boolean | null };
 export type ReviewList = {
-  ok: boolean; error?: string; brand: string; timeZone: string; weekStart: string; weeks: number; destinations: string[];
+  ok: boolean; error?: string; brand: string; timeZone: string; weekStart: string; weeks: number; destinations: string[]; approvedWeeks?: string[];
   hasPlannerSettings: boolean; accounts: ReviewAccount[]; posts: ReviewPost[];
 };
 

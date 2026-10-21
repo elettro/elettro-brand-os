@@ -59,6 +59,30 @@ test("a week under way plans only its remaining slots and replaces only future u
   assert.ok(new Date(del.params[1]) > now, "replacing starts after now, not at Monday");
 });
 
+test("posts added to a week the owner approved arrive approved; other weeks stay to review", async () => {
+  for (const [approvedWeeks, expected] of [[["2026-10-26"], "approved"], [[], "planned"]]) {
+    const inserts = [];
+    const db = async () => ({
+      async query(sql, params) {
+        if (sql.includes('FROM "Brand"')) return { rows: [{ id: "b1", slug: "stashbox", timezone: "America/New_York", settings: { planner: settings, approvedWeeks } }] };
+        if (sql.includes('FROM "CadenceRule"')) return { rows: accounts };
+        if (sql.includes('FROM "Asset"')) return { rows: assets };
+        if (sql.trim().startsWith('INSERT INTO "ScheduledPost"')) inserts.push(params);
+        return { rows: [], rowCount: 0 };
+      },
+      async end() {}
+    });
+    const r = await runPlanWeeks({ brandSlug: "stashbox", weekStart: "2026-10-26", weeks: 1, mode: "apply", copyAi: false }, db, json,
+      { modelId: null, now: new Date("2026-10-01T12:00:00Z") });
+    assert.equal(r.status, 200, JSON.stringify(r.body).slice(0, 300));
+    assert.ok(inserts.length > 0);
+    const ready = inserts.filter((p) => p[9]);
+    assert.ok(ready.length > 0, "some posts have captions");
+    for (const p of ready) assert.equal(p[11], expected);
+    for (const p of inserts.filter((x) => !x[9])) assert.equal(p[11], "planned", "no caption → stays to review");
+  }
+});
+
 test("approve-month approves the whole 4-week window in one update", async () => {
   const log = [];
   const r = await approvePlannerWeek({ brandSlug: "stashbox", weekStart: "2026-10-19", weeks: 4 }, fakeDb(log), json);

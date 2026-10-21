@@ -249,13 +249,18 @@ export async function runPlanWeek(event, connectDatabase, json, { modelId = proc
           [brand.id, notBefore, to, [...new Set(accounts.map((a) => a.socialAccountId))]])).rowCount;
       }
       let inserted = 0;
+      // A week the owner already approved (Review → Approve week) takes new posts as approved, except
+      // TikTok (TikTok wants the creator's choices on each post) and posts whose caption isn't ready.
+      const weekApproved = Array.isArray(brand.settings?.approvedWeeks) && brand.settings.approvedWeeks.includes(weekStart);
+      const destinationOf = new Map(accounts.map((a) => [a.socialAccountId, a.destination]));
       for (const slot of plan.slots.filter((s) => s.status === "planned")) {
         const run = runFor(slot.socialAccountId);
         const copy = slot.copy?.status === "ready" ? slot.copy : null;
+        const status = weekApproved && copy && destinationOf.get(slot.socialAccountId) !== "tiktok" ? "approved" : "planned";
         await client.query(
           `INSERT INTO "ScheduledPost" ("brandId","socialAccountId","assetId","placement","scheduledFor","status",
              "selectionReason","scoreBreakdown","publishingMode","generatedTitle","generatedCaption","generatedHashtags","updatedAt")
-           VALUES ($1,$2,$3,$4,$5,'planned',$6,$7::jsonb,$8,$9,$10,$11,CURRENT_TIMESTAMP)`,
+           VALUES ($1,$2,$3,$4,$5,$12,$6,$7::jsonb,$8,$9,$10,$11,CURRENT_TIMESTAMP)`,
           [brand.id, slot.socialAccountId, slot.assetId, slot.placement, slot.scheduledFor,
            slot.curatorReason ? `${slot.curatorReason} (${slot.reason})` : slot.reason,
            JSON.stringify({
@@ -272,7 +277,7 @@ export async function runPlanWeek(event, connectDatabase, json, { modelId = proc
              } : null
            }),
            slot.publishingMode || "approval",
-           copy?.title || null, copy?.caption || copy?.description || null, copy?.hashtags || []]);
+           copy?.title || null, copy?.caption || copy?.description || null, copy?.hashtags || [], status]);
         inserted += 1;
       }
       await client.query("COMMIT");

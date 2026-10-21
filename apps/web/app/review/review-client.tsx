@@ -5,7 +5,10 @@ import type { ReviewList, ReviewPost, TiktokCreator } from "@/lib/planner-review
 import { AssetThumb as Thumb } from "@/components/asset-thumb";
 import { TiktokCard } from "./tiktok-card";
 
-const NETWORK: Record<string, string> = { instagram: "Instagram", facebook: "Facebook", tiktok: "TikTok", threads: "Threads" };
+const NETWORK: Record<string, string> = {
+  instagram: "Instagram", facebook: "Facebook", tiktok: "TikTok", youtube: "YouTube", x: "X", threads: "Threads",
+  linkedin: "LinkedIn", pinterest: "Pinterest", reddit: "Reddit", "google-business": "Google Business"
+};
 // One posts-per-day setting per network and placement; TikTok's planner placement is "video".
 const SLOTS = [
   { destination: "instagram", placement: "reel", label: "Reels" },
@@ -134,6 +137,8 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
       const approved = w.posts.filter((p) => p.status === "approved").length;
       const skipped = w.posts.filter((p) => p.status === "skipped").length;
       const isOpen = open.has(w.start);
+      const weekApproved = (list.approvedWeeks || []).includes(w.start);
+      const tiktokToReview = w.posts.filter((p) => p.status === "planned" && p.destination === "tiktok").length;
       // The week under way plans only its remaining days; the planner skips slots already past.
       const underway = w.start <= today;
       return <section key={w.start} className={`review-week${isOpen ? " open" : ""}`}>
@@ -142,11 +147,13 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
             <span className="review-chevron" aria-hidden="true">▸</span>
             <h2>Week of {new Date(w.start + "T12:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}</h2>
           </button>
+          {weekApproved && <span className="review-status approved">Week approved</span>}
           <span className="muted">{w.posts.length ? `${approved} approved · ${planned} to review · ${skipped} skipped` : "Nothing planned yet"}</span>
           <div className="review-actions">
-            {planned > 0 && <button className="status-chip" disabled={!!busy}
-              title="TikTok posts are approved one at a time from their TikTok card"
-              onClick={() => run("week", { action: "approve-range", from: w.start, to: w.end }, "Approved the week's Facebook and Instagram posts. TikTok posts need their TikTok card.")}>Approve week</button>}
+            {planned > tiktokToReview && <button className="status-chip" disabled={!!busy}
+              title="Approves every network's posts this week; posts added to the week later are approved too. TikTok posts are approved one at a time from their TikTok card."
+              onClick={() => run("week", { action: "approve-range", from: w.start, to: w.end },
+                `Week of ${w.start} approved: every post goes out at its time, including any added later.${tiktokToReview ? ` ${tiktokToReview} TikTok post${tiktokToReview === 1 ? "" : "s"} still need${tiktokToReview === 1 ? "s" : ""} its TikTok card.` : ""}`)}>Approve week</button>}
             {w.end >= today && <button className="status-chip" disabled={!!busy || !list.accounts.some((a) => a.active && a.postsPerWeek)}
               title={list.accounts.some((a) => a.active && a.postsPerWeek) ? "" : "Set posts per day first"}
               onClick={() => run("plan", { action: "plan", weekStart: w.start }, `Planning ${underway ? "the rest of " : ""}the week of ${w.start}. Refresh in a minute or two.`)}>
@@ -164,6 +171,7 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
                   <b>{NETWORK[p.destination] || p.destination}</b> · {p.placement} · {fmtTime(p.scheduledFor)}
                   <span className={`review-status ${p.status}`}>{p.status === "planned" ? "to review" : p.status}</span>
                 </div>
+                {p.title && <p className="review-title"><b>{p.title}</b></p>}
                 {p.captionStale && <p className="review-warn">Clip was swapped. Check the caption still fits.</p>}
                 {p.copyStatus && p.copyStatus !== "ready" && <p className="review-warn">Caption needs work ({p.copyStatus}).</p>}
                 {editing === p.id ? <div className="review-edit">
