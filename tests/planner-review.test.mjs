@@ -49,7 +49,7 @@ test("set-status only moves posts between planned, approved and skipped", async 
   assert.deepEqual(update.params.at(-1), ["planned", "approved", "skipped"]);
 });
 
-test("plan seeds missing planner settings and starts plan-week for instagram + facebook only", async () => {
+test("plan seeds missing planner settings and starts plan-week for the networks asked for", async () => {
   process.env.CONNECTIONS_API_SHARED_SECRET = KEY;
   const client = fakeClient();
   const invoked = [];
@@ -61,7 +61,36 @@ test("plan seeds missing planner settings and starts plan-week for instagram + f
     });
   assert.equal(r.statusCode, 202);
   assert.ok(client.seen.some((q) => q.sql.includes("jsonb_set") && q.params[1].includes('"sectors"')));
-  assert.deepEqual(invoked, [{ action: "plan-week", brandSlug: "stashbox", weekStart: "2026-10-26", mode: "apply", replacePlanned: true, destinations: ["instagram"] }]);
+  assert.deepEqual(invoked, [{ action: "plan-week", brandSlug: "stashbox", weekStart: "2026-10-26", mode: "apply", replacePlanned: true, destinations: ["instagram", "youtube"] }]);
+});
+
+test("by default the Review page plans and approves every network", async () => {
+  process.env.CONNECTIONS_API_SHARED_SECRET = KEY;
+  const invoked = [];
+  await handlePlannerReview(event, { brand: "stashbox", action: "plan", weekStart: "2026-10-26" }, async () => fakeClient(), json, {
+    invoke: async (payload) => { invoked.push(payload); }, readSeed: () => JSON.stringify({ settings: { sectors: [{ id: "live" }] } }),
+    now: new Date("2026-10-20T15:00:00Z")
+  });
+  assert.equal(invoked[0].destinations, null);
+  const client = fakeClient([['UPDATE "ScheduledPost" sp SET "status"=\'approved\'', { rows: [{ id: "x" }], rowCount: 7 }]]);
+  await handlePlannerReview(event, { brand: "stashbox", action: "approve-range", from: "2026-10-26", to: "2026-11-01" }, async () => client, json);
+  const approve = client.seen.find((q) => q.sql.includes("SET \"status\"='approved'"));
+  assert.equal(approve.params[3], null, "no network filter");
+});
+
+test("approving a whole week remembers it; part of a week or some networks does not", async () => {
+  process.env.CONNECTIONS_API_SHARED_SECRET = KEY;
+  const whole = fakeClient([['UPDATE "ScheduledPost"', { rows: [], rowCount: 3 }]]);
+  const r = await handlePlannerReview(event, { brand: "stashbox", action: "approve-range", from: "2026-10-26", to: "2026-11-01" }, async () => whole, json);
+  assert.equal(r.body.weekApproved, true);
+  const saved = whole.seen.find((q) => q.sql.includes("'{approvedWeeks}'"));
+  assert.deepEqual(JSON.parse(saved.params[1]), ["2026-10-26"]);
+  for (const body of [{ from: "2026-10-26", to: "2026-10-28" }, { from: "2026-10-26", to: "2026-11-01", destinations: ["instagram"] }]) {
+    const part = fakeClient([['UPDATE "ScheduledPost"', { rows: [], rowCount: 1 }]]);
+    const p = await handlePlannerReview(event, { brand: "stashbox", action: "approve-range", ...body }, async () => part, json);
+    assert.equal(p.body.weekApproved, false);
+    assert.ok(!part.seen.some((q) => q.sql.includes("'{approvedWeeks}'")));
+  }
 });
 
 test("plan accepts the week under way but not a finished one", async () => {

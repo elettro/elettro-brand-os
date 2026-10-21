@@ -25,6 +25,7 @@ import { searchLibrary, libraryAsset, recordPublication, recentPublications } fr
 const lambda = new LambdaClient({});
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// Networks whose posts-per-day the Review page edits. Listing, planning and approving cover every network.
 export const REVIEW_DESTINATIONS = ["instagram", "facebook", "tiktok", "threads"];
 // Statuses a reviewer may move between; queued and later belong to the publisher.
 const REVIEWABLE = ["planned", "approved", "skipped"];
@@ -41,10 +42,16 @@ function keyMatches(given) {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
+// A request may narrow to some networks; by default (null) every network of the brand is covered.
 const destinationsOf = (body) => {
-  const list = Array.isArray(body?.destinations) ? body.destinations.map((d) => String(d).toLowerCase()) : REVIEW_DESTINATIONS;
-  return list.filter((d) => REVIEW_DESTINATIONS.includes(d));
+  if (!Array.isArray(body?.destinations)) return null;
+  const list = body.destinations.map((d) => String(d).toLowerCase()).filter((d) => /^[a-z][a-z-]{1,30}$/.test(d));
+  return list.length ? list : null;
 };
+
+// Approving a whole week marks it approved: posts the planner adds to it later are approved too.
+export const approvedWeeksOf = (settings) =>
+  (Array.isArray(settings?.approvedWeeks) ? settings.approvedWeeks : []).filter((w) => YMD.test(String(w)));
 
 // The current week plus two months ahead.
 export const REVIEW_MAX_WEEKS = 9;
@@ -72,7 +79,7 @@ async function listPosts(client, brand, body) {
     FROM "ScheduledPost" sp
     JOIN "SocialAccount" sa ON sa."id" = sp."socialAccountId"
     JOIN "Asset" a ON a."id" = sp."assetId"
-    WHERE sp."brandId" = $1 AND sp."scheduledFor" >= $2 AND sp."scheduledFor" < $3 AND sa."destination" = ANY($4)
+    WHERE sp."brandId" = $1 AND sp."scheduledFor" >= $2 AND sp."scheduledFor" < $3 AND ($4::text[] IS NULL OR sa."destination" = ANY($4))
     ORDER BY sp."scheduledFor", sa."destination"`, [brand.id, win.from, win.to, destinations])).rows;
   const candidateIds = [...new Set(posts.flatMap((p) => (p.scoreBreakdown?.candidateIds || []).slice(0, 6)))].filter((id) => UUID.test(id));
   const candidates = candidateIds.length ? (await client.query(
@@ -82,10 +89,11 @@ async function listPosts(client, brand, body) {
   const accounts = (await client.query(`
     SELECT sa."destination", sa."accountName", sa."externalAccountId", sa."publishingMode", cr."placement", cr."postsPerWeek", cr."active"
     FROM "SocialAccount" sa LEFT JOIN "CadenceRule" cr ON cr."socialAccountId" = sa."id"
-    WHERE sa."brandId" = $1 AND sa."status" = 'active' AND sa."destination" = ANY($2)
+    WHERE sa."brandId" = $1 AND sa."status" = 'active' AND ($2::text[] IS NULL OR sa."destination" = ANY($2))
     ORDER BY sa."destination", cr."placement"`, [brand.id, destinations])).rows;
   return {
-    ok: true, brand: brand.slug, timeZone: brand.timezone || "America/New_York", ...win, destinations,
+    ok: true, brand: brand.slug, timeZone: brand.timezone || "America/New_York", ...win,
+    destinations: destinations || [...new Set(accounts.map((a) => a.destination))], approvedWeeks: approvedWeeksOf(brand.settings),
     hasPlannerSettings: Boolean(brand.settings?.planner?.sectors?.length), accounts,
     posts: posts.map((p) => ({
       id: p.id, destination: p.destination, accountName: p.accountName, placement: p.placement,
@@ -117,13 +125,27 @@ async function setStatus(client, brand, body) {
 async function approveRange(client, brand, body) {
   if (!YMD.test(String(body.from || "")) || !YMD.test(String(body.to || ""))) return { code: 400, body: { ok: false, error: "from and to (YYYY-MM-DD) are required" } };
   const tz = brand.timezone || "America/New_York";
+  const destinations = destinationsOf(body);
   const r = await client.query(`
     UPDATE "ScheduledPost" sp SET "status"='approved', "updatedAt"=CURRENT_TIMESTAMP
     FROM "SocialAccount" sa
     WHERE sa."id" = sp."socialAccountId" AND sp."brandId"=$1 AND sp."status"='planned'
-      AND sp."scheduledFor" >= $2 AND sp."scheduledFor" < $3 AND sa."destination" = ANY($4) AND ${TIKTOK_READY}
-    RETURNING sp."id"`, [brand.id, localDateTimeToUtc(body.from, "00:00", tz), localDateTimeToUtc(addDaysToYmd(body.to, 1), "00:00", tz), destinationsOf(body)]);
-  return { code: 200, body: { ok: true, approved: r.rowCount } };
+      AND sp."scheduledFor" >= $2 AND sp."scheduledFor" < $3 AND ($4::text[] IS NULL OR sa."destination" = ANY($4)) AND ${TIKTOK_READY}
+    RETURNING sp."id"`, [brand.id, localDateTimeToUtc(body.from, "00:00", tz), localDateTimeToUtc(addDaysToYmd(body.to, 1), "00:00", tz), destinations]);
+  // A whole week for every network: remember it, so posts the planner adds to it later arrive approved.
+  const wholeWeek = !destinations && addDaysToYmd(body.from, 6) === body.to;
+  if (wholeWeek) {
+    const weeks = [...new Set([...approvedWeeksOf(brand.settings), body.from])].sort().slice(-26);
+    await client.query(
+      `UPDATE "Brand" SET "settings" = jsonb_set(COALESCE("settings",'{}'::jsonb), '{approvedWeeks}', $2::jsonb, true), "updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$1`,
+      [brand.id, JSON.stringify(weeks)]);
+  }
+  // TikTok posts stay to review: TikTok requires the creator's choices on each post.
+  const tiktokWaiting = (await client.query(`
+    SELECT COUNT(*)::int AS n FROM "ScheduledPost" sp JOIN "SocialAccount" sa ON sa."id" = sp."socialAccountId"
+    WHERE sp."brandId"=$1 AND sp."status"='planned' AND sa."destination"='tiktok' AND sp."scheduledFor" >= $2 AND sp."scheduledFor" < $3`,
+    [brand.id, localDateTimeToUtc(body.from, "00:00", tz), localDateTimeToUtc(addDaysToYmd(body.to, 1), "00:00", tz)])).rows[0]?.n || 0;
+  return { code: 200, body: { ok: true, approved: r.rowCount, weekApproved: wholeWeek, tiktokWaiting } };
 }
 
 async function editCaption(client, brand, body) {
