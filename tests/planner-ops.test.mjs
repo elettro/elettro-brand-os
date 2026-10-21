@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { weekToPlan, handlePlannerWeb, handlePlannerOps, recordingDateOf, brandLocation } from "../services/dev-api-lambda/planner-ops.mjs";
+import { weekToPlan, handlePlannerWeb, handlePlannerOps, recordingDateOf, brandLocation, youtubeTagsFor, youtubeTagLength, YOUTUBE_TAG_BUDGET } from "../services/dev-api-lambda/planner-ops.mjs";
 import { weekWindow } from "../services/dev-api-lambda/planner-v2-db.mjs";
 import { addDaysToYmd, brandLanguage, languageOf } from "../services/dev-api-lambda/planner-v2.mjs";
 
@@ -142,6 +142,32 @@ test("a brand location is used only when it has coordinates", () => {
   assert.equal(brandLocation({ location: { description: "Stashbox" } }), null);
   assert.deepEqual(brandLocation({ location: { latitude: 26.07, longitude: -80.27, description: "Stashbox" } }),
     { latitude: 26.07, longitude: -80.27, description: "Stashbox" });
+});
+
+test("YouTube counts commas and the quotes around multi-word tags", () => {
+  assert.equal(youtubeTagLength([]), 0);
+  assert.equal(youtubeTagLength(["reggae"]), 6);
+  assert.equal(youtubeTagLength(["reggae", "live band"]), 6 + 1 + 9 + 2);
+});
+
+test("YouTube tags fill just under 500 characters, most specific first, never internal tags", () => {
+  const tags = youtubeTagsFor({
+    hashtags: ["#stashbox", "#bobdylan"], topic: "Visions of Johanna", sector: "live-shows", brandSlug: "stashbox",
+    assetTags: ["song:visions-of-johanna", "original-artist:bob-dylan", "stashbox-does-dylan", "cover", "9x16", "hd-1080",
+      "visual:crowd", "ready-to-publish", "player:dean-palermo", "album:stashbox-does-dylan-vol-1"]
+  });
+  const length = youtubeTagLength(tags);
+  assert.ok(length <= YOUTUBE_TAG_BUDGET && length > 400, `tag box uses ${length} characters`);
+  assert.deepEqual(tags.slice(0, 5), ["stashbox", "bobdylan", "visions of johanna", "visions of johanna bob dylan", "bob dylan"]);
+  assert.ok(tags.includes("visions of johanna cover") && tags.includes("dean palermo") && tags.includes("book a band"));
+  for (const internal of ["9x16", "hd-1080", "hd 1080", "visual:crowd", "ready-to-publish", "cover"]) assert.ok(!tags.includes(internal), internal);
+  assert.equal(new Set(tags).size, tags.length, "no duplicates");
+});
+
+test("a brand's own keyword list replaces the built-in one; German brands get German keywords", () => {
+  assert.ok(youtubeTagsFor({ brandSlug: "stashbox", brandKeywords: ["only this"] }).includes("only this"));
+  assert.ok(!youtubeTagsFor({ brandSlug: "stashbox", brandKeywords: ["only this"] }).includes("south florida band"));
+  assert.ok(youtubeTagsFor({ brandSlug: "solarmeister" }).includes("photovoltaik"));
 });
 
 test("finish-post without a video id marks the post failed and keeps the error", async () => {
