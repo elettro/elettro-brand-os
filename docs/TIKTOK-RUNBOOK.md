@@ -35,7 +35,8 @@ Role inline policies: `tiktok-worker-secrets` (read tiktok-oauth, tiktok/*, drop
 - Only sandbox **Target Users** can connect (currently @stashboxmusic and @solarmeistershop).
 - Direct posts only work to **private** accounts (`unaudited_client_can_only_post_to_private_accounts`).
   @stashboxmusic can't go private (TikTok Shop link), so @solarmeistershop (SolarMeister, private) is the account for
-  direct posts and the review demo. Scheduled planner posts go out as inbox drafts (`TIKTOK_TICK_MODE` unset = draft).
+  direct posts and the review demo. Scheduled planner posts go out as inbox drafts (`TIKTOK_TICK_MODE` unset = draft),
+  which needs `video.upload`; that scope is not requested while the first review is pending (see Scopes).
 - TikTok's in-app "Apps and services permissions" list does not show sandbox apps; use **Disconnect** on
   `/connections` to revoke a grant (the next Connect shows TikTok's consent screen again).
 
@@ -46,3 +47,11 @@ nor Amplify built them, although the Amplify webhook itself was healthy. Check
 `gh api repos/elettro/elettro-brand-os/hooks/<id>/deliveries` for a `refs/heads/develop` delivery of the merge commit.
 If it's missing: start the Lambda builds with `gh workflow run <workflow>.yml --ref develop`, and start Amplify with
 **Run job** on the develop branch (or merge any PR, which sends a fresh push event).
+
+## Scopes
+
+The first app review requests only what the demo shows working: `user.info.basic`, `user.info.profile` (username on
+the account card) and `video.publish` (direct posts). `user.info.stats` and `video.list` (analytics) and
+`video.upload` (inbox drafts) go into a later review together with a screen that uses them. Changing
+`TIKTOK_SCOPES` (apps/web/lib/tiktok-connect.ts) changes TikTok's consent screen; accounts keep the scopes they
+granted until they reconnect.
