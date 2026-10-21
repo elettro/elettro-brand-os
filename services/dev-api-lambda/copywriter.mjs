@@ -44,7 +44,8 @@ export function postFacts(asset, slot, songFacts = {}, links = {}, { promotional
   const synthetic = Boolean(slot.synthetic);
   const sectorLinks = {
     "live-shows": links.booking?.page ? [links.booking.page] : [],
-    radio: song?.radioUrl ? [song.radioUrl] : [],
+    // A song without its own radio page points to Stashbox Radio itself (worded as "more music", not "this song").
+    radio: song?.radioUrl ? [song.radioUrl] : links.radio ? [links.radio] : [],
     // Spotify first (song, then artist profile), then the other platforms.
     streaming: [song?.spotifyUrl, links.streaming?.spotify, song?.appleMusicUrl, song?.youtubeMusicUrl,
       links.streaming?.appleMusic, links.streaming?.amazonMusic, links.streaming?.tidal].filter(Boolean)
@@ -76,6 +77,8 @@ export function postFacts(asset, slot, songFacts = {}, links = {}, { promotional
     promotional,
     primaryLink: sectorLinks[0] || pinLink,
     songHasOwnStreamingLink: Boolean(song?.spotifyUrl || song?.appleMusicUrl || song?.youtubeMusicUrl),
+    songHasRadioPage: Boolean(song?.radioUrl),
+    genre: ["reggae", "rock", "blues", "folk", "ska", "dub", "funk", "soul", "jazz", "psychedelic"].find((g) => tags.includes(g)) || null,
     allowedLinks: [...new Set([...sectorLinks, ...artistLinks, links.youtubeChannel, links.booking?.page, links.radio, links.merchStore, pinLink].filter(Boolean))],
     bookingEmail: promotional && slot.sector === "live-shows" ? links.booking?.email || null : null,
     // Goal #1 (subscribers) closes posts where the brand allows it; radio posts already ask people to join.
@@ -116,6 +119,14 @@ export function templateCopy(f, seed) {
     ]);
     body = `Booking venues and events in South Florida. ${f.linksInCaptionAreClickable ? `Book the show: ${cta}` : cta}` +
       (f.bookingEmail ? ` Or email ${f.bookingEmail}.` : "");
+  } else if (f.sector === "radio" && !f.songHasRadioPage) {
+    // The song isn't on Stashbox Radio; the link is the radio itself, so the ask is "more music", not this song.
+    hook = pick(seed, [`${songLine || "Stashbox"}.`, `${songLine ? `${songLine}, by ` : ""}Stashbox.`]);
+    body = pick(seed + "cta", [
+      `More Stashbox music on Stashbox Radio, free to listen. ${cta}`,
+      `More originals on Stashbox Radio, no login needed. ${cta}`,
+      `Hear more on Stashbox Radio. Join free for the dynamic videos. ${cta}`
+    ]);
   } else if (f.sector === "radio") {
     hook = pick(seed, [`${songLine || "New Stashbox song"}.`, `Now on Stashbox Radio: ${songLine}.`, `${songLine}, by Stashbox.`]);
     body = pick(seed + "cta", [
@@ -158,7 +169,24 @@ function plainCopy(f, seed) {
   // Without the pillar's link, its hashtags (#spotify, #stashboxradio) would point nowhere.
   const linkTags = f.primaryLink ? [] : ["#spotify", "#stashboxradio"];
   const hashtags = hashtagsFor(f).filter((t) => !linkTags.includes(t)).slice(0, LIMITS[f.destination]?.hashtags ?? 2);
-  const caption = hook;
+  // One line of context from the records, so a plain post still says something about the clip.
+  const genre = f.genre ? `${f.genre[0].toUpperCase()}${f.genre.slice(1)}` : null;
+  const context = [
+    f.isCover && f.originalArtist && !hook.includes(f.originalArtist) ? `Stashbox's take on ${f.originalArtist}.` : null,
+    !f.isCover && f.song ? (f.genre ? `A ${f.genre} original by Stashbox.` : "A Stashbox original.") : null,
+    f.show && !hook.includes(f.show) ? `From the ${f.show} set.` : null,
+    f.album ? `From ${f.album}.` : null,
+    f.realFootage && f.venue && !where ? `Recorded live at ${f.venue}${f.city ? `, ${f.city}` : ""}.` : null,
+    genre && f.isCover ? `${genre} from South Florida.` : null
+  ].filter(Boolean);
+  const contextLine = context.length ? pick(seed + "context", context) : null;
+  // A soft ask with no link, only where the post may carry one (not X's plain promo-cap posts).
+  const ask = f.promotional === false ? null : f.subscribeReminder || pick(seed + "ask", [
+    "Follow Stashbox for more.", "More from Stashbox every week. Follow along.", "South Florida's Stashbox. Follow for more."
+  ]);
+  const limit = LIMITS[f.destination]?.caption || 2200;
+  const caption = [hook, contextLine, ask].filter(Boolean).reduce((text, line) =>
+    !text ? line : `${text}\n${line}`.length <= limit ? `${text}\n${line}` : text, "");
   // YouTube posts are a title plus a description; everything else is a caption.
   const youtube = f.destination === "youtube";
   return { status: "ready", source: "template", angle: "moment", hook, caption: youtube ? null : caption,
