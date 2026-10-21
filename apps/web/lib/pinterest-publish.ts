@@ -46,6 +46,47 @@ export async function createBoard(token: Token, name: string): Promise<Board> {
   return { id: b.id, name: b.name, privacy: b.privacy };
 }
 
+// Video Pins: register the upload with Pinterest, copy the file from Dropbox into the upload
+// form Pinterest returns (its S3 bucket), then poll until processing "succeeded" and pin it.
+// The copy runs inside one web request, so very large files are refused up front.
+const MAX_VIDEO_BYTES = 150 * 1024 * 1024;
+
+export async function uploadVideo(token: Token, asset: LibraryAsset) {
+  if (asset.kind !== "video") throw new PublishError("Pick a video");
+  if (asset.durationMs && (asset.durationMs < 4000 || asset.durationMs > 15 * 60_000)) throw new PublishError("Pinterest videos must be 4 seconds to 15 minutes long");
+  const registered = await pinterestCall<{ media_id: string; upload_url: string; upload_parameters: Record<string, string> }>(
+    token, "POST", "/media", { media_type: "video" }, "video register");
+  const source = await fetch(await mediaLink(asset.sourcePath), { cache: "no-store" });
+  if (!source.ok) throw new PublishError("Dropbox could not send that file");
+  if (Number(source.headers.get("content-length") || 0) > MAX_VIDEO_BYTES) throw new PublishError("That video is over 150 MB; pick a shorter or smaller one");
+  const file = await source.blob();
+  if (file.size > MAX_VIDEO_BYTES) throw new PublishError("That video is over 150 MB; pick a shorter or smaller one");
+  const form = new FormData();
+  for (const [key, value] of Object.entries(registered.upload_parameters)) form.append(key, value);
+  form.append("file", file, asset.filename);
+  const uploaded = await fetch(registered.upload_url, { method: "POST", body: form, cache: "no-store" });
+  if (!uploaded.ok) throw new PublishError(`Pinterest video upload failed: ${uploaded.status}`);
+  return { mediaId: registered.media_id };
+}
+
+export async function videoStatus(token: Token, mediaId: string) {
+  const m = await pinterestCall<{ status?: string }>(token, "GET", `/media/${mediaId}`, null, "video status");
+  return { status: m.status || "registered" };
+}
+
+export async function videoPin(token: Token, boardId: string, mediaId: string, asset: LibraryAsset, pin: { title: string; description: string; link: string | null }) {
+  const created = await pinterestCall<{ id: string }>(token, "POST", "/pins", {
+    board_id: boardId,
+    title: pin.title,
+    description: pin.description,
+    ...(pin.link ? { link: pin.link } : {}),
+    alt_text: (asset.title || pin.title).slice(0, 500),
+    // Cover = the frame one second in, so a fade-in from black never becomes the thumbnail.
+    media_source: { source_type: "video_id", media_id: mediaId, cover_image_key_frame_time: 1 }
+  }, "Pin create");
+  return { id: created.id, url: `https://www.pinterest.com/pin/${created.id}/` };
+}
+
 // One image Pin. Title and description are Pinterest's limits (100 / 800); the link makes the Pin clickable.
 export async function imagePin(token: Token, boardId: string, asset: LibraryAsset, pin: { title: string; description: string; link: string | null }) {
   if (asset.kind !== "image") throw new PublishError("Pinterest posts here are images; pick a photo");

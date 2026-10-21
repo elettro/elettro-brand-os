@@ -38,8 +38,7 @@ export function Picker({ brand, network, selected, onSelect, blockedId }: {
   useEffect(() => { load(0); }, [kind]);
   const why = (a: Asset) => a.id === blockedId ? "Just posted to Instagram"
     : network === "instagram" && a.kind === "image" && !isJpeg(a) ? "Instagram needs a JPEG"
-    : network === "tiktok" && a.kind !== "video" ? "TikTok posts videos"
-    : network === "pinterest" && a.kind !== "image" ? "Pins here are photos" : null;
+    : network === "tiktok" && a.kind !== "video" ? "TikTok posts videos" : null;
   return <div className="picker">
     <div className="picker-bar">
       <button type="button" className={`status-chip ${kind === "video" ? "on" : ""}`} onClick={() => setKind("video")}>Videos</button>
