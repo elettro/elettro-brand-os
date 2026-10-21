@@ -144,6 +144,13 @@ test("a brand location is used only when it has coordinates", () => {
     { latitude: 26.07, longitude: -80.27, description: "Stashbox" });
 });
 
+test("Stashbox uploads default to the Davie studio; other brands have no location unless set", () => {
+  assert.equal(brandLocation({}, "stashbox").description, "Stashbox, 2231 SW 97th Rd, Davie, FL 33324");
+  assert.equal(brandLocation({}, "stashbox").latitude, 26.0916278);
+  assert.equal(brandLocation({}, "solarmeister"), null);
+  assert.equal(brandLocation({ location: { latitude: 1, longitude: 2, description: "Gig" } }, "stashbox").description, "Gig");
+});
+
 test("YouTube counts commas and the quotes around multi-word tags", () => {
   assert.equal(youtubeTagLength([]), 0);
   assert.equal(youtubeTagLength(["reggae"]), 6);

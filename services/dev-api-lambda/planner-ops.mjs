@@ -98,11 +98,18 @@ export function recordingDateOf(filename, today) {
   return today;
 }
 
-// A brand's recording location for uploads, from Brand.settings.location {latitude, longitude, description}.
-export function brandLocation(settings) {
+// A brand's recording location for uploads: Brand.settings.location {latitude, longitude, description},
+// else the brand's home base below (Stashbox's studio in Davie, confirmed on a test upload 2026-10-21).
+const BRAND_LOCATIONS = {
+  stashbox: { latitude: 26.0916278, longitude: -80.2786648, description: "Stashbox, 2231 SW 97th Rd, Davie, FL 33324" }
+};
+
+export function brandLocation(settings, slug = null) {
   const loc = settings && typeof settings === "object" ? settings.location : null;
-  return loc && Number.isFinite(loc.latitude) && Number.isFinite(loc.longitude)
-    ? { latitude: loc.latitude, longitude: loc.longitude, description: String(loc.description || "") } : null;
+  if (loc && Number.isFinite(loc.latitude) && Number.isFinite(loc.longitude)) {
+    return { latitude: loc.latitude, longitude: loc.longitude, description: String(loc.description || "") };
+  }
+  return BRAND_LOCATIONS[slug] ? { ...BRAND_LOCATIONS[slug] } : null;
 }
 
 // YouTube tags: as many relevant ones as fit just under YouTube's 500-character limit, most specific first:
@@ -271,7 +278,7 @@ async function claimDuePosts(event, connectDatabase, json) {
       const row = (await client.query('SELECT "slug", "timezone", "settings" FROM "Brand" WHERE "id" = $1', [brandId])).rows[0];
       brands.set(brandId, {
         settings: resolvePlannerSettings(row?.settings), language: brandLanguage(row?.slug, row?.settings),
-        today: ymdInTimeZone(new Date(), row?.timezone || "America/New_York"), location: brandLocation(row?.settings),
+        today: ymdInTimeZone(new Date(), row?.timezone || "America/New_York"), location: brandLocation(row?.settings, row?.slug),
         slug: row?.slug || null, keywords: row?.settings?.youtubeKeywords || null
       });
     }
