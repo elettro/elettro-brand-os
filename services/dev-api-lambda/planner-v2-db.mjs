@@ -184,7 +184,8 @@ export async function runPlanWeek(event, connectDatabase, json, { modelId = proc
       radioBaseUrl: settings.sources?.radioBaseUrl, overrides: settings.sources?.songOverrides || {}
     });
 
-    const input = { assets, accounts, settings, weekStart, timeZone, uses, songFacts };
+    // planWeek marks past slots against `now`; without it, it read the real clock instead of the caller's.
+    const input = { assets, accounts, settings, weekStart, timeZone, uses, songFacts, now };
     let plan = planWeek(input);
     let curator = { enabled: false, reason: !modelId ? "EPE_BEDROCK_CURATOR_MODEL_ID not set" : "disabled in settings or request" };
     if (modelId && settings.curator?.enabled !== false && event.curator !== false) {
