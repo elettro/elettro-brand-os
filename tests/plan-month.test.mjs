@@ -89,3 +89,25 @@ test("approve-month approves the whole 4-week window in one update", async () =>
   assert.equal(r.body.weeks, 4);
   assert.equal(log.filter((q) => q.startsWith("UPDATE")).length, 1);
 });
+
+test("approved posts count toward their day's posts-per-day, so a replan never stacks new posts on them", async () => {
+  const daily = [{ ...accounts[0], postsPerWeek: 7 }];
+  // Approved at 22:00 Tuesday, outside the 09:00-19:00 window, so no slot time matches it.
+  const approved = [{ socialAccountId: "a-yt", placement: "short", scheduledFor: new Date("2026-10-28T02:00:00Z") }];
+  const db = async () => ({
+    async query(sql) {
+      if (sql.includes('FROM "Brand"')) return { rows: [{ id: "b1", slug: "stashbox", timezone: "America/New_York", settings: { planner: settings } }] };
+      if (sql.includes('FROM "CadenceRule"')) return { rows: daily };
+      if (sql.includes('FROM "Asset"')) return { rows: assets };
+      if (sql.includes('SELECT "socialAccountId","placement","scheduledFor" FROM "ScheduledPost"')) return { rows: approved };
+      return { rows: [], rowCount: 0 };
+    },
+    async end() {}
+  });
+  const r = await runPlanWeeks({ brandSlug: "stashbox", weekStart: "2026-10-26", weeks: 1, mode: "preview", copyAi: false }, db, json,
+    { modelId: null, now: new Date("2026-10-21T16:00:00Z") });
+  assert.equal(r.status, 200, JSON.stringify(r.body).slice(0, 300));
+  const slots = r.body.perWeek[0].slots;
+  assert.deepEqual(slots.filter((s) => s.ymd === "2026-10-27").map((s) => s.status), ["covered"]);
+  assert.equal(slots.filter((s) => s.status === "planned").length, 6);
+});

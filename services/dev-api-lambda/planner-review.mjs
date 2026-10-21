@@ -10,7 +10,7 @@
  *              (who can view, comments/duet/stitch, content disclosure); TikTok posts can't be
  *              approved any other way
  *   swap        replace a post's clip with another approved clip of the brand
- *   cadence     posts per week for one destination+placement on the connected account
+ *   cadence     posts per week for one format (destination+placement) of a connected account
  *   plan        start the week planner in the background (async self-invoke of plan-week)
  *   assets, asset, record-publication, recent-publications  test posts (library-publications.mjs)
  *
@@ -21,12 +21,13 @@ import { readFileSync } from "node:fs";
 import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
 import { nextWeekStart, ymdInTimeZone, addDaysToYmd, localDateTimeToUtc } from "./planner-v2.mjs";
 import { searchLibrary, libraryAsset, recordPublication, recentPublications } from "./library-publications.mjs";
+import { PUBLISHING_FORMATS, FORMAT_DESTINATIONS, PLANNABLE_DESTINATIONS, MAX_POSTS_PER_WEEK, formatOf, isPlannable } from "./publishing-formats.mjs";
 
 const lambda = new LambdaClient({});
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-// Networks whose posts-per-day the Review page edits. Listing, planning and approving cover every network.
-export const REVIEW_DESTINATIONS = ["instagram", "facebook", "tiktok", "threads", "pinterest"];
+// Every network with a publishing format (publishing-formats.mjs); unconnected ones simply have no posts.
+export const REVIEW_DESTINATIONS = FORMAT_DESTINATIONS;
 // Statuses a reviewer may move between; queued and later belong to the publisher.
 const REVIEWABLE = ["planned", "approved", "skipped"];
 // TikTok's Content Posting API privacy levels; the creator picks one per post, there is no default.
@@ -87,14 +88,15 @@ async function listPosts(client, brand, body) {
     [candidateIds, brand.id])).rows : [];
   const byId = new Map(candidates.map((a) => [a.id, a]));
   const accounts = (await client.query(`
-    SELECT sa."destination", sa."accountName", sa."externalAccountId", sa."publishingMode", cr."placement", cr."postsPerWeek", cr."active"
+    SELECT sa."id" AS "socialAccountId", sa."destination", sa."accountName", sa."externalAccountId", sa."publishingMode", cr."placement", cr."postsPerWeek", cr."active"
     FROM "SocialAccount" sa LEFT JOIN "CadenceRule" cr ON cr."socialAccountId" = sa."id"
     WHERE sa."brandId" = $1 AND sa."status" = 'active' AND ($2::text[] IS NULL OR sa."destination" = ANY($2))
     ORDER BY sa."destination", cr."placement"`, [brand.id, destinations])).rows;
   return {
     ok: true, brand: brand.slug, timeZone: brand.timezone || "America/New_York", ...win,
-    destinations: destinations || [...new Set(accounts.map((a) => a.destination))], approvedWeeks: approvedWeeksOf(brand.settings),
+    destinations: destinations || REVIEW_DESTINATIONS, approvedWeeks: approvedWeeksOf(brand.settings),
     hasPlannerSettings: Boolean(brand.settings?.planner?.sectors?.length), accounts,
+    formats: PUBLISHING_FORMATS.map(({ rule, ...f }) => f), maxPostsPerWeek: MAX_POSTS_PER_WEEK,
     posts: posts.map((p) => ({
       id: p.id, destination: p.destination, accountName: p.accountName, placement: p.placement,
       scheduledFor: new Date(p.scheduledFor).toISOString(), status: p.status,
@@ -209,19 +211,30 @@ async function tiktokApprove(client, brand, body) {
     : { code: 404, body: { ok: false, error: "TikTok post not found or already queued" } };
 }
 
-// One rule per placement of the connected account (e.g. Instagram reel and story); setting one
-// placement leaves the others as they are. 0 per week pauses that placement.
+// One rule per format of a connected account (e.g. Instagram reel and story); setting one
+// format leaves the others as they are. 0 per week pauses that format. A network (one account)
+// takes at most MAX_POSTS_PER_WEEK across its formats.
 async function setCadence(client, brand, body) {
   const destination = String(body.destination || "").toLowerCase();
   const placement = String(body.placement || "").toLowerCase();
   const postsPerWeek = Math.floor(Number(body.postsPerWeek));
-  if (!REVIEW_DESTINATIONS.includes(destination) || !/^[a-z]{2,20}$/.test(placement) || !(postsPerWeek >= 0 && postsPerWeek <= 70)) {
-    return { code: 400, body: { ok: false, error: "destination, placement and postsPerWeek (0-70) are required" } };
+  const format = formatOf(destination, placement);
+  if (!format || !(postsPerWeek >= 0 && postsPerWeek <= MAX_POSTS_PER_WEEK)) {
+    return { code: 400, body: { ok: false, error: `destination, placement (a known format) and postsPerWeek (0-${MAX_POSTS_PER_WEEK}) are required` } };
   }
+  if (!isPlannable(format)) return { code: 409, body: { ok: false, error: `${format.label} on ${destination}: ${format.note}` } };
+  const byId = body.socialAccountId && UUID.test(String(body.socialAccountId));
   const account = (await client.query(`
     SELECT "id" FROM "SocialAccount" WHERE "brandId"=$1 AND "destination"=$2 AND "status"='active' AND "externalAccountId" IS NOT NULL
-    ORDER BY "updatedAt" DESC LIMIT 1`, [brand.id, destination])).rows[0];
+      AND ($3::uuid IS NULL OR "id"=$3::uuid)
+    ORDER BY "updatedAt" DESC LIMIT 1`, [brand.id, destination, byId ? body.socialAccountId : null])).rows[0];
   if (!account) return { code: 409, body: { ok: false, error: `Connect ${destination} for ${brand.slug} first` } };
+  const others = (await client.query(
+    `SELECT COALESCE(SUM("postsPerWeek"),0)::int AS n FROM "CadenceRule" cr WHERE cr."socialAccountId"=$1 AND cr."placement"<>$2 AND cr."active"=TRUE`,
+    [account.id, placement])).rows[0]?.n || 0;
+  if (others + postsPerWeek > MAX_POSTS_PER_WEEK) {
+    return { code: 400, body: { ok: false, error: `${destination} would get ${others + postsPerWeek} posts a week; the most is ${MAX_POSTS_PER_WEEK} (10 a day) across its formats` } };
+  }
   const rule = (await client.query('SELECT "id" FROM "CadenceRule" WHERE "socialAccountId"=$1 AND "placement"=$2 LIMIT 1', [account.id, placement])).rows[0];
   if (rule) {
     await client.query('UPDATE "CadenceRule" SET "postsPerWeek"=$2, "active"=$3, "updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$1', [rule.id, postsPerWeek, postsPerWeek > 0]);
@@ -232,7 +245,7 @@ async function setCadence(client, brand, body) {
       `INSERT INTO "CadenceRule" ("socialAccountId","placement","postsPerWeek","preferredDays","preferredStartTime","preferredEndTime","active","updatedAt")
        VALUES ($1,$2,$3,'{}',$4,$5,$6,CURRENT_TIMESTAMP)`, [account.id, placement, postsPerWeek, start, end, postsPerWeek > 0]);
   }
-  return { code: 200, body: { ok: true, destination, placement, postsPerWeek } };
+  return { code: 200, body: { ok: true, destination, placement, socialAccountId: account.id, postsPerWeek } };
 }
 
 // Brands without Brand.settings.planner get the repo seed (intelligence/brands/<slug>/planner.json).
@@ -257,7 +270,14 @@ async function startPlanning(client, brand, body, { invoke, readSeed, now = new 
   // A week under way plans only its remaining days (plan-week skips past slots); a finished one can't be planned.
   if (addDaysToYmd(weekStart, 6) < today) return { code: 400, body: { ok: false, error: "That week is already over" } };
   // IAM-style event (no requestContext) so index.mjs routes it to the existing plan-week action.
-  await invoke({ action: "plan-week", brandSlug: brand.slug, weekStart, mode: "apply", replacePlanned: true, destinations: destinationsOf(body) });
+  // Only connected networks are planned; a planner-seed account that was never connected (X, say) stays out.
+  const connected = (await client.query(
+    `SELECT DISTINCT "destination" FROM "SocialAccount" WHERE "brandId"=$1 AND "status"='active' AND "externalAccountId" IS NOT NULL`,
+    [brand.id])).rows.map((r) => r.destination);
+  // No networks named means every network (Review plans and approves whole brand-weeks).
+  const destinations = (destinationsOf(body) || PLANNABLE_DESTINATIONS).filter((d) => PLANNABLE_DESTINATIONS.includes(d) && connected.includes(d));
+  if (!destinations.length) return { code: 409, body: { ok: false, error: "Connect a social account for this brand first" } };
+  await invoke({ action: "plan-week", brandSlug: brand.slug, weekStart, mode: "apply", replacePlanned: true, destinations });
   return { code: 202, body: { ok: true, planning: true, weekStart } };
 }
 

@@ -200,14 +200,37 @@ export async function runPlanWeek(event, connectDatabase, json, { modelId = proc
 
     // Existing posts in the week (not being replaced) keep their slot.
     const existing = (await client.query(
-      `SELECT "socialAccountId","scheduledFor" FROM "ScheduledPost"
-       WHERE "brandId" = $1 AND "scheduledFor" >= $2 AND "scheduledFor" < $3 AND "status" IN ('planned','approved','queued')
+      `SELECT "socialAccountId","placement","scheduledFor" FROM "ScheduledPost"
+       WHERE "brandId" = $1 AND "scheduledFor" >= $2 AND "scheduledFor" < $3
+         AND "status" IN ('planned','approved','queued','publishing','processing','published')
          AND NOT ($4::boolean AND "status" = 'planned' AND "scheduledFor" >= $5)`, [brand.id, from, to, replacePlanned, notBefore])).rows;
     const occupied = (slot) => existing.some((e) => e.socialAccountId === slot.socialAccountId &&
       Math.abs(new Date(e.scheduledFor).getTime() - new Date(slot.scheduledFor).getTime()) < 30 * 60000);
     for (const slot of plan.slots) {
       if (new Date(slot.scheduledFor) < notBefore) slot.status = "past";
       else if (occupied(slot)) slot.status = "exists";
+    }
+    // Kept posts (approved, queued, published...) count toward their day's posts-per-day, so a replan
+    // after a cadence change never stacks new posts on top of approved ones.
+    const dayKey = (socialAccountId, placement, ymd) => `${socialAccountId}:${String(placement).toLowerCase()}:${ymd}`;
+    const tzOf = new Map(accounts.map((a) => [a.socialAccountId, a.timezone || timeZone]));
+    const kept = new Map();
+    for (const e of existing) {
+      if (!tzOf.has(e.socialAccountId)) continue;
+      const key = dayKey(e.socialAccountId, e.placement, ymdInTimeZone(new Date(e.scheduledFor), tzOf.get(e.socialAccountId)));
+      kept.set(key, (kept.get(key) || 0) + 1);
+    }
+    const target = new Map();
+    for (const slot of plan.slots) {
+      const key = dayKey(slot.socialAccountId, slot.placement, slot.ymd);
+      target.set(key, (target.get(key) || 0) + 1);
+    }
+    const room = new Map([...target].map(([key, n]) => [key, Math.max(0, n - (kept.get(key) || 0))]));
+    for (const slot of plan.slots) {
+      if (slot.status !== "planned") continue;
+      const key = dayKey(slot.socialAccountId, slot.placement, slot.ymd);
+      if (room.get(key) > 0) room.set(key, room.get(key) - 1);
+      else slot.status = "covered";
     }
 
     // Captions for every slot that will be written.

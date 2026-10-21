@@ -1,26 +1,22 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { ReviewList, ReviewPost, TiktokCreator } from "@/lib/planner-review";
+import type { PublishingFormat, ReviewAccount, ReviewList, ReviewPost, TiktokCreator } from "@/lib/planner-review";
 import { AssetThumb as Thumb } from "@/components/asset-thumb";
 import { TiktokCard } from "./tiktok-card";
 
 const NETWORK: Record<string, string> = {
-  instagram: "Instagram", facebook: "Facebook", tiktok: "TikTok", youtube: "YouTube", x: "X", threads: "Threads",
-  linkedin: "LinkedIn", pinterest: "Pinterest", reddit: "Reddit", "google-business": "Google Business"
+  instagram: "Instagram", facebook: "Facebook", tiktok: "TikTok", threads: "Threads", youtube: "YouTube",
+  pinterest: "Pinterest", linkedin: "LinkedIn", x: "X", gmb: "Google Business"
 };
-// One posts-per-day setting per network and placement; TikTok's planner placement is "video".
-const SLOTS = [
-  { destination: "instagram", placement: "reel", label: "Reels" },
-  { destination: "instagram", placement: "story", label: "Stories" },
-  { destination: "facebook", placement: "reel", label: "Reels" },
-  { destination: "facebook", placement: "story", label: "Stories" },
-  { destination: "tiktok", placement: "video", label: "Videos" },
-  { destination: "threads", placement: "post", label: "Posts" },
-  { destination: "pinterest", placement: "pin", label: "Pins" },
-  { destination: "pinterest", placement: "video", label: "Video Pins" }
-] as const;
-const slotKey = (s: { destination: string; placement: string }) => `${s.destination}:${s.placement}`;
+const STATUS: Record<PublishingFormat["status"], string> = {
+  live: "auto-publishes", planning: "planned only", review: "awaiting app review", integration: "awaiting integration"
+};
+// A planner month is 4 weeks (plan-month / approve-month).
+const WEEKS_PER_MONTH = 4;
+// One posts-per-day setting per format of each connected account; a network with no connected
+// account still shows its formats, disabled. Formats come from the API, so new ones appear on their own.
+type Slot = { key: string; format: PublishingFormat; account: ReviewAccount | null };
 
 function addDays(ymd: string, days: number) {
   const d = new Date(ymd + "T12:00:00Z");
@@ -65,11 +61,19 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
     return { start, end, posts, days: [...days.entries()] };
   }), [list]);
 
-  const perDay = (destination: string, placement: string) => {
-    const rule = list.accounts.find((a) => a.destination === destination && a.placement === placement && a.active);
-    return rule?.postsPerWeek ? Math.round(rule.postsPerWeek / 7) : 0;
+  // list.accounts has one row per account and cadence rule; one entry per connected account here.
+  const connectedAccounts = useMemo(() => [...new Map(list.accounts.filter((a) => a.externalAccountId)
+    .map((a) => [a.socialAccountId, a])).values()], [list.accounts]);
+  const slots = useMemo(() => (list.formats ?? []).flatMap((format): Slot[] => {
+    const accounts = format.status === "integration" ? [] : connectedAccounts.filter((a) => a.destination === format.destination);
+    if (!accounts.length) return [{ key: `${format.destination}:${format.placement}`, format, account: null }];
+    return accounts.map((account) => ({ key: `${account.socialAccountId}:${format.placement}`, format, account }));
+  }), [list.formats, connectedAccounts]);
+  const savedWeekly = (s: Slot) => {
+    const rule = s.account && list.accounts.find((a) => a.socialAccountId === s.account!.socialAccountId && a.placement === s.format.placement && a.active);
+    return rule?.postsPerWeek || 0;
   };
-  const connected = (destination: string) => list.accounts.find((a) => a.destination === destination && a.externalAccountId);
+  const maxWeek = list.maxPostsPerWeek || 70;
   // Weeks fold so one can be read on its own; the current week starts open.
   const [open, setOpen] = useState(() => new Set([list.weekStart]));
   const toggle = (start: string) => setOpen((prev) => {
@@ -77,8 +81,22 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
     if (next.has(start)) next.delete(start); else next.add(start);
     return next;
   });
-  const [cadence, setCadence] = useState<Record<string, number>>(() =>
-    Object.fromEntries(SLOTS.map((s) => [slotKey(s), perDay(s.destination, s.placement)])));
+  // Weekly numbers underneath; a box shows per day unless its number isn't a whole number of days.
+  const [weekly, setWeekly] = useState<Record<string, number>>(() => Object.fromEntries(slots.map((s) => [s.key, savedWeekly(s)])));
+  const [perWeek, setPerWeek] = useState<Record<string, boolean>>(() => Object.fromEntries(slots.map((s) => [s.key, savedWeekly(s) % 7 !== 0])));
+  const weeklyOf = (s: Slot) => weekly[s.key] ?? savedWeekly(s);
+  const networkGroups = useMemo(() => {
+    const groups = new Map<string, Slot[]>();
+    for (const s of slots) {
+      const key = s.account ? s.account.socialAccountId : s.format.destination;
+      groups.set(key, [...(groups.get(key) || []), s]);
+    }
+    return [...groups.values()];
+  }, [slots]);
+  const groupWeekly = (group: Slot[]) => group.reduce((n, s) => n + (s.account ? weeklyOf(s) : 0), 0);
+  const brandWeekly = networkGroups.reduce((n, g) => n + groupWeekly(g), 0);
+  const overCap = networkGroups.filter((g) => groupWeekly(g) > maxWeek);
+  const totals = (week: number) => `${week}/wk · ${week * WEEKS_PER_MONTH}/mo`;
   // TikTok's card needs the account's current settings from TikTok, fetched once per page load.
   const hasTiktok = list.posts.some((p) => p.destination === "tiktok" && reviewable(p));
   const [creator, setCreator] = useState<TiktokCreator | null>(null);
@@ -107,26 +125,68 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
     }
   }
 
+  // Saves only the boxes that changed, lowering ones first so a network never passes 10 a day mid-save.
   async function saveCadence() {
-    const saved = SLOTS.filter((s) => connected(s.destination));
-    for (const s of saved) {
-      await run("cadence", { action: "cadence", destination: s.destination, placement: s.placement, postsPerWeek: cadence[slotKey(s)] * 7 });
+    const changed = slots.filter((s) => s.account && s.format.status !== "integration" && weeklyOf(s) !== savedWeekly(s))
+      .sort((a, b) => (weeklyOf(a) - savedWeekly(a)) - (weeklyOf(b) - savedWeekly(b)));
+    if (!changed.length) { setNotice("Nothing changed."); return; }
+    setBusy("cadence");
+    setNotice(null);
+    const done: string[] = [];
+    try {
+      for (const s of changed) {
+        await act({ brand, action: "cadence", destination: s.format.destination, placement: s.format.placement,
+          socialAccountId: s.account!.socialAccountId, postsPerWeek: weeklyOf(s) });
+        done.push(`${NETWORK[s.format.destination] || s.format.destination} ${s.format.label} ${perWeek[s.key] ? `${weeklyOf(s)}/wk` : `${weeklyOf(s) / 7}/day`}`);
+      }
+      setNotice(`Saved: ${done.join(", ")}. Plan a week to use it.`);
+    } catch (error) {
+      setNotice(`${done.length ? `Saved ${done.join(", ")}; then not saved` : "Not saved"}: ${error instanceof Error ? error.message : "unknown error"}`);
+    } finally {
+      const fresh = await act({ brand, action: "list", weekStart: list.weekStart, weeks: list.weeks }).catch(() => null);
+      if (fresh) setList(fresh as ReviewList);
+      setBusy(null);
     }
-    setNotice(`Saved: ${saved.map((s) => `${NETWORK[s.destination]} ${s.label} ${cadence[slotKey(s)]}/day`).join(", ")}. Plan a week to use it.`);
   }
 
   return <div className="review">
     <section className="card review-settings">
       <div>
         <div className="eyebrow">Posts per day</div>
-        {SLOTS.map((s) => (
-          <label key={slotKey(s)} className="review-cadence">
-            {NETWORK[s.destination]} {s.label} {connected(s.destination) ? <b>{connected(s.destination)!.accountName}</b> : <span className="muted">not connected</span>}
-            <input type="number" min={0} max={10} value={cadence[slotKey(s)]} disabled={!connected(s.destination)}
-              onChange={(e) => setCadence({ ...cadence, [slotKey(s)]: Math.max(0, Math.min(10, Number(e.target.value) || 0)) })} />
-          </label>
-        ))}
-        <button className="status-chip" disabled={!!busy} onClick={saveCadence}>Save</button>
+        {networkGroups.map((group) => {
+          const first = group[0];
+          const week = groupWeekly(group);
+          return <div key={first.key} className="review-network">
+            <div>
+              <b>{NETWORK[first.format.destination] || first.format.destination}</b>{" "}
+              {first.account ? <b>{first.account.accountName}</b> : <span className="muted">{first.format.status === "integration" ? first.format.note : "not connected"}</span>}
+              {first.account && <span className={week > maxWeek ? "review-warn" : "muted"}> {totals(week)}{week > maxWeek ? ` · over ${maxWeek / 7} a day` : ""}</span>}
+            </div>
+            {group.map((s) => {
+              const editable = Boolean(s.account) && s.format.status !== "integration";
+              const wk = Boolean(perWeek[s.key]);
+              const value = weeklyOf(s);
+              return <label key={s.key} className="review-cadence" title={s.format.note || ""}>
+                {s.format.label} <span className={`review-format ${s.format.status}`}>{STATUS[s.format.status]}</span>
+                <input type="number" min={0} max={wk ? maxWeek : maxWeek / 7}
+                  value={wk ? value : Math.round((value / 7) * 10) / 10} disabled={!editable}
+                  onChange={(e) => {
+                    const n = Math.max(0, Math.floor(Number(e.target.value) || 0));
+                    setWeekly({ ...weekly, [s.key]: Math.min(maxWeek, wk ? n : n * 7) });
+                  }} />
+                <button type="button" className="status-chip review-unit" disabled={!editable}
+                  title={wk ? "Switch to posts per day" : "Switch to posts per week"}
+                  onClick={() => setPerWeek({ ...perWeek, [s.key]: !wk })}>{wk ? "/wk" : "/day"}</button>
+                {editable && <span className="muted">{totals(value)}</span>}
+              </label>;
+            })}
+          </div>;
+        })}
+        <div className="review-network">
+          <div><b>Brand total</b> <span className="muted">{totals(brandWeekly)}</span></div>
+          {overCap.length > 0 && <p className="review-warn" style={{ margin: 0 }}>A network takes at most {maxWeek / 7} posts a day across its formats.</p>}
+          <button className="status-chip" disabled={!!busy || overCap.length > 0} onClick={saveCadence}>Save</button>
+        </div>
       </div>
       <p className="muted" style={{ margin: 0 }}>
         Planning picks clips from the approved content pool and writes captions; it takes a minute or two, then refresh.

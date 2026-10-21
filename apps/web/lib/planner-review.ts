@@ -20,10 +20,13 @@ export type ReviewPost = {
   copyStatus: string | null; captionStale: boolean; asset: ReviewAsset; candidates: ReviewAsset[];
   tiktok: TiktokSettings | null;
 };
-export type ReviewAccount = { destination: string; accountName: string; externalAccountId: string | null; publishingMode: string; placement: string | null; postsPerWeek: number | null; active: boolean | null };
+export type ReviewAccount = { socialAccountId: string; destination: string; accountName: string; externalAccountId: string | null; publishingMode: string; placement: string | null; postsPerWeek: number | null; active: boolean | null };
+// live: approved posts auto-publish · planning: planned, publisher not built · review: waiting on the network's app review
+// · integration: not connected to Elettro OS yet (never editable). The list comes from the API (publishing-formats.mjs).
+export type PublishingFormat = { destination: string; placement: string; label: string; status: "live" | "planning" | "review" | "integration"; note?: string };
 export type ReviewList = {
   ok: boolean; error?: string; brand: string; timeZone: string; weekStart: string; weeks: number; destinations: string[]; approvedWeeks?: string[];
-  hasPlannerSettings: boolean; accounts: ReviewAccount[]; posts: ReviewPost[];
+  hasPlannerSettings: boolean; accounts: ReviewAccount[]; posts: ReviewPost[]; formats: PublishingFormat[]; maxPostsPerWeek: number;
 };
 
 // Server-side only: forwards one review action to the dev API with the shared connect key.
