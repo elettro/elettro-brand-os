@@ -8,7 +8,7 @@ import { THREADS_BRANDS } from "@/lib/threads-connect";
 import { TIKTOK_BRANDS } from "@/lib/tiktok-connect";
 import { TiktokPost } from "@/components/tiktok-post";
 import { TiktokDisconnect } from "@/components/tiktok-disconnect";
-import { PINTEREST_BRANDS } from "@/lib/pinterest-connect";
+import { PINTEREST_BOARDS, PINTEREST_BRANDS } from "@/lib/pinterest-connect";
 import { PinterestPost } from "@/components/pinterest-post";
 import { ReconnectCountdown } from "@/components/reconnect-countdown";
 import { redirect } from "next/navigation";
@@ -154,7 +154,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
       })}
     </div>
     <h2 style={{ marginTop: 32 }}>Pinterest</h2>
-    <p className="muted">One Pinterest business account for now: pinterest.com/elettro. While the Elettro OS app has Trial access, Pins it creates are visible only to that account. The login renews itself each time it is used; the countdown shows when it lapses if unused.</p>
+    <p className="muted">One Pinterest business account, pinterest.com/elettro, for Elettro and Stashbox: connect it under each brand (same login); Stashbox Pins go to the Stashbox board. While the Elettro OS app has Trial access, Pins it creates are visible only to that account. The login renews itself each time it is used; the countdown shows when it lapses if unused.</p>
     <div className="grid" style={{ marginTop: 20 }}>
       {pinterestBrands.map((b) => {
         const linked = pinterest[b.id];
@@ -169,7 +169,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
               <a className="status-chip" href={`/api/connections/pinterest/start?brand=${b.id}`}>{linked ? "Reconnect" : "Connect Pinterest"}</a>
               {linked?.expiresAt && <ReconnectCountdown expiresAt={linked.expiresAt} />}
             </div>
-            {linked && <PinterestPost brand={b.id} />}
+            {linked && <PinterestPost brand={b.id} boardName={PINTEREST_BOARDS[b.id] || b.name} />}
           </article>
         );
       })}

@@ -57,7 +57,7 @@ jobs:
         run: node --test tests/youtube-upload.test.mjs tests/planner-ops.test.mjs
 
       - name: Test TikTok and Threads connect and token refresh
-        run: node --test tests/tiktok-connect.test.mjs tests/tiktok-refresh.test.mjs tests/pinterest-connect.test.mjs tests/threads-connect.test.mjs tests/threads-refresh.test.mjs
+        run: node --test tests/tiktok-connect.test.mjs tests/tiktok-refresh.test.mjs tests/pinterest-connect.test.mjs tests/pinterest-worker.test.mjs tests/threads-connect.test.mjs tests/threads-refresh.test.mjs
 
       - name: Validate Step 9 Windows PowerShell setup script syntax
         shell: pwsh

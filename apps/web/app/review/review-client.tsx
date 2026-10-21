@@ -16,7 +16,9 @@ const SLOTS = [
   { destination: "facebook", placement: "reel", label: "Reels" },
   { destination: "facebook", placement: "story", label: "Stories" },
   { destination: "tiktok", placement: "video", label: "Videos" },
-  { destination: "threads", placement: "post", label: "Posts" }
+  { destination: "threads", placement: "post", label: "Posts" },
+  { destination: "pinterest", placement: "pin", label: "Pins" },
+  { destination: "pinterest", placement: "video", label: "Video Pins" }
 ] as const;
 const slotKey = (s: { destination: string; placement: string }) => `${s.destination}:${s.placement}`;
 

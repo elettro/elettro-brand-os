@@ -14,7 +14,9 @@ const LIMITS = {
   x: { caption: 280, hashtags: 2 },
   linkedin: { caption: 3000, hashtags: 3 },
   // Threads rejects posts over 500 characters and takes one topic tag per post.
-  threads: { caption: 500, hashtags: 1 }
+  threads: { caption: 500, hashtags: 1 },
+  // Pinterest: searchable title + keyword description; hashtags do little there. The Pin itself links out.
+  pinterest: { title: 100, caption: 800, hashtags: 0 }
 };
 const CLICKABLE = new Set(["youtube", "facebook", "x", "linkedin", "threads"]);
 const BANNED = [/\belevate\b/i, /\bunleash/i, /\bunlock/i, /\bdive into\b/i, /game[- ]changer/i, /experience the magic/i, /it'?s not just .+, it'?s/i];
@@ -48,6 +50,12 @@ export function postFacts(asset, slot, songFacts = {}, links = {}, { promotional
       links.streaming?.appleMusic, links.streaming?.amazonMusic, links.streaming?.tidal].filter(Boolean)
   }[slot.sector] || [];
   const artistLinks = Object.values(links.streaming || {}).filter(Boolean);
+  // Every Pin carries a destination link (Dean, 261021): the deepest record (song, streaming, booking),
+  // else the store for merch, else the brand site (taken from the radio link's origin when not set).
+  const site = links.site || (links.radio ? new URL(links.radio).origin : null);
+  // Radio and streaming posts still need their song link, as on every network.
+  const pinLink = slot.destination === "pinterest" && !sectorLinks.length && !["radio", "streaming"].includes(slot.sector)
+    ? (slot.sector === "merch" && links.merchStore) || site || null : null;
   return {
     sector: slot.sector,
     destination: slot.destination,
@@ -66,9 +74,9 @@ export function postFacts(asset, slot, songFacts = {}, links = {}, { promotional
     linksInCaptionAreClickable: CLICKABLE.has(slot.destination),
     // False on platforms with a promo cap (X) for the posts that stay a plain clip: no link, no ask.
     promotional,
-    primaryLink: sectorLinks[0] || null,
+    primaryLink: sectorLinks[0] || pinLink,
     songHasOwnStreamingLink: Boolean(song?.spotifyUrl || song?.appleMusicUrl || song?.youtubeMusicUrl),
-    allowedLinks: [...new Set([...sectorLinks, ...artistLinks, links.youtubeChannel, links.booking?.page, links.radio, links.merchStore].filter(Boolean))],
+    allowedLinks: [...new Set([...sectorLinks, ...artistLinks, links.youtubeChannel, links.booking?.page, links.radio, links.merchStore, pinLink].filter(Boolean))],
     bookingEmail: promotional && slot.sector === "live-shows" ? links.booking?.email || null : null,
     // Goal #1 (subscribers) closes posts where the brand allows it; radio posts already ask people to join.
     subscribeReminder: !promotional || slot.sector === "radio" ? null : (links.subscribeReminders || {})[slot.destination] || null,
@@ -94,7 +102,7 @@ export function templateCopy(f, seed) {
   const credited = f.originalArtist && f.song?.toLowerCase().includes(f.originalArtist.toLowerCase());
   const songLine = f.song ? (f.isCover && f.originalArtist && !credited ? `${f.song} (${f.originalArtist})` : f.song) : null;
   const where = f.realFootage && f.venue ? ` at ${f.venue}${f.city ? `, ${f.city}` : ""}` : "";
-  const cta = f.linksInCaptionAreClickable ? f.primaryLink : "Link in bio.";
+  const cta = f.linksInCaptionAreClickable ? f.primaryLink : f.destination === "pinterest" ? "Tap the Pin." : "Link in bio.";
   let hook;
   let body;
   if (f.sector === "live-shows") {
@@ -112,6 +120,10 @@ export function templateCopy(f, seed) {
       `Play the full song on Stashbox Radio. Join free for the dynamic videos. ${cta}`,
       `Full song on Stashbox Radio. Free members get the videos and their own playlists. ${cta}`
     ]);
+  } else if (f.destination === "pinterest" && f.sector !== "streaming") {
+    // Pinterest only: merch, blog and other sectors pin to the store or the brand site.
+    hook = `${songLine || "Stashbox"}${f.show ? `, ${f.show}` : ""}.`;
+    body = f.sector === "merch" ? `Stashbox merch. ${cta}` : `More from Stashbox. ${cta}`;
   } else {
     hook = pick(seed, [`${songLine || "Stashbox"}.`, `${songLine}, out now.`, `Stream ${songLine}.`]);
     body = f.songHasOwnStreamingLink
@@ -123,7 +135,8 @@ export function templateCopy(f, seed) {
   return {
     status: "ready", source: "template", angle: f.sector === "live-shows" ? "moment" : "audience", hook,
     caption: f.destination === "youtube" ? null : caption,
-    title: f.destination === "youtube" ? `${f.show ? `${f.show}: ` : ""}${f.song || "Stashbox"}${f.realFootage ? " (live)" : ""}`.slice(0, 70) : null,
+    title: f.destination === "youtube" || f.destination === "pinterest"
+      ? `${f.show ? `${f.show}: ` : ""}${f.song || "Stashbox"}${f.realFootage ? " (live)" : ""}`.slice(0, 70) : null,
     description: f.destination === "youtube" ? `${caption}\n\n${hashtags.join(" ")}` : null,
     hashtags, primaryLink: f.primaryLink, onScreenText: null, notes: []
   };
@@ -171,7 +184,7 @@ export function validateCopy(copy, f) {
   }
   if (/\$\s?\d/.test(text)) problems.push("mentions a price");
   for (const re of BANNED) if (re.test(text)) problems.push(`banned phrase: ${re.source}`);
-  if (f.destination === "youtube" && !copy.title) problems.push("missing title");
+  if ((f.destination === "youtube" || f.destination === "pinterest") && !copy.title) problems.push("missing title");
   if (f.destination !== "youtube" && !copy.caption) problems.push("missing caption");
   if (copy.caption && limits.caption && copy.caption.length > limits.caption) problems.push("caption too long");
   if (copy.title && limits.title && copy.title.length > limits.title) problems.push("title too long");

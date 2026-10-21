@@ -4,6 +4,9 @@
  * without internet egress), then sends both here. Access tokens last 30 days; with continuous
  * refresh each refresh also extends the refresh token, so the reconnect date shown on Connections
  * is the refresh token's expiry. Tokens go to Secrets Manager (never Postgres).
+ * One Pinterest account may serve several brands (pinterest.com/elettro pins Stashbox content to a
+ * Stashbox board): each brand gets its own pinterest SocialAccount row, sharing one token secret
+ * whose "brands" lists every brand connected to it.
  */
 import { timingSafeEqual } from "node:crypto";
 import { SecretsManagerClient, PutSecretValueCommand, CreateSecretCommand } from "@aws-sdk/client-secrets-manager";
@@ -24,12 +27,12 @@ function keyMatches(given) {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-async function storeTokens(user, tokens, brand) {
+async function storeTokens(user, tokens, brand, brands) {
   const SecretId = TOKEN_SECRET_PREFIX + user.id;
   const SecretString = JSON.stringify({
     accessToken: tokens.accessToken, accessExpiresAt: tokens.accessExpiresAt.toISOString(),
     refreshToken: tokens.refreshToken, refreshExpiresAt: tokens.refreshExpiresAt.toISOString(), scope: tokens.scope,
-    userId: user.id, username: user.username, brand, connectedAt: new Date().toISOString()
+    userId: user.id, username: user.username, brand, brands, connectedAt: new Date().toISOString()
   });
   try {
     await secrets.send(new PutSecretValueCommand({ SecretId, SecretString }));
@@ -40,10 +43,6 @@ async function storeTokens(user, tokens, brand) {
 }
 
 async function linkSocialAccount(client, brandId, user, expiresAt) {
-  const elsewhere = await client.query(
-    'SELECT 1 FROM "SocialAccount" WHERE "destination"=\'pinterest\' AND "externalAccountId"=$1 AND "brandId"<>$2 LIMIT 1',
-    [user.id, brandId]);
-  if (elsewhere.rows.length) throw new ConnectError(409, "That Pinterest account is already connected to another brand");
   await ensureTokenExpiryColumn(client);
   // Prefer the row already linked to this account, then the brand's unlinked Pinterest row from the planner seed.
   const existing = (await client.query(`
@@ -75,6 +74,8 @@ export async function completePinterestConnect(event, body, connectDatabase, jso
     return json(400, { ok: false, error: "brand, user, accessToken and refreshToken are required" });
   }
   const user = { id: String(raw.id), username, handle: username ? "@" + username : String(raw.name || raw.id).slice(0, 100) };
+  // Brands already sharing this account's token (read by the web app from the existing secret) plus this one.
+  const brands = [...new Set([...(Array.isArray(body?.brands) ? body.brands : []).map(String), brand])].filter((b) => /^[a-z0-9-]{2,40}$/.test(b));
   const tokens = {
     accessToken, refreshToken, scope: String(body?.scope || ""),
     accessExpiresAt: expiresAtFrom(body?.expiresIn, now),
@@ -86,8 +87,12 @@ export async function completePinterestConnect(event, body, connectDatabase, jso
     const brandRow = (await client.query('SELECT "id" FROM "Brand" WHERE "slug"=$1 LIMIT 1', [brand])).rows[0];
     if (!brandRow) throw new ConnectError(404, `Unknown brand ${brand}`);
     // Tokens first: a row that says "connected" must always have tokens behind it.
-    await store(user, tokens, brand);
+    await store(user, tokens, brand, brands);
     const socialAccountId = await linkSocialAccount(client, brandRow.id, user, tokens.refreshExpiresAt);
+    // The other brands on this account use the same new token, so their reconnect date moves too.
+    await client.query(
+      'UPDATE "SocialAccount" SET "tokenExpiresAt"=$2, "updatedAt"=CURRENT_TIMESTAMP WHERE "destination"=\'pinterest\' AND "externalAccountId"=$1 AND "id"<>$3',
+      [user.id, tokens.refreshExpiresAt, socialAccountId]);
     return json(200, { ok: true, brand, socialAccountId, user: { id: user.id, handle: user.handle }, expiresAt: tokens.refreshExpiresAt.toISOString() });
   } catch (error) {
     console.error("[pinterest-connect] failed", error?.name, error?.message);

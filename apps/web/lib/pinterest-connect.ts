@@ -7,7 +7,10 @@ export const PINTEREST_CALLBACK = DEV_ORIGIN + "/api/connections/pinterest/callb
 // Publish Pins to the account's own boards and read its own Pins, boards and analytics.
 export const PINTEREST_SCOPES = ["user_accounts:read", "boards:read", "boards:write", "pins:read", "pins:write"];
 export const PINTEREST_STATE_COOKIE = "elettro_dev_pinterest_state";
-// One Pinterest account for now (Dean, 261020): pinterest.com/elettro under the Elettro brand.
-// While the app has Trial access, Pins it creates are visible only to that account.
-export const PINTEREST_BRANDS = ["elettro"];
+// One Pinterest account (Dean, 261020): pinterest.com/elettro. It pins Elettro content and, connected
+// a second time under Stashbox, Stashbox content to a Stashbox board (Dean, 261021). Each brand pins to
+// the board named in PINTEREST_BOARDS, created on first use. While the app has Trial access, Pins it
+// creates are visible only to that account.
+export const PINTEREST_BRANDS = ["elettro", "stashbox"];
+export const PINTEREST_BOARDS: Record<string, string> = { elettro: "Elettro Digital Marketing Agency", stashbox: "Stashbox" };
 export const PINTEREST_OAUTH_SECRET = "elettro-brand-os-dev/pinterest-oauth";
