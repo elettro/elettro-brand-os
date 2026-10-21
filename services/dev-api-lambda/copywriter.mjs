@@ -95,9 +95,12 @@ function hashtagsFor(f) {
   return [...new Set(tags)];
 }
 
-/** Deterministic fallback copy. Returns null when the sector's required link is missing. */
+/**
+ * Deterministic fallback copy. When the sector's link is missing (e.g. a song with no radio page or
+ * streaming link on file) the post gets a plain caption with no link or ask, never a blank one.
+ */
 export function templateCopy(f, seed) {
-  if (!f.primaryLink) return null;
+  if (!f.primaryLink) return { ...plainCopy(f, seed), notes: ["no link on file for this pillar: plain caption"] };
   if (f.promotional === false) return plainCopy(f, seed);
   const credited = f.originalArtist && f.song?.toLowerCase().includes(f.originalArtist.toLowerCase());
   const songLine = f.song ? (f.isCover && f.originalArtist && !credited ? `${f.song} (${f.originalArtist})` : f.song) : null;
@@ -142,7 +145,7 @@ export function templateCopy(f, seed) {
   };
 }
 
-/** A clip with no link or ask, for the share of X posts above the promo cap. */
+/** A clip with no link or ask: X posts above the promo cap, and posts whose pillar link is missing. */
 function plainCopy(f, seed) {
   const credited = f.originalArtist && f.song?.toLowerCase().includes(f.originalArtist.toLowerCase());
   const songLine = f.song ? (f.isCover && f.originalArtist && !credited ? `${f.song} (${f.originalArtist} cover)` : f.song) : null;
@@ -152,8 +155,16 @@ function plainCopy(f, seed) {
     `${f.show ? `${f.show}: ` : ""}${songLine || "this one"}${where}.`,
     `${songLine ? `${songLine}, ` : ""}Stashbox${f.realFootage ? " live" : ""}${where}.`
   ]);
-  const hashtags = hashtagsFor(f).slice(0, LIMITS[f.destination]?.hashtags ?? 2);
-  return { status: "ready", source: "template", angle: "moment", hook, caption: hook, title: null, description: null,
+  // Without the pillar's link, its hashtags (#spotify, #stashboxradio) would point nowhere.
+  const linkTags = f.primaryLink ? [] : ["#spotify", "#stashboxradio"];
+  const hashtags = hashtagsFor(f).filter((t) => !linkTags.includes(t)).slice(0, LIMITS[f.destination]?.hashtags ?? 2);
+  const caption = hook;
+  // YouTube posts are a title plus a description; everything else is a caption.
+  const youtube = f.destination === "youtube";
+  return { status: "ready", source: "template", angle: "moment", hook, caption: youtube ? null : caption,
+    title: youtube || f.destination === "pinterest"
+      ? `${f.show ? `${f.show}: ` : ""}${f.song || "Stashbox"}${f.realFootage ? " (live)" : ""}`.slice(0, 70) : null,
+    description: youtube ? `${caption}\n\n${hashtags.join(" ")}` : null,
     hashtags, primaryLink: null, onScreenText: null, notes: ["plain post (promo cap)"] };
 }
 

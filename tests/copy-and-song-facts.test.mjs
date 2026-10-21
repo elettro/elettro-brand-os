@@ -75,7 +75,16 @@ test("template copy credits covers, uses record links, and fits each platform", 
     if (destination === "youtube") assert.ok(copy.title.length <= 70);
   }
   const radio = postFacts({ ...dylanAsset, tags: ["song:tangled-up-in-blue", "music-video"] }, { sector: "radio", destination: "instagram" }, {}, links);
-  assert.equal(templateCopy(radio, "x"), null, "radio post without a song page must not be written");
+  // Without a song page there is no link to give: a plain caption, never a made-up link or a blank post.
+  const plain = templateCopy(radio, "x");
+  assert.equal(plain.status, "ready");
+  assert.ok(plain.caption && !/https?:\/\/|link in bio/i.test(plain.caption), plain.caption);
+  assert.equal(plain.primaryLink, null);
+  assert.deepEqual(validateCopy(plain, radio), []);
+  const ytRadio = postFacts({ ...dylanAsset, tags: ["song:tangled-up-in-blue", "music-video"] }, { sector: "radio", destination: "youtube" }, {}, links);
+  const yt = templateCopy(ytRadio, "x");
+  assert.ok(yt.title && yt.description && !yt.caption, "YouTube still gets a title and description");
+  assert.deepEqual(validateCopy(yt, ytRadio), []);
 });
 
 test("X keeps 1 in 4 posts promotional; the rest are plain clips under 280 chars", () => {
