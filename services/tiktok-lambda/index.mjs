@@ -12,6 +12,8 @@ import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
 //                                             mode "draft" (default) lands in the creator's TikTok
 //                                             inbox to finish in the app; "direct" posts it
 //   { action: "status", brand, publishId }    where a post is in TikTok's pipeline
+//   { action: "revoke", brand }               Disconnect: withdraw Elettro OS's access at TikTok, so the
+//                                             next Connect shows TikTok's consent screen again
 //   { action: "creator-info", brand }         the account's name, avatar and allowed settings,
 //                                             fresh from TikTok, for the Review page's TikTok card
 // TikTok access tokens last 24 hours; the 365-day refresh token renews them, and each refresh
@@ -99,6 +101,8 @@ export async function refreshAll(now = new Date()) {
   for (const SecretId of await tokenSecretNames()) {
     const record = await secretJson(SecretId);
     const handle = record.username ? "@" + record.username : record.openId;
+    // A disconnected account has no tokens left to renew; Connect writes a fresh record.
+    if (record.revokedAt) continue;
     if (!needsRefresh(record, now)) { accounts.push({ handle, refreshed: false, accessExpiresAt: record.accessExpiresAt }); continue; }
     try {
       const next = await refreshRecord(record, app, now);
@@ -159,7 +163,7 @@ async function brandAccount(brand, openId) {
   const names = await tokenSecretNames();
   for (const SecretId of openId ? names.filter((n) => n === TOKEN_PREFIX + openId) : names) {
     let record = await secretJson(SecretId);
-    if (!openId && record.brand !== brand) continue;
+    if (record.revokedAt || (!openId && record.brand !== brand)) continue;
     if (needsRefresh(record)) {
       record = await refreshRecord(record, await secretJson(APP_SECRET));
       await secrets.send(new PutSecretValueCommand({ SecretId, SecretString: JSON.stringify(record) }));
@@ -240,6 +244,34 @@ export function manualSettings(event) {
   };
   if (settings.brandedContent && settings.privacyLevel === "SELF_ONLY") throw new Error("Branded content can't be private");
   return settings;
+}
+
+// TikTok's revoke endpoint ends the account's authorization of the app (all its tokens).
+export async function revokeRecord(record, app, post = fetch) {
+  if (!record?.accessToken) throw new Error("no access token stored");
+  const response = await post(`${API}/oauth/revoke/`, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ client_key: app.clientKey, client_secret: app.clientSecret, token: record.accessToken })
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok || body.error) throw new Error(`TikTok revoke failed: ${body.error_description || body.error || response.status}`);
+}
+
+async function revokeBrand(brand) {
+  const app = await secretJson(APP_SECRET);
+  for (const SecretId of await tokenSecretNames()) {
+    const record = await secretJson(SecretId);
+    if (record.brand !== brand || record.revokedAt) continue;
+    // An access token that already lapsed can't be revoked; renew it first so TikTok drops the grant.
+    const current = needsRefresh(record) ? await refreshRecord(record, app) : record;
+    await revokeRecord(current, app);
+    await secrets.send(new PutSecretValueCommand({ SecretId, SecretString: JSON.stringify({
+      openId: record.openId, username: record.username, brand, revokedAt: new Date().toISOString()
+    }) }));
+    return { handle: record.username ? "@" + record.username : record.openId, revoked: true };
+  }
+  return { revoked: false, note: `No connected TikTok account for ${brand}` };
 }
 
 async function creatorInfo(brand) {
@@ -357,6 +389,12 @@ export async function handler(event = {}) {
     } catch (error) {
       console.error("TikTok post failed:", error?.message);
       return result(502, { ok: false, error: error?.message || "Post failed" });
+    }
+  }
+  if (event.action === "revoke") {
+    try { return result(200, { ok: true, ...(await revokeBrand(String(event.brand || ""))) }); } catch (error) {
+      console.error("TikTok revoke failed:", error?.message);
+      return result(502, { ok: false, error: error?.message || "Revoke failed" });
     }
   }
   if (event.action === "creator-info") {

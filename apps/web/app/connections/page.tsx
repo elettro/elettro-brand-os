@@ -7,6 +7,7 @@ import { MetaTestPosts } from "@/components/meta-test-posts";
 import { THREADS_BRANDS } from "@/lib/threads-connect";
 import { TIKTOK_BRANDS } from "@/lib/tiktok-connect";
 import { TiktokPost } from "@/components/tiktok-post";
+import { TiktokDisconnect } from "@/components/tiktok-disconnect";
 import { ReconnectCountdown } from "@/components/reconnect-countdown";
 import { redirect } from "next/navigation";
 
@@ -40,7 +41,7 @@ async function connectionStatus(): Promise<Record<string, Record<string, Linked>
 
 export default async function ConnectionsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   if (!(await authenticated())) redirect("/api/auth/login");
-  const [{ brand, connected, error, network, expires, posted }, status] = await Promise.all([searchParams, connectionStatus()]);
+  const [{ brand, connected, disconnected, error, network, expires, posted }, status] = await Promise.all([searchParams, connectionStatus()]);
   const brands = brandConfigs.filter((b) => YOUTUBE_BRANDS.includes(b.id));
   const linkedinBrands = brandConfigs.filter((b) => LINKEDIN_BRANDS.includes(b.id));
   const metaBrands = brandConfigs.filter((b) => META_BRANDS.includes(b.id));
@@ -58,11 +59,16 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
     if (network === "threads") threads[brand] = { handle: connected, expiresAt: expires };
     if (network === "tiktok") tiktok[brand] = { handle: connected, expiresAt: expires };
   }
+  // Same cache after a disconnect: the brand is no longer linked even if the feed still says so.
+  if (brand && disconnected && network === "tiktok") {
+    delete tiktok[brand];
+  }
   return <main className="main">
     <div className="eyebrow">Publishing · Social connections</div>
     <h1>Connections</h1>
     <p className="muted">Connect each brand&apos;s accounts to Elettro OS. Google asks which YouTube channel to use; pick the one that belongs to the brand. LinkedIn logins last 60 days, so each one counts down to its reconnect date.</p>
     {connected && <p className="card" style={{ marginTop: 16 }}>Connected <b>{connected}</b> to {brand}.</p>}
+    {disconnected && <p className="card" style={{ marginTop: 16 }}>Disconnected <b>{disconnected}</b> from {brand}. Elettro OS no longer has access to it.</p>}
     {posted && <p className="card" style={{ marginTop: 16 }}>Posted to LinkedIn. <a href={posted} target="_blank" rel="noreferrer">See the post</a></p>}
     {error && <p className="card" style={{ marginTop: 16 }}>{network === "linkedin" ? "LinkedIn post not sent" : `Could not connect${brand ? ` ${brand}` : ""}`}: {error}</p>}
     <div className="grid" style={{ marginTop: 20 }}>
@@ -123,7 +129,8 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
     <p className="muted">Sign in to the brand&apos;s TikTok account when asked. Until TikTok approves the Elettro OS app, only sandbox target users can connect and posts go out private. A login lasts a year, so each one counts down to its reconnect date.</p>
     <div className="grid" style={{ marginTop: 20 }}>
       {tiktokBrands.map((b) => {
-        const linked = tiktok[b.id];
+        // A TikTok link always carries its reconnect date; without one the brand was disconnected.
+        const linked = tiktok[b.id]?.expiresAt ? tiktok[b.id] : undefined;
         return (
           <article className="card" key={b.id}>
             <div className="eyebrow">TikTok</div>
@@ -134,6 +141,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
             <div className="connect-row">
               <a className="status-chip" href={`/api/connections/tiktok/start?brand=${b.id}`}>{linked ? "Reconnect" : "Connect TikTok"}</a>
               {linked?.expiresAt && <ReconnectCountdown expiresAt={linked.expiresAt} />}
+              {linked && <TiktokDisconnect brand={b.id} handle={linked.handle || "this account"} />}
             </div>
             {linked && <TiktokPost brand={b.id} />}
           </article>
