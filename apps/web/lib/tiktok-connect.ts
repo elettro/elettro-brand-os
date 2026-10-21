@@ -5,13 +5,12 @@ import { DEV_ORIGIN } from "@/lib/cognito-auth";
 // Sandbox and production have different client keys, so both key and secret come from
 // Secrets Manager (elettro-brand-os-dev/tiktok-oauth, plain JSON {"clientKey","clientSecret"}).
 export const TIKTOK_CALLBACK = DEV_ORIGIN + "/api/connections/tiktok/callback";
-// Login Kit + Content Posting API (Direct Post on) + profile, stats and video list for analytics.
+// Only what the app review demo shows working: the account card (basic + profile for the
+// username) and direct posting. Stats and video list (analytics) and video.upload (inbox drafts)
+// come back in a later review once Elettro OS uses them on screen.
 export const TIKTOK_SCOPES = [
   "user.info.basic",
   "user.info.profile",
-  "user.info.stats",
-  "video.list",
-  "video.upload",
   "video.publish"
 ];
 export const TIKTOK_STATE_COOKIE = "elettro_dev_tiktok_state";
