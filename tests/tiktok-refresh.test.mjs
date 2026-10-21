@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { needsRefresh, refreshRecord, postRequest, chunkPlan, requestFromPost, postInfo, manualSettings, handler } from "../services/tiktok-lambda/index.mjs";
+import { needsRefresh, refreshRecord, postRequest, chunkPlan, requestFromPost, postInfo, manualSettings, revokeRecord, handler } from "../services/tiktok-lambda/index.mjs";
 
 const NOW = new Date("2026-10-21T00:00:00Z");
 const app = { clientKey: "key", clientSecret: "secret" };
@@ -116,4 +116,12 @@ test("a manual post uses the TikTok card's choices, or private for a bare consol
     { privacyLevel: "FOLLOWER_OF_CREATOR", allowComment: true, allowDuet: false, allowStitch: false, yourBrand: true, brandedContent: false });
   assert.throws(() => manualSettings({ settings: {} }), /who can view/);
   assert.throws(() => manualSettings({ settings: { privacyLevel: "SELF_ONLY", brandedContent: true } }), /can't be private/);
+});
+
+test("revoke sends the app keys and the access token to TikTok's revoke endpoint", async () => {
+  let call;
+  await revokeRecord(record, app, async (url, init) => { call = { url, body: Object.fromEntries(init.body) }; return reply(200, {})(); });
+  assert.match(call.url, /\/v2\/oauth\/revoke\/$/);
+  assert.deepEqual(call.body, { client_key: "key", client_secret: "secret", token: "old" });
+  await assert.rejects(revokeRecord(record, app, reply(400, { error: "invalid_request", error_description: "bad token" })), /TikTok revoke failed: bad token/);
 });
