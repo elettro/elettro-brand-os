@@ -138,6 +138,22 @@ test("tiktok-approve stores the settings and approves only TikTok posts", async 
   assert.equal(JSON.parse(update.params[2]).privacyLevel, "FOLLOWER_OF_CREATOR");
 });
 
+test("the week's TikTok card approves many TikTok posts with one set of the creator's choices", async () => {
+  process.env.CONNECTIONS_API_SHARED_SECRET = KEY;
+  const ids = [POST_ID, "1f8c2c62-6c5e-4a8e-9a0f-0b7f5a1d2e3f", "2f8c2c62-6c5e-4a8e-9a0f-0b7f5a1d2e3f"];
+  const client = fakeClient([['UPDATE "ScheduledPost"', { rows: ids.map((id) => ({ id })), rowCount: 3 }]]);
+  const noChoice = await handlePlannerReview(event, { brand: "stashbox", action: "tiktok-approve", ids }, async () => client, json);
+  assert.equal(noChoice.statusCode, 400, "who can view must be chosen; there is no default");
+  const r = await handlePlannerReview(event, { brand: "stashbox", action: "tiktok-approve", ids, privacyLevel: "SELF_ONLY" }, async () => client, json);
+  assert.equal(r.statusCode, 200);
+  assert.equal(r.body.approved, 3);
+  const update = client.seen.find((q) => q.sql.includes('UPDATE "ScheduledPost"'));
+  assert.deepEqual(update.params[1], ids);
+  assert.match(update.sql, /destination" = 'tiktok'/);
+  const bad = await handlePlannerReview(event, { brand: "stashbox", action: "tiktok-approve", ids: [POST_ID, "nope"], privacyLevel: "SELF_ONLY" }, async () => client, json);
+  assert.equal(bad.statusCode, 400);
+});
+
 test("plain approval refuses TikTok posts that have no TikTok settings", async () => {
   process.env.CONNECTIONS_API_SHARED_SECRET = KEY;
   const client = fakeClient([['UPDATE "ScheduledPost"', { rows: [], rowCount: 0 }]]);

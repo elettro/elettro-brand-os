@@ -191,8 +191,11 @@ export function tiktokSettings(body) {
   return settings;
 }
 
+// One post (id) or a week's TikTok posts at once (ids, from the week's TikTok card): the creator picks
+// the settings once, sees every post's preview, and consents; the same settings go on each post.
 async function tiktokApprove(client, brand, body) {
-  if (!UUID.test(String(body.id || ""))) return { code: 400, body: { ok: false, error: "id is required" } };
+  const ids = Array.isArray(body.ids) ? body.ids.map(String) : [String(body.id || "")];
+  if (!ids.length || ids.length > 200 || !ids.every((id) => UUID.test(id))) return { code: 400, body: { ok: false, error: "id (or up to 200 ids) is required" } };
   let settings;
   try { settings = tiktokSettings(body); } catch (error) { return { code: 400, body: { ok: false, error: error.message } }; }
   const r = await client.query(`
@@ -200,9 +203,10 @@ async function tiktokApprove(client, brand, body) {
       "scoreBreakdown" = COALESCE(sp."scoreBreakdown",'{}'::jsonb) || jsonb_build_object('tiktok', $3::jsonb)
     FROM "SocialAccount" sa
     WHERE sa."id" = sp."socialAccountId" AND sa."destination" = 'tiktok'
-      AND sp."brandId"=$1 AND sp."id"=$2 AND sp."status" = ANY($4) RETURNING sp."id"`,
-    [brand.id, body.id, JSON.stringify({ ...settings, approvedAt: new Date().toISOString() }), REVIEWABLE]);
-  return r.rowCount ? { code: 200, body: { ok: true, status: "approved" } } : { code: 404, body: { ok: false, error: "TikTok post not found or already queued" } };
+      AND sp."brandId"=$1 AND sp."id" = ANY($2::uuid[]) AND sp."status" = ANY($4) RETURNING sp."id"`,
+    [brand.id, ids, JSON.stringify({ ...settings, approvedAt: new Date().toISOString() }), REVIEWABLE]);
+  return r.rowCount ? { code: 200, body: { ok: true, status: "approved", approved: r.rowCount } }
+    : { code: 404, body: { ok: false, error: "TikTok post not found or already queued" } };
 }
 
 // One rule per placement of the connected account (e.g. Instagram reel and story); setting one

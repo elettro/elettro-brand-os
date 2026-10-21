@@ -702,6 +702,8 @@ button:disabled {
 .review-thumb-retry { border: 1px solid var(--line); border-radius: 8px; background: var(--panel); padding: 6px 8px; font-size: 12px; cursor: pointer; color: var(--accent); }
 /* Review: TikTok's required posting controls on each TikTok post. */
 .tiktok-card { display: grid; gap: 8px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-soft); font-size: 13px; }
+.tiktok-week { display: grid; gap: 10px; margin-top: 12px; }
+.tiktok-week-thumbs { display: flex; flex-wrap: wrap; gap: 6px; max-height: 220px; overflow-y: auto; }
 .tiktok-account { display: flex; gap: 8px; align-items: center; }
 .tiktok-account img { border-radius: 50%; }
 .tiktok-field { display: grid; gap: 4px; }
