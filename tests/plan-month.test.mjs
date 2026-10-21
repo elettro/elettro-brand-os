@@ -52,7 +52,8 @@ test("a week under way plans only its remaining slots and replaces only future u
   const r = await runPlanWeeks({ brandSlug: "stashbox", weekStart: "2026-10-19", weeks: 1, mode: "apply", replacePlanned: true, copyAi: false }, spy, json, { modelId: null, now });
   assert.equal(r.status, 200, JSON.stringify(r.body).slice(0, 300));
   const slots = r.body.perWeek[0].slots;
-  assert.ok(slots.some((s) => s.status === "past"), "earlier slots are marked past");
+  // Slots before `now` are not planned at all (planWeek skips them); only the rest of the week is.
+  assert.ok(slots.length > 0 && slots.every((s) => new Date(s.scheduledFor) > now), "only the rest of the week is planned");
   for (const s of slots.filter((x) => x.status === "planned")) assert.ok(new Date(s.scheduledFor) > now, `${s.scheduledFor} is in the future`);
   const del = sqls.find((q) => q.sql.trim().startsWith('DELETE FROM "ScheduledPost"'));
   assert.ok(new Date(del.params[1]) > now, "replacing starts after now, not at Monday");

@@ -43,12 +43,24 @@ export function uploadRequest(event) {
   // Title/description language and spoken language; English unless the post says otherwise.
   const language = String(event.language || "en");
   if (!/^[a-z]{2}(-[A-Z]{2})?$/.test(language)) throw new Error("language must be a code such as en or de");
+  // Recording date: the clip's own date when known, otherwise today.
+  const recordingDate = String(event.recordingDate || new Date().toISOString().slice(0, 10));
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(recordingDate)) throw new Error("recordingDate must be YYYY-MM-DD");
+  // Recording location is optional; YouTube marks these fields deprecated, so they are only sent when given.
+  const loc = event.location;
+  if (loc && !(Number.isFinite(loc.latitude) && Number.isFinite(loc.longitude))) throw new Error("location needs numeric latitude and longitude");
   return {
     channelId, dropboxPath, privacyStatus,
     snippet: { title, description, tags, categoryId: String(event.categoryId || "10"), defaultLanguage: language, defaultAudioLanguage: language },
     madeForKids: event.madeForKids === true,
     // YouTube's "altered or synthetic content" disclosure, required for realistic AI-made video.
-    containsSyntheticMedia: event.containsSyntheticMedia === true
+    containsSyntheticMedia: event.containsSyntheticMedia === true,
+    // YouTube's "paid promotion" question; always answered, No unless the post says otherwise.
+    paidPromotion: event.paidPromotion === true,
+    recordingDetails: {
+      recordingDate: `${recordingDate}T12:00:00.000Z`,
+      ...(loc ? { location: { latitude: loc.latitude, longitude: loc.longitude }, locationDescription: String(loc.description || "").slice(0, 200) } : {})
+    }
   };
 }
 
@@ -105,7 +117,11 @@ async function dropboxFile(path) {
 }
 
 async function startSession(accessToken, request, size) {
-  const response = await fetch("https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status", {
+  // Dean's defaults on every upload: Standard YouTube License, embedding allowed, Music category,
+  // published to the subscription feed with a notification.
+  const url = "https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&notifySubscribers=true" +
+    "&part=snippet,status,paidProductPlacementDetails,recordingDetails";
+  const response = await fetch(url, {
     method: "POST",
     headers: {
       authorization: `Bearer ${accessToken}`,
@@ -115,7 +131,12 @@ async function startSession(accessToken, request, size) {
     },
     body: JSON.stringify({
       snippet: request.snippet,
-      status: { privacyStatus: request.privacyStatus, selfDeclaredMadeForKids: request.madeForKids, containsSyntheticMedia: request.containsSyntheticMedia }
+      status: {
+        privacyStatus: request.privacyStatus, selfDeclaredMadeForKids: request.madeForKids, containsSyntheticMedia: request.containsSyntheticMedia,
+        license: "youtube", embeddable: true
+      },
+      paidProductPlacementDetails: { hasPaidProductPlacement: request.paidPromotion },
+      recordingDetails: request.recordingDetails
     }),
     signal: AbortSignal.timeout(30000)
   });
@@ -169,6 +190,9 @@ export function uploadFromPost(post, privacyStatus) {
     tags,
     privacyStatus,
     containsSyntheticMedia: post.synthetic === true,
+    paidPromotion: post.paidPromotion === true,
+    recordingDate: post.recordingDate || undefined,
+    location: post.location || undefined,
     language: post.language || "en"
   };
 }

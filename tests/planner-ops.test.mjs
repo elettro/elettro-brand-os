@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { weekToPlan, handlePlannerWeb, handlePlannerOps } from "../services/dev-api-lambda/planner-ops.mjs";
+import { weekToPlan, handlePlannerWeb, handlePlannerOps, recordingDateOf, brandLocation } from "../services/dev-api-lambda/planner-ops.mjs";
 import { weekWindow } from "../services/dev-api-lambda/planner-v2-db.mjs";
-import { addDaysToYmd, languageOf } from "../services/dev-api-lambda/planner-v2.mjs";
+import { addDaysToYmd, brandLanguage, languageOf } from "../services/dev-api-lambda/planner-v2.mjs";
 
 const json = (statusCode, body) => ({ statusCode, body });
 const KEY = "k".repeat(40);
@@ -103,6 +103,7 @@ test("claimed posts carry the AI flag from the clip's own tags, or from the plan
   };
   const r = await handlePlannerOps({ action: "claim-due-posts", destination: "youtube" }, async () => client, json);
   assert.deepEqual(r.body.posts.map((p) => [p.id, p.synthetic]), [["p1", true], ["p2", true], ["p3", false]]);
+  assert.ok(r.body.posts.every((p) => p.paidPromotion === false), "no clip is tagged paid-promotion");
   assert.ok(!("assetTags" in r.body.posts[0]) && !("brandId" in r.body.posts[0]));
 });
 
@@ -115,6 +116,32 @@ test("a clip is English unless a tag names another language; bare two-letter tag
   assert.equal(languageOf({ tags: ["language-deutsch"] }), "de");
   assert.equal(languageOf({ tags: ["de", "es"] }), "en");
   assert.equal(languageOf({ tags: ["lang:xx"] }), "en");
+});
+
+test("German brands default to German, and a clip tag still overrides the brand", () => {
+  assert.equal(brandLanguage("solarmeister", {}), "de");
+  assert.equal(brandLanguage("neckermann-strom", null), "de");
+  assert.equal(brandLanguage("stashbox", {}), "en");
+  assert.equal(brandLanguage("stashbox", { language: "es" }), "es");
+  assert.equal(languageOf({ tags: ["solar"] }, "de"), "de");
+  assert.equal(languageOf({ tags: ["english"] }, "de"), "en");
+});
+
+test("a clip's recording date is its filename's YYMMDD session date, else today", () => {
+  const today = "2026-10-21";
+  assert.equal(recordingDateOf("261011-stashbox-does-dylan-tangled-up-in-blue-9x16-4K-05.mp4", today), "2026-10-11");
+  assert.equal(recordingDateOf("260930_session-clip.mp4", today), "2026-09-30");
+  assert.equal(recordingDateOf("stashbox-does-sublime-promo-ai-montage-wan3-9x16-v7.mp4", today), today);
+  assert.equal(recordingDateOf("261399-bad-date.mp4", today), today, "not a real date");
+  assert.equal(recordingDateOf("271231-future.mp4", today), today, "not in the future");
+  assert.equal(recordingDateOf(null, today), today);
+});
+
+test("a brand location is used only when it has coordinates", () => {
+  assert.equal(brandLocation({}), null);
+  assert.equal(brandLocation({ location: { description: "Stashbox" } }), null);
+  assert.deepEqual(brandLocation({ location: { latitude: 26.07, longitude: -80.27, description: "Stashbox" } }),
+    { latitude: 26.07, longitude: -80.27, description: "Stashbox" });
 });
 
 test("finish-post without a video id marks the post failed and keeps the error", async () => {
