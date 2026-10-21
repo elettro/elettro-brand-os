@@ -25,7 +25,7 @@ import { searchLibrary, libraryAsset, recordPublication, recentPublications } fr
 const lambda = new LambdaClient({});
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-export const REVIEW_DESTINATIONS = ["instagram", "facebook", "tiktok"];
+export const REVIEW_DESTINATIONS = ["instagram", "facebook", "tiktok", "threads"];
 // Statuses a reviewer may move between; queued and later belong to the publisher.
 const REVIEWABLE = ["planned", "approved", "skipped"];
 // TikTok's Content Posting API privacy levels; the creator picks one per post, there is no default.

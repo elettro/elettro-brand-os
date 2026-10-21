@@ -5,14 +5,15 @@ import type { ReviewList, ReviewPost, TiktokCreator } from "@/lib/planner-review
 import { AssetThumb as Thumb } from "@/components/asset-thumb";
 import { TiktokCard } from "./tiktok-card";
 
-const NETWORK: Record<string, string> = { instagram: "Instagram", facebook: "Facebook", tiktok: "TikTok" };
+const NETWORK: Record<string, string> = { instagram: "Instagram", facebook: "Facebook", tiktok: "TikTok", threads: "Threads" };
 // One posts-per-day setting per network and placement; TikTok's planner placement is "video".
 const SLOTS = [
   { destination: "instagram", placement: "reel", label: "Reels" },
   { destination: "instagram", placement: "story", label: "Stories" },
   { destination: "facebook", placement: "reel", label: "Reels" },
   { destination: "facebook", placement: "story", label: "Stories" },
-  { destination: "tiktok", placement: "video", label: "Videos" }
+  { destination: "tiktok", placement: "video", label: "Videos" },
+  { destination: "threads", placement: "post", label: "Posts" }
 ] as const;
 const slotKey = (s: { destination: string; placement: string }) => `${s.destination}:${s.placement}`;
 
