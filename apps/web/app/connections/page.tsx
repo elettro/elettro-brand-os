@@ -9,6 +9,7 @@ import { TIKTOK_BRANDS } from "@/lib/tiktok-connect";
 import { TiktokPost } from "@/components/tiktok-post";
 import { TiktokDisconnect } from "@/components/tiktok-disconnect";
 import { PINTEREST_BRANDS } from "@/lib/pinterest-connect";
+import { PinterestPost } from "@/components/pinterest-post";
 import { ReconnectCountdown } from "@/components/reconnect-countdown";
 import { redirect } from "next/navigation";
 
@@ -168,6 +169,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
               <a className="status-chip" href={`/api/connections/pinterest/start?brand=${b.id}`}>{linked ? "Reconnect" : "Connect Pinterest"}</a>
               {linked?.expiresAt && <ReconnectCountdown expiresAt={linked.expiresAt} />}
             </div>
+            {linked && <PinterestPost brand={b.id} />}
           </article>
         );
       })}
