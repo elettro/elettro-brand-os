@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { needsRefresh, refreshRecord, postRequest, chunkPlan, requestFromPost, postInfo, manualSettings, revokeRecord, handler } from "../services/tiktok-lambda/index.mjs";
+import { needsRefresh, refreshRecord, postRequest, chunkPlan, requestFromPost, postInfo, manualSettings, revokeRecord, revokeTokens, handler } from "../services/tiktok-lambda/index.mjs";
 
 const NOW = new Date("2026-10-21T00:00:00Z");
 const app = { clientKey: "key", clientSecret: "secret" };
@@ -124,4 +124,14 @@ test("revoke sends the app keys and the access token to TikTok's revoke endpoint
   assert.match(call.url, /\/v2\/oauth\/revoke\/$/);
   assert.deepEqual(call.body, { client_key: "key", client_secret: "secret", token: "old" });
   await assert.rejects(revokeRecord(record, app, reply(400, { error: "invalid_request", error_description: "bad token" })), /TikTok revoke failed: bad token/);
+});
+
+test("disconnect treats a login TikTok already rejects as disconnected, but not other failures", async () => {
+  const dead = async () => { throw new Error("TikTok refresh failed: Refresh token is invalid or expired."); };
+  assert.deepEqual(await revokeTokens(record, app, { refresh: dead, revoke: async () => {}, now: NOW }), { alreadyInvalid: true });
+  const fresh = { ...record, accessExpiresAt: "2026-10-22T00:00:00.000Z" };
+  let revoked = false;
+  assert.deepEqual(await revokeTokens(fresh, app, { refresh: dead, revoke: async () => { revoked = true; }, now: NOW }), { alreadyInvalid: false });
+  assert.equal(revoked, true);
+  await assert.rejects(revokeTokens(fresh, app, { revoke: async () => { throw new Error("TikTok revoke failed: 503"); }, now: NOW }), /503/);
 });

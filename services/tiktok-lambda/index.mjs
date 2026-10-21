@@ -258,18 +258,33 @@ export async function revokeRecord(record, app, post = fetch) {
   if (!response.ok || body.error) throw new Error(`TikTok revoke failed: ${body.error_description || body.error || response.status}`);
 }
 
+// TikTok's answer when the stored login no longer works (refresh_token or access_token rejected).
+const DEAD_LOGIN = /invalid or expired|invalid_grant|access_token_invalid|token is invalid/i;
+
+// Revoke the grant at TikTok. If TikTok already rejects the stored login, there is no access left
+// to withdraw, so that counts as disconnected; anything else (network, 5xx) still fails.
+export async function revokeTokens(record, app, { refresh = refreshRecord, revoke = revokeRecord, now = new Date() } = {}) {
+  try {
+    // An access token that already lapsed can't be revoked; renew it first so TikTok drops the grant.
+    const current = needsRefresh(record, now) ? await refresh(record, app, now) : record;
+    await revoke(current, app);
+    return { alreadyInvalid: false };
+  } catch (error) {
+    if (DEAD_LOGIN.test(String(error?.message || ""))) return { alreadyInvalid: true };
+    throw error;
+  }
+}
+
 async function revokeBrand(brand) {
   const app = await secretJson(APP_SECRET);
   for (const SecretId of await tokenSecretNames()) {
     const record = await secretJson(SecretId);
     if (record.brand !== brand || record.revokedAt) continue;
-    // An access token that already lapsed can't be revoked; renew it first so TikTok drops the grant.
-    const current = needsRefresh(record) ? await refreshRecord(record, app) : record;
-    await revokeRecord(current, app);
+    const { alreadyInvalid } = await revokeTokens(record, app);
     await secrets.send(new PutSecretValueCommand({ SecretId, SecretString: JSON.stringify({
       openId: record.openId, username: record.username, brand, revokedAt: new Date().toISOString()
     }) }));
-    return { handle: record.username ? "@" + record.username : record.openId, revoked: true };
+    return { handle: record.username ? "@" + record.username : record.openId, revoked: true, alreadyInvalid };
   }
   return { revoked: false, note: `No connected TikTok account for ${brand}` };
 }
