@@ -9,15 +9,21 @@ const NETWORK: Record<string, string> = {
   instagram: "Instagram", facebook: "Facebook", tiktok: "TikTok", youtube: "YouTube", x: "X", threads: "Threads",
   linkedin: "LinkedIn", pinterest: "Pinterest", reddit: "Reddit", "google-business": "Google Business"
 };
-// One posts-per-day setting per network and placement; TikTok's planner placement is "video".
+// One amount per network and placement the planner schedules (placements as in planner.json). YouTube long
+// videos are counted per week (goal 5/week); the rest per day. auto = an automatic publisher is live.
 const SLOTS = [
-  { destination: "instagram", placement: "reel", label: "Reels" },
-  { destination: "instagram", placement: "story", label: "Stories" },
-  { destination: "facebook", placement: "reel", label: "Reels" },
-  { destination: "facebook", placement: "story", label: "Stories" },
-  { destination: "tiktok", placement: "video", label: "Videos" },
-  { destination: "threads", placement: "post", label: "Posts" }
+  { destination: "instagram", placement: "reel", label: "Reels", unit: "day", auto: false },
+  { destination: "instagram", placement: "story", label: "Stories", unit: "day", auto: false },
+  { destination: "facebook", placement: "reel", label: "Reels", unit: "day", auto: false },
+  { destination: "facebook", placement: "story", label: "Stories", unit: "day", auto: false },
+  { destination: "tiktok", placement: "video", label: "Videos", unit: "day", auto: true },
+  { destination: "threads", placement: "post", label: "Posts", unit: "day", auto: true },
+  { destination: "youtube", placement: "short", label: "Shorts", unit: "day", auto: true },
+  { destination: "youtube", placement: "video", label: "Long videos", unit: "week", auto: true },
+  { destination: "x", placement: "video", label: "Videos", unit: "day", auto: false }
 ] as const;
+// Connected networks the planner doesn't schedule yet; shown so every network is accounted for.
+const NOT_SCHEDULED = ["linkedin", "pinterest"];
 const slotKey = (s: { destination: string; placement: string }) => `${s.destination}:${s.placement}`;
 
 function addDays(ymd: string, days: number) {
@@ -63,9 +69,11 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
     return { start, end, posts, days: [...days.entries()] };
   }), [list]);
 
-  const perDay = (destination: string, placement: string) => {
-    const rule = list.accounts.find((a) => a.destination === destination && a.placement === placement && a.active);
-    return rule?.postsPerWeek ? Math.round(rule.postsPerWeek / 7) : 0;
+  // The amount shown in a slot's box: posts per day, or per week for weekly slots.
+  const amountOf = (s: (typeof SLOTS)[number]) => {
+    const rule = list.accounts.find((a) => a.destination === s.destination && a.placement === s.placement && a.active);
+    if (!rule?.postsPerWeek) return 0;
+    return s.unit === "week" ? rule.postsPerWeek : Math.round(rule.postsPerWeek / 7);
   };
   const connected = (destination: string) => list.accounts.find((a) => a.destination === destination && a.externalAccountId);
   // Weeks fold so one can be read on its own; the current week starts open.
@@ -76,7 +84,7 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
     return next;
   });
   const [cadence, setCadence] = useState<Record<string, number>>(() =>
-    Object.fromEntries(SLOTS.map((s) => [slotKey(s), perDay(s.destination, s.placement)])));
+    Object.fromEntries(SLOTS.map((s) => [slotKey(s), amountOf(s)])));
   // TikTok's card needs the account's current settings from TikTok, fetched once per page load.
   const hasTiktok = list.posts.some((p) => p.destination === "tiktok" && reviewable(p));
   const [creator, setCreator] = useState<TiktokCreator | null>(null);
@@ -108,22 +116,27 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
   async function saveCadence() {
     const saved = SLOTS.filter((s) => connected(s.destination));
     for (const s of saved) {
-      await run("cadence", { action: "cadence", destination: s.destination, placement: s.placement, postsPerWeek: cadence[slotKey(s)] * 7 });
+      const n = cadence[slotKey(s)];
+      await run("cadence", { action: "cadence", destination: s.destination, placement: s.placement, postsPerWeek: s.unit === "week" ? n : n * 7 });
     }
-    setNotice(`Saved: ${saved.map((s) => `${NETWORK[s.destination]} ${s.label} ${cadence[slotKey(s)]}/day`).join(", ")}. Plan a week to use it.`);
+    setNotice(`Saved: ${saved.map((s) => `${NETWORK[s.destination]} ${s.label} ${cadence[slotKey(s)]}/${s.unit}`).join(", ")}. Weeks planned from now on use it.`);
   }
 
   return <div className="review">
     <section className="card review-settings">
       <div>
-        <div className="eyebrow">Posts per day</div>
-        {SLOTS.map((s) => (
-          <label key={slotKey(s)} className="review-cadence">
+        <div className="eyebrow">Posts per day (YouTube long videos per week)</div>
+        {SLOTS.map((s) => {
+          const max = s.unit === "week" ? 70 : 10;
+          return <label key={slotKey(s)} className="review-cadence">
             {NETWORK[s.destination]} {s.label} {connected(s.destination) ? <b>{connected(s.destination)!.accountName}</b> : <span className="muted">not connected</span>}
-            <input type="number" min={0} max={10} value={cadence[slotKey(s)]} disabled={!connected(s.destination)}
-              onChange={(e) => setCadence({ ...cadence, [slotKey(s)]: Math.max(0, Math.min(10, Number(e.target.value) || 0)) })} />
-          </label>
-        ))}
+            {!s.auto && <span className="muted"> (not auto-posting yet)</span>}
+            <input type="number" min={0} max={max} value={cadence[slotKey(s)]} disabled={!connected(s.destination)}
+              onChange={(e) => setCadence({ ...cadence, [slotKey(s)]: Math.max(0, Math.min(max, Number(e.target.value) || 0)) })} />
+            {s.unit === "week" && <span className="muted">/week</span>}
+          </label>;
+        })}
+        {NOT_SCHEDULED.map((d) => <span key={d} className="review-cadence muted">{NETWORK[d]}: not scheduled yet</span>)}
         <button className="status-chip" disabled={!!busy} onClick={saveCadence}>Save</button>
       </div>
       <p className="muted" style={{ margin: 0 }}>

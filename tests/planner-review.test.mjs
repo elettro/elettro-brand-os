@@ -107,6 +107,19 @@ test("the review window reaches nine weeks: this week plus two months", () => {
   assert.equal(reviewWindow("America/New_York", "2026-10-19", 20).weeks, 9);
 });
 
+test("posts per day/week can be set for YouTube Shorts, YouTube long videos and X too", async () => {
+  process.env.CONNECTIONS_API_SHARED_SECRET = KEY;
+  for (const [destination, placement, postsPerWeek] of [["youtube", "short", 21], ["youtube", "video", 5], ["x", "video", 28]]) {
+    const client = fakeClient([['FROM "SocialAccount" WHERE', { rows: [{ id: "acct" }] }], ['FROM "CadenceRule" WHERE', { rows: [{ id: "rule" }] }]]);
+    const r = await handlePlannerReview(event, { brand: "stashbox", action: "cadence", destination, placement, postsPerWeek }, async () => client, json);
+    assert.equal(r.statusCode, 200, `${destination} ${placement}`);
+    const update = client.seen.find((q) => q.sql.startsWith('UPDATE "CadenceRule"'));
+    assert.deepEqual(update.params, ["rule", postsPerWeek, true]);
+  }
+  const unknown = await handlePlannerReview(event, { brand: "stashbox", action: "cadence", destination: "myspace", placement: "post", postsPerWeek: 7 }, async () => fakeClient(), json);
+  assert.equal(unknown.statusCode, 400);
+});
+
 test("cadence needs a connected account", async () => {
   process.env.CONNECTIONS_API_SHARED_SECRET = KEY;
   const r = await handlePlannerReview(event, { brand: "stashbox", action: "cadence", destination: "instagram", placement: "reel", postsPerWeek: 7 },

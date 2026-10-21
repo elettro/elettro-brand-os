@@ -26,7 +26,7 @@ const lambda = new LambdaClient({});
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // Networks whose posts-per-day the Review page edits. Listing, planning and approving cover every network.
-export const REVIEW_DESTINATIONS = ["instagram", "facebook", "tiktok", "threads"];
+export const REVIEW_DESTINATIONS = ["instagram", "facebook", "tiktok", "threads", "youtube", "x"];
 // Statuses a reviewer may move between; queued and later belong to the publisher.
 const REVIEWABLE = ["planned", "approved", "skipped"];
 // TikTok's Content Posting API privacy levels; the creator picks one per post, there is no default.
