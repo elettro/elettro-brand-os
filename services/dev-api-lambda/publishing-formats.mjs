@@ -13,13 +13,13 @@
  * (photo formats take images, not the brand's default vertical video pool).
  */
 export const PUBLISHING_FORMATS = [
-  { destination: "instagram", placement: "reel", label: "Reels", status: "planning", note: "Test posts work; scheduled auto-publishing isn't built yet" },
+  { destination: "instagram", placement: "reel", label: "Reels", status: "live" },
   { destination: "instagram", placement: "story", label: "Stories", status: "planning", note: "Story publishing isn't built yet" },
-  { destination: "instagram", placement: "post", label: "Feed photos", status: "planning", note: "Instagram photo test posts work; scheduled auto-publishing isn't built yet",
+  { destination: "instagram", placement: "post", label: "Feed photos", status: "planning", note: "Publisher is deployed; no feed photo has published on schedule yet",
     rule: { kinds: ["image"], aspectRatios: [] } },
-  { destination: "facebook", placement: "reel", label: "Reels", status: "planning", note: "Test posts work; scheduled auto-publishing isn't built yet" },
+  { destination: "facebook", placement: "reel", label: "Reels", status: "live" },
   { destination: "facebook", placement: "story", label: "Stories", status: "planning", note: "Story publishing isn't built yet" },
-  { destination: "facebook", placement: "post", label: "Photo / wide video posts", status: "planning", note: "Page test posts work; scheduled auto-publishing isn't built yet",
+  { destination: "facebook", placement: "post", label: "Photo / wide video posts", status: "planning", note: "Publisher is deployed; no photo or wide video has published on schedule yet",
     rule: { kinds: ["image", "video"], aspectRatios: [] } },
   { destination: "tiktok", placement: "video", label: "Videos", status: "review", note: "Scheduled publishing is built; waiting on TikTok's app review" },
   { destination: "threads", placement: "post", label: "Posts", status: "live" },
