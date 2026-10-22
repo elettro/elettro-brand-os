@@ -129,7 +129,19 @@ Amplify auto-builds the web app from `develop`. After a merge, do the PR's "AWS 
 - Dean's style: wants plain answers, verified facts over guesses, and says so when something was never checked.
   When state is unknown, check AWS/GitHub rather than guessing.
 
-## 7. Where to look next
+## 7. Keeping this file current
+
+This file is only useful while it's true. Update it in the **same PR** as the change whenever you:
+
+- add, remove or rename a Lambda, EventBridge rule, bucket, secret prefix or other AWS resource;
+- change how code is built or deployed, or which AWS profile or permissions the deploy steps need;
+- change a network's publishing status, so that `publishing-formats.mjs` changes;
+- add a new service, package or top-level folder, or change the branch and PR workflow.
+
+Keep it to what's hard to see from the code. Don't paste secrets, tokens or key values. If you find
+something here that's wrong, fix it, or tell Dean if you can't verify the fix.
+
+## 8. Where to look next
 
 `docs/SYSTEM-SPEC-V1.md` and `docs/ARCHITECTURE.md` (original plan, partly stale), `docs/database-schema.md`,
 `docs/PHASE-II-BACKLOG.md`, `docs/PUBLISHING-ENGINE-NEXT-PHASE-PREP.md`, `docs/ai-gateway-v1.md` (MCP/ChatGPT/Claude access),
