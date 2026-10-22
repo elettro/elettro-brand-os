@@ -211,3 +211,12 @@ test("curator only passes through picks from each slot's own candidates", async 
   assert.deepEqual(failing.preferences, {});
   assert.throws(() => parseDecisions("{}"), /decisions/);
 });
+
+test("photo formats take images even when the brand pool is vertical video", () => {
+  const settings = resolvePlannerSettings({ planner: { pool: { kinds: ["video"], aspectRatios: ["9x16"] } } });
+  const photo = { id: "p", kind: "image", aspectRatioLabel: "4x5", tags: [] };
+  const clip = { id: "v", kind: "video", aspectRatioLabel: "9x16", durationMs: 30000, tags: [] };
+  assert.equal(poolRejection(photo, { destination: "pinterest", placement: "pin" }, settings), null);
+  assert.equal(poolRejection(clip, { destination: "pinterest", placement: "pin" }, settings), "kind");
+  assert.equal(poolRejection(photo, { destination: "instagram", placement: "reel" }, settings), "kind");
+});

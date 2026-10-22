@@ -2,6 +2,7 @@
 // cadence, sector mix); an optional curator may only choose among candidates that
 // already passed them, and every choice is re-validated here.
 import { createHash } from "node:crypto";
+import { placementRule } from "./publishing-formats.mjs";
 
 export const PLANNER_VERSION = "planner-v2.0";
 export const DURATION_BUCKETS = ["under-15s", "15-30s", "30-60s", "1-3min", "3min-plus"];
@@ -192,7 +193,7 @@ export function poolRejection(asset, account, settings) {
   const tags = tagsOf(asset);
   const { pool } = settings;
   const dest = String(account.destination).toLowerCase();
-  const rule = settings.placements[`${dest}:${String(account.placement).toLowerCase()}`] || {};
+  const rule = placementRule(settings, dest, String(account.placement).toLowerCase());
   // A placement may override the brand pool, e.g. youtube:video takes 16x9 long-form while Shorts stay 9x16.
   const kinds = rule.kinds || pool.kinds;
   const aspectRatios = rule.aspectRatios || pool.aspectRatios;
@@ -339,7 +340,7 @@ export function planWeek({ assets, accounts, settings, weekStart, timeZone, uses
       const newBatch = ageDays < settings.newBatchBoostDays ? 15 * (1 - Math.max(0, ageDays) / settings.newBatchBoostDays) : 0;
       const songRepeats = song ? thisWeek.filter((u) => u.songKey === song).length : 0;
       const groupRepeats = asset.contentGroup ? thisWeek.filter((u) => u.contentGroup === asset.contentGroup).length : 0;
-      const rule = settings.placements[`${slot.destination}:${String(slot.placement).toLowerCase()}`] || {};
+      const rule = placementRule(settings, slot.destination, String(slot.placement).toLowerCase());
       // Keep groups like the two shows in balance within a sector: favor the value used least this week.
       let balance = 0;
       for (const group of settings.balance || []) {

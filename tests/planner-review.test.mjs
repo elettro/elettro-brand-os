@@ -49,9 +49,9 @@ test("set-status only moves posts between planned, approved and skipped", async 
   assert.deepEqual(update.params.at(-1), ["planned", "approved", "skipped"]);
 });
 
-test("plan seeds missing planner settings and starts plan-week for the networks asked for", async () => {
+test("plan seeds missing planner settings and starts plan-week only for the asked networks that are connected", async () => {
   process.env.CONNECTIONS_API_SHARED_SECRET = KEY;
-  const client = fakeClient();
+  const client = fakeClient([['SELECT DISTINCT "destination"', { rows: [{ destination: "instagram" }, { destination: "x" }] }]]);
   const invoked = [];
   const r = await handlePlannerReview(event, { brand: "stashbox", action: "plan", weekStart: "2026-10-26", destinations: ["instagram", "youtube"] },
     async () => client, json, {
@@ -61,17 +61,19 @@ test("plan seeds missing planner settings and starts plan-week for the networks 
     });
   assert.equal(r.statusCode, 202);
   assert.ok(client.seen.some((q) => q.sql.includes("jsonb_set") && q.params[1].includes('"sectors"')));
-  assert.deepEqual(invoked, [{ action: "plan-week", brandSlug: "stashbox", weekStart: "2026-10-26", mode: "apply", replacePlanned: true, destinations: ["instagram", "youtube"] }]);
+  // youtube isn't connected and x isn't integrated yet, so only instagram is planned.
+  assert.deepEqual(invoked, [{ action: "plan-week", brandSlug: "stashbox", weekStart: "2026-10-26", mode: "apply", replacePlanned: true, destinations: ["instagram"] }]);
 });
 
-test("by default the Review page plans and approves every network", async () => {
+test("by default the Review page plans every connected network and approves every network", async () => {
   process.env.CONNECTIONS_API_SHARED_SECRET = KEY;
   const invoked = [];
-  await handlePlannerReview(event, { brand: "stashbox", action: "plan", weekStart: "2026-10-26" }, async () => fakeClient(), json, {
+  const connected = fakeClient([['SELECT DISTINCT "destination"', { rows: ["instagram", "facebook", "youtube", "threads", "x"].map((destination) => ({ destination })) }]]);
+  await handlePlannerReview(event, { brand: "stashbox", action: "plan", weekStart: "2026-10-26" }, async () => connected, json, {
     invoke: async (payload) => { invoked.push(payload); }, readSeed: () => JSON.stringify({ settings: { sectors: [{ id: "live" }] } }),
     now: new Date("2026-10-20T15:00:00Z")
   });
-  assert.equal(invoked[0].destinations, null);
+  assert.deepEqual([...invoked[0].destinations].sort(), ["facebook", "instagram", "threads", "youtube"]);
   const client = fakeClient([['UPDATE "ScheduledPost" sp SET "status"=\'approved\'', { rows: [{ id: "x" }], rowCount: 7 }]]);
   await handlePlannerReview(event, { brand: "stashbox", action: "approve-range", from: "2026-10-26", to: "2026-11-01" }, async () => client, json);
   const approve = client.seen.find((q) => q.sql.includes("SET \"status\"='approved'"));
@@ -96,7 +98,8 @@ test("approving a whole week remembers it; part of a week or some networks does 
 test("plan accepts the week under way but not a finished one", async () => {
   process.env.CONNECTIONS_API_SHARED_SECRET = KEY;
   const deps = { invoke: async () => {}, readSeed: () => JSON.stringify({ settings: { sectors: [{ id: "live" }] } }), now: new Date("2026-10-20T15:00:00Z") };
-  const underway = await handlePlannerReview(event, { brand: "stashbox", action: "plan", weekStart: "2026-10-19" }, async () => fakeClient(), json, deps);
+  const connected = () => fakeClient([['SELECT DISTINCT "destination"', { rows: [{ destination: "facebook" }] }]]);
+  const underway = await handlePlannerReview(event, { brand: "stashbox", action: "plan", weekStart: "2026-10-19" }, async () => connected(), json, deps);
   assert.equal(underway.statusCode, 202);
   const over = await handlePlannerReview(event, { brand: "stashbox", action: "plan", weekStart: "2026-10-12" }, async () => fakeClient(), json, deps);
   assert.equal(over.statusCode, 400);
@@ -174,4 +177,52 @@ test("setting Reels per day leaves the Stories rule alone", async () => {
   const updates = client.seen.filter((q) => q.sql.includes('UPDATE "CadenceRule"'));
   assert.equal(updates.length, 1);
   assert.deepEqual(updates[0].params, ["rule-reel", 35, true]);
+});
+
+test("list hands the page every publishing format, without planner rules, and each account's id", async () => {
+  process.env.CONNECTIONS_API_SHARED_SECRET = KEY;
+  const client = fakeClient([['LEFT JOIN "CadenceRule"', { rows: [{ socialAccountId: "sa-yt", destination: "youtube", accountName: "@Stashboxband",
+    externalAccountId: "UC1", publishingMode: "approval", placement: "short", postsPerWeek: 21, active: true }] }]]);
+  const r = await handlePlannerReview(event, { brand: "stashbox", action: "list" }, async () => client, json);
+  assert.equal(r.statusCode, 200);
+  assert.equal(r.body.formats.length, 15);
+  assert.ok(r.body.formats.every((f) => !("rule" in f)));
+  assert.equal(r.body.formats.find((f) => f.destination === "gmb").status, "integration");
+  assert.equal(r.body.maxPostsPerWeek, 70);
+  assert.equal(r.body.accounts[0].socialAccountId, "sa-yt");
+  assert.ok(r.body.destinations.includes("youtube") && r.body.destinations.includes("pinterest"));
+});
+
+test("cadence refuses unknown formats and formats still waiting on an integration", async () => {
+  process.env.CONNECTIONS_API_SHARED_SECRET = KEY;
+  const unknown = await handlePlannerReview(event, { brand: "stashbox", action: "cadence", destination: "instagram", placement: "carousel", postsPerWeek: 7 }, async () => fakeClient(), json);
+  assert.equal(unknown.statusCode, 400);
+  const x = await handlePlannerReview(event, { brand: "stashbox", action: "cadence", destination: "x", placement: "video", postsPerWeek: 7 }, async () => fakeClient(), json);
+  assert.equal(x.statusCode, 409);
+  const gmb = await handlePlannerReview(event, { brand: "stashbox", action: "cadence", destination: "gmb", placement: "update", postsPerWeek: 7 }, async () => fakeClient(), json);
+  assert.equal(gmb.statusCode, 409);
+});
+
+test("a network takes at most 10 posts a day across its formats", async () => {
+  process.env.CONNECTIONS_API_SHARED_SECRET = KEY;
+  const client = fakeClient([
+    ['FROM "SocialAccount" WHERE', { rows: [{ id: "sa-ig" }] }],
+    ["AS n FROM", { rows: [{ n: 42 }] }]
+  ]);
+  const over = await handlePlannerReview(event, { brand: "stashbox", action: "cadence", destination: "instagram", placement: "reel", postsPerWeek: 35 }, async () => client, json);
+  assert.equal(over.statusCode, 400);
+  assert.ok(!client.seen.some((q) => q.sql.includes('UPDATE "CadenceRule"') || q.sql.includes('INSERT INTO "CadenceRule"')));
+  const fits = await handlePlannerReview(event, { brand: "stashbox", action: "cadence", destination: "instagram", placement: "reel", postsPerWeek: 28 }, async () => client, json);
+  assert.equal(fits.statusCode, 200);
+});
+
+test("cadence saves to the named account when a network has more than one", async () => {
+  process.env.CONNECTIONS_API_SHARED_SECRET = KEY;
+  const id = "0b6f1c1e-2a3b-4c5d-8e9f-0a1b2c3d4e5f";
+  const client = fakeClient([['FROM "SocialAccount" WHERE', (params) => ({ rows: [{ id: params[2] || "sa-newest" }] })]]);
+  const r = await handlePlannerReview(event, { brand: "stashbox", action: "cadence", destination: "pinterest", placement: "pin", socialAccountId: id, postsPerWeek: 3 }, async () => client, json);
+  assert.equal(r.statusCode, 200);
+  assert.equal(r.body.socialAccountId, id);
+  const insert = client.seen.find((q) => q.sql.includes('INSERT INTO "CadenceRule"'));
+  assert.deepEqual(insert.params.slice(0, 3), [id, "pin", 3]);
 });
