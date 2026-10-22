@@ -180,3 +180,14 @@ test("claim-due-posts only claims the named placements, and all of them when non
   await handlePlannerOps({ action: "claim-due-posts", destination: "youtube", placements: [] }, async () => client, json);
   assert.deepEqual(claims, [["instagram", 1, ["reel", "post"]], ["youtube", 2, null], ["youtube", 2, null]]);
 });
+
+test("a stuck upload is retried once only when the worker asks, and requeue-failed needs a destination", async () => {
+  const sweeps = [];
+  const client = { query: async (text, values) => { if (text.includes("never reported back")) sweeps.push(values); return { rowCount: 0, rows: [] }; }, end: async () => {} };
+  await handlePlannerOps({ action: "claim-due-posts", destination: "tiktok", retryStuck: true }, async () => client, json);
+  await handlePlannerOps({ action: "claim-due-posts", destination: "youtube" }, async () => client, json);
+  assert.deepEqual(sweeps, [["tiktok", true], ["youtube", false]]);
+  assert.equal((await handlePlannerOps({ action: "requeue-failed" }, async () => client, json)).statusCode, 400);
+  const requeued = await handlePlannerOps({ action: "requeue-failed", destination: "tiktok" }, async () => client, json);
+  assert.equal(requeued.statusCode, 200);
+});

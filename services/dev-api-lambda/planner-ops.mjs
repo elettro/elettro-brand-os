@@ -246,12 +246,18 @@ async function claimDuePosts(event, connectDatabase, json) {
        FROM "SocialAccount" sa
        WHERE sa."id" = sp."socialAccountId" AND sa."destination" = $1
          AND sp."status" = 'approved' AND sp."scheduledFor" < CURRENT_TIMESTAMP - INTERVAL '24 hours'`, [destination])).rowCount;
+    // A worker that only uploads drafts (TikTok) can ask for one retry: a crashed upload left nothing
+    // public, and a repeated draft is harmless. Everything else, and any second failure, stays failed.
     const stuck = (await client.query(
-      `UPDATE "ScheduledPost" sp SET "status" = 'failed', "updatedAt" = CURRENT_TIMESTAMP,
-              "scoreBreakdown" = jsonb_set(sp."scoreBreakdown", '{publish}', '{"error":"Upload never reported back; check the channel before retrying"}'::jsonb, true)
+      `UPDATE "ScheduledPost" sp SET "updatedAt" = CURRENT_TIMESTAMP,
+              "status" = CASE WHEN $2 AND COALESCE((sp."scoreBreakdown"->'publish'->>'retries')::int, 0) < 1 THEN 'approved' ELSE 'failed' END,
+              "scoreBreakdown" = jsonb_set(COALESCE(sp."scoreBreakdown", '{}'::jsonb), '{publish}',
+                CASE WHEN $2 AND COALESCE((sp."scoreBreakdown"->'publish'->>'retries')::int, 0) < 1
+                  THEN '{"retries":1,"note":"Upload never reported back; queued for one retry"}'::jsonb
+                  ELSE '{"error":"Upload never reported back; check the channel before retrying"}'::jsonb END, true)
        FROM "SocialAccount" sa
        WHERE sa."id" = sp."socialAccountId" AND sa."destination" = $1
-         AND sp."status" = 'publishing' AND sp."updatedAt" < CURRENT_TIMESTAMP - INTERVAL '30 minutes'`, [destination])).rowCount;
+         AND sp."status" = 'publishing' AND sp."updatedAt" < CURRENT_TIMESTAMP - INTERVAL '30 minutes'`, [destination, event.retryStuck === true])).rowCount;
     const posts = (await client.query(
       `WITH due AS (
          SELECT sp."id" FROM "ScheduledPost" sp JOIN "SocialAccount" sa ON sa."id" = sp."socialAccountId"
@@ -295,6 +301,24 @@ async function claimDuePosts(event, connectDatabase, json) {
   });
 }
 
+// One-off recovery: posts a crashed worker left "Upload never reported back" go back to approved for one retry.
+async function requeueFailed(event, connectDatabase, json) {
+  const destination = String(event.destination || "");
+  const hours = Math.min(72, Math.max(1, Number(event.hours) || 36));
+  if (!destination) return json(400, { ok: false, error: "destination is required" });
+  return withClient(connectDatabase, json, "requeue-failed", async (client) => {
+    const rows = (await client.query(
+      `UPDATE "ScheduledPost" sp SET "status" = 'approved', "updatedAt" = CURRENT_TIMESTAMP,
+              "scoreBreakdown" = jsonb_set(sp."scoreBreakdown", '{publish}', '{"retries":1,"note":"Re-queued after a worker crash"}'::jsonb, true)
+       FROM "SocialAccount" sa
+       WHERE sa."id" = sp."socialAccountId" AND sa."destination" = $1 AND sp."status" = 'failed'
+         AND sp."scoreBreakdown"->'publish'->>'error' LIKE 'Upload never reported back%'
+         AND sp."updatedAt" > CURRENT_TIMESTAMP - make_interval(hours => $2)
+       RETURNING sp."id", sp."scheduledFor"`, [destination, hours])).rows;
+    return json(200, { ok: true, requeued: rows.length, posts: rows });
+  });
+}
+
 async function finishPost(event, connectDatabase, json) {
   const id = String(event.id || "");
   if (!id) return json(400, { ok: false, error: "id is required" });
@@ -332,6 +356,7 @@ async function finishPost(event, connectDatabase, json) {
 export async function handlePlannerOps(event, connectDatabase, json) {
   if (event.action === "planner-tick") return plannerTick(connectDatabase, json);
   if (event.action === "claim-due-posts") return claimDuePosts(event, connectDatabase, json);
+  if (event.action === "requeue-failed") return requeueFailed(event, connectDatabase, json);
   if (event.action === "finish-post") return finishPost(event, connectDatabase, json);
   return json(400, { ok: false, error: "Unknown planner operation" });
 }
