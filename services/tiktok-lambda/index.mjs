@@ -137,9 +137,11 @@ export function postRequest(event) {
 
 export function chunkPlan(size) {
   if (!Number.isFinite(size) || size <= 0) throw new Error("video is empty");
-  if (size <= 64 * MB) return { chunkSize: size, count: 1 };
-  // The remainder rides on the last chunk, so it stays under 2 × CHUNK.
-  return { chunkSize: CHUNK, count: Math.floor(size / CHUNK) };
+  // Small enough to hold in one piece; bigger videos go in CHUNK-sized parts so the worker's memory
+  // use stays flat however long the clip is (a 30-64 MB single chunk ran the 256 MB Lambda out of memory).
+  // The remainder rides on the last chunk, so it stays under 2 × CHUNK; a single chunk is the whole file.
+  const count = Math.floor(size / CHUNK);
+  return count <= 1 ? { chunkSize: size, count: 1 } : { chunkSize: CHUNK, count };
 }
 
 // TikTok wraps every answer as { data, error: { code, message, log_id } }; code "ok" means success.
@@ -354,7 +356,7 @@ async function api(payload) {
 }
 
 async function publishingTick() {
-  const claimed = await api({ action: "claim-due-posts", destination: "tiktok", limit: POSTS_PER_TICK });
+  const claimed = await api({ action: "claim-due-posts", destination: "tiktok", limit: POSTS_PER_TICK, retryStuck: true });
   if (!claimed.ok) throw new Error(`claim-due-posts failed: ${claimed.error}`);
   const published = [];
   for (const post of claimed.posts) {

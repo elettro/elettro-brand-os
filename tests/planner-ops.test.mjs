@@ -79,12 +79,11 @@ test("claim-due-posts only marks missed or stuck posts for its own destination",
   const client = { query: async (text, values) => { queries.push({ text, values }); return { rowCount: 0, rows: [] }; }, end: async () => {} };
   const r = await handlePlannerOps({ action: "claim-due-posts", destination: "youtube" }, async () => client, json);
   assert.equal(r.statusCode, 200);
-  const updates = queries.filter((q) => /SET "status" = '(missed|failed)'/.test(q.text));
+  const updates = queries.filter((q) => /SET "status" = 'missed'|never reported back/.test(q.text));
   assert.equal(updates.length, 2);
-  for (const q of updates) {
-    assert.match(q.text, /sa\."destination" = \$1/);
-    assert.deepEqual(q.values, ["youtube"]);
-  }
+  for (const q of updates) assert.match(q.text, /sa\."destination" = \$1/);
+  // The stuck sweep also carries whether this worker wants one retry (YouTube does not).
+  assert.deepEqual(updates.map((q) => q.values), [["youtube"], ["youtube", false]]);
 });
 
 test("claimed posts carry the AI flag from the clip's own tags, or from the planner", async () => {

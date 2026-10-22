@@ -65,9 +65,11 @@ test("post requests outside the brand Dropbox, non-videos, long captions and odd
   assert.throws(() => postRequest({ ...post, brand: "Stash Box" }), /brand/);
 });
 
-test("videos up to 64 MB go in one chunk; bigger ones in 10 MB chunks with the remainder on the last", () => {
+test("videos up to 10 MB go in one chunk; bigger ones in 10 MB chunks with the remainder on the last", () => {
   assert.deepEqual(chunkPlan(3 * MB), { chunkSize: 3 * MB, count: 1 });
-  assert.deepEqual(chunkPlan(64 * MB), { chunkSize: 64 * MB, count: 1 });
+  assert.deepEqual(chunkPlan(10 * MB), { chunkSize: 10 * MB, count: 1 });
+  assert.deepEqual(chunkPlan(15 * MB), { chunkSize: 15 * MB, count: 1 });
+  assert.deepEqual(chunkPlan(30 * MB), { chunkSize: 10 * MB, count: 3 });
   assert.deepEqual(chunkPlan(95 * MB), { chunkSize: 10 * MB, count: 9 });
   assert.throws(() => chunkPlan(0), /empty/);
 });
