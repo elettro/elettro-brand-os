@@ -51,8 +51,8 @@ EventBridge, every 15 min ──> platform worker Lambda ──> network API
 - **Worker Lambdas** `services/<platform>-lambda`: `threads`, `tiktok`, `pinterest`, `youtube-upload`, and `meta`
   (Instagram + Facebook Reels and feed posts; Page tokens don't expire, so no renewal). Each is invoked only
   through IAM (no HTTP route), runs **outside the VPC** (they need to reach the network APIs), and publishes by calling the
-  dev-api's `claim-due-posts` (a worker can pass `placements` to claim only some) then `finish-post`. **`meta` is in the repo
-  but not yet created in AWS as of 2026-10-22; delete this note once it's deployed and has published.** There is no
+  dev-api's `claim-due-posts` (a worker can pass `placements` to claim only some) then `finish-post`. `meta` was created in AWS and
+  published its first scheduled Reels on 2026-10-22. There is no
   LinkedIn worker yet; its connect + test-post code is in dev-api/web only.
 - **Other Lambdas**: `dropbox-sync` (change ingestion), `dropbox-upload` (browser upload links).
 - `packages/*` (ai, auth, connectors, database/prisma, media) and `services/worker` are the original Sprint-1 scaffold.
@@ -72,13 +72,13 @@ EventBridge, every 15 min ──> platform worker Lambda ──> network API
 | Piece | AWS name |
 |---|---|
 | API | `elettro-brand-os-dev-api` (+ HTTP API) |
-| Workers | `elettro-brand-os-dev-{threads,tiktok,pinterest,youtube-upload}` (+ `-meta`, planned: not created yet) |
+| Workers | `elettro-brand-os-dev-{threads,tiktok,pinterest,youtube-upload,meta}` |
 | Dropbox | `elettro-brand-os-dev-{dropbox-sync,dropbox-upload}` |
 | DB | RDS `elettro-brand-os-dev` |
 | Buckets | `elettro-brand-os-dev-assets`, `elettro-brand-os-dev-thumbnails` |
 | Web | Amplify app `d2k28tehm1a8zw` |
 | Secrets | Secrets Manager prefix `elettro-brand-os-dev/` (app secrets `*-oauth`; per-account tokens under `<platform>/<id>`) |
-| Schedules | EventBridge, all `rate(15 minutes)`: `elettro-brand-os-dev-threads-refresh`, `…-tiktok-refresh`, `…-youtube-tick`, and **`elettro-pinterest-tick`** (different name pattern) |
+| Schedules | EventBridge, all `rate(15 minutes)`: `elettro-brand-os-dev-threads-refresh`, `…-tiktok-refresh`, `…-youtube-tick`, and **`elettro-pinterest-tick`** (different name pattern), `elettro-brand-os-dev-meta-tick` |
 
 (**verify** with `aws lambda list-functions` / `aws events list-rules`.)
 
@@ -93,8 +93,8 @@ Amplify auto-builds the web app from `develop`. After a merge, do the PR's "AWS 
 ### Credentials on Dean's machine
 - CLI profile **`stashbox-audit`** = IAM user `claude-audit-only` (the name is misleading: it appears to have been created for
   Stashbox Radio auditing on 2026-07-05, per `stashbox-radio/CONTEXT_VERIFIED.md`). It has `ReadOnlyAccess` plus write policies that let it deploy Elettro OS: `EbosDevBrandsCutover`,
-  `ElettroDevConnectionsSetup` (inline) and **`ElettroDevPlatformWorkers`** (managed, added 2026-10-22: update the four
-  worker Lambdas, edit the four tick rules). It **cannot** touch IAM roles, delete anything, or touch Stashbox Radio.
+  `ElettroDevConnectionsSetup` (inline) and **`ElettroDevPlatformWorkers`** (managed, added 2026-10-22, now v2: update the five
+  worker Lambdas, edit the five tick rules). It **cannot** touch IAM roles, delete anything, or touch Stashbox Radio.
   Use this one. Past sessions also deployed as `root`; avoid that.
 - CLI profile `elettro` and the browser console are the **root user** (`aws login`, session expires). Only for rare IAM steps
   (e.g. adding Secrets Manager access to a worker role). Always ask Dean first.
@@ -103,12 +103,13 @@ Amplify auto-builds the web app from `develop`. After a merge, do the PR's "AWS 
 
 ## 4. Publishing status (per `services/dev-api-lambda/publishing-formats.mjs`, 2026-10-22, **verify**)
 
-- **live**: Threads posts, YouTube Shorts, YouTube long-form.
+- **live**: Threads posts, YouTube Shorts, YouTube long-form, Instagram Reels, Facebook Reels (first scheduled
+  publishes 2026-10-22). Merch posts with no caption fail on purpose instead of going out blank.
 - **review** (built, waiting on the network): TikTok videos. Elettro OS TikTok app was submitted for review 2026-10-21.
 - **planning** (test posts work, scheduled auto-publish not built or not enabled): Instagram, Facebook, LinkedIn, Pinterest
-  (Pinterest posting was merged in PR #144; re-check whether it is now live). Instagram/Facebook Reels and feed posts have a
-  worker in the repo (`services/meta-lambda`); flip them to `live` in `publishing-formats.mjs` only after it has published
-  on schedule. Stories are not built.
+  (Pinterest posting was merged in PR #144; re-check whether it is now live). Instagram/Facebook feed photos and wide
+  videos are handled by the same worker (`services/meta-lambda`) but stay `planning` until one publishes on schedule.
+  Stories are not built.
 - **integration** (not connected): X, Google Business Profile (waiting on Google's API allowlist).
 - Token expiry matters: Threads/Pinterest/Meta tokens expire and must be renewed or reconnected by hand if a window is
   missed. Threads renewal is automatic (tick). Connection status/expiry feeds `elettro.com/dash`.
