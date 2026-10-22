@@ -223,6 +223,9 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
               title="Approves every network's posts this week; posts added to the week later are approved too. TikTok posts are approved together from the week's TikTok box."
               onClick={() => run("week", { action: "approve-range", from: w.start, to: w.end },
                 `Week of ${w.start} approved: every post goes out at its time, including any added later.${tiktokToReview ? ` Approve the ${tiktokToReview} TikTok post${tiktokToReview === 1 ? "" : "s"} in the week's TikTok box.` : ""}`)}>Approve week</button>}
+            {w.end >= today && (weekApproved || w.posts.some((p) => ["planned", "approved", "skipped", "failed"].includes(p.status))) && <button className="status-chip" disabled={!!busy}
+              title="Deletes this week's posts that haven't gone out yet and un-approves the week. Published and queued posts stay."
+              onClick={() => { if (window.confirm(`Reset the week of ${w.start}? Its unsent posts are deleted and the week is un-approved. Published posts stay.`)) run("week", { action: "reset-week", from: w.start, to: w.end }, `Week of ${w.start} reset. Plan it again when ready.`); }}>Reset week</button>}
             {w.end >= today && <button className="status-chip" disabled={!!busy || !list.accounts.some((a) => a.active && a.postsPerWeek)}
               title={list.accounts.some((a) => a.active && a.postsPerWeek) ? "" : "Set posts per day first"}
               onClick={() => run("plan", { action: "plan", weekStart: w.start }, `Planning ${underway ? "the rest of " : ""}the week of ${w.start}. Refresh in a minute or two.`)}>

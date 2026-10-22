@@ -4,7 +4,7 @@ import { REVIEW_BRANDS, reviewCall } from "@/lib/planner-review";
 export const runtime = "nodejs";
 
 // "asset" and "record-publication" stay server-only (test-post route), so the browser cannot forge the publication log.
-const ACTIONS = ["list", "set-status", "approve-range", "edit", "tiktok-approve", "swap", "cadence", "plan", "assets", "recent-publications"];
+const ACTIONS = ["list", "set-status", "approve-range", "reset-week", "edit", "tiktok-approve", "swap", "cadence", "plan", "assets", "recent-publications"];
 
 // Same-origin proxy for the Review page; the browser never sees the connect key.
 export async function POST(request: NextRequest) {

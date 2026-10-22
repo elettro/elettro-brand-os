@@ -5,6 +5,7 @@
  *   list        planned/approved/skipped posts for a window (default: this week + 3)
  *   set-status  approve, skip or un-approve posts (never touches queued/published ones)
  *   approve-range  approve every planned post in a date range (e.g. a whole week)
+ *   reset-week  delete a week's not-yet-sent posts and un-approve the week (back to "Plan this week")
  *   edit        rewrite a post's caption and hashtags
  *   tiktok-approve  approve one TikTok post with the settings TikTok requires the creator to pick
  *              (who can view, comments/duet/stitch, content disclosure); TikTok posts can't be
@@ -148,6 +149,32 @@ async function approveRange(client, brand, body) {
     WHERE sp."brandId"=$1 AND sp."status"='planned' AND sa."destination"='tiktok' AND sp."scheduledFor" >= $2 AND sp."scheduledFor" < $3`,
     [brand.id, localDateTimeToUtc(body.from, "00:00", tz), localDateTimeToUtc(addDaysToYmd(body.to, 1), "00:00", tz)])).rows[0]?.n || 0;
   return { code: 200, body: { ok: true, approved: r.rowCount, weekApproved: wholeWeek, tiktokWaiting } };
+}
+
+// Back to "Plan this week": deletes the week's posts that haven't gone out yet and forgets the week's approval,
+// so a fresh plan arrives unapproved. Published, queued and in-flight posts are never touched.
+const RESETTABLE = ["planned", "approved", "skipped", "failed"];
+async function resetWeek(client, brand, body, now = new Date()) {
+  if (!YMD.test(String(body.from || "")) || !YMD.test(String(body.to || ""))) return { code: 400, body: { ok: false, error: "from and to (YYYY-MM-DD) are required" } };
+  const tz = brand.timezone || "America/New_York";
+  const destinations = destinationsOf(body);
+  const from = localDateTimeToUtc(body.from, "00:00", tz);
+  const to = localDateTimeToUtc(addDaysToYmd(body.to, 1), "00:00", tz);
+  const notBefore = new Date(Math.max(from.getTime(), now.getTime()));
+  const r = await client.query(`
+    DELETE FROM "ScheduledPost" sp USING "SocialAccount" sa
+    WHERE sa."id" = sp."socialAccountId" AND sp."brandId"=$1 AND sp."status" = ANY($2)
+      AND sp."scheduledFor" >= $3 AND sp."scheduledFor" < $4 AND ($5::text[] IS NULL OR sa."destination" = ANY($5))
+    RETURNING sp."id"`, [brand.id, RESETTABLE, notBefore, to, destinations]);
+  // A whole-week reset also un-approves the week, or the next plan would arrive approved.
+  const wholeWeek = !destinations && addDaysToYmd(body.from, 6) === body.to;
+  if (wholeWeek) {
+    const weeks = approvedWeeksOf(brand.settings).filter((w) => w !== body.from);
+    await client.query(
+      `UPDATE "Brand" SET "settings" = jsonb_set(COALESCE("settings",'{}'::jsonb), '{approvedWeeks}', $2::jsonb, true), "updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$1`,
+      [brand.id, JSON.stringify(weeks)]);
+  }
+  return { code: 200, body: { ok: true, deleted: r.rowCount, weekApproved: wholeWeek ? false : undefined } };
 }
 
 async function editCaption(client, brand, body) {
@@ -294,6 +321,7 @@ export async function handlePlannerReview(event, body, connectDatabase, json, de
     list: async (c, b) => ({ code: 200, body: await listPosts(c, b, body) }),
     "set-status": (c, b) => setStatus(c, b, body),
     "approve-range": (c, b) => approveRange(c, b, body),
+    "reset-week": (c, b) => resetWeek(c, b, body, deps.now),
     edit: (c, b) => editCaption(c, b, body),
     "tiktok-approve": (c, b) => tiktokApprove(c, b, body),
     swap: (c, b) => swapAsset(c, b, body),

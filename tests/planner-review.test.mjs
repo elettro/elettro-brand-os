@@ -226,3 +226,31 @@ test("cadence saves to the named account when a network has more than one", asyn
   const insert = client.seen.find((q) => q.sql.includes('INSERT INTO "CadenceRule"'));
   assert.deepEqual(insert.params.slice(0, 3), [id, "pin", 3]);
 });
+
+test("reset-week deletes only the week's unsent posts and un-approves a whole week", async () => {
+  process.env.CONNECTIONS_API_SHARED_SECRET = KEY;
+  const approved = { ...brandRow, settings: { approvedWeeks: ["2026-10-26", "2026-11-09"] } };
+  const client = fakeClient([['DELETE FROM "ScheduledPost"', { rows: [{ id: "a" }, { id: "b" }], rowCount: 2 }]]);
+  client.query = ((q) => async (sql, params) => sql.includes('FROM "Brand"') ? { rows: [approved] } : q(sql, params))(client.query.bind(client));
+  const now = new Date("2026-10-22T18:00:00Z");
+  const r = await handlePlannerReview(event, { brand: "stashbox", action: "reset-week", from: "2026-10-26", to: "2026-11-01" }, async () => client, json, { now });
+  assert.equal(r.statusCode, 200);
+  assert.equal(r.body.deleted, 2);
+  const del = client.seen.find((q) => q.sql.includes('DELETE FROM "ScheduledPost"'));
+  assert.deepEqual(del.params[1], ["planned", "approved", "skipped", "failed"]);
+  assert.ok(!del.params[1].includes("published") && !del.params[1].includes("queued"));
+  const settings = client.seen.find((q) => q.sql.includes("approvedWeeks"));
+  assert.deepEqual(JSON.parse(settings.params[1]), ["2026-11-09"]);
+});
+
+test("reset-week keeps today's already-past posts and leaves approval alone when narrowed to some networks", async () => {
+  process.env.CONNECTIONS_API_SHARED_SECRET = KEY;
+  const client = fakeClient([['DELETE FROM "ScheduledPost"', { rows: [], rowCount: 0 }]]);
+  const now = new Date("2026-10-28T18:00:00Z");
+  await handlePlannerReview(event, { brand: "stashbox", action: "reset-week", from: "2026-10-26", to: "2026-11-01", destinations: ["instagram"] }, async () => client, json, { now });
+  const del = client.seen.find((q) => q.sql.includes('DELETE FROM "ScheduledPost"'));
+  assert.equal(new Date(del.params[2]).toISOString(), now.toISOString());
+  assert.deepEqual(del.params[4], ["instagram"]);
+  assert.ok(!client.seen.some((q) => q.sql.includes("approvedWeeks")));
+  assert.equal((await handlePlannerReview(event, { brand: "stashbox", action: "reset-week", from: "x", to: "y" }, async () => client, json)).statusCode, 400);
+});
