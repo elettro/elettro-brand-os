@@ -234,6 +234,9 @@ async function plannerTick(connectDatabase, json) {
 async function claimDuePosts(event, connectDatabase, json) {
   const destination = String(event.destination || "youtube");
   const limit = Math.min(5, Math.max(1, Number(event.limit) || 2));
+  // A worker that only publishes some placements (Meta: Reels and feed posts, not Stories) names them;
+  // the others stay approved. Omitted, every placement of the destination is claimed.
+  const placements = Array.isArray(event.placements) && event.placements.length ? event.placements.map(String) : null;
   return withClient(connectDatabase, json, "claim-due-posts", async (client) => {
     // A slot more than a day late is skipped, and an upload that never reported back is not retried
     // (it may have gone through), so nothing is ever posted twice. Both only touch this worker's
@@ -254,6 +257,7 @@ async function claimDuePosts(event, connectDatabase, json) {
          SELECT sp."id" FROM "ScheduledPost" sp JOIN "SocialAccount" sa ON sa."id" = sp."socialAccountId"
          WHERE sa."destination" = $1 AND sa."status" = 'active' AND sa."externalAccountId" IS NOT NULL
            AND sp."status" = 'approved' AND sp."scheduledFor" <= CURRENT_TIMESTAMP
+           AND ($3::text[] IS NULL OR sp."placement"::text = ANY($3::text[]))
          ORDER BY sp."scheduledFor" LIMIT $2 FOR UPDATE OF sp SKIP LOCKED)
        UPDATE "ScheduledPost" sp SET "status" = 'publishing', "updatedAt" = CURRENT_TIMESTAMP
        FROM due, "SocialAccount" sa, "Asset" a
@@ -263,7 +267,7 @@ async function claimDuePosts(event, connectDatabase, json) {
                  a."filename", a."title" AS "assetTitle", sp."scoreBreakdown"->'tiktok' AS "tiktok", a."tags" AS "assetTags", sp."brandId",
                  sp."scoreBreakdown"->>'syntheticDisclosure' AS "plannedSynthetic", sp."scoreBreakdown"->>'sector' AS "sector",
                  a."topic" AS "assetTopic", sp."scoreBreakdown"->'copy'->>'primaryLink' AS "primaryLink",
-                 a."kind" AS "assetKind"`, [destination, limit])).rows;
+                 a."kind" AS "assetKind"`, [destination, limit, placements])).rows;
     // AI-made content must be declared to the network. Judged from the clip being posted (it may have
     // been swapped since planning) with the brand's own AI tags; the planner's flag can only add to it.
     // Language: the clip's tags, else the brand's language (SolarMeister and Neckermann Strom are German).

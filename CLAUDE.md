@@ -48,10 +48,12 @@ EventBridge, every 15 min ──> platform worker Lambda ──> network API
   (**source of truth** for which network/placement is live), `*-connect.mjs` (OAuth connect per network),
   `copywriter.mjs` / `curator.mjs` / `intelligence.mjs` (AI picks and copy), `connection-status.mjs` (feeds the
   elettro.com/dash race).
-- **Worker Lambdas** `services/<platform>-lambda`: `threads`, `tiktok`, `pinterest`, `youtube-upload`. Each is invoked only
-  through IAM (no HTTP route), runs **outside the VPC** (they need to reach the network APIs), renews its own OAuth
-  tokens, and publishes by calling the dev-api's `claim-due-posts` then `finish-post`. **There is no Meta (IG/FB) or
-  LinkedIn worker yet**; their connect + test-post code is in dev-api/web only.
+- **Worker Lambdas** `services/<platform>-lambda`: `threads`, `tiktok`, `pinterest`, `youtube-upload`, and `meta`
+  (Instagram + Facebook Reels and feed posts; Page tokens don't expire, so no renewal). Each is invoked only
+  through IAM (no HTTP route), runs **outside the VPC** (they need to reach the network APIs), and publishes by calling the
+  dev-api's `claim-due-posts` (a worker can pass `placements` to claim only some) then `finish-post`. **`meta` is in the repo
+  but not yet created in AWS as of 2026-10-22; delete this note once it's deployed and has published.** There is no
+  LinkedIn worker yet; its connect + test-post code is in dev-api/web only.
 - **Other Lambdas**: `dropbox-sync` (change ingestion), `dropbox-upload` (browser upload links).
 - `packages/*` (ai, auth, connectors, database/prisma, media) and `services/worker` are the original Sprint-1 scaffold.
   The live backend is the Lambdas above; check before assuming a package is wired in.
@@ -70,7 +72,7 @@ EventBridge, every 15 min ──> platform worker Lambda ──> network API
 | Piece | AWS name |
 |---|---|
 | API | `elettro-brand-os-dev-api` (+ HTTP API) |
-| Workers | `elettro-brand-os-dev-{threads,tiktok,pinterest,youtube-upload}` |
+| Workers | `elettro-brand-os-dev-{threads,tiktok,pinterest,youtube-upload}` (+ `-meta`, planned: not created yet) |
 | Dropbox | `elettro-brand-os-dev-{dropbox-sync,dropbox-upload}` |
 | DB | RDS `elettro-brand-os-dev` |
 | Buckets | `elettro-brand-os-dev-assets`, `elettro-brand-os-dev-thumbnails` |
@@ -104,7 +106,9 @@ Amplify auto-builds the web app from `develop`. After a merge, do the PR's "AWS 
 - **live**: Threads posts, YouTube Shorts, YouTube long-form.
 - **review** (built, waiting on the network): TikTok videos. Elettro OS TikTok app was submitted for review 2026-10-21.
 - **planning** (test posts work, scheduled auto-publish not built or not enabled): Instagram, Facebook, LinkedIn, Pinterest
-  (Pinterest posting was merged in PR #144; re-check whether it is now live).
+  (Pinterest posting was merged in PR #144; re-check whether it is now live). Instagram/Facebook Reels and feed posts have a
+  worker in the repo (`services/meta-lambda`); flip them to `live` in `publishing-formats.mjs` only after it has published
+  on schedule. Stories are not built.
 - **integration** (not connected): X, Google Business Profile (waiting on Google's API allowlist).
 - Token expiry matters: Threads/Pinterest/Meta tokens expire and must be renewed or reconnected by hand if a window is
   missed. Threads renewal is automatic (tick). Connection status/expiry feeds `elettro.com/dash`.
