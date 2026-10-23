@@ -54,7 +54,7 @@ export default function Welcome() {
   return (
     <div className="pub">
       <header className="pub-top">
-        <a className="pub-brand" href="#top">Elettro <span>OS</span></a>
+        <a className="pub-brand" href="#top" aria-label="Elettro OS home"><img src="/brand/elettro-logo-white.png" alt="Elettro" width="407" height="161" /><span>OS</span></a>
         <nav className="pub-nav" aria-label="Elettro OS">
           <a href="#platforms">Platforms</a>
           <a href="#features">Features</a>
@@ -165,6 +165,7 @@ export default function Welcome() {
 
       <footer className="pub-foot">
         <div>
+          <img className="pub-foot-logo" src="/brand/elettro-logo-white.png" alt="Elettro" width="407" height="161" loading="lazy" />
           <strong>Elettro Incorporated</strong>
           <span>2231 SW 97th Road, Davie, Florida 33324 &middot; contact@elettro.com &middot; 310.408.6687</span>
         </div>
