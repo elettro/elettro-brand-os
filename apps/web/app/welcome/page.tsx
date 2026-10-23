@@ -55,7 +55,7 @@ export default function Welcome() {
   return (
     <div className="pub">
       <header className="pub-top">
-        <a className="pub-brand" href="#top">Elettro <span>OS</span></a>
+        <a className="pub-brand" href="#top" aria-label="Elettro OS home"><img src="/brand/elettro-logo-white.png" alt="Elettro" width="407" height="161" /><span>OS</span></a>
         <nav className="pub-nav" aria-label="Elettro OS">
           <a href="#platforms">Platforms</a>
           <a href="#features">Features</a>
@@ -63,11 +63,7 @@ export default function Welcome() {
           <a href="#sheets">One-sheets</a>
           <a href="#data">Your data</a>
           <a href="#faq">FAQ</a>
-          <form className="pub-signin" action="/api/auth/login" method="get">
-            <label className="pub-sr" htmlFor="pub-email">Email address</label>
-            <input id="pub-email" name="login_hint" type="email" autoComplete="username" placeholder="name@host.com" />
-            <button className="pub-login" type="submit"><span>Log in</span></button>
-          </form>
+          <a className="pub-login" href="/api/auth/login"><span>Log in</span></a>
         </nav>
       </header>
 
@@ -169,6 +165,7 @@ export default function Welcome() {
 
       <footer className="pub-foot">
         <div>
+          <img className="pub-foot-logo" src="/brand/elettro-logo-white.png" alt="Elettro" width="407" height="161" loading="lazy" />
           <strong>Elettro Incorporated</strong>
           <span>2231 SW 97th Road, Davie, Florida 33324 &middot; contact@elettro.com &middot; 310.408.6687</span>
         </div>
