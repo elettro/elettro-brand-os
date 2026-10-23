@@ -1,13 +1,23 @@
 // Public one-sheets shown on /welcome. "soon" marks sheets that show features not built yet.
-export type Sheet = { slug: string; group: "restaurants" | "venues" | "hotels" | "video" | "growth"; title: string; soon: boolean; w: number; h: number };
+export type Sheet = { slug: string; group: "restaurants" | "venues" | "hotels" | "music" | "video" | "growth"; title: string; soon: boolean; w: number; h: number };
 
 export const SHEET_GROUPS: Array<{ id: Sheet["group"] | "all"; label: string }> = [
   { id: "all", label: "All" },
   { id: "restaurants", label: "Restaurants" },
   { id: "venues", label: "Event venues" },
   { id: "hotels", label: "Hotels and resorts" },
+  { id: "music", label: "Music and artists" },
   { id: "video", label: "AI video" },
-  { id: "growth", label: "Growth system" }
+  { id: "growth", label: "Growth system" },
+  { slug: "stashbox-music-everywhere", group: "music", title: "Stashbox: social publishing built for every platform", soon: false, w: 960, h: 1706 },
+  { slug: "hotels-guest-experiences", group: "hotels", title: "Turn guest experiences into bookings", soon: false, w: 960, h: 1418 },
+  { slug: "hotels-showcase-24-7", group: "hotels", title: "Showcase your property 24/7", soon: false, w: 960, h: 1462 },
+  { slug: "hotels-more-visibility", group: "hotels", title: "More visibility, more guests, more revenue", soon: true, w: 960, h: 1509 },
+  { slug: "hotels-real-stays", group: "hotels", title: "Real people, real stays", soon: true, w: 960, h: 1551 },
+  { slug: "hotels-fill-rooms", group: "hotels", title: "Fill more rooms year-round", soon: false, w: 960, h: 1425 },
+  { slug: "hotels-views-into-vacations", group: "hotels", title: "Turn views into vacations", soon: false, w: 960, h: 1453 },
+  { slug: "hotels-be-the-hotel", group: "hotels", title: "Be the hotel everyone talks about", soon: false, w: 960, h: 1498 },
+  { slug: "hotels-consistent-content", group: "hotels", title: "Consistent content, lasting occupancy", soon: true, w: 960, h: 1545 }
 ];
 
 export const SHEETS: Sheet[] = [
@@ -43,5 +53,14 @@ export const SHEETS: Sheet[] = [
   { slug: "growth-step-1", group: "growth", title: "Step 1: register and tag assets", soon: false, w: 960, h: 1706 },
   { slug: "blueprint-neon-coastal", group: "growth", title: "Marketing intelligence blueprint", soon: true, w: 960, h: 1241 },
   { slug: "blueprint-elettro-os", group: "growth", title: "Moneyball your marketing assets", soon: true, w: 960, h: 1241 },
-  { slug: "blueprint-poster", group: "growth", title: "Moneyball your marketing assets: poster", soon: true, w: 960, h: 1241 }
+  { slug: "blueprint-poster", group: "growth", title: "Moneyball your marketing assets: poster", soon: true, w: 960, h: 1241 },
+  { slug: "stashbox-music-everywhere", group: "music", title: "Stashbox: social publishing built for every platform", soon: false, w: 960, h: 1706 },
+  { slug: "hotels-guest-experiences", group: "hotels", title: "Turn guest experiences into bookings", soon: false, w: 960, h: 1418 },
+  { slug: "hotels-showcase-24-7", group: "hotels", title: "Showcase your property 24/7", soon: false, w: 960, h: 1462 },
+  { slug: "hotels-more-visibility", group: "hotels", title: "More visibility, more guests, more revenue", soon: true, w: 960, h: 1509 },
+  { slug: "hotels-real-stays", group: "hotels", title: "Real people, real stays", soon: true, w: 960, h: 1551 },
+  { slug: "hotels-fill-rooms", group: "hotels", title: "Fill more rooms year-round", soon: false, w: 960, h: 1425 },
+  { slug: "hotels-views-into-vacations", group: "hotels", title: "Turn views into vacations", soon: false, w: 960, h: 1453 },
+  { slug: "hotels-be-the-hotel", group: "hotels", title: "Be the hotel everyone talks about", soon: false, w: 960, h: 1498 },
+  { slug: "hotels-consistent-content", group: "hotels", title: "Consistent content, lasting occupancy", soon: true, w: 960, h: 1545 }
 ];
