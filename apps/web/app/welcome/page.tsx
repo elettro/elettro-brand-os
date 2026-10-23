@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { SheetGallery } from "./gallery";
+import { HeroCarousel } from "./hero-carousel";
 
 export const metadata: Metadata = {
   title: "Elettro OS | Create once. Publish everywhere.",
@@ -72,17 +73,20 @@ export default function Welcome() {
 
       <main id="top">
         <section className="pub-hero">
-          <p className="pub-eyebrow">Marketing | Social media | AI | Tech</p>
-          <h1>Create once.<br /><em>Publish everywhere.</em></h1>
-          <p className="pub-lede">
-            Elettro OS is the publishing system from Elettro Incorporated. One brand library, a weekly plan that fits each network,
-            a person approving every post, and scheduled publishing to the brand&apos;s own accounts.
-          </p>
-          <div className="pub-cta-row">
-            <a className="pub-cta" href={CONTACT}><span>Contact Elettro for access</span><i aria-hidden="true">&rarr;</i></a>
-            <a className="pub-ghost" href="/api/auth/login">Team login</a>
+          <div className="pub-hero-copy">
+            <p className="pub-eyebrow">Marketing | Social media | AI | Tech</p>
+            <h1>Create once.<br /><em>Publish everywhere.</em></h1>
+            <p className="pub-lede">
+              Elettro OS is the publishing system from Elettro Incorporated. One brand library, a weekly plan that fits each network,
+              a person approving every post, and scheduled publishing to the brand&apos;s own accounts.
+            </p>
+            <div className="pub-cta-row">
+              <a className="pub-cta" href={CONTACT}><span>Contact Elettro for access</span><i aria-hidden="true">&rarr;</i></a>
+              <a className="pub-ghost" href="/api/auth/login">Team login</a>
+            </div>
+            <p className="pub-note">Elettro OS is not open to the public. Access is by invitation.</p>
           </div>
-          <p className="pub-note">Elettro OS is not open to the public. Access is by invitation.</p>
+          <HeroCarousel />
         </section>
 
         <section id="platforms" className="pub-section">
