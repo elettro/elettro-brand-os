@@ -62,7 +62,11 @@ export default function Welcome() {
           <a href="#sheets">One-sheets</a>
           <a href="#data">Your data</a>
           <a href="#faq">FAQ</a>
-          <a className="pub-login" href="/api/auth/login"><span>Login</span></a>
+          <form className="pub-signin" action="/api/auth/login" method="get">
+            <label className="pub-sr" htmlFor="pub-email">Email address</label>
+            <input id="pub-email" name="login_hint" type="email" autoComplete="username" placeholder="name@host.com" />
+            <button className="pub-login" type="submit"><span>Log in</span></button>
+          </form>
         </nav>
       </header>
 
