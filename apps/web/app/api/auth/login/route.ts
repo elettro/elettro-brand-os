@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { CALLBACK, COGNITO_CLIENT_ID, COGNITO_DOMAIN, STATE_COOKIE, challenge, cookieSettings, seal } from "@/lib/cognito-auth";
 export const runtime = "nodejs";
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const state = challenge();
     const url = new URL(COGNITO_DOMAIN + "/oauth2/authorize");
@@ -10,6 +10,9 @@ export async function GET() {
     url.searchParams.set("response_type", "code");
     url.searchParams.set("scope", "openid email");
     url.searchParams.set("state", state);
+    // Optional email typed on the public page; Cognito pre-fills it. Anything that is not a plain email is dropped.
+    const hint = (new URL(request.url).searchParams.get("login_hint") || "").trim();
+    if (hint.length <= 254 && /^[^\s@<>"']+@[^\s@<>"']+\.[^\s@<>"']+$/.test(hint)) url.searchParams.set("login_hint", hint);
     const response = NextResponse.redirect(url);
     response.cookies.set(STATE_COOKIE, await seal(state), cookieSettings(600));
     return response;
