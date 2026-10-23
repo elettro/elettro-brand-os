@@ -48,7 +48,9 @@ export function postFacts(asset, slot, songFacts = {}, links = {}, { promotional
     radio: song?.radioUrl ? [song.radioUrl] : links.radio ? [links.radio] : [],
     // Spotify first (song, then artist profile), then the other platforms.
     streaming: [song?.spotifyUrl, links.streaming?.spotify, song?.appleMusicUrl, song?.youtubeMusicUrl,
-      links.streaming?.appleMusic, links.streaming?.amazonMusic, links.streaming?.tidal].filter(Boolean)
+      links.streaming?.appleMusic, links.streaming?.amazonMusic, links.streaming?.tidal].filter(Boolean),
+    // A product post points at the brand's store.
+    merch: links.merchStore ? [links.merchStore] : []
   }[slot.sector] || [];
   const artistLinks = Object.values(links.streaming || {}).filter(Boolean);
   // Every Pin carries a destination link (Dean, 261021): the deepest record (song, streaming, booking),
@@ -62,6 +64,8 @@ export function postFacts(asset, slot, songFacts = {}, links = {}, { promotional
     destination: slot.destination,
     placement: slot.placement,
     song: slug ? song?.title || asset.topic || titleCase(slug) : null,
+    // A product post (Shopify item) is named by the asset's own title, e.g. "Rastaman Portrait AOP Tee".
+    product: slot.sector === "merch" ? String(asset.title || asset.topic || "").trim() || null : null,
     show: showTag ? SHOWS[showTag] : null,
     isCover: tags.some((t) => ["cover", "licensed-cover", "bob-dylan-cover"].includes(t)),
     originalArtist: valueOf("original-artist") ? titleCase(valueOf("original-artist")) : null,
@@ -95,6 +99,7 @@ function hashtagsFor(f) {
   if (f.sector === "live-shows") tags.push("#southflorida", "#liveband");
   if (f.sector === "radio") tags.push("#stashboxradio", "#newmusic");
   if (f.sector === "streaming") tags.push("#spotify", "#newmusic");
+  if (f.sector === "merch") tags.push("#stashboxmerch");
   return [...new Set(tags)];
 }
 
@@ -134,6 +139,13 @@ export function templateCopy(f, seed) {
       `Play the full song on Stashbox Radio. Join free for the dynamic videos. ${cta}`,
       `Full song on Stashbox Radio. Free members get the videos and their own playlists. ${cta}`
     ]);
+  } else if (f.sector === "merch" && f.product) {
+    hook = `${f.product}.`;
+    body = pick(seed + "cta", [
+      `New in the Stashbox merch store. ${cta}`,
+      `Now in the Stashbox store. ${cta}`,
+      `Find it in the Stashbox merch store. ${cta}`
+    ]);
   } else if (f.destination === "pinterest" && f.sector !== "streaming") {
     // Pinterest only: merch, blog and other sectors pin to the store or the brand site.
     hook = `${songLine || "Stashbox"}${f.show ? `, ${f.show}` : ""}.`;
@@ -150,7 +162,7 @@ export function templateCopy(f, seed) {
     status: "ready", source: "template", angle: f.sector === "live-shows" ? "moment" : "audience", hook,
     caption: f.destination === "youtube" ? null : caption,
     title: f.destination === "youtube" || f.destination === "pinterest"
-      ? `${f.show ? `${f.show}: ` : ""}${f.song || "Stashbox"}${f.realFootage ? " (live)" : ""}`.slice(0, 70) : null,
+      ? `${f.show ? `${f.show}: ` : ""}${f.song || f.product || "Stashbox"}${f.realFootage ? " (live)" : ""}`.slice(0, 70) : null,
     description: f.destination === "youtube" ? `${caption}\n\n${hashtags.join(" ")}` : null,
     hashtags, primaryLink: f.primaryLink, onScreenText: null, notes: []
   };
@@ -159,7 +171,7 @@ export function templateCopy(f, seed) {
 /** A clip with no link or ask: X posts above the promo cap, and posts whose pillar link is missing. */
 function plainCopy(f, seed) {
   const credited = f.originalArtist && f.song?.toLowerCase().includes(f.originalArtist.toLowerCase());
-  const songLine = f.song ? (f.isCover && f.originalArtist && !credited ? `${f.song} (${f.originalArtist} cover)` : f.song) : null;
+  const songLine = f.song ? (f.isCover && f.originalArtist && !credited ? `${f.song} (${f.originalArtist} cover)` : f.song) : f.product || null;
   const where = f.realFootage && f.venue ? ` at ${f.venue}` : "";
   const hook = pick(seed, [
     `${songLine || "Stashbox"}${where}.`,
@@ -191,7 +203,7 @@ function plainCopy(f, seed) {
   const youtube = f.destination === "youtube";
   return { status: "ready", source: "template", angle: "moment", hook, caption: youtube ? null : caption,
     title: youtube || f.destination === "pinterest"
-      ? `${f.show ? `${f.show}: ` : ""}${f.song || "Stashbox"}${f.realFootage ? " (live)" : ""}`.slice(0, 70) : null,
+      ? `${f.show ? `${f.show}: ` : ""}${f.song || f.product || "Stashbox"}${f.realFootage ? " (live)" : ""}`.slice(0, 70) : null,
     description: youtube ? `${caption}\n\n${hashtags.join(" ")}` : null,
     hashtags, primaryLink: null, onScreenText: null, notes: ["plain post (promo cap)"] };
 }
