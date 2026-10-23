@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authenticated, allowedOrigin } from "@/lib/cognito-auth";
 import { PINTEREST_BRANDS } from "@/lib/pinterest-connect";
 import { PublishError, brandAsset, recordPublication } from "@/lib/meta-publish";
-import { brandPinterestToken, createBoard, imagePin, listBoards, uploadVideo, videoPin, videoStatus } from "@/lib/pinterest-publish";
+import { brandPinterestToken, sandboxPinterestToken, createBoard, imagePin, listBoards, uploadVideo, videoPin, videoStatus } from "@/lib/pinterest-publish";
 export const runtime = "nodejs";
 
 type Body = { brand?: string; step?: string; boardId?: string; boardName?: string; assetId?: string; mediaId?: string; sandbox?: boolean; title?: string; description?: string; link?: string };
@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
   try {
     // Sandbox = Pinterest's test API. Trial-access apps can only create Pins there; nothing is public.
     const sandbox = body.sandbox === true;
-    const token = { ...await brandPinterestToken(brand), sandbox };
+    const token = sandbox ? await sandboxPinterestToken() : await brandPinterestToken(brand);
     if (body.step === "boards") return NextResponse.json({ ok: true, boards: await listBoards(token) });
     if (body.step === "board") {
       const name = String(body.boardName || "").trim();
