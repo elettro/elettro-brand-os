@@ -33,7 +33,7 @@ const NAV: Array<{ label: string; items: Array<{ label: string; href?: string }>
 ];
 
 // Pages that stand alone (sign-in errors) keep no frame.
-const BARE = ["/auth"];
+const BARE = ["/auth", "/welcome"];
 
 const BRANDS = [{ id: "all", name: "All brands", timezone: "" }, ...brandConfigs.map(({ id, name, timezone }) => ({ id, name, timezone }))];
 

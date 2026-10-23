@@ -46,7 +46,7 @@ export default function ShopifyAssetsPage() {
               <div className="eyebrow">Product Media</div>
               <h2 style={{ margin: "4px 0 0" }}>Stashbox Logo Tee</h2>
             </div>
-            <button type="button" style={{ border: "1px solid var(--line)", background: "white", borderRadius: 9, padding: "9px 12px", fontWeight: 700 }}>
+            <button type="button" style={{ border: "1px solid var(--line)", background: "var(--panel)", borderRadius: 9, padding: "9px 12px", fontWeight: 700 }}>
               Sync Now
             </button>
           </div>
