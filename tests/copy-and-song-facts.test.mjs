@@ -160,3 +160,25 @@ test("Threads copy is held to 500 characters and one topic tag; links are clicka
   assert.match(problems, /caption too long/);
   assert.match(problems, /too many hashtags/);
 });
+
+test("merch (Shopify product) posts name the product and point at the store on every network", () => {
+  const tee = { id: "m1", filename: "rastaman-portrait-aop-tee.jpg", kind: "image", tags: ["merch"], title: "Rastaman Portrait AOP Tee" };
+  for (const destination of ["instagram", "facebook", "tiktok", "threads", "x", "pinterest", "youtube"]) {
+    const f = postFacts(tee, { sector: "merch", destination, placement: "reel", synthetic: false }, {}, links);
+    const copy = templateCopy(f, `seed-${destination}`);
+    assert.equal(copy.status, "ready", destination);
+    const text = [copy.caption, copy.title, copy.description].filter(Boolean).join("\n");
+    assert.ok(text.includes("Rastaman Portrait AOP Tee"), `${destination}: ${text}`);
+    assert.ok(!/null|undefined|spotify|stream|radio/i.test(text), `${destination}: ${text}`);
+    assert.deepEqual(validateCopy(copy, f), [], destination);
+    assert.equal(copy.primaryLink, "https://stashbox.ai");
+    if (f.linksInCaptionAreClickable) assert.ok(text.includes("https://stashbox.ai"), `${destination}: ${text}`);
+    else assert.ok(/Link in bio|Tap the Pin/.test(text), `${destination}: ${text}`);
+  }
+  // No store link on file: still a caption, still the product's name, no made-up link.
+  const bare = postFacts(tee, { sector: "merch", destination: "instagram", placement: "reel", synthetic: false }, {}, {});
+  const plain = templateCopy(bare, "x");
+  assert.equal(plain.status, "ready");
+  assert.ok(plain.caption.includes("Rastaman Portrait AOP Tee") && !/https?:\/\//.test(plain.caption), plain.caption);
+  assert.equal(plain.primaryLink, null);
+});
