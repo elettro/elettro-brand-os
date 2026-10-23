@@ -12,6 +12,26 @@ const sandboxApi = "https://api-sandbox.pinterest.com/v5";
 type Token = { accessToken: string; accessExpiresAt: string; userId: string; username: string | null; brand: string; brands?: string[]; sandbox?: boolean };
 export type Board = { id: string; name: string; privacy: string };
 
+// Sandbox calls use a token generated in the Pinterest developer portal (Sandbox environment, 30 days),
+// not the connected account login, which the sandbox rejects. Stored as plain text (or JSON with accessToken).
+const SANDBOX_SECRET = "elettro-brand-os-dev/pinterest-oauth-sandbox";
+
+export async function sandboxPinterestToken(): Promise<Token> {
+  let raw = "";
+  try {
+    raw = (await secrets.send(new GetSecretValueCommand({ SecretId: SANDBOX_SECRET }))).SecretString || "";
+  } catch {
+    throw new PublishError("The Pinterest sandbox token is not stored yet");
+  }
+  let accessToken = raw.trim();
+  try {
+    const parsed = JSON.parse(raw) as { accessToken?: string; access_token?: string };
+    accessToken = String(parsed.accessToken || parsed.access_token || "").trim();
+  } catch { /* plain text token */ }
+  if (!accessToken) throw new PublishError("The Pinterest sandbox token is empty");
+  return { accessToken, accessExpiresAt: "", userId: "sandbox", username: null, brand: "", sandbox: true };
+}
+
 export async function brandPinterestToken(brand: string): Promise<Token> {
   const listed = await secrets.send(new ListSecretsCommand({ Filters: [{ Key: "name", Values: [TOKEN_PREFIX] }] }));
   for (const entry of listed.SecretList || []) {
