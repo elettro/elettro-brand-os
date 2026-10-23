@@ -192,3 +192,14 @@ test("a merch-tagged asset in a live-shows slot is still captioned as the produc
   assert.match(c.caption, /Mini Rastaman Tee/);
   assert.doesNotMatch(c.caption, /Booking|booking/);
 });
+
+test("a merch post is titled by the product, not by a song or show tag on the asset", () => {
+  const tee = { id: "m3", filename: "lincoln-arms-open-tee.jpg", kind: "image", tags: ["merch", "stashbox-does-sublime", "travelin-live"], title: "Lincoln Arms Open Tee", topic: "Travelin Live" };
+  const links = { merchStore: "https://stashbox.ai/collections/merch" };
+  for (const destination of ["pinterest", "youtube"]) {
+    const f = postFacts(tee, { sector: "merch", destination, placement: "pin", synthetic: false }, {}, links);
+    assert.equal(f.song, null);
+    assert.equal(f.show, null);
+    assert.equal(templateCopy(f, "seed").title, "Lincoln Arms Open Tee");
+  }
+});
