@@ -150,7 +150,7 @@ export function AiGatewayLabClient(){
     <button type="button" disabled={busy||testBusy} onClick={()=>void call("list_folders")}>Browse brand root</button>
    </div>
    {busy&&<p role="status" className="muted">Checking {current.replaceAll("_"," ")}…</p>}
-   {error&&<p role="alert" style={{color:"#b42318"}}>{error}</p>}
+   {error&&<p role="alert" style={{color:"#ff9b8f"}}>{error}</p>}
    {reply!==null&&<div style={{marginTop:16}}>
     <strong>{current.replaceAll("_"," ")} succeeded</strong>
     <pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",overflow:"auto",maxHeight:400,marginTop:10,padding:14,border:"1px solid var(--line)",borderRadius:10,background:"var(--panel-soft)",fontSize:12}}>
@@ -181,9 +181,9 @@ export function AiGatewayLabClient(){
      </div>
     </div>}
    {testBusy&&<p role="status">Running the test and restoring the original tags. Please wait for the final result.</p>}
-   {testError&&<p role="alert" style={{color:"#b42318"}}>{testError}</p>}
+   {testError&&<p role="alert" style={{color:"#ff9b8f"}}>{testError}</p>}
    {testResult&&<div style={{marginTop:16}}>
-    <strong style={{color:testResult.ok?"#116c46":"#b42318"}}>
+    <strong style={{color:testResult.ok?"#2efd7c":"#ff9b8f"}}>
      {testResult.ok?"PASS · Metadata write and restoration verified":"ATTENTION · Test or restoration needs review"}
     </strong>
     <pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",overflow:"auto",maxHeight:400,marginTop:10,padding:14,border:"1px solid var(--line)",borderRadius:10,background:"var(--panel-soft)",fontSize:12}}>
@@ -209,9 +209,9 @@ export function AiGatewayLabClient(){
      </button></div>
     </div>}
    {registrationBusy&&<p role="status">Checking asset record and its Dropbox identity…</p>}
-   {registrationError&&<p role="alert" style={{color:"#b42318"}}>{registrationError}</p>}
+   {registrationError&&<p role="alert" style={{color:"#ff9b8f"}}>{registrationError}</p>}
    {registrationResult&&<div style={{marginTop:16}}>
-    <strong style={{color:registrationResult.registrationVerified===true?"#116c46":"#b45309"}}>
+    <strong style={{color:registrationResult.registrationVerified===true?"#2efd7c":"#fbbf24"}}>
      {registrationResult.registrationVerified===true?"PASS · Dropbox source identity verified":"NEEDS REVIEW · Dropbox source identity not yet verified"}
     </strong>
     <pre style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere",overflow:"auto",maxHeight:400,marginTop:10,padding:14,border:"1px solid var(--line)",borderRadius:10,background:"var(--panel-soft)",fontSize:12}}>
@@ -237,9 +237,9 @@ export function AiGatewayLabClient(){
       </button>
      </div>}
    {duplicateBusy&&<p role="status">Checking the immutable Dropbox ID against the asset registry…</p>}
-   {duplicateError&&<p role="alert" style={{color:"#b42318"}}>{duplicateError}</p>}
+   {duplicateError&&<p role="alert" style={{color:"#ff9b8f"}}>{duplicateError}</p>}
    {duplicateResult&&<div style={{marginTop:16}}>
-    <strong style={{color:duplicateResult.preflightMatchVerified===true?"#116c46":"#b45309"}}>
+    <strong style={{color:duplicateResult.preflightMatchVerified===true?"#2efd7c":"#fbbf24"}}>
      {duplicateResult.preflightMatchVerified===true?
       "PASS · Existing registration recognized; no duplicate created":
       "NEEDS REVIEW · Existing registration was not conclusively identified"}
@@ -276,9 +276,9 @@ export function AiGatewayLabClient(){
      </div>
     </div>}
    {globalBusy&&<p role="status">Searching both Dropbox ID fields across the entire database…</p>}
-   {globalError&&<p role="alert" style={{color:"#b42318"}}>{globalError}</p>}
+   {globalError&&<p role="alert" style={{color:"#ff9b8f"}}>{globalError}</p>}
    {globalResult&&<div style={{marginTop:16}}>
-    <strong style={{color:globalResult.globalLookupVerified===true?"#116c46":"#b45309"}}>
+    <strong style={{color:globalResult.globalLookupVerified===true?"#2efd7c":"#fbbf24"}}>
      {globalResult.globalLookupVerified===true?
       "PASS · Global Dropbox identity lookup verified":
       "NEEDS REVIEW · Global Dropbox identity not verified"}

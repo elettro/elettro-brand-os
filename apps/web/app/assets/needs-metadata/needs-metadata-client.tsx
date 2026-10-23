@@ -378,7 +378,7 @@ export function NeedsMetadataClient({ assets }: { assets: ApiAsset[] }) {
             type="button"
             disabled={busy || !selected.size}
             onClick={() => apply(false)}
-            style={{ border: "1px solid var(--line)", background: "white", borderRadius: 9, padding: "10px 13px", fontWeight: 800, cursor: "pointer" }}
+            style={{ border: "1px solid var(--line)", background: "var(--panel)", borderRadius: 9, padding: "10px 13px", fontWeight: 800, cursor: "pointer" }}
           >
             Save metadata
           </button>
@@ -434,7 +434,7 @@ export function NeedsMetadataClient({ assets }: { assets: ApiAsset[] }) {
             <button
               type="button"
               onClick={toggleAll}
-              style={{ border: "1px solid var(--line)", background: "white", borderRadius: 9, padding: "10px 13px", fontWeight: 800, cursor: "pointer" }}
+              style={{ border: "1px solid var(--line)", background: "var(--panel)", borderRadius: 9, padding: "10px 13px", fontWeight: 800, cursor: "pointer" }}
             >
               {allSelected ? "Unselect filtered" : `Select filtered (${visibleAssets.length})`}
             </button>

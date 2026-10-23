@@ -12,7 +12,7 @@ const pipeline = [
 ];
 
 export default async function DashboardPage() {
-  if (!(await authenticated())) redirect("/api/auth/login");
+  if (!(await authenticated())) redirect("/welcome");
   const [brandResponse, dashboardResponse] = await Promise.allSettled([
     getBrands(),
     getDashboard()

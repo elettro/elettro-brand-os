@@ -726,7 +726,7 @@ export function IntakeClient() {
           setDragActive(false);
           addFiles(event.dataTransfer.files);
         }}
-        style={{ border: dragActive ? "3px dashed #1477d4" : "3px dashed #98a9bf", background: dragActive ? "#d8ecff" : "#f5f9ff", padding: 30, textAlign: "center", borderRadius: 14, boxShadow: dragActive ? "0 0 0 6px rgba(20,119,212,.20)" : "none", transition: "background .18s,border-color .18s,box-shadow .18s" }}
+        style={{ border: dragActive ? "3px dashed #1477d4" : "3px dashed #98a9bf", background: dragActive ? "rgba(129,236,255,.16)" : "rgba(129,236,255,.06)", padding: 30, textAlign: "center", borderRadius: 14, boxShadow: dragActive ? "0 0 0 6px rgba(20,119,212,.20)" : "none", transition: "background .18s,border-color .18s,box-shadow .18s" }}
       >
         <h2 style={{ marginTop: 0 }}>Drop assets here</h2>
         <p className="muted">
@@ -820,7 +820,7 @@ export function IntakeClient() {
                     }} style={{width:156}} />
                   {sessionDateDigits && <button type="button" onClick={()=>setSessionDateDigits("")}>Clear</button>}
                 </div>
-                {sessionDateInvalid && <small style={{color:"#b42318"}}>Enter a real date as YYMMDD, or leave blank.</small>}
+                {sessionDateInvalid && <small style={{color:"#ff9b8f"}}>Enter a real date as YYMMDD, or leave blank.</small>}
               </Field>
               <Field label="Session Type (optional)">
                 <select value={sessionType} onChange={event=>setSessionType(event.target.value)}>
@@ -854,7 +854,7 @@ export function IntakeClient() {
             </select>
           </Field>
           <Field label="Tags">
-            <div style={{display:"flex",flexWrap:"wrap",alignItems:"center",gap:6,padding:8,border:"1px solid var(--line)",borderRadius:8,minHeight:44,background:"white"}}>
+            <div style={{display:"flex",flexWrap:"wrap",alignItems:"center",gap:6,padding:8,border:"1px solid var(--line)",borderRadius:8,minHeight:44,background:"var(--panel)"}}>
               {tags.map(tag => <span key={tag} style={{display:"inline-flex",alignItems:"center",gap:5,padding:"5px 8px",borderRadius:7,background:"var(--panel-soft)",border:"1px solid var(--line)",fontSize:13}}>
                 {tag}<button type="button" aria-label={`Remove tag ${tag}`} onClick={()=>setTags(current=>current.filter(item=>item!==tag))} style={{border:0,background:"transparent",cursor:"pointer",fontWeight:800}}>×</button>
               </span>)}
@@ -881,7 +881,7 @@ export function IntakeClient() {
                 </label>
               ))}
             </div>
-            {stockAllowedBrands.length===0 && <p role="alert" style={{color:"#b42318",fontSize:13,marginBottom:0}}>Select at least one brand before saving.</p>}
+            {stockAllowedBrands.length===0 && <p role="alert" style={{color:"#ff9b8f",fontSize:13,marginBottom:0}}>Select at least one brand before saving.</p>}
             <p className="muted" style={{fontSize:12,marginBottom:0}}>Stock sources use Save Raw for now. Brand selections are forwarded as metadata; server-side usage enforcement requires validation.</p>
           </div>
         )}
@@ -989,8 +989,8 @@ export function IntakeClient() {
                           style={{
                             flex: "0 0 auto",
                             border: "1px solid var(--line)",
-                            background: "white",
-                            color: "#b42318",
+                            background: "var(--panel)",
+                            color: "#ff9b8f",
                             borderRadius: 999,
                             width: 30,
                             height: 30,
@@ -1031,7 +1031,7 @@ export function IntakeClient() {
                          file.status === "ready" ? "Ready" : "Error"}
                       </span>
                       {file.error && (
-                        <div style={{ marginTop: 4, fontSize: 11, color: "#b42318" }}>{file.error}</div>
+                        <div style={{ marginTop: 4, fontSize: 11, color: "#ff9b8f" }}>{file.error}</div>
                       )}
                     </td>
 
@@ -1057,9 +1057,9 @@ export function IntakeClient() {
               fontWeight: messageTone === "success" ? 700 : 500,
               color:
                 messageTone === "success"
-                  ? "#067647"
+                  ? "#2efd7c"
                   : messageTone === "error"
-                    ? "#b42318"
+                    ? "#ff9b8f"
                     : "var(--muted)"
             }}
           >
@@ -1110,4 +1110,4 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 const th = { textAlign: "left" as const, padding: "10px 8px", borderBottom: "1px solid var(--line)", fontSize: 12, color: "var(--muted)" };
 const td = { padding: "12px 8px", borderBottom: "1px solid var(--line)", fontSize: 14 };
 const buttonPrimary = { border: 0, borderRadius: 9, padding: "10px 14px", background: "var(--accent)", color: "white", fontWeight: 700, cursor: "pointer" };
-const buttonSecondary = { border: "1px solid var(--line)", borderRadius: 9, padding: "10px 14px", background: "white", color: "var(--text)", fontWeight: 700, cursor: "pointer" };
+const buttonSecondary = { border: "1px solid var(--line)", borderRadius: 9, padding: "10px 14px", background: "var(--panel)", color: "var(--text)", fontWeight: 700, cursor: "pointer" };

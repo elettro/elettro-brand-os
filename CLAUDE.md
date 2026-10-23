@@ -40,6 +40,7 @@ EventBridge, every 15 min ──> platform worker Lambda ──> network API
 ```
 
 - **Web app** `apps/web`: Next.js, hosted on Amplify (`WEB_COMPUTE`, app `d2k28tehm1a8zw`, branch `develop` → `os.elettro.com`).
+  Signed-out visitors see the public site at `/welcome` (platforms, features, one-sheets in `public/sheets`, data/privacy, contact CTA); `/` redirects there.
   Pages: `/connections` (connect + test each network), `/planner`, `/review` (approve weeks, posts-per-day),
   `/assets…`, `/content-pool`, `/ai-gateway`. It reaches the API through `apps/web/lib/dev-api.ts`
   (`BRAND_OS_API_BASE_URL`). Amplify build config lives in the Amplify console, not the repo.

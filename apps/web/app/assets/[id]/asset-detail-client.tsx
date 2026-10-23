@@ -387,7 +387,7 @@ export function AssetDetailClient({ asset }: { asset: ApiAsset }) {
                 padding: "7px 12px",
                 borderRadius: 12,
                 border: "1px solid var(--line)",
-                background: "white",
+                background: "var(--panel)",
                 boxShadow: "0 1px 2px rgba(0,0,0,.05)"
               }}
             >
@@ -410,7 +410,7 @@ export function AssetDetailClient({ asset }: { asset: ApiAsset }) {
                 padding: "7px 12px",
                 borderRadius: 12,
                 border: "1px solid var(--line)",
-                background: "white",
+                background: "var(--panel)",
                 boxShadow: "0 1px 2px rgba(0,0,0,.05)"
               }}
             >
@@ -630,7 +630,7 @@ export function AssetDetailClient({ asset }: { asset: ApiAsset }) {
                     title="Remove link"
                     style={{
                       border: "1px solid var(--line)",
-                      background: "white",
+                      background: "var(--panel)",
                       borderRadius: 8,
                       minWidth: 38,
                       height: 38,
@@ -734,7 +734,7 @@ export function AssetDetailClient({ asset }: { asset: ApiAsset }) {
                 padding: 10,
                 border: "1px solid var(--line)",
                 borderRadius: 10,
-                background: "white",
+                background: "var(--panel)",
                 boxSizing: "border-box"
               }}
               onClick={(event) => {
@@ -844,7 +844,7 @@ export function AssetDetailClient({ asset }: { asset: ApiAsset }) {
               type="button"
               disabled={busy}
               onClick={() => save(false)}
-              style={{ border: "1px solid var(--line)", background: "white", borderRadius: 9, padding: "10px 14px", fontWeight: 800, cursor: "pointer" }}
+              style={{ border: "1px solid var(--line)", background: "var(--panel)", borderRadius: 9, padding: "10px 14px", fontWeight: 800, cursor: "pointer" }}
             >
               Save asset
             </button>
