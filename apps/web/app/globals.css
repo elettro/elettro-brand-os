@@ -960,16 +960,6 @@ code {
   .pub * { transition: none !important; }
 }
 
-/* Header sign-in: email + Log in, upper right. The email is optional and only pre-fills Cognito. */
-.pub-signin { display: flex; align-items: center; gap: 8px; margin: 0; }
-.pub-signin input { width: 210px; height: 38px; padding: 0 16px; border-radius: 999px; border: 1px solid rgba(129, 236, 255, .35); background: rgba(6, 14, 32, .9); color: #fff; font: 500 14px Manrope, system-ui, sans-serif; }
-.pub-signin input::placeholder { color: #6b7699; }
-.pub-signin input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(129, 236, 255, .2); }
-.pub-signin button.pub-login { border: 0; cursor: pointer; }
-.pub-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-@media (max-width: 760px) { .pub-signin input { width: 140px; } }
-@media (max-width: 480px) { .pub-signin input { display: none; } }
-
 /* Brand: the Elettro script wordmark (white, transparent) next to "OS". */
 .brandmark { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 0; }
 .brandmark img { height: 36px; width: auto; display: block; }
