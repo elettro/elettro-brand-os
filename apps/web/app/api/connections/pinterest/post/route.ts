@@ -5,7 +5,7 @@ import { PublishError, brandAsset, recordPublication } from "@/lib/meta-publish"
 import { brandPinterestToken, createBoard, imagePin, listBoards, uploadVideo, videoPin, videoStatus } from "@/lib/pinterest-publish";
 export const runtime = "nodejs";
 
-type Body = { brand?: string; step?: string; boardId?: string; boardName?: string; assetId?: string; mediaId?: string; title?: string; description?: string; link?: string };
+type Body = { brand?: string; step?: string; boardId?: string; boardName?: string; assetId?: string; mediaId?: string; sandbox?: boolean; title?: string; description?: string; link?: string };
 
 const fail = (error: string, status = 400) => NextResponse.json({ ok: false, error }, { status });
 
@@ -20,7 +20,9 @@ export async function POST(request: NextRequest) {
   const brand = String(body.brand || "");
   if (!PINTEREST_BRANDS.includes(brand)) return fail("Unknown brand");
   try {
-    const token = await brandPinterestToken(brand);
+    // Sandbox = Pinterest's test API. Trial-access apps can only create Pins there; nothing is public.
+    const sandbox = body.sandbox === true;
+    const token = { ...await brandPinterestToken(brand), sandbox };
     if (body.step === "boards") return NextResponse.json({ ok: true, boards: await listBoards(token) });
     if (body.step === "board") {
       const name = String(body.boardName || "").trim();
@@ -55,6 +57,8 @@ export async function POST(request: NextRequest) {
       } else {
         pin = await imagePin(token, boardId, asset, text);
       }
+      // A sandbox Pin is not published: no public URL and no ledger row for the dashboard.
+      if (sandbox) return NextResponse.json({ ok: true, sandbox: true, pinId: pin.id });
       const logged = await recordPublication(brand, "pinterest", asset.kind === "video" ? "video" : "pin", asset.id, pin.id, pin.url);
       return NextResponse.json({ ok: true, url: pin.url, logged });
     }

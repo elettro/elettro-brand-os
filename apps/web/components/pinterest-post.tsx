@@ -26,19 +26,21 @@ export function PinterestPost({ brand, boardName }: { brand: string; boardName: 
   const [description, setDescription] = useState(DEFAULT_DESCRIPTION);
   const [link, setLink] = useState("https://elettro.com");
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<{ url?: string; error?: string; logged?: boolean } | null>(null);
+  const [result, setResult] = useState<{ url?: string; error?: string; logged?: boolean; sandbox?: boolean; pinId?: string } | null>(null);
+  const [sandbox, setSandbox] = useState(false);
   const [step, setStep] = useState<string | null>(null);
 
   useEffect(() => {
-    call<{ boards: Board[] }>({ brand, step: "boards" })
+    setBoards([]); setBoardId("");
+    call<{ boards: Board[] }>({ brand, step: "boards", sandbox })
       .then((d) => { setBoards(d.boards); setBoardId((d.boards.find((b) => b.name === boardName) || d.boards[0])?.id || ""); })
       .catch((e) => setResult({ error: e instanceof Error ? e.message : "Could not load boards" }));
-  }, [brand, boardName]);
+  }, [brand, boardName, sandbox]);
 
   async function addBoard() {
     setBusy(true); setResult(null);
     try {
-      const { board } = await call<{ board: Board }>({ brand, step: "board", boardName: newBoard });
+      const { board } = await call<{ board: Board }>({ brand, step: "board", boardName: newBoard, sandbox });
       setBoards([board, ...boards]); setBoardId(board.id);
     } catch (e) {
       setResult({ error: e instanceof Error ? e.message : "Could not create the board" });
@@ -54,10 +56,10 @@ export function PinterestPost({ brand, boardName }: { brand: string; boardName: 
       let mediaId: string | undefined;
       if (asset.kind === "video") {
         setStep("Uploading the video to Pinterest…");
-        mediaId = (await call<{ mediaId: string }>({ brand, step: "video", assetId: asset.id })).mediaId;
+        mediaId = (await call<{ mediaId: string }>({ brand, step: "video", assetId: asset.id, sandbox })).mediaId;
         // Pinterest processes the upload before it can be pinned; it reports "succeeded" when ready.
         for (let i = 0; ; i += 1) {
-          const { status } = await call<{ status: string }>({ brand, step: "media", mediaId });
+          const { status } = await call<{ status: string }>({ brand, step: "media", mediaId, sandbox });
           if (status === "succeeded") break;
           if (status === "failed") throw Error("Pinterest could not process the video");
           if (i === 60) throw Error("Pinterest is still processing after 5 minutes; try again later");
@@ -66,7 +68,7 @@ export function PinterestPost({ brand, boardName }: { brand: string; boardName: 
         }
       }
       setStep("Pinning…");
-      setResult(await call<{ url: string; logged: boolean }>({ brand, step: "pin", boardId, assetId: asset.id, mediaId, title, description, link }));
+      setResult(await call<{ url?: string; logged?: boolean; sandbox?: boolean; pinId?: string }>({ brand, step: "pin", sandbox, boardId, assetId: asset.id, mediaId, title, description, link }));
     } catch (e) {
       setResult({ error: e instanceof Error ? e.message : "Pin failed" });
     } finally {
@@ -76,6 +78,7 @@ export function PinterestPost({ brand, boardName }: { brand: string; boardName: 
 
   return <div className="test-post">
     <div className="eyebrow">Post a Pin</div>
+    <label className="muted"><input type="checkbox" checked={sandbox} onChange={(e) => setSandbox(e.target.checked)} /> Sandbox (Pinterest test mode: Pins are not public; needed until Standard access)</label>
     {boards.length ? <>
       <label className="muted" htmlFor={`pin-board-${brand}`}>Board</label>
       <select id={`pin-board-${brand}`} value={boardId} onChange={(e) => setBoardId(e.target.value)}>
@@ -97,6 +100,7 @@ export function PinterestPost({ brand, boardName }: { brand: string; boardName: 
     <button type="button" className="status-chip" disabled={!asset || !boardId || !title.trim() || busy} onClick={post}>
       {busy ? step || "Working…" : "Post to Pinterest now"}
     </button>
+    {result?.sandbox && <p className="card">Sandbox Pin created (id {result.pinId}). It is a test Pin and does not appear on pinterest.com.</p>}
     {result?.url && <p className="card">Pinned. <a href={result.url} target="_blank" rel="noreferrer">See the Pin</a>
       {result.logged === false && <span className="muted"> (live, but not logged for the dashboard)</span>}</p>}
     {result?.error && <p className="card">Pin not sent: {result.error}</p>}

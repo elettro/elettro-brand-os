@@ -6,8 +6,10 @@ import { PublishError, mediaLink, type LibraryAsset } from "@/lib/meta-publish";
 const secrets = new SecretsManagerClient({ region: "us-east-1" });
 const TOKEN_PREFIX = "elettro-brand-os-dev/pinterest/";
 const api = "https://api.pinterest.com/v5";
+// Trial-access apps can only create Pins in Pinterest's API Sandbox (separate boards, nothing public).
+const sandboxApi = "https://api-sandbox.pinterest.com/v5";
 
-type Token = { accessToken: string; accessExpiresAt: string; userId: string; username: string | null; brand: string; brands?: string[] };
+type Token = { accessToken: string; accessExpiresAt: string; userId: string; username: string | null; brand: string; brands?: string[]; sandbox?: boolean };
 export type Board = { id: string; name: string; privacy: string };
 
 export async function brandPinterestToken(brand: string): Promise<Token> {
@@ -25,7 +27,7 @@ export async function brandPinterestToken(brand: string): Promise<Token> {
 }
 
 async function pinterestCall<T>(token: Token, method: "GET" | "POST", path: string, body: unknown, what: string): Promise<T> {
-  const response = await fetch(`${api}${path}`, {
+  const response = await fetch(`${token.sandbox ? sandboxApi : api}${path}`, {
     method,
     headers: { authorization: `Bearer ${token.accessToken}`, ...(body ? { "content-type": "application/json" } : {}) },
     body: body ? JSON.stringify(body) : undefined,
