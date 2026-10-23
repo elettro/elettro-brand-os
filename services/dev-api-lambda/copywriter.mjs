@@ -27,8 +27,10 @@ const titleCase = (slug) => String(slug).split("-").map((w) => (w ? w[0].toUpper
 const pick = (seed, list) => list[parseInt(createHash("sha256").update(seed).digest("hex").slice(0, 8), 16) % list.length];
 
 /** Everything a caption may state about this post, from records only. */
-export function postFacts(asset, slot, songFacts = {}, links = {}, { promotional = true } = {}) {
+export function postFacts(asset, slotIn, songFacts = {}, links = {}, { promotional = true } = {}) {
   const tags = (asset.tags || []).map((t) => String(t).toLowerCase());
+  // A product is captioned as a product even when the planner filled a show/song slot with it (a tee can carry song tags).
+  const slot = tags.includes("merch") && slotIn.sector !== "merch" ? { ...slotIn, sector: "merch" } : slotIn;
   const valueOf = (prefix) => tags.find((t) => t.startsWith(prefix + ":"))?.slice(prefix.length + 1) || null;
   const slug = songKeyOf(asset);
   const song = slug ? songFacts[slug] : null;

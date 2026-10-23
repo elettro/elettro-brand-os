@@ -182,3 +182,13 @@ test("merch (Shopify product) posts name the product and point at the store on e
   assert.ok(plain.caption.includes("Rastaman Portrait AOP Tee") && !/https?:\/\//.test(plain.caption), plain.caption);
   assert.equal(plain.primaryLink, null);
 });
+
+test("a merch-tagged asset in a live-shows slot is still captioned as the product", () => {
+  const tee = { id: "m2", filename: "mini-rastaman-tee.jpg", kind: "image", tags: ["merch", "stashbox-does-sublime", "reggae"], title: "Mini Rastaman Tee" };
+  const links = { merchStore: "https://stashbox.ai/collections/merch", booking: { page: "https://stashbox.ai/booking", email: "booking@stashbox.com" } };
+  const f = postFacts(tee, { sector: "live-shows", destination: "pinterest", placement: "pin", synthetic: false }, {}, links);
+  assert.equal(f.sector, "merch");
+  const c = templateCopy(f, "seed");
+  assert.match(c.caption, /Mini Rastaman Tee/);
+  assert.doesNotMatch(c.caption, /Booking|booking/);
+});
