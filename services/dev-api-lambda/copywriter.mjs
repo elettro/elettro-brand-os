@@ -65,10 +65,10 @@ export function postFacts(asset, slotIn, songFacts = {}, links = {}, { promotion
     sector: slot.sector,
     destination: slot.destination,
     placement: slot.placement,
-    song: slug ? song?.title || asset.topic || titleCase(slug) : null,
+    song: slug && slot.sector !== "merch" ? song?.title || asset.topic || titleCase(slug) : null,
     // A product post (Shopify item) is named by the asset's own title, e.g. "Rastaman Portrait AOP Tee".
     product: slot.sector === "merch" ? String(asset.title || asset.topic || "").trim() || null : null,
-    show: showTag ? SHOWS[showTag] : null,
+    show: showTag && slot.sector !== "merch" ? SHOWS[showTag] : null,
     isCover: tags.some((t) => ["cover", "licensed-cover", "bob-dylan-cover"].includes(t)),
     originalArtist: valueOf("original-artist") ? titleCase(valueOf("original-artist")) : null,
     album: valueOf("album") ? titleCase(valueOf("album")) : song?.album || null,
