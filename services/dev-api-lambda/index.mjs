@@ -17,6 +17,7 @@ import { completeYoutubeConnect } from "./youtube-connect.mjs";
 import { completeLinkedinConnect } from "./linkedin-connect.mjs";
 import { completeMetaConnect } from "./meta-connect.mjs";
 import { handlePlannerWeb, handlePlannerOps } from "./planner-ops.mjs";
+import { setPostingWindow } from "./posting-window.mjs";
 import { completeThreadsConnect } from "./threads-connect.mjs";
 import { completeTiktokConnect } from "./tiktok-connect.mjs";
 import { completePinterestConnect } from "./pinterest-connect.mjs";
@@ -1560,6 +1561,8 @@ export const handler = async (event = {}) => {
   if (iamOnly && event.action === "configure-planner-brand") return configurePlannerBrand(event, connectDatabase, json);
   if (iamOnly && event.action === "plan-week") return runPlanWeek(event, connectDatabase, json);
   if (iamOnly && event.action === "approve-week") return approvePlannerWeek(event, connectDatabase, json);
+  // IAM-only: clamp a brand's posting windows and re-spread its unpublished planned/approved posts (preview unless mode:"apply").
+  if (iamOnly && event.action === "set-posting-window") return setPostingWindow(event, connectDatabase, json);
   // Month = 4 weeks planned in sequence; approve-month approves all of them at once.
   if (iamOnly && event.action === "plan-month") return runPlanWeeks({ weeks: 4, ...event }, connectDatabase, json);
   if (iamOnly && event.action === "approve-month") return approvePlannerWeek({ weeks: 4, ...event }, connectDatabase, json);

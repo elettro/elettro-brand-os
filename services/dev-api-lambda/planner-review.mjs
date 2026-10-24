@@ -266,8 +266,8 @@ async function setCadence(client, brand, body) {
   if (rule) {
     await client.query('UPDATE "CadenceRule" SET "postsPerWeek"=$2, "active"=$3, "updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$1', [rule.id, postsPerWeek, postsPerWeek > 0]);
   } else {
-    // Stories run all day; feed posts keep the afternoon window.
-    const [start, end] = placement === "story" ? ["07:00", "23:30"] : ["12:00", "18:00"];
+    // Stories use the full 10:00 to 22:00 posting window; feed posts keep the afternoon window.
+    const [start, end] = placement === "story" ? ["10:00", "22:00"] : ["12:00", "18:00"];
     await client.query(
       `INSERT INTO "CadenceRule" ("socialAccountId","placement","postsPerWeek","preferredDays","preferredStartTime","preferredEndTime","active","updatedAt")
        VALUES ($1,$2,$3,'{}',$4,$5,$6,CURRENT_TIMESTAMP)`, [account.id, placement, postsPerWeek, start, end, postsPerWeek > 0]);
