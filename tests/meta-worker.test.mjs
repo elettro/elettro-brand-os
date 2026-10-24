@@ -30,7 +30,12 @@ test("a claimed post is checked for its network and placement before anything go
   assert.equal(publishRequest("facebook", post({ placement: "post", dropboxPath: ROOT + "wide.mov" })).kind, "video");
   assert.equal(publishRequest("facebook", post({ placement: "post", dropboxPath: ROOT + "pic.png" })).kind, "image");
   assert.equal(publishRequest("instagram", post({ placement: "post", dropboxPath: ROOT + "pic.JPG" })).kind, "image");
-  assert.throws(() => publishRequest("instagram", post({ placement: "story" })), /story posts aren't published automatically/);
+  const story = publishRequest("instagram", post({ placement: "story", caption: "", dropboxPath: ROOT + "story.mp4" }));
+  assert.equal(story.caption, "");
+  assert.equal(story.kind, "video");
+  assert.equal(publishRequest("facebook", post({ placement: "story", caption: "", dropboxPath: ROOT + "s.png" })).kind, "image");
+  assert.throws(() => publishRequest("instagram", post({ placement: "story", dropboxPath: ROOT + "s.png" })), /Stories take JPEG/);
+  assert.throws(() => publishRequest("instagram", post({ placement: "banner" })), /banner posts aren't published automatically/);
   assert.throws(() => publishRequest("instagram", post({ placement: "post", dropboxPath: ROOT + "pic.png" })), /JPEG/);
   assert.throws(() => publishRequest("instagram", post({ placement: "post", dropboxPath: ROOT + "clip.mp4" })), /JPEG/);
   assert.throws(() => publishRequest("facebook", post({ dropboxPath: ROOT + "pic.jpg" })), /Reel needs a video/);
@@ -145,8 +150,8 @@ test("the tick claims Reels and feed posts per network, publishes, and reports e
   };
   const tick = await publishingTick({ callApi, publish });
   assert.deepEqual(sent.filter((s) => s.action === "claim-due-posts"),
-    [{ action: "claim-due-posts", destination: "instagram", placements: ["reel", "post"], limit: 1 },
-     { action: "claim-due-posts", destination: "facebook", placements: ["reel", "post"], limit: 1 }]);
+    [{ action: "claim-due-posts", destination: "instagram", placements: ["reel", "post", "story"], limit: 1 },
+     { action: "claim-due-posts", destination: "facebook", placements: ["reel", "post", "story"], limit: 1 }]);
   assert.deepEqual(sent.filter((s) => s.action === "finish-post"), [
     { action: "finish-post", id: "instagram-1", externalPostId: "m1", externalUrl: "https://www.instagram.com/p/x/" },
     { action: "finish-post", id: "facebook-1", error: "Meta Facebook photo failed: (#200) permission denied" }
@@ -190,4 +195,50 @@ test("a stuck upload is retried once only when the worker asks, and requeue-fail
   assert.equal((await handlePlannerOps({ action: "requeue-failed" }, async () => client, json)).statusCode, 400);
   const requeued = await handlePlannerOps({ action: "requeue-failed", destination: "tiktok" }, async () => client, json);
   assert.equal(requeued.statusCode, 200);
+});
+
+test("an Instagram Story posts the bare media with media_type STORIES and no caption", async () => {
+  const calls = [];
+  const call = async (method, path, params) => {
+    calls.push({ method, path, params });
+    if (path === "222/media") return { id: "c1" };
+    if (path === "c1") return { status_code: "FINISHED" };
+    if (path === "222/media_publish") return { id: "s9" };
+    return { permalink: "https://www.instagram.com/stories/stashboxmusic/s9/" };
+  };
+  const deps = { call, link: async () => "https://dl/story", wait: async () => {} };
+  const video = await publishInstagram(record, publishRequest("instagram", post({ placement: "story", caption: "", dropboxPath: ROOT + "story.mp4" })), deps);
+  assert.deepEqual(calls[0].params, { media_type: "STORIES", video_url: "https://dl/story" });
+  assert.equal(video.postId, "s9");
+  calls.length = 0;
+  await publishInstagram(record, publishRequest("instagram", post({ placement: "story", caption: "", dropboxPath: ROOT + "story.jpg" })), deps);
+  assert.deepEqual(calls[0].params, { media_type: "STORIES", image_url: "https://dl/story" });
+});
+
+test("a Facebook photo Story uploads unpublished, then becomes a Story", async () => {
+  const calls = [];
+  const call = async (method, path, params) => { calls.push({ path, params }); return path.endsWith("/photos") ? { id: "ph1" } : { success: true, post_id: "st1" }; };
+  const out = await publishFacebook(record, publishRequest("facebook", post({ placement: "story", caption: "", dropboxPath: ROOT + "s.jpg", channelId: "111" })), { call, link: async () => "https://dl/s.jpg" });
+  assert.deepEqual(calls, [
+    { path: "111/photos", params: { url: "https://dl/s.jpg", published: "false" } },
+    { path: "111/photo_stories", params: { photo_id: "ph1" } }
+  ]);
+  assert.deepEqual(out, { postId: "st1", permalink: "https://www.facebook.com/stories/111" });
+});
+
+test("a Facebook video Story starts, uploads from the link, then finishes; a failed upload never finishes", async () => {
+  const calls = [];
+  const call = async (method, path, params) => { calls.push({ path, params }); return params.upload_phase === "start" ? { video_id: "v1", upload_url: "https://rupload/v1" } : { success: true, post_id: "st2" }; };
+  let uploaded;
+  const upload = async (url, opts) => { uploaded = { url, opts }; return { ok: true, status: 200, json: async () => ({ success: true }) }; };
+  const req = publishRequest("facebook", post({ placement: "story", caption: "", dropboxPath: ROOT + "s.mp4", channelId: "111" }));
+  const out = await publishFacebook(record, req, { call, link: async () => "https://dl/s.mp4", upload });
+  assert.equal(uploaded.url, "https://rupload/v1");
+  assert.equal(uploaded.opts.headers.file_url, "https://dl/s.mp4");
+  assert.deepEqual(calls[1], { path: "111/video_stories", params: { upload_phase: "finish", video_id: "v1" } });
+  assert.deepEqual(out, { postId: "st2", permalink: "https://www.facebook.com/stories/111" });
+  calls.length = 0;
+  const failing = async () => ({ ok: false, status: 400, json: async () => ({ debug_info: { message: "bad file" } }) });
+  await assert.rejects(publishFacebook(record, req, { call, link: async () => "u", upload: failing }), /Story upload failed: bad file/);
+  assert.equal(calls.filter((c) => c.params.upload_phase === "finish").length, 0);
 });
