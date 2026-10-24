@@ -5,8 +5,8 @@ import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
 // graph.facebook.com) and is only invoked directly through IAM: no HTTP route points at it. Way in:
 //   an EventBridge schedule (every 15 min)   the tick: for Instagram, then Facebook, claim the next due
 //                                             approved planner post (claim-due-posts) -> publish -> finish-post
-// Only Reels and feed posts (placement "reel" / "post") are claimed; Stories aren't built yet, so
-// their approved posts are left alone (and marked missed once a day late).
+// Reels, feed posts and Stories (placement "reel" / "post" / "story") are claimed. Stories are
+// published without a caption (neither network's Story API takes one).
 // Page tokens come from "Connect Meta" (elettro-brand-os-dev/meta/<pageId>) and don't expire, so
 // there is no renewal step. Media goes up by URL: a 4-hour Dropbox temporary link Meta downloads itself.
 
@@ -21,7 +21,7 @@ const GRAPH = `https://graph.facebook.com/${GRAPH_VERSION}`;
 const REEL_UPLOAD = `https://rupload.facebook.com/video-upload/${GRAPH_VERSION}`;
 const BRANDS_ROOT = "/1---elettro-brand-os/brands/";
 const DESTINATIONS = ["instagram", "facebook"];
-const PLACEMENTS = ["reel", "post"];
+const PLACEMENTS = ["reel", "post", "story"];
 // One post per network per tick keeps a backlog from bursting onto the feed.
 const POSTS_PER_TICK = 1;
 // Reels take a while to process; poll every 5 s for up to 5 minutes (Lambda timeout 15 min).
@@ -60,7 +60,12 @@ export function publishRequest(destination, post) {
   if (destination === "instagram" && placement === "post" && !(kind === "image" && /\.jpe?g$/i.test(dropboxPath))) {
     throw new Error("Instagram feed posts take JPEG photos only; pick a .jpg");
   }
-  return { destination, placement, kind, dropboxPath, caption: captionFor(destination, post), channelId: String(post.channelId || "") };
+  if (destination === "instagram" && placement === "story" && kind === "image" && !/\.jpe?g$/i.test(dropboxPath)) {
+    throw new Error("Instagram Stories take JPEG photos only; pick a .jpg");
+  }
+  // Stories carry no caption, so a Story without one is fine.
+  const caption = placement === "story" ? "" : captionFor(destination, post);
+  return { destination, placement, kind, dropboxPath, caption, channelId: String(post.channelId || "") };
 }
 
 async function secretJson(SecretId) {
@@ -144,9 +149,12 @@ export async function publishInstagram(record, request, deps = {}) {
     wait = (ms) => new Promise((r) => setTimeout(r, ms)), pollMs = POLL_MS, limitMs = POLL_LIMIT_MS } = deps;
   if (!record.instagramId) throw new Error("No Instagram account is linked to this Page");
   const url = await link(request.dropboxPath);
-  const params = request.kind === "image"
-    ? { image_url: url, caption: request.caption }
-    : { media_type: "REELS", video_url: url, caption: request.caption, share_to_feed: "true" };
+  const media = request.kind === "image" ? { image_url: url } : { video_url: url };
+  const params = request.placement === "story"
+    ? { media_type: "STORIES", ...media }
+    : request.kind === "image"
+      ? { image_url: url, caption: request.caption }
+      : { media_type: "REELS", video_url: url, caption: request.caption, share_to_feed: "true" };
   const container = await call("POST", `${record.instagramId}/media`, params, "Instagram upload");
   if (!container.id) throw new Error("Instagram returned no media container");
   for (let waited = 0; ; waited += pollMs) {
@@ -165,6 +173,27 @@ export async function publishInstagram(record, request, deps = {}) {
   return { postId: published.id, permalink };
 }
 
+// Facebook Page Story. A photo is uploaded unpublished, then turned into a Story. A video is
+// start -> Meta pulls the file from the link -> finish (it publishes as a Story on finish).
+async function publishFacebookStory(record, request, url, { call, upload }) {
+  const storiesLink = `https://www.facebook.com/stories/${record.pageId}`;
+  if (request.kind === "image") {
+    const photo = await call("POST", `${record.pageId}/photos`, { url, published: "false" }, "Facebook Story photo");
+    if (!photo.id) throw new Error("Facebook returned no photo id");
+    const story = await call("POST", `${record.pageId}/photo_stories`, { photo_id: photo.id }, "Facebook Story publish");
+    return { postId: story.post_id || photo.id, permalink: storiesLink };
+  }
+  const start = await call("POST", `${record.pageId}/video_stories`, { upload_phase: "start" }, "Facebook Story start");
+  if (!start.video_id) throw new Error("Facebook returned no Story video id");
+  const sent = await upload(start.upload_url || `${REEL_UPLOAD}/${start.video_id}`, {
+    method: "POST", headers: { authorization: `OAuth ${record.pageAccessToken}`, file_url: url }, signal: AbortSignal.timeout(60000)
+  });
+  const uploaded = await sent.json().catch(() => ({}));
+  if (!sent.ok || !uploaded.success) throw new Error(`Meta Facebook Story upload failed: ${uploaded.debug_info?.message || sent.status}`);
+  const done = await call("POST", `${record.pageId}/video_stories`, { upload_phase: "finish", video_id: start.video_id }, "Facebook Story publish");
+  return { postId: done.post_id || start.video_id, permalink: storiesLink };
+}
+
 // Facebook Page: photos and wide videos post in one call; a Reel is start -> Meta pulls the file
 // from the link -> finish with PUBLISHED.
 export async function publishFacebook(record, request, deps = {}) {
@@ -172,6 +201,7 @@ export async function publishFacebook(record, request, deps = {}) {
     upload = fetch } = deps;
   if (!record.pageId) throw new Error("No Facebook Page is connected");
   const url = await link(request.dropboxPath);
+  if (request.placement === "story") return publishFacebookStory(record, request, url, { call, upload });
   if (request.kind === "image") {
     const photo = await call("POST", `${record.pageId}/photos`, { url, message: request.caption, published: "true" }, "Facebook photo");
     const id = photo.post_id || photo.id;

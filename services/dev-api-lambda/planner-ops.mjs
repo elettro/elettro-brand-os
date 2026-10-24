@@ -234,7 +234,7 @@ async function plannerTick(connectDatabase, json) {
 async function claimDuePosts(event, connectDatabase, json) {
   const destination = String(event.destination || "youtube");
   const limit = Math.min(5, Math.max(1, Number(event.limit) || 2));
-  // A worker that only publishes some placements (Meta: Reels and feed posts, not Stories) names them;
+  // A worker that only publishes some placements (e.g. a worker for only some formats) names them;
   // the others stay approved. Omitted, every placement of the destination is claimed.
   const placements = Array.isArray(event.placements) && event.placements.length ? event.placements.map(String) : null;
   return withClient(connectDatabase, json, "claim-due-posts", async (client) => {
