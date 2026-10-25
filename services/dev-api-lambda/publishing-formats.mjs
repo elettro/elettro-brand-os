@@ -30,7 +30,7 @@ export const PUBLISHING_FORMATS = [
     rule: { kinds: ["image"], aspectRatios: [] } },
   { destination: "pinterest", placement: "video", label: "Video pins", status: "planning", note: "Publisher is deployed; no video pin has published on schedule yet",
     rule: { kinds: ["video"], aspectRatios: [] } },
-  { destination: "linkedin", placement: "post", label: "Posts", status: "planning", note: "LinkedIn test posts work; scheduled auto-publishing isn't built yet",
+  { destination: "linkedin", placement: "post", label: "Posts", status: "planning", note: "Publisher is built (services/linkedin-lambda); no post has published on schedule yet",
     rule: { kinds: ["image", "video"], aspectRatios: [] } },
   { destination: "x", placement: "video", label: "Videos", status: "integration", note: "X isn't connected to Elettro OS yet" },
   { destination: "gmb", placement: "update", label: "Update posts", status: "integration", note: "Waiting on Google's API allowlist" }
