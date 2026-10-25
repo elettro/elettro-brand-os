@@ -1,11 +1,12 @@
 // The Planner page and the publishing loop around Planner V2.
-//   POST /planner (web, connect key): view | set-cadence | approve-week | request-replan
+//   POST /planner (web, connect key): view | stats | set-cadence | approve-week | request-replan
 //   IAM-only (the YouTube upload worker calls these every 15 minutes):
 //     planner-tick     plan the next unplanned week, or a week the page asked to re-plan (one per call)
 //     claim-due-posts  hand out approved posts whose time has come, marked 'publishing'
 //     finish-post      record the outcome: 'published' + a PublicationLedger row, or 'failed'
 import { withClient, loadBrand, weekWindow, runPlanWeek, approvePlannerWeek } from "./planner-v2-db.mjs";
 import { addDaysToYmd, brandLanguage, isSynthetic, languageOf, resolvePlannerSettings, ymdInTimeZone } from "./planner-v2.mjs";
+import { dashboardStats } from "./dashboard-stats.mjs";
 import { keyMatches } from "./youtube-connect.mjs";
 
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
@@ -78,6 +79,7 @@ export async function handlePlannerWeb(event, body, connectDatabase, json) {
   const headers = event.headers || {};
   if (!keyMatches(headers["x-elettro-connect-key"])) return json(401, { ok: false, error: "Planner key required" });
   if (body.action === "view") return plannerView(body, connectDatabase, json);
+  if (body.action === "stats") return dashboardStats(body, connectDatabase, json);
   if (body.action === "set-cadence") return setCadence(body, connectDatabase, json);
   if (body.action === "request-replan") return requestReplan(body, connectDatabase, json);
   if (body.action === "approve-week") {

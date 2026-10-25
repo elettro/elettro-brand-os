@@ -173,7 +173,7 @@ export function isSynthetic(asset, settings) {
   return hasAny(tagsOf(asset), settings.syntheticTagsAny);
 }
 
-function eligibleOn(asset, ymd) {
+export function eligibleOn(asset, ymd) {
   if (asset.eligibilityType === "one_time") {
     const from = asset.eligibleFrom ? String(asset.eligibleFrom).slice(0, 10) : null;
     const until = asset.eligibleUntil ? String(asset.eligibleUntil).slice(0, 10) : null;

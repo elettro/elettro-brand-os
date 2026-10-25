@@ -982,3 +982,28 @@ code {
 .pub-brand img { height: 42px; width: auto; display: block; }
 .pub-brand span { font: 800 22px/1 "Space Grotesk", sans-serif; color: var(--accent); }
 .pub-foot-logo { height: 40px; width: auto; justify-self: start; margin-bottom: 4px; }
+
+/* Dashboard: one card per network */
+.net-list { display: grid; gap: 16px; margin-top: 20px; }
+.net-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.net-head h2 { margin: 0; font-size: 20px; }
+.net-totals { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 8px; }
+.stat-cell { background: var(--panel-soft); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.stat-cell b { display: block; font-size: 22px; font-weight: 800; }
+.stat-cell span { color: var(--muted); font-size: 12px; }
+.stat-cell.zero b { color: var(--muted); font-weight: 600; }
+.stat-cell.warn:not(.zero) b { color: var(--warn); }
+.stat-cell.danger:not(.zero) b { color: var(--danger); }
+.fmt-table { margin-top: 14px; display: grid; gap: 6px; }
+.fmt-row { display: grid; grid-template-columns: 150px repeat(8, minmax(0, 1fr)); gap: 8px; align-items: center; border-top: 1px solid var(--line); padding-top: 8px; }
+.fmt-row .stat-cell { padding: 4px 8px; background: none; border: 0; }
+.fmt-row .stat-cell b { font-size: 16px; }
+.fmt-name strong { display: block; font-size: 14px; }
+.fmt-name small { color: var(--muted); }
+.fmt-row.status-live .fmt-name small { color: var(--success); }
+.fmt-row.status-integration { opacity: .55; }
+@media (max-width: 900px) {
+  .net-totals { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .fmt-row { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .fmt-name { grid-column: 1 / -1; }
+}
