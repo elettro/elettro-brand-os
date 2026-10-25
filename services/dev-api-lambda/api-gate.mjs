@@ -33,6 +33,12 @@ export function gateHttp(event, requestPath, json) {
   return null;
 }
 
+/** The shared creative-assets library; `?shared=1` adds its assets to a brand-filtered /assets list. */
+export const SHARED_LIBRARY_SLUG = "creative-assets";
+export function includeShared(event) {
+  return event?.queryStringParameters?.shared === "1";
+}
+
 /** Parses `?brands=a,b` into a clean slug list, or null when no filter was asked for. */
 export function brandFilter(event) {
   const raw = event?.queryStringParameters?.brands;

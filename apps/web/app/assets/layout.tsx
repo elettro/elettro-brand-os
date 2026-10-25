@@ -1,8 +1,7 @@
-import { redirect } from "next/navigation";
-import { authenticated } from "@/lib/cognito-auth";
+import { requireSession } from "@/lib/page-guards";
 
-// Signed-out visitors go to the sign-in page, same as /review and /connections.
+// Signed-in users only; pages inside narrow it further (a client sees only their brands).
 export default async function Layout({ children }: Readonly<{ children: React.ReactNode }>) {
-  if (!(await authenticated())) redirect("/api/auth/login");
+  await requireSession();
   return children;
 }
