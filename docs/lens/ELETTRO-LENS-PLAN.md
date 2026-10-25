@@ -209,6 +209,14 @@ and a deep link `https://stashbox.com/radio/?song=<song_key>`.
 - **Reverse link (optional, needs Dean's OK and a separate Radio PR):** a "Scan this cover" hint on a Radio song page.
 - Do not modify Radio, its API or its AWS resources from the Lens PRs. If Lens needs a Radio change, stop and ask.
 
+**Same AWS account (confirmed read-only 2026-10-25, account 656260749296):** Radio's prod API is `stashbox-radio-api-prod-api-v2`, its media is the CloudFront
+`d34ez960394y8w` in front of bucket `stashbox-radio-media-prod-us-east-1` (dev stack alongside). Same account is not the same project: Lens reads Radio's public
+catalog first (no new permissions); a read-only grant on Radio's prod media bucket is added only if the public catalog proves insufficient. Never write to Radio from Lens PRs.
+
+**Default scan experience for Stashbox songs (Dean 2026-10-25, "definitely"):** when someone scans a Stashbox song cover, the overlay plays the video **and** shows two buttons:
+**Listen** (opens `https://stashbox.com/radio/?song=<song_key>`) and **Buy** (the song's `shop_url`, or a chosen Shopify product, with `utm_source=lens`).
+Radio already supplies `song_key` and `shop_url` for all 89 songs, so importing a song from Radio creates the trigger plus Listen and Buy buttons automatically. The video is the only thing the admin adds.
+
 **Shopify (stashbox.ai and each brand's own shop).** Store feeds are public (`/products.json`; stashbox.ai has 250 products).
 - **New action type `shop`:** a product card (image, title, price, **Buy** button) that links to the product page or adds to cart with a `?variant=` link.
   Pick the product from a list loaded from the brand's storefront feed, so price and availability stay current (cached, refreshed on publish).
