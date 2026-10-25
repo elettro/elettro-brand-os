@@ -18,10 +18,16 @@ export const META_SCOPES = [
 ];
 export const META_STATE_COOKIE = "elettro_dev_meta_state";
 // Brands that can connect a Facebook Page (and the Instagram account linked to it).
-export const META_BRANDS = ["stashbox", "elettro", "therasbox", "solarmeister"];
+export const META_BRANDS = ["stashbox", "elettro", "therasbox", "solarmeister", "weightlossdavie"];
 // Pinned Page per brand when Dean manages several look-alikes; others must grant exactly one Page.
 // Stashbox = the "Stashbox" Page linked to @stashboxmusic, not "Stashbox.com".
-export const META_PAGES: Record<string, string> = { stashbox: "380791482028270" };
+// Dean's login now grants several Pages (Reggae.Land too), so every brand is pinned.
+export const META_PAGES: Record<string, string> = {
+  stashbox: "380791482028270",
+  therasbox: "697827850080589",
+  solarmeister: "1199724163224021",
+  weightlossdavie: "123095134218070"
+};
 
 export type MetaPage = { id: string; name: string; access_token?: string; instagram_business_account?: { id: string; username?: string } };
 
