@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 
-export function StatsBrandSelect({ brands, value }: { brands: Array<{ slug: string; name: string }>; value: string }) {
+export function StatsBrandSelect({ brands, value, allowAll = true }: { brands: Array<{ slug: string; name: string }>; value: string; allowAll?: boolean }) {
   const router = useRouter();
   return (
     <select
@@ -11,7 +11,7 @@ export function StatsBrandSelect({ brands, value }: { brands: Array<{ slug: stri
       value={value}
       onChange={(event) => router.push(event.target.value === "all" ? "/" : `/?brand=${event.target.value}`)}
     >
-      <option value="all">All brands</option>
+      {allowAll && <option value="all">All brands</option>}
       {brands.map((b) => <option key={b.slug} value={b.slug}>{b.name}</option>)}
     </select>
   );

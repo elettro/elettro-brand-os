@@ -32,6 +32,9 @@ jobs:
       - name: Test MCP tool permissions and assistant parity
         run: node --experimental-strip-types --test tests/ai-mcp-tools.test.mjs
 
+      - name: Test per-user brand access
+        run: node --experimental-strip-types --test tests/brand-access.test.mjs
+
       - name: Test asset metadata state and enrichment guards
         run: node --test tests/asset-enrichment-safety.test.mjs
 

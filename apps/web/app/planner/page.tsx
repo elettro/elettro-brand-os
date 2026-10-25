@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { authenticated } from "@/lib/cognito-auth";
+import { session } from "@/lib/cognito-auth";
+import { canAccessBrand, visibleBrands } from "@/lib/brand-access";
 import { brandConfigs } from "@/lib/brand-config";
 import { plannerCall, type PlannedPost } from "@/lib/planner";
 import { approveWeek, requestReplan, saveCadence } from "./actions";
@@ -33,13 +34,15 @@ function byDay(posts: PlannedPost[], timeZone: string) {
 }
 
 export default async function PlannerPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
-  if (!(await authenticated())) redirect("/api/auth/login");
+  const who = await session();
+  if (!who) redirect("/api/auth/login");
   const params = await searchParams;
-  const brandSlug = params.brand || "stashbox";
+  const brandSlug = params.brand || (who.owner ? "stashbox" : who.brands[0]);
+  if (!canAccessBrand(who, brandSlug)) redirect("/planner?brand=" + encodeURIComponent(who.brands[0]));
   const week = await plannerCall({ action: "view", brandSlug, weekStart: params.week });
   const brandTabs = (
     <div className="planner-tabs">
-      {brandConfigs.map((b) => (
+      {visibleBrands(who, brandConfigs).map((b) => (
         <Link key={b.id} href={`/planner?brand=${b.id}`} className={b.id === brandSlug ? "active" : ""}>{b.name}</Link>
       ))}
     </div>

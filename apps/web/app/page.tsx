@@ -1,4 +1,5 @@
-import { authenticated } from "@/lib/cognito-auth";
+import { session } from "@/lib/cognito-auth";
+import { canAccessBrand } from "@/lib/brand-access";
 import { redirect } from "next/navigation";
 import { StatsBrandSelect } from "@/components/stats-brand-select";
 import { plannerCall, type DashboardStats, type StatCounts } from "@/lib/planner";
@@ -28,8 +29,12 @@ const MACRO: Array<[keyof StatCounts, string, "warn" | "danger" | undefined]> = 
 ];
 
 export default async function DashboardPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
-  if (!(await authenticated())) redirect("/welcome");
-  const scope = (await searchParams).brand || "all";
+  const who = await session();
+  if (!who) redirect("/welcome");
+  const requested = (await searchParams).brand;
+  // The all-brands view adds up every brand, so a restricted user is always pinned to one of theirs.
+  if (!who.owner && !canAccessBrand(who, requested || "")) redirect("/?brand=" + encodeURIComponent(who.brands[0]));
+  const scope = requested || "all";
   const stats = await plannerCall<DashboardStats>({ action: "stats", brandSlug: scope });
 
   return (
@@ -39,7 +44,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           <div className="eyebrow">Publishing · Dashboard</div>
           <h1>{stats.ok ? (scope === "all" ? "All brands" : stats.brands.find((b) => b.slug === scope)?.name ?? scope) : "Dashboard"}</h1>
         </div>
-        {stats.ok && <StatsBrandSelect brands={stats.brands} value={scope} />}
+        {stats.ok && <StatsBrandSelect brands={stats.brands.filter((b) => canAccessBrand(who, b.slug))} value={scope} allowAll={who.owner} />}
       </div>
 
       {!stats.ok ? (

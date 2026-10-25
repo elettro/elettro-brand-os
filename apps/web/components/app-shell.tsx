@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { BrandSwitcher } from "@/components/brand-switcher";
 import { NavLink } from "@/components/nav-link";
@@ -39,9 +39,26 @@ const BARE = ["/auth", "/welcome"];
 
 const BRANDS = [{ id: "all", name: "All brands", timezone: "" }, ...brandConfigs.map(({ id, name, timezone }) => ({ id, name, timezone }))];
 
+// A user who is not the owner (a client) gets only these pages, for their own brands.
+const CLIENT_PAGES = ["/", "/planner", "/review"];
+
+// Who is signed in: owner sees everything; a client sees only the listed brands.
+type Scope = { owner: boolean; brands: string[] | null };
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() || "/";
-  if (BARE.some((p) => pathname.startsWith(p))) return <>{children}</>;
+  const [scope, setScope] = useState<Scope | null>(null);
+  const bare = BARE.some((p) => pathname.startsWith(p));
+  useEffect(() => {
+    if (bare) return;
+    fetch("/api/auth/status", { cache: "no-store" })
+      .then((r) => r.json() as Promise<{ signedIn?: boolean; owner?: boolean; brands?: string[] | null }>)
+      .then((s) => setScope(s.signedIn ? { owner: !!s.owner, brands: s.brands ?? null } : null))
+      .catch(() => setScope(null));
+  }, [bare]);
+  if (bare) return <>{children}</>;
+  const client = !!scope && !scope.owner;
+  const brands = scope?.brands ? BRANDS.filter((b) => scope.brands!.includes(b.id)) : BRANDS;
   const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
 
   return (
@@ -49,7 +66,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <header className="app-header">
         <Link className="brandmark" href="/" aria-label="Elettro OS home"><img src="/brand/elettro-logo-white.png" alt="Elettro" width="407" height="161" /><span>OS</span></Link>
         <div className="app-header-tools">
-          <Suspense fallback={null}><BrandSwitcher brands={BRANDS} /></Suspense>
+          {scope && <Suspense fallback={null}><BrandSwitcher brands={brands} /></Suspense>}
           <a className="app-live" href="https://elettro.com/dash/" target="_blank" rel="noreferrer">
             <i aria-hidden="true" /> Live status
           </a>
@@ -61,7 +78,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {NAV.map((section) => (
             <div className="nav-section" key={section.label}>
               <div className="nav-label">{section.label}</div>
-              {section.items.map((item) =>
+              {section.items.filter((item) => !client || (item.href && CLIENT_PAGES.includes(item.href))).map((item) =>
                 item.href ? (
                   <Suspense key={item.label} fallback={<Link href={item.href} className={`nav-item${isActive(item.href) ? " active" : ""}`}>{item.label}</Link>}>
                     <NavLink href={item.href} className={`nav-item${isActive(item.href) ? " active" : ""}`}>
@@ -77,7 +94,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
           ))}
         </nav>
-        <div className="app-content"><ReconnectBanner />{children}</div>
+        <div className="app-content">{scope?.owner && <ReconnectBanner />}{children}</div>
       </div>
     </div>
   );

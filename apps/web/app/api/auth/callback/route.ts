@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { AUTH_COOKIE, CALLBACK, COGNITO_CLIENT_ID, COGNITO_DOMAIN, DEV_ORIGIN, STATE_COOKIE, cookieSettings, unseal, serverSetting, seal } from "@/lib/cognito-auth";
+import { AUTH_COOKIE, CALLBACK, COGNITO_CLIENT_ID, COGNITO_DOMAIN, DEV_ORIGIN, STATE_COOKIE, cookieSettings, unseal, serverSetting, seal, ownerEmail } from "@/lib/cognito-auth";
+import { accessFromClaims, encodeScope } from "@/lib/brand-access";
+import { brandConfigs } from "@/lib/brand-config";
 import { createPublicKey, verify, type JsonWebKey as NodeJsonWebKey } from "node:crypto";
 export const runtime = "nodejs";
 async function verifiedClaims(jwt: string): Promise<Record<string,unknown>> {
@@ -43,10 +45,14 @@ export async function GET(request:NextRequest) {
     if (!data.id_token) throw Error("Missing identity token");
     const claims=await verifiedClaims(data.id_token);
     const email=String(claims.email||"").toLowerCase();
-    if (!email || claims.email_verified !== true || email !== (process.env.ELETTRO_OWNER_EMAIL || "dpalermo@elettro.com").toLowerCase()) throw Error("Account not authorized");
-    const destination=NextResponse.redirect(DEV_ORIGIN+"/assets/add");
+    if (!email || claims.email_verified !== true) throw Error("Account not authorized");
+    // Cognito owns the account: the owner (this email or the "owner" group) sees everything, anyone else only the
+    // brands whose "brand-<id>" group they are in. A user with neither gets no session.
+    const access=accessFromClaims(email,claims["cognito:groups"],ownerEmail(),brandConfigs.map(b=>b.id));
+    if (!access.owner && !access.brands.length) throw Error("Account not authorized");
+    const destination=NextResponse.redirect(DEV_ORIGIN+(access.owner?"/assets/add":"/?brand="+encodeURIComponent(access.brands[0])));
     const expiration=Date.now()+8*60*60*1000;
-    destination.cookies.set(AUTH_COOKIE,await seal(email+"|"+expiration),cookieSettings(8*60*60));
+    destination.cookies.set(AUTH_COOKIE,await seal(email+"|"+expiration+"|"+encodeScope(access)),cookieSettings(8*60*60));
     destination.cookies.delete(STATE_COOKIE);
     return destination;
   } catch(error) {
