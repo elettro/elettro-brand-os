@@ -13,7 +13,6 @@ import pg from "pg";
 import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
 import { withDropboxIdentityTransaction, DropboxIdentityConflict } from "./dropbox-identity.mjs";
 import { handler as existingHandler } from "./db-main.mjs";
-import { guardResponse } from "./api-guard.mjs";
 import { gateHttp } from "./api-gate.mjs";
 import { handleDropboxUploadSession } from "./dropbox-upload-session.mjs";
 import { completeYoutubeConnect } from "./youtube-connect.mjs";
@@ -1583,10 +1582,6 @@ export const handler = async (event = {}) => {
     event?.requestContext?.http?.path ||
     event?.path ||
     "";
-
-  // Asset, brand, dashboard and bulk-update routes are for the web app only: they need the shared connect key.
-  const keyDenied = guardResponse(event, json);
-  if (keyDenied) return keyDenied;
 
   // Public, read-only: connection race feed for elettro.com/dash (counts only).
   if (requestPath === "/status/connections" && (event?.requestContext?.http?.method || "GET") === "GET") return handleConnectionStatus(connectDatabase);
