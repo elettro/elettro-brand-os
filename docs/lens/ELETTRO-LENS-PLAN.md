@@ -226,7 +226,16 @@ Radio already supplies `song_key` and `shop_url` for all 89 songs, so importing 
 - Each brand can have a different shop (Stashbox, SolarMeister, ...); the shop is a per-brand setting in `/lens/settings`. Read-only: no orders, customers or inventory touched.
 - Shopify admin/Storefront API tokens, if ever needed, go in Secrets Manager under `elettro-lens-dev/`, never in code.
 
-Build order: after PR4, one small PR per item: (a) `link`, `radio` and `shop` action types, (b) Radio import, (c) Shopify product picker + UTM, (d) merch-as-trigger flow.
+**Product links from asset metadata (Dean 2026-10-25):** assets in Elettro OS carry Shopify product links in their metadata. If a trigger's source asset has products, Lens shows a **Buy** button for each; no products, no button.
+- Already in the schema (checked in `init.sql`, 2026-10-25): `ShopifyStore` (per brand), `ShopifyProduct` (with `productUrl`), and `Asset.shopifyStoreId` / `Asset.shopifyProductId` (one product per asset today).
+  Whether those columns are filled in live data was **not** checked.
+- **Isolation kept:** the Lens Lambda has no Postgres access. At **Publish** (and a "Refresh buttons" action), the Elettro OS web server reads the trigger's `sourceAssetId` from the dev-api
+  (existing read route, connect key, brand-scoped) and writes the product title, image, price and URL into the Lens manifest as `shop` actions. Lens never queries Postgres or Shopify from the phone path.
+- Precedence: buttons added by hand in `/lens` win over metadata-derived ones; metadata-derived ones can be turned off per trigger.
+- **If an asset needs several products:** `shopifyProductId` holds one. A multi-product metadata field would be a change to the dev-api / schema, outside the Lens guardrails,
+  so it is a separate PR into the dev-api that Dean approves first, then a small Lens change to read it.
+
+Build order: after PR4, one small PR per item: (a) `link`, `radio` and `shop` action types, (b) Radio import, (c) Shopify product picker + UTM, (d) merch-as-trigger flow, (e) buttons from asset metadata (product links).
 
 ## 10. Master instruction to give Sonnet (paste at the start of each build session)
 
