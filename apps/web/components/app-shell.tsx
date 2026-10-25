@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { Suspense } from "react";
 import { usePathname } from "next/navigation";
 import { BrandSwitcher } from "@/components/brand-switcher";
+import { NavLink } from "@/components/nav-link";
 import { ReconnectBanner } from "@/components/reconnect-banner";
 import { brandConfigs } from "@/lib/brand-config";
 
@@ -47,7 +49,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <header className="app-header">
         <Link className="brandmark" href="/" aria-label="Elettro OS home"><img src="/brand/elettro-logo-white.png" alt="Elettro" width="407" height="161" /><span>OS</span></Link>
         <div className="app-header-tools">
-          <BrandSwitcher brands={BRANDS} />
+          <Suspense fallback={null}><BrandSwitcher brands={BRANDS} /></Suspense>
           <a className="app-live" href="https://elettro.com/dash/" target="_blank" rel="noreferrer">
             <i aria-hidden="true" /> Live status
           </a>
@@ -61,9 +63,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <div className="nav-label">{section.label}</div>
               {section.items.map((item) =>
                 item.href ? (
-                  <Link key={item.label} href={item.href} className={`nav-item${isActive(item.href) ? " active" : ""}`}>
-                    {item.label}
-                  </Link>
+                  <Suspense key={item.label} fallback={<Link href={item.href} className={`nav-item${isActive(item.href) ? " active" : ""}`}>{item.label}</Link>}>
+                    <NavLink href={item.href} className={`nav-item${isActive(item.href) ? " active" : ""}`}>
+                      {item.label}
+                    </NavLink>
+                  </Suspense>
                 ) : (
                   <span key={item.label} className="nav-item soon" aria-disabled="true">
                     {item.label} <small>soon</small>
