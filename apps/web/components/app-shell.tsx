@@ -39,8 +39,12 @@ const BARE = ["/auth", "/welcome"];
 
 const BRANDS = [{ id: "all", name: "All brands", timezone: "" }, ...brandConfigs.map(({ id, name, timezone }) => ({ id, name, timezone }))];
 
-// A user who is not the owner (a client) gets only these pages, for their own brands.
-const CLIENT_PAGES = ["/", "/planner", "/review"];
+// What a user who is not the owner (a client) sees in the rail. Pages not listed show greyed as "soon";
+// each follow-up that opens a page for clients flips it to "active" here.
+const CLIENT_NAV: Record<string, "active" | "soon" | "hidden"> = {
+  "/": "active", "/review": "active",
+  "/collections": "hidden", "/ai-gateway": "hidden"
+};
 
 // Who is signed in: owner sees everything; a client sees only the listed brands.
 type Scope = { owner: boolean; brands: string[] | null };
@@ -58,6 +62,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [bare]);
   if (bare) return <>{children}</>;
   const client = !!scope && !scope.owner;
+  const itemState = (item: { href?: string }) => (!client ? "active" : item.href ? CLIENT_NAV[item.href] ?? "soon" : "soon");
   const brands = scope?.brands ? BRANDS.filter((b) => scope.brands!.includes(b.id)) : BRANDS;
   const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
 
@@ -78,8 +83,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {NAV.map((section) => (
             <div className="nav-section" key={section.label}>
               <div className="nav-label">{section.label}</div>
-              {section.items.filter((item) => !client || (item.href && CLIENT_PAGES.includes(item.href))).map((item) =>
-                item.href ? (
+              {section.items.filter((item) => itemState(item) !== "hidden").map((item) =>
+                item.href && itemState(item) === "active" ? (
                   <Suspense key={item.label} fallback={<Link href={item.href} className={`nav-item${isActive(item.href) ? " active" : ""}`}>{item.label}</Link>}>
                     <NavLink href={item.href} className={`nav-item${isActive(item.href) ? " active" : ""}`}>
                       {item.label}
