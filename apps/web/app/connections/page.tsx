@@ -74,8 +74,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
     <p className="muted">Connect each brand&apos;s accounts to Elettro OS. Google asks which YouTube channel to use; pick the one that belongs to the brand. LinkedIn logins last 60 days, so each one counts down to its reconnect date.</p>
     {connected && <p className="card" style={{ marginTop: 16 }}>Connected <b>{connected}</b> to {brand}.</p>}
     {disconnected && <p className="card" style={{ marginTop: 16 }}>Disconnected <b>{disconnected}</b> from {brand}. Elettro OS no longer has access to it.</p>}
-    {posted && <p className="card" style={{ marginTop: 16 }}>Posted to LinkedIn. <a href={posted} target="_blank" rel="noreferrer">See the post</a></p>}
-    {error && <p className="card" style={{ marginTop: 16 }}>{network === "linkedin" ? "LinkedIn post not sent" : `Could not connect${brand ? ` ${brand}` : ""}`}: {error}</p>}
+    {error && network !== "linkedin" && <p className="card" style={{ marginTop: 16 }}>Could not connect{brand ? ` ${brand}` : ""}: {error}</p>}
     <div className="grid" style={{ marginTop: 20 }}>
       {brands.map((b) => {
         const handle = youtube[b.id]?.handle;
@@ -174,8 +173,11 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
         );
       })}
     </div>
-    <h2 style={{ marginTop: 32 }}>LinkedIn</h2>
+    <h2 id="linkedin" style={{ marginTop: 32 }}>LinkedIn</h2>
     <p className="muted">Dean&apos;s personal profile, posting through the Elettro OS Personal app. LinkedIn gives no refresh token, so reconnect before the countdown runs out; company pages follow once LinkedIn approves Community Management.</p>
+    {/* The result sits next to the form: the redirect lands on #linkedin, far down the page. */}
+    {network === "linkedin" && posted && <p className="card" style={{ marginTop: 16 }}>Posted to LinkedIn. <a href={posted} target="_blank" rel="noreferrer">See the post</a></p>}
+    {network === "linkedin" && error && <p className="card" style={{ marginTop: 16 }}>LinkedIn post not sent: {error}</p>}
     <div className="grid" style={{ marginTop: 20 }}>
       {linkedinBrands.map((b) => {
         const linked = linkedin[b.id];
