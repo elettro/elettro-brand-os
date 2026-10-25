@@ -11,4 +11,4 @@ export const YOUTUBE_SCOPES = [
 ];
 export const YOUTUBE_STATE_COOKIE = "elettro_dev_yt_state";
 // Brands that can connect a YouTube channel (slugs from brand-config / the Brand table).
-export const YOUTUBE_BRANDS = ["stashbox", "elettro", "solarmeister", "therasbox", "weightlossdavie"];
+export const YOUTUBE_BRANDS = ["stashbox", "elettro", "solarmeister", "therasbox", "weightlossdavie", "pianomusicsoothing"];
