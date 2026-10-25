@@ -26,7 +26,8 @@ export const META_PAGES: Record<string, string> = {
   stashbox: "380791482028270",
   therasbox: "697827850080589",
   solarmeister: "1199724163224021",
-  weightlossdavie: "123095134218070"
+  weightlossdavie: "123095134218070",
+  elettro: "222151710680"
 };
 
 export type MetaPage = { id: string; name: string; access_token?: string; instagram_business_account?: { id: string; username?: string } };
