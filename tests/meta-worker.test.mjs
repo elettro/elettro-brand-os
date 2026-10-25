@@ -77,7 +77,7 @@ test("an Instagram Reel creates a container, waits until it is FINISHED, then pu
   const out = await publishInstagram(record, publishRequest("instagram", post()), { call, link: async (p) => "https://dl/" + p.split("/").pop(), wait: async () => { waits++; } });
   assert.deepEqual(out, { postId: "m9", permalink: "https://www.instagram.com/reel/abc/" });
   assert.equal(waits, 2);
-  assert.deepEqual(calls[0].params, { media_type: "REELS", video_url: "https://dl/clip.mp4", caption: "Live at the Dirty Bird\n\n#reggae #stashbox", share_to_feed: "true" });
+  assert.deepEqual(calls[0].params, { media_type: "REELS", video_url: "https://dl/clip.mp4", caption: "Live at the Dirty Bird\n\n#reggae #stashbox", share_to_feed: "true", is_ai_generated: "true" });
   assert.deepEqual(calls.find((c) => c.path === "222/media_publish").params, { creation_id: "c1" });
 });
 
@@ -129,7 +129,7 @@ test("a Facebook Reel starts, uploads from the link, then finishes as PUBLISHED"
   assert.equal(uploaded.url, "https://rupload.facebook.com/video-upload/v26.0/r5");
   assert.equal(uploaded.opts.headers.file_url, "https://dl/clip.mp4");
   assert.equal(uploaded.opts.headers.authorization, "OAuth page-token");
-  assert.deepEqual(calls[1].params, { upload_phase: "finish", video_id: "r5", video_state: "PUBLISHED", description: "Live at the Dirty Bird\n\n#reggae #stashbox" });
+  assert.deepEqual(calls[1].params, { upload_phase: "finish", video_id: "r5", video_state: "PUBLISHED", is_ai_generated: "true", description: "Live at the Dirty Bird\n\n#reggae #stashbox" });
   const failing = async () => ({ ok: false, status: 400, json: async () => ({ debug_info: { message: "bad file" } }) });
   await assert.rejects(publishFacebook(record, publishRequest("facebook", post({ channelId: "111" })), { call, link: async () => "u", upload: failing }), /Reel upload failed: bad file/);
   assert.equal(calls.filter((c) => c.params.upload_phase === "finish").length, 1, "no finish after a failed upload");
@@ -208,11 +208,11 @@ test("an Instagram Story posts the bare media with media_type STORIES and no cap
   };
   const deps = { call, link: async () => "https://dl/story", wait: async () => {} };
   const video = await publishInstagram(record, publishRequest("instagram", post({ placement: "story", caption: "", dropboxPath: ROOT + "story.mp4" })), deps);
-  assert.deepEqual(calls[0].params, { media_type: "STORIES", video_url: "https://dl/story" });
+  assert.deepEqual(calls[0].params, { media_type: "STORIES", video_url: "https://dl/story", is_ai_generated: "true" });
   assert.equal(video.postId, "s9");
   calls.length = 0;
   await publishInstagram(record, publishRequest("instagram", post({ placement: "story", caption: "", dropboxPath: ROOT + "story.jpg" })), deps);
-  assert.deepEqual(calls[0].params, { media_type: "STORIES", image_url: "https://dl/story" });
+  assert.deepEqual(calls[0].params, { media_type: "STORIES", image_url: "https://dl/story", is_ai_generated: "true" });
 });
 
 test("a Facebook photo Story uploads unpublished, then becomes a Story", async () => {
@@ -235,10 +235,22 @@ test("a Facebook video Story starts, uploads from the link, then finishes; a fai
   const out = await publishFacebook(record, req, { call, link: async () => "https://dl/s.mp4", upload });
   assert.equal(uploaded.url, "https://rupload/v1");
   assert.equal(uploaded.opts.headers.file_url, "https://dl/s.mp4");
-  assert.deepEqual(calls[1], { path: "111/video_stories", params: { upload_phase: "finish", video_id: "v1" } });
+  assert.deepEqual(calls[1], { path: "111/video_stories", params: { upload_phase: "finish", video_id: "v1", is_ai_generated: "true" } });
   assert.deepEqual(out, { postId: "st2", permalink: "https://www.facebook.com/stories/111" });
   calls.length = 0;
   const failing = async () => ({ ok: false, status: 400, json: async () => ({ debug_info: { message: "bad file" } }) });
   await assert.rejects(publishFacebook(record, req, { call, link: async () => "u", upload: failing }), /Story upload failed: bad file/);
   assert.equal(calls.filter((c) => c.params.upload_phase === "finish").length, 0);
+});
+
+test("every Instagram post carries the AI label unless the request opts out", async () => {
+  const sent = [];
+  const call = async (method, path, params) => { sent.push(params); return path.endsWith("/media") ? { id: "c1" } : path === "c1" ? { status_code: "FINISHED" } : path.endsWith("/media_publish") ? { id: "m1" } : {}; };
+  const deps = { call, link: async () => "https://dl/x.jpg", wait: async () => {} };
+  const req = publishRequest("instagram", post({ placement: "post", dropboxPath: ROOT + "x.jpg" }));
+  await publishInstagram(record, req, deps);
+  assert.equal(sent[0].is_ai_generated, "true");
+  sent.length = 0;
+  await publishInstagram(record, { ...req, aiGenerated: false }, deps);
+  assert.ok(!("is_ai_generated" in sent[0]));
 });
