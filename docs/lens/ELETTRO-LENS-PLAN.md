@@ -27,11 +27,11 @@ Verified 2026-10-25:
 - **MindAR** (`mind-ar` on npm, MIT) is the long-standing open WebAR image-tracking library (three.js / A-Frame).
   It compiles targets **in the browser**, so no server is needed to register a target.
 
-**Decision (Dean's phone tests, 2026-10-25): 8th Wall open-source engine** (binary + Image Targets, MIT framework), with MindAR as the fallback.
+**FINAL (Dean, 2026-10-25): 8th Wall open-source engine** (binary + Image Targets, MIT framework), with MindAR as the fallback.
 Same hung T-shirt print (Super Funk), iPhone Safari:
 - 8th Wall: steady, found/lost 2/1-2, dead on the print after a one-time placement correction; first lock 6.1-7.0 s (includes camera permission + engine start); about 50-75 KB of tracking data per cover.
 - MindAR 1.2.5: first lock 3.8-4.8 s, but **very jittery** at its normal smoothing and laggy when smoothed hard; overlay sat off the print; about 0.75 MB per cover.
-Calibrated on the same print: MindAR x 0.000 / y -0.040 / size 1.120, first lock 3.6 s, lost 0, **still jittery after calibration**; 8th Wall x -0.053 / y -0.027 / size 1.130, steady.
+Calibrated on the same print (8th Wall's final tuning on the phone was x -0.048 / y -0.027 / size 1.140; one later run was slower, 12.3 s with motion blur, so lock time must be re-measured in the real build): MindAR x 0.000 / y -0.040 / size 1.120, first lock 3.6 s, lost 0, **still jittery after calibration**; 8th Wall x -0.053 / y -0.027 / size 1.130, steady.
 **Finding:** both engines independently needed about **1.12-1.13x** and about -0.03 to -0.04 in y, so the printed shirt art is not 1:1 with the registered cover file (print bleed/margin or a different crop). Per-trigger placement and size calibration is therefore a first-class product feature (the nudge tool in `/lens`) regardless of engine, and the registered image should be the exact printed art where possible.
 Open item: bring 8th Wall's first lock down (about 4 s target): preload only the chunks the image-target path needs (dropping the `slam` preload), keep the engine files on CloudFront, warm the camera on the splash screen.
 Both engines remain free and self-hosted; nothing to buy. The rest of the plan is engine-agnostic (the viewer loads a targets file plus a JSON manifest).
@@ -161,7 +161,7 @@ Every PR: branch from `origin/develop`, own worktree `epe-lens-<n>`, PR into `de
 
 | # | Work | Checkpoint (Dean) |
 |---|---|---|
-| **CP0** | **Spike, outside the repo.** One Stashbox cover + one video. Two static pages (MindAR, 8th Wall OSS) on a temporary HTTPS host (S3 website bucket behind CloudFront, or a branch preview). No Elettro OS changes. | Dean scans on his iPhone + an Android. Picks the engine. |
+| **CP0** | **DONE 2026-10-25.** Spike outside the repo (lens-spike folder on Dean's PC, local HTTPS test pages). Both engines ran on Dean's iPhone with three Stashbox covers (Dirty Bird, Super Funk, I'm Waiting) and a printed T-shirt. | Dean chose **8th Wall**. Domain `lens.elettro.com` confirmed. |
 | PR1 | `services/lens-lambda` + tests + `build-lens-lambda.yml` (zip artifact, like the others) + `docs/lens/AWS-SETUP.md` (exact CLI for the table, bucket, CloudFront, role). CLAUDE.md §2/§3 updated. | Dean (or root, with Dean's OK) creates the AWS resources and deploys the Lambda. Smoke test with curl. |
 | PR2 | `apps/lens-viewer` (static) + deploy script `scripts/lens-deploy-viewer` (build → `aws s3 sync` → invalidate). Seeds the Stashbox manifest by hand. | **Milestone 1 demo**: scan a real Stashbox cover → video. iPhone + Android. |
 | PR3 | Elettro OS `/lens` pages + nav + entitlement toggle + triggers, actions, sets and the multi-QR manager `/lens/qr` (§5a, §5b) + Next API routes (server-side calls only, `connectKeyHeaders()`). | Dean registers a second cover himself from the OS, with no code involved, then creates two QRs (one scanner for a set, one web link), switches the web-link QR to the scanner and back, and the same printed QR follows each time. |
