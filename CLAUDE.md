@@ -49,12 +49,14 @@ EventBridge, every 15 min ──> platform worker Lambda ──> network API
   (**source of truth** for which network/placement is live), `*-connect.mjs` (OAuth connect per network),
   `copywriter.mjs` / `curator.mjs` / `intelligence.mjs` (AI picks and copy), `connection-status.mjs` (feeds the
   elettro.com/dash race).
-- **Worker Lambdas** `services/<platform>-lambda`: `threads`, `tiktok`, `pinterest`, `youtube-upload`, and `meta`
-  (Instagram + Facebook Reels and feed posts; Page tokens don't expire, so no renewal). Each is invoked only
+- **Worker Lambdas** `services/<platform>-lambda`: `threads`, `tiktok`, `pinterest`, `youtube-upload`, `meta`
+  (Instagram + Facebook Reels, feed posts and Stories; Page tokens don't expire, so no renewal) and `linkedin`. Each is invoked only
   through IAM (no HTTP route), runs **outside the VPC** (they need to reach the network APIs), and publishes by calling the
   dev-api's `claim-due-posts` (a worker can pass `placements` to claim only some) then `finish-post`. `meta` was created in AWS and
-  published its first scheduled Reels on 2026-10-22. There is no
-  LinkedIn worker yet; its connect + test-post code is in dev-api/web only.
+  published its first scheduled Reels on 2026-10-22. `linkedin` publishes approved photo/video posts to the connected member
+  profile (member tokens last 60 days with no refresh, so there is no renewal step; with an expired login the tick skips and
+  leaves posts approved). Its Lambda and schedule must be created in AWS by hand (see its PR); connect + test-post code is
+  in dev-api/web.
 - **Other Lambdas**: `dropbox-sync` (change ingestion), `dropbox-upload` (browser upload links).
 - `packages/*` (ai, auth, connectors, database/prisma, media) and `services/worker` are the original Sprint-1 scaffold.
   The live backend is the Lambdas above; check before assuming a package is wired in.
@@ -73,7 +75,7 @@ EventBridge, every 15 min ──> platform worker Lambda ──> network API
 | Piece | AWS name |
 |---|---|
 | API | `elettro-brand-os-dev-api` (+ HTTP API) |
-| Workers | `elettro-brand-os-dev-{threads,tiktok,pinterest,youtube-upload,meta}` |
+| Workers | `elettro-brand-os-dev-{threads,tiktok,pinterest,youtube-upload,meta,linkedin}` (`linkedin` once created) |
 | Dropbox | `elettro-brand-os-dev-{dropbox-sync,dropbox-upload}` |
 | DB | RDS `elettro-brand-os-dev` |
 | Buckets | `elettro-brand-os-dev-assets`, `elettro-brand-os-dev-thumbnails` |
