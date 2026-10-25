@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
 import pg from "pg";
 import { withDropboxIdentityTransaction, findDropboxAsset, DropboxIdentityConflict } from "./dropbox-identity.mjs";
+import { brandFilter } from "./api-gate.mjs";
 
 const { Client } = pg;
 const secrets = new SecretsManagerClient({});
@@ -403,26 +404,32 @@ export const handler = async (event = {}) => {
     }
 
     if (requestAction === "brands") {
+      const only = brandFilter(event);
       const result = await client.query(
-        'SELECT "id", "name", "slug", "timezone", "status" FROM "Brand" ORDER BY "name"'
+        'SELECT "id", "name", "slug", "timezone", "status" FROM "Brand" WHERE ($1::text[] IS NULL OR "slug" = ANY($1::text[])) ORDER BY "name"',
+        [only]
       );
       return json(200, { ok: true, brands: result.rows });
     }
 
     if (requestAction === "dashboard") {
+      // With ?brands=a,b every count covers only those brands (never all-brands totals).
+      const only = brandFilter(event);
       const result = await client.query(`
         SELECT
-          (SELECT COUNT(*)::int FROM "Brand" WHERE "status" = 'active') AS "brands",
-          (SELECT COUNT(*)::int FROM "StorageConnection" WHERE "status" = 'active') AS "dropboxAccounts",
-          (SELECT COUNT(*)::int FROM "Asset") AS "assetsIndexed",
+          (SELECT COUNT(*)::int FROM "Brand" WHERE "status" = 'active' AND ($1::text[] IS NULL OR "slug" = ANY($1::text[]))) AS "brands",
+          (SELECT COUNT(*)::int FROM "StorageConnection" WHERE "status" = 'active' AND $1::text[] IS NULL) AS "dropboxAccounts",
+          (SELECT COUNT(*)::int FROM "Asset" a JOIN "Brand" b ON b."id" = a."brandId"
+            WHERE $1::text[] IS NULL OR b."slug" = ANY($1::text[])) AS "assetsIndexed",
           (
             SELECT COUNT(*)::int
-            FROM "Asset"
-            WHERE "approvalStatus" = 'approved'
-              AND "ingestStatus" = 'ready'
-              AND "retiredAt" IS NULL
+            FROM "Asset" a JOIN "Brand" b ON b."id" = a."brandId"
+            WHERE a."approvalStatus" = 'approved'
+              AND a."ingestStatus" = 'ready'
+              AND a."retiredAt" IS NULL
+              AND ($1::text[] IS NULL OR b."slug" = ANY($1::text[]))
           ) AS "approvedInPool"
-      `);
+      `, [only]);
       return json(200, { ok: true, dashboard: result.rows[0] });
     }
 
@@ -629,9 +636,10 @@ export const handler = async (event = {}) => {
           b."name" AS "brandName"
         FROM "Asset" a
         JOIN "Brand" b ON b."id" = a."brandId"
+        WHERE ($1::text[] IS NULL OR b."slug" = ANY($1::text[]))
         ORDER BY a."createdAt" DESC
         LIMIT 2000
-      `);
+      `, [brandFilter(event)]);
       return json(200, { ok: true, assets: result.rows });
     }
 
@@ -659,9 +667,10 @@ export const handler = async (event = {}) => {
         WHERE a."approvalStatus" = 'approved'
           AND a."ingestStatus" = 'ready'
           AND a."retiredAt" IS NULL
+          AND ($1::text[] IS NULL OR b."slug" = ANY($1::text[]))
         ORDER BY a."updatedAt" DESC
         LIMIT 100
-      `);
+      `, [brandFilter(event)]);
       return json(200, { ok: true, assets: result.rows });
     }
 

@@ -49,6 +49,10 @@ EventBridge, every 15 min ──> platform worker Lambda ──> network API
   (**source of truth** for which network/placement is live), `*-connect.mjs` (OAuth connect per network),
   `copywriter.mjs` / `curator.mjs` / `intelligence.mjs` (AI picks and copy), `connection-status.mjs` (feeds the
   elettro.com/dash race).
+  **Every HTTP route except `GET /status/connections` and `/status/posts` needs the `x-elettro-connect-key` header**
+  (deny-by-default gate in `api-gate.mjs`, which also parses the `?brands=a,b` filter that `/brands`, `/dashboard`, `/assets`
+  and `/content-pool` accept). Web server code sends the key via `connectKeyHeaders()` in `apps/web/lib/dev-api-key.ts`;
+  never call the dev-api from browser code. The dropbox-sync Lambda's thumbnail route checks the same key.
 - **Worker Lambdas** `services/<platform>-lambda`: `threads`, `tiktok`, `pinterest`, `youtube-upload`, `meta`
   (Instagram + Facebook Reels, feed posts and Stories; Page tokens don't expire, so no renewal) and `linkedin`. Each is invoked only
   through IAM (no HTTP route), runs **outside the VPC** (they need to reach the network APIs), and publishes by calling the
