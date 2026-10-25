@@ -226,6 +226,13 @@ Radio already supplies `song_key` and `shop_url` for all 89 songs, so importing 
 - Each brand can have a different shop (Stashbox, SolarMeister, ...); the shop is a per-brand setting in `/lens/settings`. Read-only: no orders, customers or inventory touched.
 - Shopify admin/Storefront API tokens, if ever needed, go in Secrets Manager under `elettro-lens-dev/`, never in code.
 
+**Button presets per brand (Dean 2026-10-25):** each brand defines its own default buttons in `/lens/settings`, and every trigger inherits them unless it overrides them.
+A preset is an ordered list of `{ label, type: link|radio|shop|phone|email, urlTemplate, style }`; templates can use `{song_key}`, `{asset.title}`, `{product.url}` and `{brand}`.
+- **Stashbox:** **Listen** (`https://stashbox.com/radio/?song={song_key}`) + **Buy** (song `shop_url` / product).
+- **Other brands choose their own**, e.g. SolarMeister: Shop / Get a quote / Call; Neckermann Strom: its own set. Nothing is hard-coded to Stashbox.
+- A button with an empty template value (no `song_key`, no product) is skipped, not shown broken.
+- Per-trigger overrides: add, remove, reorder or relabel buttons for one cover. Preset changes apply on the next Publish of each set.
+
 **Product links from asset metadata (Dean 2026-10-25):** assets in Elettro OS carry Shopify product links in their metadata. If a trigger's source asset has products, Lens shows a **Buy** button for each; no products, no button.
 - Already in the schema (checked in `init.sql`, 2026-10-25): `ShopifyStore` (per brand), `ShopifyProduct` (with `productUrl`), and `Asset.shopifyStoreId` / `Asset.shopifyProductId` (one product per asset today).
   Whether those columns are filled in live data was **not** checked.
