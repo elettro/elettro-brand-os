@@ -5,8 +5,9 @@ const apiBaseUrl =
   process.env.NEXT_PUBLIC_BRAND_OS_API_BASE_URL ||
   "https://zkjngy7rdd.execute-api.us-east-1.amazonaws.com";
 
-// Brands whose Facebook + Instagram posts can be reviewed (same list as Connect Meta).
-export { META_BRANDS as REVIEW_BRANDS } from "@/lib/meta-connect";
+// Brands that appear on the Review page: the Connect Meta brands, plus Neckermann Strom (no Meta login yet, but it has posts to review).
+import { META_BRANDS } from "@/lib/meta-connect";
+export const REVIEW_BRANDS = [...META_BRANDS, "neckermann-strom"];
 
 export type TiktokSettings = { privacyLevel: string; allowComment: boolean; allowDuet: boolean; allowStitch: boolean; yourBrand: boolean; brandedContent: boolean };
 export type TiktokCreator = {
