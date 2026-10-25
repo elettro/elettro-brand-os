@@ -61,6 +61,10 @@ EventBridge, every 15 min ──> platform worker Lambda ──> network API
   profile (member tokens last 60 days with no refresh, so there is no renewal step; with an expired login the tick skips and
   leaves posts approved). Its Lambda and schedule must be created in AWS by hand (see its PR); connect + test-post code is
   in dev-api/web.
+- **Elettro Lens** (WebAR; plan in `docs/lens/ELETTRO-LENS-PLAN.md`, setup in `docs/lens/AWS-SETUP.md`): `services/lens-lambda` is the admin API
+  (Lambda Function URL, outside the VPC, **no Postgres**, DynamoDB + S3 + CloudFront only; same `x-elettro-connect-key`). It is fully separate from the Publishing Engine:
+  Lens PRs must not edit the dev-api, the worker Lambdas, the schedules or the schema. Public pages and manifests are served by CloudFront at `lens.elettro.com`, not by the Lambda.
+  **Status 2026-10-25: API code added in the Lens PR1; the AWS resources are not created yet** (see the setup guide; needs the root profile).
 - **Other Lambdas**: `dropbox-sync` (change ingestion), `dropbox-upload` (browser upload links).
 - `packages/*` (ai, auth, connectors, database/prisma, media) and `services/worker` are the original Sprint-1 scaffold.
   The live backend is the Lambdas above; check before assuming a package is wired in.
@@ -85,6 +89,7 @@ EventBridge, every 15 min ──> platform worker Lambda ──> network API
 | Buckets | `elettro-brand-os-dev-assets`, `elettro-brand-os-dev-thumbnails` |
 | Web | Amplify app `d2k28tehm1a8zw` |
 | Secrets | Secrets Manager prefix `elettro-brand-os-dev/` (app secrets `*-oauth`; per-account tokens under `<platform>/<id>`) |
+| Lens (**planned, not created yet**) | Lambda `elettro-lens-dev-api`, DynamoDB `elettro-lens-dev`, bucket `elettro-lens-dev-media`, CloudFront for `lens.elettro.com`, role `elettro-lens-dev-api-role` |
 | Schedules | EventBridge, all `rate(15 minutes)`: `elettro-brand-os-dev-threads-refresh`, `…-tiktok-refresh`, `…-youtube-tick`, and **`elettro-pinterest-tick`** (different name pattern), `elettro-brand-os-dev-meta-tick` |
 
 (**verify** with `aws lambda list-functions` / `aws events list-rules`.)
