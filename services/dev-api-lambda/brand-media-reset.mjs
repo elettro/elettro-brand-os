@@ -6,7 +6,7 @@
 // dry run unless mode:"apply".
 
 export const RESET = "brand_media_reset_20261017";
-const BRANDS = ["stashbox","elettro","solarmeister","neckermann-strom","weightlossdavie","therasbox","pianomusicsoothing"];
+const BRANDS = ["stashbox","elettro","solarmeister","neckermann-strom","weightlossdavie","therasbox","pianomusicsoothing","reggaeland"];
 const T = {asset: `"_${RESET}_asset"`, subject: `"_${RESET}_asset_subject"`, post: `"_${RESET}_scheduled_post"`};
 
 async function exists(client, table) {

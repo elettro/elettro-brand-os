@@ -343,7 +343,7 @@ async function invokeWriter(entries, listing) {
 
 
 async function listBrandFolders(token, event) {
-  const roots = ["stashbox", "solarmeister", "weightlossdavie", "neckermann-strom", "therasbox", "elettro", "pianomusicsoothing"];
+  const roots = ["stashbox", "solarmeister", "weightlossdavie", "neckermann-strom", "therasbox", "elettro", "pianomusicsoothing","reggaeland"];
   const brand = event?.brand || event?.queryStringParameters?.brand || "";
   if (!roots.includes(brand)) return json(400, { ok: false, error: "Invalid brand" });
   const root = `${DROPBOX_ROOT}/brands/${brand}`;
@@ -387,7 +387,7 @@ async function listBrandFolders(token, event) {
 // DEV-only Dropbox write preparation. Never exposes OAuth credentials to the browser.
 function authorizedDropboxPath(event, childName) {
   const brand = String(event.brand || "");
-  const allowed = ["solarmeister","stashbox","weightlossdavie","neckermann-strom","therasbox","elettro","pianomusicsoothing"];
+  const allowed = ["solarmeister","stashbox","weightlossdavie","neckermann-strom","therasbox","elettro","pianomusicsoothing","reggaeland"];
   if (!allowed.includes(brand)) throw new Error("Invalid brand");
   const root = `${DROPBOX_ROOT}/brands/${brand}`;
   const folder = String(event.path || root).replace(/\\/g,"/").replace(/\/+$/,"");
@@ -423,7 +423,7 @@ async function verifyBrandUpload(token,event){
  try {
   const brand=String(event.brand||"");
   const root=`${DROPBOX_ROOT}/brands/${brand}`;
-  if(!["solarmeister","stashbox","weightlossdavie","neckermann-strom","therasbox","elettro","pianomusicsoothing"].includes(brand)) return json(400,{ok:false,error:"Invalid brand"});
+  if(!["solarmeister","stashbox","weightlossdavie","neckermann-strom","therasbox","elettro","pianomusicsoothing","reggaeland"].includes(brand)) return json(400,{ok:false,error:"Invalid brand"});
   const path=String(event.path||"").replace(/\\/g,"/");
   if(!path.toLowerCase().startsWith(root.toLowerCase()+"/") || path.includes("\0")) return json(403,{ok:false,error:"Outside brand root"});
   const response=await fetch("https://api.dropboxapi.com/2/files/get_metadata",{method:"POST",headers:{authorization:`Bearer ${token}`,"content-type":"application/json"},body:JSON.stringify({path,include_deleted:false})});
