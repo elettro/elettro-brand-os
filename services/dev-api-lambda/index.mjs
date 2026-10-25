@@ -16,6 +16,7 @@ import { handler as existingHandler } from "./db-main.mjs";
 import { gateHttp } from "./api-gate.mjs";
 import { handleDropboxUploadSession } from "./dropbox-upload-session.mjs";
 import { completeYoutubeConnect } from "./youtube-connect.mjs";
+import { completeGmbConnect } from "./gmb-connect.mjs";
 import { completeLinkedinConnect } from "./linkedin-connect.mjs";
 import { completeMetaConnect } from "./meta-connect.mjs";
 import { handlePlannerWeb, handlePlannerOps } from "./planner-ops.mjs";
@@ -1757,6 +1758,11 @@ export const handler = async (event = {}) => {
   // "Connect YouTube": the web app forwards Google's one-time code with the shared connect key.
   if (requestPath === "/connections/youtube/complete" && event?.requestContext?.http?.method === "POST") {
     return completeYoutubeConnect(event, parseJsonBody(event), connectDatabase, json);
+  }
+
+  // "Connect Google Business Profile": same flow as YouTube, one profile per brand.
+  if (requestPath === "/connections/gmb/complete" && event?.requestContext?.http?.method === "POST") {
+    return completeGmbConnect(event, parseJsonBody(event), connectDatabase, json);
   }
 
   // Planner page (owner only): view a week, edit cadence, approve, or ask the next tick to re-plan.

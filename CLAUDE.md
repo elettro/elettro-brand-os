@@ -117,7 +117,7 @@ Amplify auto-builds the web app from `develop`. After a merge, do the PR's "AWS 
   (Pinterest posting was merged in PR #144; re-check whether it is now live). Instagram/Facebook feed photos and wide
   videos are handled by the same worker (`services/meta-lambda`) but stay `planning` until one publishes on schedule.
   Stories are not built.
-- **integration** (not connected): X, Google Business Profile (waiting on Google's API allowlist).
+- **integration** (not connected): X. Google Business Profile is allowlisted (261023) and has a connect flow (Stashbox + Elettro); posting is not built and waits on the business-intelligence layer.
 - Token expiry matters: Threads/Pinterest/Meta tokens expire and must be renewed or reconnected by hand if a window is
   missed. Threads renewal is automatic (tick). Connection status/expiry feeds `elettro.com/dash`.
 - Each network has a hard daily cap of 10 posts across formats; Review page "posts per day" controls it.

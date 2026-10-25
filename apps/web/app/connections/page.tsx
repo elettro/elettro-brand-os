@@ -2,6 +2,7 @@ import { authenticated } from "@/lib/cognito-auth";
 import { brandConfigs } from "@/lib/brand-config";
 import { YOUTUBE_BRANDS } from "@/lib/youtube-connect";
 import { LINKEDIN_BRANDS, calendarReminderUrl } from "@/lib/linkedin-connect";
+import { GBP_BRANDS } from "@/lib/gbp-connect";
 import { META_BRANDS } from "@/lib/meta-connect";
 import { MetaTestPosts } from "@/components/meta-test-posts";
 import { THREADS_BRANDS } from "@/lib/threads-connect";
@@ -48,6 +49,8 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
   const linkedinBrands = brandConfigs.filter((b) => LINKEDIN_BRANDS.includes(b.id));
   const metaBrands = brandConfigs.filter((b) => META_BRANDS.includes(b.id));
   const threadsBrands = brandConfigs.filter((b) => THREADS_BRANDS.includes(b.id));
+  const gbpBrands = brandConfigs.filter((b) => GBP_BRANDS.includes(b.id));
+  const gmb = status.gmb || {};
   const youtube = status.youtube || {};
   const linkedin = status.linkedin || {};
   const facebook = status.facebook || {};
@@ -86,6 +89,23 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
               {handle ? <>● Connected · <b>{handle}</b></> : "○ Not connected"}
             </p>
             <a className="status-chip" href={`/api/connections/youtube/start?brand=${b.id}`}>{handle ? "Reconnect" : "Connect YouTube"}</a>
+          </article>
+        );
+      })}
+    </div>
+    <h2 style={{ marginTop: 32 }}>Google Business Profile</h2>
+    <p className="muted">Sign in with the Google account that manages the profile. Elettro OS picks the brand&apos;s profile automatically; nothing is posted until the business-content rules are in place.</p>
+    <div className="grid" style={{ marginTop: 20 }}>
+      {gbpBrands.map((b) => {
+        const profile = gmb[b.id]?.handle;
+        return (
+          <article className="card" key={b.id}>
+            <div className="eyebrow">Google Business Profile</div>
+            <h2>{b.name}</h2>
+            <p className="muted" style={{ margin: "0 0 12px" }}>
+              {profile ? <>● Connected · <b>{profile}</b></> : "○ Not connected"}
+            </p>
+            <a className="status-chip" href={`/api/connections/gbp/start?brand=${b.id}`}>{profile ? "Reconnect" : "Connect Google Business Profile"}</a>
           </article>
         );
       })}
