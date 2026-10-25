@@ -1,75 +1,80 @@
 import { authenticated } from "@/lib/cognito-auth";
 import { redirect } from "next/navigation";
-import { sprintOneBrands } from "@/lib/brands";
-import { getBrands, getDashboard } from "@/lib/dev-api";
+import { StatsBrandSelect } from "@/components/stats-brand-select";
+import { plannerCall, type DashboardStats, type StatCounts } from "@/lib/planner";
 
-const pipeline = [
-  ["Dropbox", "One connected Dropbox account with six mapped brand roots."],
-  ["Ingestion", "Detect files, hashes, paths, file type and technical metadata."],
-  ["AI analysis", "Suggest description, topic, product, tags and creative family."],
-  ["Human review", "Confirm metadata, eligibility, annual rules and approval."],
-  ["Content Pool", "Approved and eligible assets become available to the planner."]
-];
+const STATUS_LABEL: Record<string, string> = {
+  live: "Live", planning: "Planning", review: "In app review", integration: "Not connected"
+};
 
-export default async function DashboardPage() {
-  if (!(await authenticated())) redirect("/welcome");
-  const [brandResponse, dashboardResponse] = await Promise.allSettled([
-    getBrands(),
-    getDashboard()
-  ]);
+// Per-format cells shown in every row, in reading order.
+const PERIODS: Array<[keyof StatCounts, string]> = [["today", "Today"], ["week", "This week"], ["month", "This month"], ["total", "All time"]];
 
-  const apiBrands = brandResponse.status === "fulfilled" ? brandResponse.value.brands : [];
-  const brands = apiBrands.length
-    ? apiBrands.map(({ id, name, timezone }) => ({ id, name, timezone }))
-    : sprintOneBrands;
-
-  const metrics = dashboardResponse.status === "fulfilled"
-    ? dashboardResponse.value.dashboard
-    : { brands: 6, dropboxAccounts: 0, assetsIndexed: 0, approvedInPool: 0 };
+function Cell({ value, label, tone }: { value: number; label: string; tone?: "warn" | "danger" }) {
   return (
-      <main className="main">
-        <div className="topbar">
-          <div>
-            <div className="eyebrow">Publishing Engine · Sprint 1</div>
-            <h1>Create. Approve. The engine distributes.</h1>
-          </div>
-        </div>
+    <div className={`stat-cell${value === 0 ? " zero" : ""}${tone ? ` ${tone}` : ""}`}>
+      <b>{value.toLocaleString("en-US")}</b>
+      <span>{label}</span>
+    </div>
+  );
+}
 
-        <div className="grid stats">
-          <div className="card"><div className="metric">Brands</div><div className="metric-value">{metrics.brands}</div></div>
-          <div className="card"><div className="metric">Dropbox accounts</div><div className="metric-value">{metrics.dropboxAccounts}</div></div>
-          <div className="card"><div className="metric">Assets indexed</div><div className="metric-value">{metrics.assetsIndexed}</div></div>
-          <div className="card"><div className="metric">Approved in pool</div><div className="metric-value">{metrics.approvedInPool}</div></div>
-        </div>
+export default async function DashboardPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
+  if (!(await authenticated())) redirect("/welcome");
+  const scope = (await searchParams).brand || "all";
+  const stats = await plannerCall<DashboardStats>({ action: "stats", brandSlug: scope });
 
-        <div className="hero">
-          <section className="card">
-            <span className="status-chip">Sprint 1 implementation</span>
-            <h2>First vertical slice</h2>
-            <p className="muted">The app shell, asset review screens, eligibility engine and Content Pool logic are now being wired before live Dropbox credentials.</p>
-            <div className="pipeline">
-              {pipeline.map(([title, description], index) => (
-                <div className="pipeline-row" key={title}>
-                  <strong>{index + 1}. {title}</strong>
-                  <span className="muted">{description}</span>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <aside className="card">
-            <h2>Brand roots</h2>
-            <p className="muted">Each root and all of its subfolders map to one brand automatically.</p>
-            <div className="pipeline">
-              {brands.map((brand) => (
-                <div className="pipeline-row" key={brand.id}>
-                  <strong>{brand.name}</strong>
-                  <span className="muted">{brand.timezone}</span>
-                </div>
-              ))}
-            </div>
-          </aside>
+  return (
+    <main className="main">
+      <div className="topbar">
+        <div>
+          <div className="eyebrow">Publishing · Dashboard</div>
+          <h1>{stats.ok ? (scope === "all" ? "All brands" : stats.brands.find((b) => b.slug === scope)?.name ?? scope) : "Dashboard"}</h1>
         </div>
-      </main>
+        {stats.ok && <StatsBrandSelect brands={stats.brands} value={scope} />}
+      </div>
+
+      {!stats.ok ? (
+        <p className="card">Could not load stats: {stats.error}</p>
+      ) : (
+        <div className="net-list">
+          {stats.networks.map((net) => (
+            <section className="card net" key={net.destination}>
+              <header className="net-head">
+                <h2>{net.label}</h2>
+                <span className="muted">
+                  {net.connectedBrands
+                    ? `${net.connectedBrands} brand${net.connectedBrands === 1 ? "" : "s"} connected`
+                    : "No brand connected"}
+                </span>
+              </header>
+              <div className="net-totals">
+                <Cell value={net.totals.possible} label="Possible assets" />
+                <Cell value={net.totals.scheduled} label="Approved & scheduled" />
+                <Cell value={net.totals.awaiting} label="Awaiting approval" tone="warn" />
+                <Cell value={net.totals.failed} label="Failed this month" tone="danger" />
+                {PERIODS.map(([key, label]) => <Cell key={key} value={net.totals[key]} label={label} />)}
+              </div>
+              <div className="fmt-table">
+                {net.formats.map((f) => (
+                  <div className={`fmt-row status-${f.status}`} key={f.placement} title={f.note ?? undefined}>
+                    <div className="fmt-name">
+                      <strong>{f.label}</strong>
+                      <small>{STATUS_LABEL[f.status] ?? f.status}</small>
+                    </div>
+                    <Cell value={f.possible} label="Possible" />
+                    <Cell value={f.scheduled} label="Scheduled" />
+                    <Cell value={f.awaiting} label="Awaiting" tone="warn" />
+                    <Cell value={f.failed} label="Failed" tone="danger" />
+                    {PERIODS.map(([key, label]) => <Cell key={key} value={f[key]} label={label} />)}
+                  </div>
+                ))}
+              </div>
+            </section>
+          ))}
+          <p className="muted">Counts use each brand's own time zone. “Possible assets” are approved library assets that fit the format's rules today.</p>
+        </div>
+      )}
+    </main>
   );
 }

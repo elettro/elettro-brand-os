@@ -52,3 +52,23 @@ export async function plannerCall<T = PlannerWeek>(body: Record<string, unknown>
   const result = await response.json().catch(() => ({ ok: false, error: `Planner API returned ${response.status}` }));
   return result as T;
 }
+
+export type StatCounts = {
+  possible: number; scheduled: number; awaiting: number; failed: number;
+  today: number; week: number; month: number; total: number;
+};
+export type NetworkStats = {
+  destination: string;
+  label: string;
+  connectedBrands: number;
+  totals: StatCounts;
+  formats: Array<StatCounts & { placement: string; label: string; status: string; note: string | null }>;
+};
+export type DashboardStats = {
+  ok: boolean;
+  error?: string;
+  scope: string;
+  generatedAt: string;
+  brands: Array<{ slug: string; name: string }>;
+  networks: NetworkStats[];
+};
