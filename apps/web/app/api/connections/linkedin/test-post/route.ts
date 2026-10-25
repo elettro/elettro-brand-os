@@ -11,7 +11,7 @@ type MemberToken = { accessToken: string; memberUrn: string; brand: string; expi
 
 function done(params: Record<string, string>) {
   // 303 so the browser follows the form POST with a GET.
-  return NextResponse.redirect(DEV_ORIGIN + "/connections?" + new URLSearchParams({ network: "linkedin", ...params }), 303);
+  return NextResponse.redirect(DEV_ORIGIN + "/connections?" + new URLSearchParams({ network: "linkedin", ...params }) + "#linkedin", 303);
 }
 
 // Member tokens are stored per LinkedIn member id; pick the one connected for this brand.
