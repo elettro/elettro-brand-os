@@ -1,3 +1,4 @@
+import { connectKeyHeaders } from "@/lib/dev-api-key";
 const DEFAULT_DEV_API_BASE_URL = "https://zkjngy7rdd.execute-api.us-east-1.amazonaws.com";
 
 const apiBaseUrl =
@@ -7,6 +8,7 @@ const apiBaseUrl =
 
 async function fetchJson<T>(path: string): Promise<T> {
   const response = await fetch(`${apiBaseUrl}${path}`, {
+    headers: await connectKeyHeaders(),
     cache: "no-store"
   });
 

@@ -1,3 +1,4 @@
+import { connectKeyHeaders } from "@/lib/dev-api-key";
 import { enrichAfterRegistrationIfEnabled } from "@/lib/asset-ai-enrichment";
 import {createHash} from "node:crypto";
 import {SecretsManagerClient,GetSecretValueCommand} from "@aws-sdk/client-secrets-manager";
@@ -154,7 +155,7 @@ async function putDropbox(token:string,path:string,bytes:Buffer,contentHash:stri
 }
 async function apiAction(body:Obj):Promise<Obj>{
  const r=await fetch(API_BASE+"/assets/bulk-update",{
-  method:"POST",headers:{"content-type":"application/json"},
+  method:"POST",headers:await connectKeyHeaders({"content-type":"application/json"}),
   body:JSON.stringify(body),cache:"no-store",signal:AbortSignal.timeout(20000)
  });
  const data=await r.json().catch(()=>null) as Obj|null;

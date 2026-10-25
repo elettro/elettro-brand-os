@@ -1,3 +1,4 @@
+import { connectKeyHeaders } from "@/lib/dev-api-key";
 import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
 import { brandConfigs } from "@/lib/brand-config";
 
@@ -84,7 +85,7 @@ function assetId(value: unknown): string {
 async function api(path: string, body?: Dict): Promise<Dict> {
   const response = await fetch(API_BASE + path, {
     method: body ? "POST" : "GET",
-    headers: { "content-type": "application/json" },
+    headers: await connectKeyHeaders({ "content-type": "application/json" }),
     ...(body ? { body: JSON.stringify(body) } : {}),
     cache: "no-store"
   });
@@ -422,7 +423,7 @@ export async function executeAiGateway(input: unknown): Promise<Dict> {
       {parentPath:folderPath(command.parentPath,config.dropboxRoot)};
     if(typeof fields.name==="string"&&(/[\/\\\x00-\x1f]/.test(fields.name)||fields.name==="."||fields.name===".."))
       throw new GatewayError(400,"Unsafe folder name");
-    const response=await fetch(API_BASE+"/assets/bulk-update",{method:"POST",headers:{"content-type":"application/json"},
+    const response=await fetch(API_BASE+"/assets/bulk-update",{method:"POST",headers:await connectKeyHeaders({"content-type":"application/json"}),
       body:JSON.stringify({action:"move-brand-folder",operation:action==="rename_folder"?"rename":"move",brandSlug:config.id,path,...fields,confirmed:true}),
       cache:"no-store",signal:AbortSignal.timeout(60000)});
     const result=await response.json().catch(()=>null);

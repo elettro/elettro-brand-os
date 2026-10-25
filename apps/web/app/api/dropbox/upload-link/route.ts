@@ -1,3 +1,4 @@
+import { connectKeyHeaders } from "@/lib/dev-api-key";
 import {NextRequest,NextResponse} from "next/server";
 import {brandConfigs} from "@/lib/brand-config";
 import {authenticated, allowedOrigin} from "@/lib/cognito-auth";
@@ -15,7 +16,7 @@ export async function POST(request:NextRequest){
  const filename=String(body.filename||"").trim();
  if(!filename||filename==="."||filename===".."||filename.length>180||/[\/\x00-\x1f]/.test(filename))return NextResponse.json({ok:false,error:"Invalid filename"},{status:400});
  try{
-  const upstream=await fetch(`${API_BASE}/assets/bulk-update`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action:"prepare-brand-upload",brand,path,filename}),cache:"no-store"});
+  const upstream=await fetch(`${API_BASE}/assets/bulk-update`,{method:"POST",headers:await connectKeyHeaders({"content-type":"application/json"}),body:JSON.stringify({action:"prepare-brand-upload",brand,path,filename}),cache:"no-store"});
   const data=await upstream.json();return NextResponse.json(data,{status:upstream.status});
  }catch(error){return NextResponse.json({ok:false,error:"Unable to request a Dropbox upload link"},{status:503});}
 }
