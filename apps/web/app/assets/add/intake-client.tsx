@@ -27,7 +27,7 @@ type IntakeFile = {
 };
 
 const networks = ["Instagram", "Facebook", "TikTok", "YouTube", "Threads", "X", "LinkedIn", "Pinterest", "GMB", "Feed"];
-const brandChoices = [{id:"stashbox",label:"Stashbox"},{id:"solarmeister",label:"SolarMeister"},{id:"weightlossdavie",label:"WeightLossDavie"},{id:"neckermann-strom",label:"Neckermann Strom"},{id:"therasbox",label:"Therasbox"},{id:"elettro",label:"Elettro"}];
+const brandChoices = [{id:"stashbox",label:"Stashbox"},{id:"solarmeister",label:"SolarMeister"},{id:"weightlossdavie",label:"WeightLossDavie"},{id:"neckermann-strom",label:"Neckermann Strom"},{id:"therasbox",label:"Therasbox"},{id:"elettro",label:"Elettro"},{id:"pianomusicsoothing",label:"Piano Music Soothing"}];
 
 export function IntakeClient() {
   const [files, setFiles] = useState<IntakeFile[]>([]);
@@ -786,6 +786,7 @@ export function IntakeClient() {
               <option value="neckermann-strom">Neckermann Strom</option>
               <option value="therasbox">Therasbox</option>
               <option value="elettro">Elettro</option>
+              <option value="pianomusicsoothing">Piano Music Soothing</option>
             </select>
           </Field>
           <Field label={brand === "stashbox" ? "Show / Music Series" : "Collection"}>

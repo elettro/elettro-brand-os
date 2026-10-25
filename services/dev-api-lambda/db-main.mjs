@@ -15,6 +15,7 @@ const DROPBOX_BRAND_ROOTS = [
   ["weightlossdavie", "/1---elettro-brand-os/brands/weightlossdavie"],
   ["neckermann-strom", "/1---elettro-brand-os/brands/neckermann-strom"],
   ["therasbox", "/1---elettro-brand-os/brands/therasbox"],
+  ["pianomusicsoothing", "/1---elettro-brand-os/brands/pianomusicsoothing"],
   ["elettro", "/1---elettro-brand-os/brands/elettro"]
 ];
 
