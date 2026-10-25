@@ -76,7 +76,7 @@ export async function instagramContainer(token: PageToken, asset: LibraryAsset, 
   const params: Record<string, string> = asset.kind === "image"
     ? { image_url: url, caption }
     : { media_type: "REELS", video_url: url, caption, share_to_feed: "true" };
-  const created = await graphCall<{ id: string }>("POST", `${token.instagramId}/media`, params, token.pageAccessToken, "Instagram upload");
+  const created = await graphCall<{ id: string }>("POST", `${token.instagramId}/media`, { ...params, is_ai_generated: "true" }, token.pageAccessToken, "Instagram upload");
   return { containerId: created.id, placement: asset.kind === "image" ? "post" : "reel" };
 }
 
@@ -110,7 +110,7 @@ export async function facebookPost(token: PageToken, asset: LibraryAsset, captio
   });
   const uploaded = await upload.json().catch(() => ({})) as { success?: boolean; debug_info?: { message?: string } };
   if (!upload.ok || !uploaded.success) throw new PublishError(`Meta Facebook Reel upload failed: ${uploaded.debug_info?.message || upload.status}`);
-  await graphCall("POST", `${token.pageId}/video_reels`, { upload_phase: "finish", video_id: start.video_id, video_state: "PUBLISHED", description: caption }, token.pageAccessToken, "Facebook Reel publish");
+  await graphCall("POST", `${token.pageId}/video_reels`, { upload_phase: "finish", video_id: start.video_id, video_state: "PUBLISHED", description: caption, is_ai_generated: "true" }, token.pageAccessToken, "Facebook Reel publish");
   return { id: start.video_id, url: `https://www.facebook.com/reel/${start.video_id}`, placement: "reel" };
 }
 

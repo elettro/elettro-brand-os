@@ -143,6 +143,11 @@ async function dropboxLink(path) {
   return (await response.json()).link;
 }
 
+// Every post is disclosed as AI-generated (Dean 261025). Meta's flag: Instagram takes is_ai_generated on the media
+// container, Facebook Reels and video Stories take it on the finish call. Facebook photos and feed videos have no
+// documented flag, so they are left alone. A request can opt out with aiGenerated: false.
+const aiLabel = (request) => (request.aiGenerated === false ? {} : { is_ai_generated: "true" });
+
 // Instagram is create a container, wait for Meta to fetch and process it, then publish it.
 export async function publishInstagram(record, request, deps = {}) {
   const { call = (method, path, params, what) => graph(method, path, params, record.pageAccessToken, what), link = dropboxLink,
@@ -155,7 +160,7 @@ export async function publishInstagram(record, request, deps = {}) {
     : request.kind === "image"
       ? { image_url: url, caption: request.caption }
       : { media_type: "REELS", video_url: url, caption: request.caption, share_to_feed: "true" };
-  const container = await call("POST", `${record.instagramId}/media`, params, "Instagram upload");
+  const container = await call("POST", `${record.instagramId}/media`, { ...params, ...aiLabel(request) }, "Instagram upload");
   if (!container.id) throw new Error("Instagram returned no media container");
   for (let waited = 0; ; waited += pollMs) {
     const state = await call("GET", container.id, { fields: "status_code,status" }, "Instagram status");
@@ -190,7 +195,7 @@ async function publishFacebookStory(record, request, url, { call, upload }) {
   });
   const uploaded = await sent.json().catch(() => ({}));
   if (!sent.ok || !uploaded.success) throw new Error(`Meta Facebook Story upload failed: ${uploaded.debug_info?.message || sent.status}`);
-  const done = await call("POST", `${record.pageId}/video_stories`, { upload_phase: "finish", video_id: start.video_id }, "Facebook Story publish");
+  const done = await call("POST", `${record.pageId}/video_stories`, { upload_phase: "finish", video_id: start.video_id, ...aiLabel(request) }, "Facebook Story publish");
   return { postId: done.post_id || start.video_id, permalink: storiesLink };
 }
 
@@ -221,7 +226,7 @@ export async function publishFacebook(record, request, deps = {}) {
   const uploaded = await sent.json().catch(() => ({}));
   if (!sent.ok || !uploaded.success) throw new Error(`Meta Facebook Reel upload failed: ${uploaded.debug_info?.message || sent.status}`);
   await call("POST", `${record.pageId}/video_reels`,
-    { upload_phase: "finish", video_id: start.video_id, video_state: "PUBLISHED", description: request.caption }, "Facebook Reel publish");
+    { upload_phase: "finish", video_id: start.video_id, video_state: "PUBLISHED", description: request.caption, ...aiLabel(request) }, "Facebook Reel publish");
   return { postId: start.video_id, permalink: `https://www.facebook.com/reel/${start.video_id}` };
 }
 
