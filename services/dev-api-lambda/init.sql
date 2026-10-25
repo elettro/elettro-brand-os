@@ -268,7 +268,8 @@ CROSS JOIN (VALUES
   ('WeightLossDavie','weightlossdavie','America/New_York'),
   ('Neckermann Strom','neckermann-strom','Europe/Berlin'),
   ('Therasbox','therasbox','America/New_York'),
-  ('Elettro','elettro','America/New_York')
+  ('Elettro','elettro','America/New_York'),
+  ('Piano Music Soothing','pianomusicsoothing','America/New_York')
 ) AS v(name,slug,timezone)
 ON CONFLICT ("organizationId","slug")
 DO UPDATE SET "name"=EXCLUDED."name","timezone"=EXCLUDED."timezone","updatedAt"=CURRENT_TIMESTAMP;
