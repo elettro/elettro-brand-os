@@ -38,6 +38,7 @@ const DROPBOX_BRAND_ROOTS = [
   ["neckermann-strom", "/1---elettro-brand-os/brands/neckermann-strom"],
   ["therasbox", "/1---elettro-brand-os/brands/therasbox"],
   ["pianomusicsoothing", "/1---elettro-brand-os/brands/pianomusicsoothing"],
+  ["reggaeland", "/1---elettro-brand-os/brands/reggaeland"],
   ["elettro", "/1---elettro-brand-os/brands/elettro"],
   // Shared library: only the audio subtree is indexed (see shared-audio-library.mjs).
   [LIBRARY_SLUG, LIBRARY_AUDIO_ROOT]

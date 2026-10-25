@@ -10,7 +10,8 @@ const brands=[
  {id:"weightlossdavie",name:"WeightLossDavie"},
  {id:"neckermann-strom",name:"Neckermann Strom"},
  {id:"therasbox",name:"Therasbox"},
- {id:"pianomusicsoothing",name:"Piano Music Soothing"}
+ {id:"pianomusicsoothing",name:"Piano Music Soothing"},
+ {id:"reggaeland",name:"Reggae.Land"}
 ];
 
 async function gateway(request:Record<string,unknown>):Promise<ApiResult>{
