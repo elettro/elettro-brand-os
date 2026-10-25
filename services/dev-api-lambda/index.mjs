@@ -3,7 +3,8 @@ import {runBrandMediaReset} from "./brand-media-reset.mjs";
 import {runBrandRootMigration} from "./brand-root-migration.mjs";
 import { configurePlannerBrand, runPlanWeek, runPlanWeeks, approvePlannerWeek } from "./planner-v2-db.mjs";
 import {runSharedAudioLibrarySetup,LIBRARY_SLUG,LIBRARY_AUDIO_ROOT} from "./shared-audio-library.mjs";
-import { handleConnectionStatus, setPlatformMilestone, setTokenExpiry } from "./connection-status.mjs";
+import { handleConnectionStatus, setPlatformMilestone, setTokenExpiry, feedResponse } from "./connection-status.mjs";
+import { handlePostRace } from "./post-race.mjs";
 import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
 import { S3Client, PutObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
@@ -1582,6 +1583,8 @@ export const handler = async (event = {}) => {
 
   // Public, read-only: connection race feed for elettro.com/dash (counts only).
   if (requestPath === "/status/connections" && (event?.requestContext?.http?.method || "GET") === "GET") return handleConnectionStatus(connectDatabase);
+  // Public, read-only: the 1000-post race (counts per brand and network) for elettro.com/dash.
+  if (requestPath === "/status/posts" && (event?.requestContext?.http?.method || "GET") === "GET") return handlePostRace(connectDatabase, feedResponse);
   if (
     event?.action === "ingest-dropbox-page" ||
     requestPath === "/dropbox/ingest-page"
