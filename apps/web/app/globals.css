@@ -1007,3 +1007,15 @@ code {
   .fmt-row { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .fmt-name { grid-column: 1 / -1; }
 }
+
+/* Dashboard: macro numbers across every network */
+.macro { margin-top: 20px; }
+.macro-grid { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 10px; margin-bottom: 10px; }
+.macro-cell { background: var(--panel-soft); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+.macro-cell b { display: block; font-size: 36px; font-weight: 800; letter-spacing: -.02em; line-height: 1.1; color: var(--accent); }
+.macro-cell span { color: var(--muted); font-size: 13px; }
+.macro-cell.zero b { color: var(--muted); font-weight: 600; }
+.macro-cell.warn:not(.zero) b { color: var(--warn); }
+.macro-cell.danger:not(.zero) b { color: var(--danger); }
+@media (max-width: 1200px) { .macro-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-width: 600px) { .macro-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .macro-cell b { font-size: 28px; } }

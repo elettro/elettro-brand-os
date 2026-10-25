@@ -10,6 +10,8 @@ const STATUS_LABEL: Record<string, string> = {
 // Per-format cells shown in every row, in reading order.
 const PERIODS: Array<[keyof StatCounts, string]> = [["today", "Today"], ["week", "This week"], ["month", "This month"], ["total", "All time"]];
 
+const sum = (stats: DashboardStats, key: keyof StatCounts) => stats.networks.reduce((n, net) => n + net.totals[key], 0);
+
 function Cell({ value, label, tone }: { value: number; label: string; tone?: "warn" | "danger" }) {
   return (
     <div className={`stat-cell${value === 0 ? " zero" : ""}${tone ? ` ${tone}` : ""}`}>
@@ -18,6 +20,12 @@ function Cell({ value, label, tone }: { value: number; label: string; tone?: "wa
     </div>
   );
 }
+
+const MACRO: Array<[keyof StatCounts, string, "warn" | "danger" | undefined]> = [
+  ["total", "Posts all time", undefined], ["month", "This month", undefined], ["week", "This week", undefined], ["today", "Today", undefined],
+  ["scheduled", "Approved & scheduled", undefined], ["awaiting", "Awaiting approval", "warn"], ["failed", "Failed this month", "danger"],
+  ["possible", "Possible assets", undefined]
+];
 
 export default async function DashboardPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   if (!(await authenticated())) redirect("/welcome");
@@ -37,6 +45,18 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       {!stats.ok ? (
         <p className="card">Could not load stats: {stats.error}</p>
       ) : (
+        <>
+        <section className="card macro" aria-label="Totals across all networks">
+          <div className="macro-grid">
+            {MACRO.map(([key, label, tone]) => (
+              <div className={`macro-cell${tone ? ` ${tone}` : ""}${sum(stats, key) === 0 ? " zero" : ""}`} key={key}>
+                <b>{sum(stats, key).toLocaleString("en-US")}</b>
+                <span>{label}</span>
+              </div>
+            ))}
+          </div>
+          <p className="muted">Added up across every network below{scope === "all" ? " and every brand" : ""}. Possible assets counts an asset once for each network it fits.</p>
+        </section>
         <div className="net-list">
           {stats.networks.map((net) => (
             <section className="card net" key={net.destination}>
@@ -74,6 +94,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           ))}
           <p className="muted">Counts use each brand's own time zone. “Possible assets” are approved library assets that fit the format's rules today.</p>
         </div>
+        </>
       )}
     </main>
   );
