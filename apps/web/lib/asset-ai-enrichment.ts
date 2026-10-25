@@ -1,3 +1,4 @@
+import { connectKeyHeaders } from "@/lib/dev-api-key";
 import { BedrockRuntimeClient, ConverseCommand } from "@aws-sdk/client-bedrock-runtime";
 import { brandConfigs } from "@/lib/brand-config";
 import { executeAiGateway, GatewayError } from "@/lib/ai-gateway";
@@ -92,7 +93,7 @@ export async function enrichMissingAssetMetadata(input: { brandSlug: unknown; as
   const thumbnail = await fetch(
     apiBase + "/dropbox/thumbnail?path=" + encodeURIComponent(path) +
     "&kind=" + (isVideo ? "video" : "image"),
-    { cache: "no-store", signal: AbortSignal.timeout(15000) }
+    { headers: await connectKeyHeaders(), cache: "no-store", signal: AbortSignal.timeout(15000) }
   );
   if (!thumbnail.ok || !/image\/(jpeg|png)/i.test(thumbnail.headers.get("content-type") || "")) {
     throw new GatewayError(502, "Dropbox visual preview unavailable; metadata was not changed");

@@ -13,6 +13,7 @@ import pg from "pg";
 import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
 import { withDropboxIdentityTransaction, DropboxIdentityConflict } from "./dropbox-identity.mjs";
 import { handler as existingHandler } from "./db-main.mjs";
+import { gateHttp } from "./api-gate.mjs";
 import { handleDropboxUploadSession } from "./dropbox-upload-session.mjs";
 import { completeYoutubeConnect } from "./youtube-connect.mjs";
 import { completeLinkedinConnect } from "./linkedin-connect.mjs";
@@ -1586,6 +1587,9 @@ export const handler = async (event = {}) => {
   if (requestPath === "/status/connections" && (event?.requestContext?.http?.method || "GET") === "GET") return handleConnectionStatus(connectDatabase);
   // Public, read-only: the 1000-post race (counts per brand and network) for elettro.com/dash.
   if (requestPath === "/status/posts" && (event?.requestContext?.http?.method || "GET") === "GET") return handlePostRace(connectDatabase, feedResponse);
+  // Everything else over HTTP needs the shared connect key (deny by default); see api-gate.mjs.
+  const gated = gateHttp(event, requestPath, json);
+  if (gated) return gated;
   if (
     event?.action === "ingest-dropbox-page" ||
     requestPath === "/dropbox/ingest-page"

@@ -8,12 +8,13 @@ const ts=require('typescript');
 const root=path.resolve(__dirname,'..');
 const brands=[{id:'elettro',dropboxRoot:'/1---elettro-brand-os/brands/elettro'}];
 const identity={clientId:'claude_code',brandSlugs:['elettro'],permissions:['assets:read','assets:write','assets:upload','folders:write']};
+const KEYMOCK={connectKeyHeaders:async(h={})=>({...h,'x-elettro-connect-key':'test-key'})};
 function load(file,mocks={},globals={}){
  const source=fs.readFileSync(path.join(root,file),'utf8');
  const result=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS},reportDiagnostics:true});
  assert.equal((result.diagnostics||[]).filter(d=>d.category===ts.DiagnosticCategory.Error).length,0,file);
  const module={exports:{}};
- vm.runInNewContext(result.outputText,{module,exports:module.exports,require:n=>n in mocks?mocks[n]:require(n),
+ vm.runInNewContext(result.outputText,{module,exports:module.exports,require:n=>n in mocks?mocks[n]:n==='@/lib/dev-api-key'?KEYMOCK:require(n),
   Buffer,URL,URLSearchParams,Date,AbortSignal,console,process:{env:{}},...globals},{filename:file});
  return module.exports;
 }

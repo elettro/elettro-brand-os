@@ -1,4 +1,4 @@
-import { getContentPool } from "@/lib/dev-api";
+import { getContentPool } from "@/lib/dev-api-server";
 import { ContentPoolClient } from "./content-pool-client";
 
 export default async function ContentPoolPage() {

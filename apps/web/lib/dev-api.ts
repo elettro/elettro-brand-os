@@ -1,12 +1,8 @@
-const DEFAULT_DEV_API_BASE_URL = "https://zkjngy7rdd.execute-api.us-east-1.amazonaws.com";
-
-const apiBaseUrl =
-  process.env.BRAND_OS_API_BASE_URL ||
-  process.env.NEXT_PUBLIC_BRAND_OS_API_BASE_URL ||
-  DEFAULT_DEV_API_BASE_URL;
+// Browser-safe: reads go through the signed-in same-origin proxy (/api/dev-api), which adds the connect key.
+// Server components use lib/dev-api-server.ts instead.
 
 async function fetchJson<T>(path: string): Promise<T> {
-  const response = await fetch(`${apiBaseUrl}${path}`, {
+  const response = await fetch(`/api/dev-api${path}`, {
     cache: "no-store"
   });
 
@@ -113,7 +109,7 @@ export async function getContentPool() {
 
 export function getAssetThumbnailUrl(sourcePath?: string | null, kind: string = "image") {
   if (!sourcePath) return null;
-  return `${apiBaseUrl}/dropbox/thumbnail?path=${encodeURIComponent(sourcePath)}&kind=${encodeURIComponent(kind)}`;
+  return `/api/dev-api/dropbox/thumbnail?path=${encodeURIComponent(sourcePath)}&kind=${encodeURIComponent(kind)}`;
 }
 
 

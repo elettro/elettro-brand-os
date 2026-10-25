@@ -1,3 +1,4 @@
+import { connectKeyHeaders } from "@/lib/dev-api-key";
 import { enrichAfterRegistrationIfEnabled } from "@/lib/asset-ai-enrichment";
 import {createHmac,timingSafeEqual} from "node:crypto";
 import {serverSetting} from "@/lib/cognito-auth";
@@ -97,7 +98,7 @@ export async function completeClaudeTransfer(args:unknown,identity:McpIdentity){
  let data:Obj;
  try{
   const response=await fetch(API_BASE+"/assets/bulk-update",{
-   method:"POST",headers:{"content-type":"application/json"},cache:"no-store",signal:AbortSignal.timeout(20000),
+   method:"POST",headers:await connectKeyHeaders({"content-type":"application/json"}),cache:"no-store",signal:AbortSignal.timeout(20000),
    body:JSON.stringify({action:"complete-dropbox-upload",brandSlug:plan.brandSlug,path,mode:"raw",
     metadata:{sendToApprovalQueue:false,allowedDestinations:[],eligibilityMode:"evergreen"}})
   });

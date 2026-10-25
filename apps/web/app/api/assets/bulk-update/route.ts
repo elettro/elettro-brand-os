@@ -1,3 +1,4 @@
+import { connectKeyHeaders } from "@/lib/dev-api-key";
 import { NextRequest, NextResponse } from "next/server";
 import { GetParameterCommand, SSMClient } from "@aws-sdk/client-ssm";
 import { authenticated, allowedOrigin } from "@/lib/cognito-auth";
@@ -46,7 +47,9 @@ export async function POST(request: NextRequest) {
   try {
     const response = await fetch(uploadSession ? uploadApi! : `${apiBaseUrl}/assets/bulk-update`, {
       method: "POST",
-      headers: { "content-type": "application/json", ...(uploadSession ? { "x-elettro-upload-key": uploadKey! } : {}) },
+      headers: uploadSession
+        ? { "content-type": "application/json", "x-elettro-upload-key": uploadKey! }
+        : await connectKeyHeaders({ "content-type": "application/json" }),
       body,
       cache: "no-store"
     });

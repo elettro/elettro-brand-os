@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getAssets } from "@/lib/dev-api";
+import { getAssets } from "@/lib/dev-api-server";
 import { NeedsMetadataClient } from "./needs-metadata-client";
 
 export default async function NeedsMetadataPage() {
