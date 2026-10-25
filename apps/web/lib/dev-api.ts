@@ -71,6 +71,7 @@ export type ApiAsset = {
   lastUsedAt?: string | null;
   brandSlug: string;
   brandName: string;
+  allowedBrandSlugs?: string[] | null;
   createdAt?: string;
 };
 
