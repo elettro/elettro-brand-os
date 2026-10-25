@@ -197,6 +197,29 @@ Phase 3: Bedrock "AI recognizes" fallback, AI agent experience, location trigger
    each redirectable by the brand (§5a). Brands also manage many triggers and actions (§5b).
 4. ~~Upsell wording~~ **Left open (Dean 2026-10-25).** No upsell UI in M1. Revisit after the Milestone 1 demo.
 
+## 11. Integrations: Stashbox Radio and Shopify (Dean 2026-10-25; after Milestone 1)
+
+Both are **read-only links from Lens**; Lens never writes to Radio or to a shop.
+
+**Stashbox Radio (stashbox.com/radio).** Radio is a separate project (`stashbox-radio-*` AWS resources). Its public catalog
+(`GET <radio api>/prod-v2/radio/songs`) already lists 89 songs, each with `song_key`, `resolved_artwork_url`, `shop_url`
+and a deep link `https://stashbox.com/radio/?song=<song_key>`.
+- **Import covers as triggers:** a "Import from Radio" button in `/lens` creates one trigger per song from its artwork (admin picks which).
+- **New action type `radio`:** "Play this song on Radio" opens `stashbox.com/radio/?song=<key>`; the scan page can also embed the song player in the overlay later.
+- **Reverse link (optional, needs Dean's OK and a separate Radio PR):** a "Scan this cover" hint on a Radio song page.
+- Do not modify Radio, its API or its AWS resources from the Lens PRs. If Lens needs a Radio change, stop and ask.
+
+**Shopify (stashbox.ai and each brand's own shop).** Store feeds are public (`/products.json`; stashbox.ai has 250 products).
+- **New action type `shop`:** a product card (image, title, price, **Buy** button) that links to the product page or adds to cart with a `?variant=` link.
+  Pick the product from a list loaded from the brand's storefront feed, so price and availability stay current (cached, refreshed on publish).
+- **Merch as triggers:** a product's own print art (the T-shirt design, poster, vinyl sleeve) registered as a trigger, so scanning a shirt opens that song's video plus a Buy button.
+  This is the printed-art calibration case from Test 0 (see the nudge tool).
+- **Attribution:** every Lens link carries `utm_source=lens&utm_medium=ar&utm_campaign=<set>` so scans show up in Shopify analytics.
+- Each brand can have a different shop (Stashbox, SolarMeister, ...); the shop is a per-brand setting in `/lens/settings`. Read-only: no orders, customers or inventory touched.
+- Shopify admin/Storefront API tokens, if ever needed, go in Secrets Manager under `elettro-lens-dev/`, never in code.
+
+Build order: after PR4, one small PR per item: (a) `link`, `radio` and `shop` action types, (b) Radio import, (c) Shopify product picker + UTM, (d) merch-as-trigger flow.
+
 ## 10. Master instruction to give Sonnet (paste at the start of each build session)
 
 > You are building **Elettro Lens** in the Elettro OS repo (`elettro/elettro-brand-os`). Read `CLAUDE.md`, then
