@@ -1,3 +1,4 @@
+import { connectKeyHeaders } from "@/lib/dev-api-key";
 import { NextRequest, NextResponse } from "next/server";
 import { brandConfigs } from "@/lib/brand-config";
 import { authenticated, allowedOrigin } from "@/lib/cognito-auth";
@@ -66,7 +67,7 @@ export async function POST(request:NextRequest){
  const name=String(body.name||"").trim();
  if(!name||name.length>180||/[\/\x00-\x1f]/.test(name)||name==="."||name==="..")return NextResponse.json({error:"Invalid folder name"},{status:400});
  try{
-  const response=await fetch(`${API_BASE}/assets/bulk-update`,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action:"create-brand-folder",brand,path,name}),cache:"no-store"});
+  const response=await fetch(`${API_BASE}/assets/bulk-update`,{method:"POST",headers:await connectKeyHeaders({"content-type":"application/json"}),body:JSON.stringify({action:"create-brand-folder",brand,path,name}),cache:"no-store"});
   const data=await response.json();
   return NextResponse.json(data,{status:response.status});
  }catch(error){return NextResponse.json({error:"Unable to create Dropbox folder",details:error instanceof Error?error.message:"Network error"},{status:503});}

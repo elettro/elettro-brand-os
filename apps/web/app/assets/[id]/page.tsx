@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { getAsset } from "@/lib/dev-api";
+import { getAsset } from "@/lib/dev-api-server";
 import { AssetDetailClient } from "./asset-detail-client";
 
 export default async function AssetDetailPage({ params }: { params: Promise<{ id: string }> }) {

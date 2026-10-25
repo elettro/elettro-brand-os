@@ -2,7 +2,7 @@ import { handleFolderRelay } from "./claude-folder-relay.mjs";
 import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
 import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
 import { S3Client, GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
-import { createHash } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 
 const secrets = new SecretsManagerClient({});
 const lambda = new LambdaClient({});
@@ -434,8 +434,19 @@ async function verifyBrandUpload(token,event){
  }catch(error){return json(502,{ok:false,error:error instanceof Error?error.message:"Verification failed"});}
 }
 
+// Over HTTP (the thumbnail route) the web app must send the shared connect key; invokes with no HTTP context are IAM-only.
+function httpKeyOk(event) {
+  if (!event?.requestContext?.http) return true;
+  const expected = process.env.CONNECTIONS_API_SHARED_SECRET || "";
+  const given = (event.headers || {})["x-elettro-connect-key"];
+  if (expected.length < 32 || typeof given !== "string") return false;
+  const a = Buffer.from(given), b = Buffer.from(expected);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
 export const handler = async (event = {}) => {
   const startedAt = Date.now();
+  if (!httpKeyOk(event)) return json(401, { ok: false, error: "Connect key required" });
   if(event?.action === "claude-folder-relay-v1") return handleFolderRelay(event,getDropboxToken);
 
   try {
