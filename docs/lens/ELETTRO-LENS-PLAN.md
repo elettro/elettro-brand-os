@@ -239,8 +239,10 @@ A preset is an ordered list of `{ label, type: link|radio|shop|phone|email, urlT
 - **Isolation kept:** the Lens Lambda has no Postgres access. At **Publish** (and a "Refresh buttons" action), the Elettro OS web server reads the trigger's `sourceAssetId` from the dev-api
   (existing read route, connect key, brand-scoped) and writes the product title, image, price and URL into the Lens manifest as `shop` actions. Lens never queries Postgres or Shopify from the phone path.
 - Precedence: buttons added by hand in `/lens` win over metadata-derived ones; metadata-derived ones can be turned off per trigger.
-- **If an asset needs several products:** `shopifyProductId` holds one. A multi-product metadata field would be a change to the dev-api / schema, outside the Lens guardrails,
-  so it is a separate PR into the dev-api that Dean approves first, then a small Lens change to read it.
+- **Several products per asset: DECIDED yes, optional (Dean 2026-10-25).** `shopifyProductId` holds one, so this needs its own **prerequisite PR into the dev-api (not a Lens PR)**,
+  approved by Dean before it is written: an additive join table `AssetShopifyProduct (assetId, shopifyProductId, sortOrder)` (created with `IF NOT EXISTS`; `Asset.shopifyProductId` stays as the
+  primary product for back-compat), the read routes returning `shopifyProducts[]`, and a way to set them in Assets. Needs a manual dev-api Lambda deploy and the migration step by Dean; how
+  `init.sql` changes reach the live database was **not** checked and must be confirmed before that PR. Lens item (e) starts only after it is merged.
 
 Build order: after PR4, one small PR per item: (a) `link`, `radio` and `shop` action types, (b) Radio import, (c) Shopify product picker + UTM, (d) merch-as-trigger flow, (e) buttons from asset metadata (product links).
 
