@@ -1,8 +1,7 @@
-import { redirect } from "next/navigation";
-import { authenticated } from "@/lib/cognito-auth";
+import { requireOwner } from "@/lib/page-guards";
 
-// The preview reads the asset library, so it needs a signed-in visitor like the other library pages.
+// Owner only for now; clients are sent home.
 export default async function Layout({ children }: Readonly<{ children: React.ReactNode }>) {
-  if (!(await authenticated())) redirect("/api/auth/login");
+  await requireOwner();
   return children;
 }

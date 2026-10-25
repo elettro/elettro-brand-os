@@ -13,14 +13,21 @@ async function fetchJson<T>(path: string): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export async function getAssets() {
-  return fetchJson<{ ok: boolean; assets: ApiAsset[] }>("/assets");
+// `brands` limits a call to those brands (a client account); null/undefined means everything (the owner).
+// A scoped asset list also includes the shared creative-assets library.
+function scoped(brands: string[] | null | undefined, shared = false): string {
+  if (!brands) return "";
+  return `brands=${encodeURIComponent(brands.join(","))}${shared ? "&shared=1" : ""}`;
 }
 
-export async function getAsset(id: string) {
-  return fetchJson<{ ok: boolean; asset: ApiAsset }>(`/assets?id=${encodeURIComponent(id)}`);
+export async function getAssets(brands?: string[] | null) {
+  return fetchJson<{ ok: boolean; assets: ApiAsset[] }>(`/assets${brands ? "?" + scoped(brands, true) : ""}`);
 }
 
-export async function getContentPool() {
-  return fetchJson<{ ok: boolean; assets: ApiAsset[] }>("/content-pool");
+export async function getAsset(id: string, brands?: string[] | null) {
+  return fetchJson<{ ok: boolean; asset: ApiAsset }>(`/assets?id=${encodeURIComponent(id)}${brands ? "&" + scoped(brands, true) : ""}`);
+}
+
+export async function getContentPool(brands?: string[] | null) {
+  return fetchJson<{ ok: boolean; assets: ApiAsset[] }>(`/content-pool${brands ? "?" + scoped(brands) : ""}`);
 }

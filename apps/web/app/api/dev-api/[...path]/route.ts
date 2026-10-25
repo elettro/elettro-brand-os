@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authenticated } from "@/lib/cognito-auth";
+import { session } from "@/lib/cognito-auth";
 import { connectKeyHeaders } from "@/lib/dev-api-key";
+import { scopeRead } from "@/lib/client-scope";
 
 const apiBaseUrl =
   process.env.BRAND_OS_API_BASE_URL ||
@@ -11,12 +12,21 @@ const apiBaseUrl =
 const ALLOWED = new Set(["brands", "dashboard", "assets", "content-pool", "dropbox/thumbnail"]);
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
-  if (!(await authenticated())) return NextResponse.json({ ok: false, error: "Login required" }, { status: 401 });
+  const who = await session();
+  if (!who) return NextResponse.json({ ok: false, error: "Login required" }, { status: 401 });
   const { path } = await params;
   const route = path.join("/");
   if (!ALLOWED.has(route)) return NextResponse.json({ ok: false, error: "Not found" }, { status: 404 });
+
+  // The owner sees everything; a client's brand list always comes from the session, never from the request.
+  let search = request.nextUrl.search;
+  if (!who.owner) {
+    const scoped = scopeRead(route, search, who.brands);
+    if (!scoped.ok) return NextResponse.json({ ok: false, error: "Not allowed" }, { status: scoped.status });
+    search = scoped.search;
+  }
   try {
-    const upstream = await fetch(`${apiBaseUrl}/${route}${request.nextUrl.search}`, {
+    const upstream = await fetch(`${apiBaseUrl}/${route}${search}`, {
       headers: await connectKeyHeaders(),
       cache: "no-store",
       signal: AbortSignal.timeout(25000)

@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
 import pg from "pg";
 import { withDropboxIdentityTransaction, findDropboxAsset, DropboxIdentityConflict } from "./dropbox-identity.mjs";
-import { brandFilter } from "./api-gate.mjs";
+import { brandFilter, includeShared, SHARED_LIBRARY_SLUG } from "./api-gate.mjs";
 
 const { Client } = pg;
 const secrets = new SecretsManagerClient({});
@@ -603,8 +603,9 @@ export const handler = async (event = {}) => {
           FROM "Asset" a
           JOIN "Brand" b ON b."id" = a."brandId"
           WHERE a."id" = $1::uuid
+            AND ($2::text[] IS NULL OR b."slug" = ANY($2::text[]) OR ($3::boolean AND b."slug" = $4))
           LIMIT 1
-        `, [assetId]);
+        `, [assetId, brandFilter(event), includeShared(event), SHARED_LIBRARY_SLUG]);
 
         if (!result.rows[0]) return json(404, { ok: false, error: "Asset not found" });
         return json(200, { ok: true, asset: result.rows[0] });
@@ -636,10 +637,10 @@ export const handler = async (event = {}) => {
           b."name" AS "brandName"
         FROM "Asset" a
         JOIN "Brand" b ON b."id" = a."brandId"
-        WHERE ($1::text[] IS NULL OR b."slug" = ANY($1::text[]))
+        WHERE ($1::text[] IS NULL OR b."slug" = ANY($1::text[]) OR ($2::boolean AND b."slug" = $3))
         ORDER BY a."createdAt" DESC
         LIMIT 2000
-      `, [brandFilter(event)]);
+      `, [brandFilter(event), includeShared(event), SHARED_LIBRARY_SLUG]);
       return json(200, { ok: true, assets: result.rows });
     }
 
