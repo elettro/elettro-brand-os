@@ -1,4 +1,4 @@
-import { parsePath, resolveEntry, planeFor, sortActions, galleryIndex, withUtm, targetData } from "/viewer/logic.js";
+import { parsePath, resolveRoute, resolveEntry, planeFor, sortActions, galleryIndex, withUtm, targetData } from "/viewer/logic.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -31,12 +31,11 @@ async function getJson(url) {
 const xrReady = new Promise((resolve) => (window.XR8 ? resolve() : window.addEventListener("xrloaded", () => resolve())));
 
 async function main() {
-  let { brand, slug } = parsePath(location.pathname);
-  // The bare address (ar.elettro.com) opens whichever brand /home.json names, so it can be typed or printed short.
-  if (!brand) {
-    try { brand = String((await getJson("/home.json")).brand || "").toLowerCase(); } catch { brand = ""; }
-    if (!brand) return say("Elettro AR", "Scan an AR code to start.");
-  }
+  // /domains.json says which brand owns which address (ar.elettro.com is shared; ar.stashbox.com belongs to Stashbox).
+  let domains = {};
+  try { domains = await getJson("/domains.json"); } catch {}
+  const { brand, slug } = resolveRoute(location.hostname, location.pathname, domains);
+  if (!brand) return say("Elettro AR", "Scan an AR code to start.");
   say(brand, "Loading…", { brand });
 
   let manifest;

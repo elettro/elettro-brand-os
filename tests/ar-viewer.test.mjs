@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parsePath, resolveEntry, cropUv, planeFor, pickVideo, linkButtons, withUtm, targetData } from "../apps/ar-viewer/src/logic.js";
+import { parsePath, resolveRoute, resolveEntry, cropUv, planeFor, pickVideo, linkButtons, withUtm, targetData } from "../apps/ar-viewer/src/logic.js";
 
 test("parsePath reads brand and qr slug", () => {
   assert.deepEqual(parsePath("/stashbox/radio"), { brand: "stashbox", slug: "radio" });
@@ -66,4 +66,18 @@ test("galleryIndex cycles through the pictures", () => {
   assert.equal(galleryIndex(3, 3, 3.1), 1);
   assert.equal(galleryIndex(3, 3, 9), 0);
   assert.equal(galleryIndex(1, 3, 100), 0);
+});
+
+test("resolveRoute: shared host, brand-owned host, unknown host", () => {
+  const domains = { "ar.elettro.com": { brand: "elettro", shared: true }, "ar.stashbox.com": { brand: "stashbox" } };
+  // shared host: bare address is the host's own brand, otherwise /<brand>/<slug>
+  assert.deepEqual(resolveRoute("ar.elettro.com", "/", domains), { brand: "elettro", slug: "" });
+  assert.deepEqual(resolveRoute("ar.elettro.com", "/stashbox", domains), { brand: "stashbox", slug: "" });
+  assert.deepEqual(resolveRoute("ar.elettro.com", "/Stashbox/Covers", domains), { brand: "stashbox", slug: "covers" });
+  // brand-owned host: brand from the host, first path part is the QR slug
+  assert.deepEqual(resolveRoute("ar.stashbox.com", "/", domains), { brand: "stashbox", slug: "" });
+  assert.deepEqual(resolveRoute("ar.stashbox.com", "/covers", domains), { brand: "stashbox", slug: "covers" });
+  // unknown host or no domains file: the plain /<brand>/<slug> form, and nothing on a bare path
+  assert.deepEqual(resolveRoute("localhost", "/stashbox/radio", {}), { brand: "stashbox", slug: "radio" });
+  assert.deepEqual(resolveRoute("localhost", "/", null), { brand: "", slug: "" });
 });

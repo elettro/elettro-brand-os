@@ -7,6 +7,20 @@ export function parsePath(pathname) {
   return { brand: parts[0].toLowerCase(), slug: (parts[1] || "").toLowerCase() };
 }
 
+/**
+ * Which brand and QR slug does this address mean? `domains` is /domains.json: { "<host>": { brand, shared? } }.
+ *  - a brand-owned host (ar.stashbox.com): the brand comes from the host, the first path part is the QR slug;
+ *  - the shared host (ar.elettro.com, shared:true): the first path part is the brand, the second the slug, and the bare address opens the host's own brand;
+ *  - unknown host (localhost, a preview address): the plain /<brand>/<slug> form.
+ */
+export function resolveRoute(hostname, pathname, domains) {
+  const parts = String(pathname || "").split("/").filter(Boolean).map((p) => p.toLowerCase());
+  const d = domains && domains[String(hostname || "").toLowerCase()];
+  if (d && !d.shared) return { brand: d.brand, slug: parts[0] || "" };
+  if (parts.length) return { brand: parts[0], slug: parts[1] || "" };
+  return { brand: d ? d.brand : "", slug: "" };
+}
+
 /** Decide what the visitor sees from the brand manifest. */
 export function resolveEntry(brandManifest, slug) {
   if (!brandManifest || brandManifest.enabled === false) return { kind: "inactive" };
