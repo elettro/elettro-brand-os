@@ -158,8 +158,8 @@ async function approveRange(client, brand, body) {
   return { code: 200, body: { ok: true, approved: r.rowCount, weekApproved: wholeWeek, tiktokWaiting } };
 }
 
-// Back to "Plan this week": deletes the week's posts that haven't gone out yet (including unapproved ones whose slot
-// already passed today) and forgets the week's approval,
+// Back to "Plan this week": deletes the week's posts that haven't gone out yet (including ones whose slot already
+// passed earlier in the week, approved or not) and forgets the week's approval,
 // so a fresh plan arrives unapproved. Published, queued and in-flight posts are never touched.
 const RESETTABLE = ["planned", "approved", "skipped", "failed"];
 async function resetWeek(client, brand, body, now = new Date()) {
@@ -173,7 +173,7 @@ async function resetWeek(client, brand, body, now = new Date()) {
     DELETE FROM "ScheduledPost" sp USING "SocialAccount" sa
     WHERE sa."id" = sp."socialAccountId" AND sp."brandId"=$1 AND sp."status" = ANY($2)
       AND sp."scheduledFor" < $4 AND ($5::text[] IS NULL OR sa."destination" = ANY($5))
-      AND (sp."scheduledFor" >= $3 OR (sp."scheduledFor" >= $6 AND sp."status" <> 'approved'))
+      AND (sp."scheduledFor" >= $3 OR sp."scheduledFor" >= $6)
     RETURNING sp."id"`, [brand.id, RESETTABLE, notBefore, to, destinations, from]);
   // A whole-week reset also un-approves the week, or the next plan would arrive approved.
   const wholeWeek = !destinations && addDaysToYmd(body.from, 6) === body.to;

@@ -245,7 +245,7 @@ test("reset-week deletes only the week's unsent posts and un-approves a whole we
   const held = client.seen.find((q) => q.sql.includes("heldWeeks"));
   assert.deepEqual(JSON.parse(held.params[1]), ["2026-10-26"]);
   assert.equal(new Date(del.params[5]).toISOString(), new Date(del.params[5]).toISOString());
-  assert.match(del.sql, /status" <> 'approved'/);
+  assert.ok(!del.sql.includes("<> 'approved'"));
 });
 
 test("reset-week keeps today's already-past posts and leaves approval alone when narrowed to some networks", async () => {
