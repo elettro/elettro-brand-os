@@ -55,6 +55,13 @@ const destinationsOf = (body) => {
 export const approvedWeeksOf = (settings) =>
   (Array.isArray(settings?.approvedWeeks) ? settings.approvedWeeks : []).filter((w) => YMD.test(String(w)));
 
+// A week Review reset stays empty (the 15-minute planner tick skips it) until Plan is clicked for it.
+export const heldWeeksOf = (settings) =>
+  (Array.isArray(settings?.heldWeeks) ? settings.heldWeeks : []).filter((w) => YMD.test(String(w)));
+const saveHeldWeeks = (client, brandId, weeks) => client.query(
+  `UPDATE "Brand" SET "settings" = jsonb_set(COALESCE("settings",'{}'::jsonb), '{heldWeeks}', $2::jsonb, true), "updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$1`,
+  [brandId, JSON.stringify(weeks.slice(-26))]);
+
 // The current week plus two months ahead.
 export const REVIEW_MAX_WEEKS = 9;
 
@@ -151,7 +158,8 @@ async function approveRange(client, brand, body) {
   return { code: 200, body: { ok: true, approved: r.rowCount, weekApproved: wholeWeek, tiktokWaiting } };
 }
 
-// Back to "Plan this week": deletes the week's posts that haven't gone out yet and forgets the week's approval,
+// Back to "Plan this week": deletes the week's posts that haven't gone out yet (including ones whose slot already
+// passed earlier in the week, approved or not) and forgets the week's approval,
 // so a fresh plan arrives unapproved. Published, queued and in-flight posts are never touched.
 const RESETTABLE = ["planned", "approved", "skipped", "failed"];
 async function resetWeek(client, brand, body, now = new Date()) {
@@ -164,8 +172,9 @@ async function resetWeek(client, brand, body, now = new Date()) {
   const r = await client.query(`
     DELETE FROM "ScheduledPost" sp USING "SocialAccount" sa
     WHERE sa."id" = sp."socialAccountId" AND sp."brandId"=$1 AND sp."status" = ANY($2)
-      AND sp."scheduledFor" >= $3 AND sp."scheduledFor" < $4 AND ($5::text[] IS NULL OR sa."destination" = ANY($5))
-    RETURNING sp."id"`, [brand.id, RESETTABLE, notBefore, to, destinations]);
+      AND sp."scheduledFor" < $4 AND ($5::text[] IS NULL OR sa."destination" = ANY($5))
+      AND (sp."scheduledFor" >= $3 OR sp."scheduledFor" >= $6)
+    RETURNING sp."id"`, [brand.id, RESETTABLE, notBefore, to, destinations, from]);
   // A whole-week reset also un-approves the week, or the next plan would arrive approved.
   const wholeWeek = !destinations && addDaysToYmd(body.from, 6) === body.to;
   if (wholeWeek) {
@@ -173,6 +182,8 @@ async function resetWeek(client, brand, body, now = new Date()) {
     await client.query(
       `UPDATE "Brand" SET "settings" = jsonb_set(COALESCE("settings",'{}'::jsonb), '{approvedWeeks}', $2::jsonb, true), "updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$1`,
       [brand.id, JSON.stringify(weeks)]);
+    // Stay empty with the Plan button until asked, instead of the tick refilling the week.
+    await saveHeldWeeks(client, brand.id, [...new Set([...heldWeeksOf(brand.settings), body.from])].sort());
   }
   return { code: 200, body: { ok: true, deleted: r.rowCount, weekApproved: wholeWeek ? false : undefined } };
 }
@@ -304,6 +315,7 @@ async function startPlanning(client, brand, body, { invoke, readSeed, now = new 
   // No networks named means every network (Review plans and approves whole brand-weeks).
   const destinations = (destinationsOf(body) || PLANNABLE_DESTINATIONS).filter((d) => PLANNABLE_DESTINATIONS.includes(d) && connected.includes(d));
   if (!destinations.length) return { code: 409, body: { ok: false, error: "Connect a social account for this brand first" } };
+  if (heldWeeksOf(brand.settings).includes(weekStart)) await saveHeldWeeks(client, brand.id, heldWeeksOf(brand.settings).filter((w) => w !== weekStart));
   await invoke({ action: "plan-week", brandSlug: brand.slug, weekStart, mode: "apply", replacePlanned: true, destinations });
   return { code: 202, body: { ok: true, planning: true, weekStart } };
 }

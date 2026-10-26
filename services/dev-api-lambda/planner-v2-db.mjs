@@ -7,6 +7,7 @@ import { planWeek, resolvePlannerSettings, songKeyOf, nextWeekStart, ymdInTimeZo
 import { curateWeek, bedrockInvoke } from "./curator.mjs";
 import { buildSongFacts, fetchRadioCatalog } from "./song-facts.mjs";
 import { writeWeekCopy } from "./copywriter.mjs";
+import { PLANNABLE_DESTINATIONS } from "./publishing-formats.mjs";
 
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
 const HHMM = /^\d{2}:\d{2}$/;
@@ -139,7 +140,9 @@ export async function runPlanWeek(event, connectDatabase, json, { modelId = proc
        FROM "CadenceRule" cr JOIN "SocialAccount" sa ON sa."id" = cr."socialAccountId"
        WHERE sa."brandId" = $1 AND sa."status" = 'active' AND cr."active" = TRUE AND cr."postsPerWeek" > 0
          AND ($2::text[] IS NULL OR sa."destination" = ANY($2::text[]))
-       ORDER BY sa."destination", cr."placement"`, [brand.id, destinations])).rows;
+       ORDER BY sa."destination", cr."placement"`, [brand.id, destinations])).rows
+      // A network with no plannable format yet (X, Google Business, Reddit) keeps its settings but gets no posts.
+      .filter((a) => PLANNABLE_DESTINATIONS.includes(a.destination));
     if (!accounts.length) return json(409, { ok: false, error: "No active social accounts with cadence rules" });
 
     const assets = (await client.query(

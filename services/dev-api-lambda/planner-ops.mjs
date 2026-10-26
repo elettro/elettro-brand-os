@@ -8,6 +8,7 @@ import { withClient, loadBrand, weekWindow, runPlanWeek, approvePlannerWeek } fr
 import { addDaysToYmd, brandLanguage, isSynthetic, languageOf, resolvePlannerSettings, ymdInTimeZone } from "./planner-v2.mjs";
 import { dashboardStats } from "./dashboard-stats.mjs";
 import { keyMatches } from "./youtube-connect.mjs";
+import { PLANNABLE_DESTINATIONS } from "./publishing-formats.mjs";
 
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_POSTS_PER_WEEK = 200;
@@ -183,7 +184,9 @@ export function weekToPlan(brand, plannedByDestination) {
   const requested = brand.settings?.plannerRuntime?.replanWeek;
   if (YMD.test(String(requested || ""))) return { weekStart: requested, replace: true, destinations: null };
   let week = weekWindow(brand, null).weekStart;
+  const held = Array.isArray(brand.settings?.heldWeeks) ? brand.settings.heldWeeks : [];
   for (let i = 0; i < WEEKS_AHEAD; i++, week = addDaysToYmd(week, 7)) {
+    if (held.includes(week)) continue; // reset in Review: stays empty until someone clicks Plan
     const missing = Object.keys(plannedByDestination).filter((d) => !plannedByDestination[d].includes(week)).sort();
     if (missing.length) return { weekStart: week, replace: false, destinations: missing };
   }
@@ -203,7 +206,7 @@ async function plannerTick(connectDatabase, json) {
       const active = (await client.query(
         `SELECT DISTINCT sa."destination" FROM "SocialAccount" sa
          JOIN "CadenceRule" cr ON cr."socialAccountId" = sa."id" AND cr."active" = TRUE AND cr."postsPerWeek" > 0
-         WHERE sa."brandId" = $1 AND sa."status" = 'active'`, [brand.id])).rows.map((r) => r.destination);
+         WHERE sa."brandId" = $1 AND sa."status" = 'active'`, [brand.id])).rows.map((r) => r.destination).filter((d) => PLANNABLE_DESTINATIONS.includes(d));
       const plannedByDestination = Object.fromEntries(active.map((d) => [d, []]));
       const planned = (await client.query(
         `SELECT DISTINCT sa."destination", to_char((sp."scheduledFor" AT TIME ZONE 'UTC' AT TIME ZONE $2)::date
