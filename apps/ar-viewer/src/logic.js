@@ -16,10 +16,12 @@ export function parsePath(pathname) {
 export function resolveRoute(hostname, pathname, domains) {
   const parts = String(pathname || "").split("/").filter(Boolean).map((p) => p.toLowerCase());
   const d = domains && domains[String(hostname || "").toLowerCase()];
-  if (d && !d.shared) return { brand: d.brand, slug: parts[0] || "" };
-  if (parts.length) return { brand: parts[0], slug: parts[1] || "" };
-  // the bare shared address can scan several brands at once: d.scan = ["<brand>/<qr slug>", ...], in priority order
-  if (d && Array.isArray(d.scan) && d.scan.length) return { brand: d.brand, slug: "", scan: d.scan };
+  // Every known address scans every listed brand (domains._scan, or the host's own "scan" list; "own" turns it off), the address's own brand first.
+  const list = d ? (d.scan === "own" ? null : Array.isArray(d.scan) ? d.scan : Array.isArray(domains._scan) ? domains._scan : null) : null;
+  const withScan = (r) => (list && list.length ? { ...r, scan: list } : r);
+  if (d && !d.shared) return withScan({ brand: d.brand, slug: parts[0] || "" });
+  if (parts.length) return withScan({ brand: parts[0], slug: parts[1] || "" });
+  if (d && list && list.length) return { brand: d.brand, slug: "", scan: list, all: true }; // the bare shared address opens the whole list
   return { brand: d ? d.brand : "", slug: "" };
 }
 

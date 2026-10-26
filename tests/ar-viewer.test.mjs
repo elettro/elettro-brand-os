@@ -82,10 +82,15 @@ test("resolveRoute: shared host, brand-owned host, unknown host", () => {
   assert.deepEqual(resolveRoute("localhost", "/", null), { brand: "", slug: "" });
 });
 
-test("resolveRoute: bare shared address carries the scan list", () => {
-  const domains = { "ar.elettro.com": { brand: "elettro", shared: true, scan: ["elettro/ar", "stashbox/covers"] } };
-  assert.deepEqual(resolveRoute("ar.elettro.com", "/", domains), { brand: "elettro", slug: "", scan: ["elettro/ar", "stashbox/covers"] });
-  assert.deepEqual(resolveRoute("ar.elettro.com", "/stashbox", domains), { brand: "stashbox", slug: "" }); // a brand path still means just that brand
+test("resolveRoute: every known address carries the scan list, the bare shared one opens all of it", () => {
+  const domains = { _scan: ["elettro/ar", "stashbox/covers"], "ar.elettro.com": { brand: "elettro", shared: true }, "ar.stashbox.com": { brand: "stashbox" }, "ar.charity.org": { brand: "charity", scan: ["charity/main", "elettro/ar"] }, "ar.private.org": { brand: "private", scan: "own" } };
+  const all = ["elettro/ar", "stashbox/covers"];
+  assert.deepEqual(resolveRoute("ar.elettro.com", "/", domains), { brand: "elettro", slug: "", scan: all, all: true });
+  assert.deepEqual(resolveRoute("ar.elettro.com", "/stashbox", domains), { brand: "stashbox", slug: "", scan: all });
+  assert.deepEqual(resolveRoute("ar.stashbox.com", "/covers", domains), { brand: "stashbox", slug: "covers", scan: all });
+  assert.deepEqual(resolveRoute("ar.charity.org", "/", domains), { brand: "charity", slug: "", scan: ["charity/main", "elettro/ar"] }); // a quarantined list of its own
+  assert.deepEqual(resolveRoute("ar.private.org", "/", domains), { brand: "private", slug: "" }); // "own": that brand only
+  assert.deepEqual(resolveRoute("localhost", "/stashbox/covers", domains), { brand: "stashbox", slug: "covers" }); // unknown host: no merging
 });
 
 test("mergeSets: prefixes names per brand, same cover = earlier brand wins", () => {
