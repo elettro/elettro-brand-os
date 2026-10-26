@@ -1,7 +1,7 @@
 {
-  "imagePath": "image-targets/bifazial_luminance.jpg",
+  "imagePath": "image-targets/roof1_luminance.jpg",
   "metadata": null,
-  "name": "bifazial",
+  "name": "roof1",
   "type": "PLANAR",
   "properties": {
     "left": 135,
@@ -13,11 +13,11 @@
     "originalHeight": 1080
   },
   "resources": {
-    "originalImage": "bifazial_original.jpg",
-    "croppedImage": "bifazial_cropped.jpg",
-    "thumbnailImage": "bifazial_thumbnail.jpg",
-    "luminanceImage": "bifazial_luminance.jpg"
+    "originalImage": "roof1_original.jpg",
+    "croppedImage": "roof1_cropped.jpg",
+    "thumbnailImage": "roof1_thumbnail.jpg",
+    "luminanceImage": "roof1_luminance.jpg"
   },
-  "created": 1793038212112,
-  "updated": 1793038212112
+  "created": 1793047801076,
+  "updated": 1793047801076
 }
