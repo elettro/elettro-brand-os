@@ -1,4 +1,4 @@
-import { parsePath, resolveRoute, resolveEntry, planeFor, sortActions, galleryIndex, withUtm, targetData } from "/viewer/logic.js";
+import { parsePath, resolveRoute, mergeSets, resolveEntry, planeFor, sortActions, galleryIndex, withUtm, targetData } from "/viewer/logic.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -34,8 +34,21 @@ async function main() {
   // /domains.json says which brand owns which address (ar.elettro.com is shared; ar.stashbox.com belongs to Stashbox).
   let domains = {};
   try { domains = await getJson("/domains.json"); } catch {}
-  const { brand, slug } = resolveRoute(location.hostname, location.pathname, domains);
+  const { brand, slug, scan } = resolveRoute(location.hostname, location.pathname, domains);
   if (!brand) return say("Elettro AR", "Scan an AR code to start.");
+  if (scan) { // the bare address scans every listed brand's cover set at once
+    say(brand, "Loading…", { brand });
+    const got = await Promise.allSettled(scan.map(async (ref) => {
+      const [b, q = ""] = ref.split("/");
+      const entry = resolveEntry(await getJson(`/${b}/manifest.json`), q);
+      if (entry.kind !== "scanner") throw new Error(ref + " is not a scanner");
+      return { brand: b, set: await getJson(entry.manifestUrl) };
+    }));
+    got.forEach((g, i) => { if (g.status === "rejected") dbg("scan list skipped " + scan[i] + ": " + g.reason, true); });
+    const merged = mergeSets(got.filter((g) => g.status === "fulfilled").map((g) => g.value));
+    if (!merged.triggers.length) return say(brand, "This AR code isn't active.", { brand });
+    return prepareScanner(brand, merged);
+  }
   say(brand, "Loading…", { brand });
 
   let manifest;

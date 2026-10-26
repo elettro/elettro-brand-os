@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parsePath, resolveRoute, resolveEntry, cropUv, planeFor, pickVideo, linkButtons, withUtm, targetData } from "../apps/ar-viewer/src/logic.js";
+import { parsePath, resolveRoute, mergeSets, resolveEntry, cropUv, planeFor, pickVideo, linkButtons, withUtm, targetData } from "../apps/ar-viewer/src/logic.js";
 
 test("parsePath reads brand and qr slug", () => {
   assert.deepEqual(parsePath("/stashbox/radio"), { brand: "stashbox", slug: "radio" });
@@ -80,4 +80,22 @@ test("resolveRoute: shared host, brand-owned host, unknown host", () => {
   // unknown host or no domains file: the plain /<brand>/<slug> form, and nothing on a bare path
   assert.deepEqual(resolveRoute("localhost", "/stashbox/radio", {}), { brand: "stashbox", slug: "radio" });
   assert.deepEqual(resolveRoute("localhost", "/", null), { brand: "", slug: "" });
+});
+
+test("resolveRoute: bare shared address carries the scan list", () => {
+  const domains = { "ar.elettro.com": { brand: "elettro", shared: true, scan: ["elettro/ar", "stashbox/covers"] } };
+  assert.deepEqual(resolveRoute("ar.elettro.com", "/", domains), { brand: "elettro", slug: "", scan: ["elettro/ar", "stashbox/covers"] });
+  assert.deepEqual(resolveRoute("ar.elettro.com", "/stashbox", domains), { brand: "stashbox", slug: "" }); // a brand path still means just that brand
+});
+
+test("mergeSets: prefixes names per brand, same cover = earlier brand wins", () => {
+  const trig = (id, name) => ({ id, name, target: { name, json: {} }, actions: [] });
+  const m = mergeSets([
+    { brand: "elettro", set: { triggers: [trig("im-waiting", "im-waiting"), trig("let-me-down", "let-me-down")] } },
+    { brand: "stashbox", set: { triggers: [trig("im-waiting", "im-waiting"), trig("super-funk", "super-funk")] } }
+  ]);
+  assert.deepEqual(m.triggers.map((x) => x.id), ["elettro--im-waiting", "elettro--let-me-down", "stashbox--super-funk"]);
+  assert.deepEqual(m.triggers.map((x) => x.target.name), ["elettro--im-waiting", "elettro--let-me-down", "stashbox--super-funk"]);
+  assert.equal(mergeSets([]).triggers.length, 0);
+  assert.equal(mergeSets([{ brand: "x", set: null }]).triggers.length, 0);
 });

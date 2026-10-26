@@ -18,7 +18,26 @@ export function resolveRoute(hostname, pathname, domains) {
   const d = domains && domains[String(hostname || "").toLowerCase()];
   if (d && !d.shared) return { brand: d.brand, slug: parts[0] || "" };
   if (parts.length) return { brand: parts[0], slug: parts[1] || "" };
+  // the bare shared address can scan several brands at once: d.scan = ["<brand>/<qr slug>", ...], in priority order
+  if (d && Array.isArray(d.scan) && d.scan.length) return { brand: d.brand, slug: "", scan: d.scan };
   return { brand: d ? d.brand : "", slug: "" };
+}
+
+/**
+ * One scanner out of several brands' scanner sets. `parts` is [{ brand, set }] in priority order.
+ * Trigger ids and target names get the brand as a prefix so two brands can use the same names; when two triggers
+ * share an original target name it is the same cover, and the earlier brand wins.
+ */
+export function mergeSets(parts) {
+  const seen = new Set(), triggers = [];
+  for (const { brand, set } of parts) {
+    for (const t of (set && set.triggers) || []) {
+      if (seen.has(t.target.name)) continue;
+      seen.add(t.target.name);
+      triggers.push({ ...t, id: brand + "--" + t.id, brand, target: { ...t.target, name: brand + "--" + t.target.name } });
+    }
+  }
+  return { triggers };
 }
 
 /** Decide what the visitor sees from the brand manifest. */
