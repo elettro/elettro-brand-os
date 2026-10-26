@@ -1,4 +1,5 @@
-import { authenticated } from "@/lib/cognito-auth";
+import { authenticated, session } from "@/lib/cognito-auth";
+import { visibleBrands } from "@/lib/brand-access";
 import { brandConfigs } from "@/lib/brand-config";
 import { YOUTUBE_BRANDS } from "@/lib/youtube-connect";
 import { LINKEDIN_BRANDS, calendarReminderUrl } from "@/lib/linkedin-connect";
@@ -45,20 +46,25 @@ async function connectionStatus(): Promise<Record<string, Record<string, Linked>
 export default async function ConnectionsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   if (!(await authenticated())) redirect("/api/auth/login");
   const [{ brand, connected, disconnected, error, network, expires, posted }, status] = await Promise.all([searchParams, connectionStatus()]);
-  const brands = brandConfigs.filter((b) => YOUTUBE_BRANDS.includes(b.id));
-  const linkedinBrands = brandConfigs.filter((b) => LINKEDIN_BRANDS.includes(b.id));
-  const metaBrands = brandConfigs.filter((b) => META_BRANDS.includes(b.id));
-  const threadsBrands = brandConfigs.filter((b) => THREADS_BRANDS.includes(b.id));
-  const gbpBrands = brandConfigs.filter((b) => GBP_BRANDS.includes(b.id));
+  // The header dropdown drives ?brand=: one brand shows only its connections, "All brands" (no param) shows every brand this user may see.
+  const accessible: string[] = visibleBrands(await session(), brandConfigs).map((b) => b.id);
+  const picked = brand && accessible.includes(brand) ? brand : null;
+  const inView = (id: string) => accessible.includes(id) && (!picked || id === picked);
+  const brandName = brandConfigs.find((b) => b.id === brand)?.name || "";
+  const brands = brandConfigs.filter((b) => YOUTUBE_BRANDS.includes(b.id) && inView(b.id));
+  const linkedinBrands = brandConfigs.filter((b) => LINKEDIN_BRANDS.includes(b.id) && inView(b.id));
+  const metaBrands = brandConfigs.filter((b) => META_BRANDS.includes(b.id) && inView(b.id));
+  const threadsBrands = brandConfigs.filter((b) => THREADS_BRANDS.includes(b.id) && inView(b.id));
+  const gbpBrands = brandConfigs.filter((b) => GBP_BRANDS.includes(b.id) && inView(b.id));
   const gmb = status.gmb || {};
   const youtube = status.youtube || {};
   const linkedin = status.linkedin || {};
   const facebook = status.facebook || {};
   const instagram = status.instagram || {};
   const threads = status.threads || {};
-  const tiktokBrands = brandConfigs.filter((b) => TIKTOK_BRANDS.includes(b.id));
+  const tiktokBrands = brandConfigs.filter((b) => TIKTOK_BRANDS.includes(b.id) && inView(b.id));
   const tiktok = status.tiktok || {};
-  const pinterestBrands = brandConfigs.filter((b) => PINTEREST_BRANDS.includes(b.id));
+  const pinterestBrands = brandConfigs.filter((b) => PINTEREST_BRANDS.includes(b.id) && inView(b.id));
   const pinterest = status.pinterest || {};
   // The feed caches for 60s; right after a connect, trust the expiry the callback just reported.
   if (brand && connected && expires && !Number.isNaN(Date.parse(expires))) {
@@ -75,9 +81,10 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
     <div className="eyebrow">Publishing · Social connections</div>
     <h1>Connections</h1>
     <p className="muted">Connect each brand&apos;s accounts to Elettro OS. Google asks which YouTube channel to use; pick the one that belongs to the brand. LinkedIn logins last 60 days, so each one counts down to its reconnect date.</p>
-    {connected && <p className="card" style={{ marginTop: 16 }}>Connected <b>{connected}</b> to {brand}.</p>}
-    {disconnected && <p className="card" style={{ marginTop: 16 }}>Disconnected <b>{disconnected}</b> from {brand}. Elettro OS no longer has access to it.</p>}
-    {error && network !== "linkedin" && <p className="card" style={{ marginTop: 16 }}>Could not connect{brand ? ` ${brand}` : ""}: {error}</p>}
+    {connected && <p className="card" style={{ marginTop: 16 }}>Connected <b>{connected}</b>{brandName ? <> to {brandName}</> : null}.</p>}
+    {disconnected && <p className="card" style={{ marginTop: 16 }}>Disconnected <b>{disconnected}</b>{brandName ? <> from {brandName}</> : null}. Elettro OS no longer has access to it.</p>}
+    {error && network !== "linkedin" && <p className="card" style={{ marginTop: 16 }}>Could not connect{brandName ? ` ${brandName}` : ""}: {error}</p>}
+    {brands.length > 0 && <>
     <div className="grid" style={{ marginTop: 20 }}>
       {brands.map((b) => {
         const handle = youtube[b.id]?.handle;
@@ -93,6 +100,8 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
         );
       })}
     </div>
+    </>}
+    {gbpBrands.length > 0 && <>
     <h2 style={{ marginTop: 32 }}>Google Business Profile</h2>
     <p className="muted">Sign in with the Google account that manages the profile. Elettro OS picks the brand&apos;s profile automatically; nothing is posted until the business-content rules are in place.</p>
     <div className="grid" style={{ marginTop: 20 }}>
@@ -110,6 +119,8 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
         );
       })}
     </div>
+    </>}
+    {metaBrands.length > 0 && <>
     <h2 style={{ marginTop: 32 }}>Facebook + Instagram</h2>
     <p className="muted">One Meta login per brand: Facebook asks which Pages and Instagram accounts Elettro OS may use; tick only the brand&apos;s Page and the Instagram account linked to it. Page tokens do not expire.</p>
     <div className="grid" style={{ marginTop: 20 }}>
@@ -129,6 +140,8 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
         );
       })}
     </div>
+    </>}
+    {threadsBrands.length > 0 && <>
     <h2 style={{ marginTop: 32 }}>Threads</h2>
     <p className="muted">Threads has its own login, separate from Facebook. Sign in to the brand&apos;s Threads profile when asked. Logins last 60 days, so each one counts down to its reconnect date.</p>
     <div className="grid" style={{ marginTop: 20 }}>
@@ -149,6 +162,8 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
         );
       })}
     </div>
+    </>}
+    {tiktokBrands.length > 0 && <>
     <h2 style={{ marginTop: 32 }}>TikTok</h2>
     <p className="muted">Sign in to the brand&apos;s TikTok account when asked. Until TikTok approves the Elettro OS app, only sandbox target users can connect and posts go out private. A login lasts a year, so each one counts down to its reconnect date.</p>
     <div className="grid" style={{ marginTop: 20 }}>
@@ -172,6 +187,8 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
         );
       })}
     </div>
+    </>}
+    {pinterestBrands.length > 0 && <>
     <h2 style={{ marginTop: 32 }}>Pinterest</h2>
     <p className="muted">One Pinterest business account, pinterest.com/elettro, for Elettro and Stashbox: connect it under each brand (same login); Stashbox Pins go to the Stashbox board. While the Elettro OS app has Trial access, Pins it creates are visible only to that account. The login renews itself each time it is used; the countdown shows when it lapses if unused.</p>
     <div className="grid" style={{ marginTop: 20 }}>
@@ -193,6 +210,8 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
         );
       })}
     </div>
+    </>}
+    {linkedinBrands.length > 0 && <>
     <h2 id="linkedin" style={{ marginTop: 32 }}>LinkedIn</h2>
     <p className="muted">Dean&apos;s personal profile, posting through the Elettro OS Personal app. LinkedIn gives no refresh token, so reconnect before the countdown runs out; company pages follow once LinkedIn approves Community Management.</p>
     {/* The result sits next to the form: the redirect lands on #linkedin, far down the page. */}
@@ -230,5 +249,6 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
         );
       })}
     </div>
+    </>}
   </main>;
 }
