@@ -189,6 +189,12 @@ export function action(input, existing = {}) {
       url: s.url ? httpsUrl(s.url, `systems[${n}].url`) : undefined
     }));
     a.cta = i.cta ? text(i.cta, "cta", { max: 40, required: false }) : "Dieses System ansehen";
+    if (i.labels != null) {
+      const L = i.labels, one = (k, max = 40) => (L[k] ? text(L[k], "labels." + k, { max, required: false }) : undefined);
+      if (!L || typeof L !== "object") throw bad("labels must be an object");
+      if (L.years && !String(L.years).includes("{n}")) throw bad("labels.years must contain {n}");
+      a.labels = { use: one("use"), saves: one("saves"), costs: one("costs"), payback: one("payback"), years: one("years"), locale: L.locale === "en-GB" || L.locale === "de-DE" ? L.locale : undefined };
+    }
     a.note = i.note ? text(i.note, "note", { max: 200, required: false }) : "";
     a.accent = accentColor(i.accent);
   } else if (type === "scratch") {
@@ -198,6 +204,8 @@ export function action(input, existing = {}) {
     a.prize = text(i.prize, "prize", { max: 40 });
     a.code = i.code ? text(i.code, "code", { max: 24, required: false }) : "";
     a.hint = i.hint ? text(i.hint, "hint", { max: 140, required: false }) : "";
+    a.coverText = i.coverText ? text(i.coverText, "coverText", { max: 16, required: false }) : "";
+    a.doneText = i.doneText ? text(i.doneText, "doneText", { max: 24, required: false }) : "";
     if (i.cta != null) a.cta = { label: text(i.cta && i.cta.label, "cta.label", { max: 40 }), url: httpsUrl(i.cta && i.cta.url, "cta.url") };
     a.note = i.note ? text(i.note, "note", { max: 200, required: false }) : "";
     a.accent = accentColor(i.accent);

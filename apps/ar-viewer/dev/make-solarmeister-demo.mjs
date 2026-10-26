@@ -19,9 +19,11 @@ const brand = "solarmeister";
 const SHOP = "https://solarmeister-shop.de";
 const shop = JSON.parse(fs.readFileSync(path.join(src, "shop.json"), "utf8")).products;
 
-const names = { lieferung: "Lieferung", montage: "Montagesystem", system: "Balkonkraftwerk", fassade: "Fassade", bifazial: "Bifaziale Module",
+const names = { lieferung: "Delivery", montage: "Mounting system", system: "Balcony power plant", fassade: "Facade", bifazial: "Bifacial modules",
   // the four logo cards: the logo plus a different second picture, one per Brand scan outcome
-  kontakt: "Logo-Karte Kontakt", film: "Logo-Karte Film", rechner: "Logo-Karte Rechner", rubbeln: "Logo-Karte Rubbeln" };
+  kontakt: "Logo card Contact", film: "Logo card Film", rechner: "Logo card Calculator", rubbeln: "Logo card Scratch",
+  // stronger pictures for the same screens (clearly different cards, richer photos); both generations trigger the same thing
+  fassade2: "Facade (new)", bifazial2: "Solar modules (new)", kontakt2: "Card Contact (new)", film2: "Card Film (new)", rechner2: "Card Calculator (new)", rubbeln2: "Card Scratch (new)" };
 const triggers = Object.keys(names).map((n) => {
   const json = JSON.parse(fs.readFileSync(path.join(src, "targets", `${n}.json`), "utf8"));
   const luminanceKey = `${brand}/targets/${n}_luminance.jpg`;
@@ -30,37 +32,46 @@ const triggers = Object.keys(names).map((n) => {
 });
 for (let i = 1; i <= 6; i++) put(`${brand}/img/gallery-${i}.jpg`, fs.readFileSync(path.join(src, "img", `gallery-${i}.jpg`)));
 
+// English wording for the demo (the shop's own product names stay as they are).
+const eur = (s) => "€" + Number(String(s).replace(/\D/g, "")).toLocaleString("en-GB"); // "1.379 €" -> "€1,379"
+const productEn = {
+  "max-1000-bifazial-pro-mit-zendure-solarflow-2400-pro": "Max 1000 bifacial Pro + Zendure storage",
+  "max-2000-bifazial-pro-mit-zendure-solarflow-2400-pro": "Max 2000 bifacial Pro + Zendure storage",
+  "premium-pure-1860-bifazial": "Premium Pure 1860 bifacial",
+  "halterung-fassade": "Facade bracket"
+};
 const actions = [
-  { id: "a-video", type: "video", name: "Solar-Dach Video", videoKey: `${brand}/media/solar-roof.mp4`, fit: "crop", loop: true, scale: 1 },
-  { id: "a-shop-btn", type: "link", name: "Zum Shop", label: "Zum Shop", url: SHOP },
-  { id: "a-links", type: "card", name: "Montage und Beratung", title: "Montage & Beratung", subtitle: "Vom Halter bis zum Speicher: alles für dein Balkonkraftwerk.", items: [
-    { kind: "link", label: "Unterkonstruktion & Montage", url: `${SHOP}/collections/unterkonstruktion-montage` },
-    { kind: "link", label: "Balkonkraftwerke mit Speicher", url: `${SHOP}/collections/balkonkraftwerke-mit-speicher` },
-    { kind: "link", label: "Zubehör", url: `${SHOP}/collections/zubehoer` },
-    { kind: "link", label: "Eigenes AR für deine Marke", url: "https://elettro.com/ar" } ] },
-  { id: "a-shop", type: "card", name: "Shop", title: "Balkonkraftwerke", subtitle: "Live aus dem SolarMeister-Shop.", items: [
-    ...shop.map((p) => ({ kind: "product", label: p.label, url: `${SHOP}/products/${p.handle}`, price: p.price, cta: "Ansehen" })),
-    { kind: "link", label: "Alle Balkonkraftwerke", url: `${SHOP}/collections/balkonkraftwerke` } ] },
-  { id: "a-gallery", type: "gallery", name: "Fassade und Systeme", imageKeys: [1, 6, 2, 3, 4, 5].map((i) => `${brand}/img/gallery-${i}.jpg`), seconds: 3, scale: 1 },
-  { id: "a-panel", type: "model", name: "Solarmodul", builtin: "solarpanel", scale: 1 },
-  { id: "a-modules", type: "link", name: "Solarmodule", label: "Solarmodule", url: `${SHOP}/collections/solarmodule` },
+  { id: "a-video", type: "video", name: "Solar roof video", videoKey: `${brand}/media/solar-roof.mp4`, fit: "crop", loop: true, scale: 1 },
+  { id: "a-shop-btn", type: "link", name: "To the shop", label: "To the shop", url: SHOP },
+  { id: "a-links", type: "card", name: "Mounting and advice", title: "Mounting & advice", subtitle: "From brackets to batteries: everything for your balcony power plant.", items: [
+    { kind: "link", label: "Mounting & brackets", url: `${SHOP}/collections/unterkonstruktion-montage` },
+    { kind: "link", label: "Balcony power plants with storage", url: `${SHOP}/collections/balkonkraftwerke-mit-speicher` },
+    { kind: "link", label: "Accessories", url: `${SHOP}/collections/zubehoer` },
+    { kind: "link", label: "Your own AR for your brand", url: "https://elettro.com/ar" } ] },
+  { id: "a-shop", type: "card", name: "Shop", title: "Balcony power plants", subtitle: "Live from the SolarMeister shop.", items: [
+    ...shop.map((p) => ({ kind: "product", label: productEn[p.handle] || p.label, url: `${SHOP}/products/${p.handle}`, price: eur(p.price), cta: "View" })),
+    { kind: "link", label: "All balcony power plants", url: `${SHOP}/collections/balkonkraftwerke` } ] },
+  { id: "a-gallery", type: "gallery", name: "Facade and systems", imageKeys: [1, 6, 2, 3, 4, 5].map((i) => `${brand}/img/gallery-${i}.jpg`), seconds: 3, scale: 1 },
+  { id: "a-panel", type: "model", name: "Solar panel", builtin: "solarpanel", scale: 1 },
+  { id: "a-modules", type: "link", name: "Solar modules", label: "Solar modules", url: `${SHOP}/collections/solarmodule` },
 
   // --- the four logo-card outcomes. Contact details are the ones printed on solarmeister-shop.de (Kontakt/Impressum), read 2026-10-26.
-  { id: "a-contact", type: "card", name: "Kontakt", title: "Wir sind für dich da", subtitle: "SolarMeister Kundenservice", items: [
-    { kind: "link", label: "Jetzt anrufen: +49 1525 972 5120", url: "tel:+4915259725120" },
-    { kind: "link", label: "E-Mail an support@solarmeister-shop.de", url: "mailto:support@solarmeister-shop.de" },
-    { kind: "link", label: "Zur Kontaktseite", url: `${SHOP}/pages/contact` },
+  { id: "a-contact", type: "card", name: "Contact", title: "We're here for you", subtitle: "SolarMeister customer service", items: [
+    { kind: "link", label: "Call now: +49 1525 972 5120", url: "tel:+4915259725120" },
+    { kind: "link", label: "Email support@solarmeister-shop.de", url: "mailto:support@solarmeister-shop.de" },
+    { kind: "link", label: "Contact page", url: `${SHOP}/pages/contact` },
     { kind: "link", label: "solarmeister-shop.de", url: SHOP } ] },
-  { id: "a-call", type: "link", name: "Anrufen", label: "Jetzt anrufen", url: "tel:+4915259725120" },
-  { id: "a-film-shop", type: "link", name: "Balkonkraftwerk ansehen", label: "Jetzt Balkonkraftwerk ansehen", url: `${SHOP}/collections/balkonkraftwerke` },
-  { id: "a-calc", type: "calculator", name: "Solar-Rechner", title: "Was spart mein Balkonkraftwerk?", subtitle: "Schieb auf deinen Stromverbrauch und wähle ein System.",
+  { id: "a-call", type: "link", name: "Call", label: "Call now", url: "tel:+4915259725120" },
+  { id: "a-film-shop", type: "link", name: "See balcony power plants", label: "See balcony power plants", url: `${SHOP}/collections/balkonkraftwerke` },
+  { id: "a-calc", type: "calculator", name: "Solar calculator", title: "What does a balcony power plant save?", subtitle: "Slide to your electricity use and pick a system.",
     kwh: { min: 1500, max: 6000, step: 100, value: 3200 }, pricePerKwh: 0.35, yieldPerKwp: 900,
     systems: [
-      { label: "Max 1000", sub: "+ Speicher", kwp: 1, selfUse: 0.85, price: Number(shop[0].price.replace(/\D/g, "")), url: `${SHOP}/products/${shop[0].handle}` },
-      { label: "Max 2000", sub: "+ Speicher", kwp: 2, selfUse: 0.8, price: Number(shop[1].price.replace(/\D/g, "")), url: `${SHOP}/products/${shop[1].handle}` } ],
-    cta: "Dieses System ansehen", note: "Beispielrechnung: 900 kWh pro kWp, 35 ct pro kWh. Keine Garantie.", accent: "#3fb62c" },
-  { id: "a-scratch", type: "scratch", name: "Rubbellos", title: "Rubbel dein Geschenk frei", subtitle: "Ein Überraschungs-Rabatt wartet.", prize: "5 % Rabatt", code: "BEISPIELCODE",
-    hint: "Mit dem Finger rubbeln.", cta: { label: "Im Shop einlösen", url: SHOP }, note: "Beispielcode für die Demo. Kein echter Gutschein.", accent: "#ffd21f" }
+      { label: "Max 1000", sub: "+ storage", kwp: 1, selfUse: 0.85, price: Number(shop[0].price.replace(/\D/g, "")), url: `${SHOP}/products/${shop[0].handle}` },
+      { label: "Max 2000", sub: "+ storage", kwp: 2, selfUse: 0.8, price: Number(shop[1].price.replace(/\D/g, "")), url: `${SHOP}/products/${shop[1].handle}` } ],
+    labels: { use: "Your electricity use per year", saves: "Savings per year", costs: "The system costs", payback: "Pays for itself in", years: "about {n} years", locale: "en-GB" },
+    cta: "See this system", note: "Example calculation: 900 kWh per kWp, 35 cents per kWh. No guarantee.", accent: "#3fb62c" },
+  { id: "a-scratch", type: "scratch", name: "Scratch card", title: "Scratch to reveal your gift", subtitle: "A surprise discount is waiting.", prize: "5% discount", code: "EXAMPLECODE",
+    hint: "Scratch with your finger.", coverText: "SCRATCH", doneText: "Done!", cta: { label: "Redeem in the shop", url: SHOP }, note: "Example code for the demo. Not a real voucher.", accent: "#ffd21f" }
 ];
 const rules = [
   { triggerId: "lieferung", order: 0, actionIds: ["a-video", "a-shop-btn"] },
@@ -71,7 +82,13 @@ const rules = [
   { triggerId: "kontakt", order: 0, actionIds: ["a-contact"] },
   { triggerId: "film", order: 0, actionIds: ["a-video", "a-film-shop", "a-call"] },
   { triggerId: "rechner", order: 0, actionIds: ["a-calc"] },
-  { triggerId: "rubbeln", order: 0, actionIds: ["a-scratch"] }
+  { triggerId: "rubbeln", order: 0, actionIds: ["a-scratch"] },
+  { triggerId: "fassade2", order: 0, actionIds: ["a-gallery", "a-shop-btn"] },
+  { triggerId: "bifazial2", order: 0, actionIds: ["a-panel", "a-modules"] },
+  { triggerId: "kontakt2", order: 0, actionIds: ["a-contact"] },
+  { triggerId: "film2", order: 0, actionIds: ["a-video", "a-film-shop", "a-call"] },
+  { triggerId: "rechner2", order: 0, actionIds: ["a-calc"] },
+  { triggerId: "rubbeln2", order: 0, actionIds: ["a-scratch"] }
 ];
 const set = { id: "s-sm", slug: "demo", name: "SolarMeister AR demo", triggerIds: triggers.map((t) => t.id) };
 const { manifest, problems } = buildSetManifest({ brand, set, triggers, rules, actions, baseUrl });

@@ -44,9 +44,12 @@ const noteLine = (sheet, text) => { if (text) { const n = el("p", { class: "fnot
 // A savings estimate that runs on the phone. `savings` is passed in (from logic.js) so this file needs no imports.
 export function renderCalculator(sheet, c, savings) {
   heading(sheet, c);
+  const L = { use: "Dein Stromverbrauch pro Jahr", saves: "Ersparnis pro Jahr", costs: "Das System kostet", payback: "Hat sich bezahlt nach", years: "ca. {n} Jahren", locale: "de-DE" };
+  for (const k in (c.labels || {})) if (c.labels[k]) L[k] = c.labels[k];
+  const nfl = new Intl.NumberFormat(L.locale), money = (n) => (L.locale.startsWith("de") ? nfl.format(Math.round(n)) + " €" : "€" + nfl.format(Math.round(n)));
   const cap = el("label", { class: "ffld" });
-  const head = el("span", { class: "fhead" }); const l1 = el("span"); l1.textContent = "Dein Stromverbrauch pro Jahr"; const val = el("b"); head.append(l1, val);
-  const range = el("input", { type: "range", min: String(c.kwh.min), max: String(c.kwh.max), step: String(c.kwh.step), value: String(c.kwh.value), class: "frange", "aria-label": "Stromverbrauch pro Jahr in kWh" });
+  const head = el("span", { class: "fhead" }); const l1 = el("span"); l1.textContent = L.use; const val = el("b"); head.append(l1, val);
+  const range = el("input", { type: "range", min: String(c.kwh.min), max: String(c.kwh.max), step: String(c.kwh.step), value: String(c.kwh.value), class: "frange", "aria-label": L.use });
   cap.append(head, range); sheet.append(cap);
   const seg = el("div", { class: "fseg", role: "group", "aria-label": "System" });
   let pick = 0;
@@ -58,16 +61,16 @@ export function renderCalculator(sheet, c, savings) {
   });
   sheet.append(seg);
   const row = (label) => { const r = el("div", { class: "fres" }); const a = el("span"); a.textContent = label; const b = el("b"); r.append(a, b); sheet.append(r); return b; };
-  const outSave = row("Ersparnis pro Jahr"), outPrice = row("Das System kostet"), outYears = row("Hat sich bezahlt nach");
+  const outSave = row(L.saves), outPrice = row(L.costs), outYears = row(L.payback);
   outSave.classList.add("fbig");
   const go = el("a", { class: "fcta", target: "_blank", rel: "noopener" }); go.textContent = c.cta; sheet.append(go);
   noteLine(sheet, c.note);
   function update() {
     const s = c.systems[pick], use = Number(range.value);
     const r = savings({ use, kwp: s.kwp, selfUse: s.selfUse, yieldPerKwp: c.yieldPerKwp, pricePerKwh: c.pricePerKwh, price: s.price });
-    val.textContent = nf.format(use) + " kWh";
-    outSave.textContent = "≈ " + euro(r.perYear); outPrice.textContent = euro(s.price);
-    outYears.textContent = r.years ? "ca. " + Math.max(1, Math.round(r.years)) + " Jahren" : "–";
+    val.textContent = nfl.format(use) + " kWh";
+    outSave.textContent = "≈ " + money(r.perYear); outPrice.textContent = money(s.price);
+    outYears.textContent = r.years ? L.years.replace("{n}", String(Math.max(1, Math.round(r.years)))) : "–";
     if (s.url) { go.href = s.url; go.hidden = false; } else go.hidden = true;
   }
   range.addEventListener("input", update); update();
@@ -89,7 +92,7 @@ export function renderScratch(sheet, s) {
   const g = cv.getContext("2d"), grad = g.createLinearGradient(0, 0, 560, 200);
   grad.addColorStop(0, "#9aa4b5"); grad.addColorStop(1, "#d3d8e2");
   g.fillStyle = grad; g.fillRect(0, 0, 560, 200);
-  g.fillStyle = "#657089"; g.font = "700 40px system-ui, sans-serif"; g.textAlign = "center"; g.fillText("RUBBELN", 280, 114);
+  g.fillStyle = "#657089"; g.font = "700 40px system-ui, sans-serif"; g.textAlign = "center"; g.fillText(s.coverText || "RUBBELN", 280, 114);
   let down = false, done = false;
   const rub = (e) => {
     if (!down || done) return;
@@ -97,7 +100,7 @@ export function renderScratch(sheet, s) {
     g.globalCompositeOperation = "destination-out"; g.beginPath(); g.arc(x, y, 28, 0, 7); g.fill();
     const d = g.getImageData(0, 0, 560, 200).data; let n = 0, total = 0;
     for (let i = 3; i < d.length; i += 64) { total++; if (d[i] === 0) n++; }
-    if (n / total > 0.5) { done = true; cv.style.transition = "opacity .4s"; cv.style.opacity = "0"; cv.style.pointerEvents = "none"; if (go) go.hidden = false; hint.textContent = "Geschafft!"; }
+    if (n / total > 0.5) { done = true; cv.style.transition = "opacity .4s"; cv.style.opacity = "0"; cv.style.pointerEvents = "none"; if (go) go.hidden = false; hint.textContent = s.doneText || "Geschafft!"; }
   };
   cv.addEventListener("pointerdown", (e) => { down = true; try { cv.setPointerCapture(e.pointerId); } catch {} rub(e); });
   cv.addEventListener("pointermove", rub);
