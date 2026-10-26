@@ -1,0 +1,34 @@
+{
+  "readAt": "2026-10-26",
+  "source": "https://solarmeister-shop.de/products.json",
+  "products": [
+    {
+      "handle": "max-1000-bifazial-pro-mit-zendure-solarflow-2400-pro",
+      "label": "Max 1000 bifazial Pro + Zendure-Speicher",
+      "price": "1.379 €",
+      "image": "https://cdn.shopify.com/s/files/1/1004/1858/4950/files/Neu-Max1000_Zendure_2400_Pro.webp?v=1786575006",
+      "title": "Max 1000 bifazial Pro (mit Zendure Solarflow 2400 Pro)"
+    },
+    {
+      "handle": "max-2000-bifazial-pro-mit-zendure-solarflow-2400-pro",
+      "label": "Max 2000 bifazial Pro + Zendure-Speicher",
+      "price": "1.499 €",
+      "image": "https://cdn.shopify.com/s/files/1/1004/1858/4950/files/Neu-Max2000_Zendure_2400_Pro.webp?v=1786575051",
+      "title": "Max 2000 bifazial Pro (mit Zendure Solarflow 2400 Pro)"
+    },
+    {
+      "handle": "premium-pure-1860-bifazial",
+      "label": "Premium Pure 1860 bifazial",
+      "price": "1.052 €",
+      "image": "https://cdn.shopify.com/s/files/1/1004/1858/4950/files/PremiumPure1600.webp?v=1786557888",
+      "title": "Premium Pure 1860 bifazial"
+    },
+    {
+      "handle": "halterung-fassade",
+      "label": "Halterung Fassade",
+      "price": "89 €",
+      "image": "https://cdn.shopify.com/s/files/1/1004/1858/4950/files/Fassade1_a161667c-bd84-4f69-b7a0-21e02008ef87.webp?v=1786554596",
+      "title": "Halterung Fassade"
+    }
+  ]
+}

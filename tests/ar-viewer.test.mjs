@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parsePath, resolveRoute, resolveEntry, cropUv, planeFor, pickVideo, linkButtons, withUtm, targetData } from "../apps/ar-viewer/src/logic.js";
+import { parsePath, resolveRoute, mergeSets, resolveEntry, cropUv, planeFor, pickVideo, linkButtons, withUtm, targetData } from "../apps/ar-viewer/src/logic.js";
 
 test("parsePath reads brand and qr slug", () => {
   assert.deepEqual(parsePath("/stashbox/radio"), { brand: "stashbox", slug: "radio" });
@@ -80,4 +80,33 @@ test("resolveRoute: shared host, brand-owned host, unknown host", () => {
   // unknown host or no domains file: the plain /<brand>/<slug> form, and nothing on a bare path
   assert.deepEqual(resolveRoute("localhost", "/stashbox/radio", {}), { brand: "stashbox", slug: "radio" });
   assert.deepEqual(resolveRoute("localhost", "/", null), { brand: "", slug: "" });
+});
+
+test("resolveRoute: every known address carries the scan list, the bare shared one opens all of it", () => {
+  const domains = { _scan: ["elettro/ar", "stashbox/covers"], "ar.elettro.com": { brand: "elettro", shared: true }, "ar.stashbox.com": { brand: "stashbox" }, "ar.charity.org": { brand: "charity", scan: ["charity/main", "elettro/ar"] }, "ar.private.org": { brand: "private", scan: "own" } };
+  const all = ["elettro/ar", "stashbox/covers"];
+  assert.deepEqual(resolveRoute("ar.elettro.com", "/", domains), { brand: "elettro", slug: "", scan: all, all: true });
+  assert.deepEqual(resolveRoute("ar.elettro.com", "/stashbox", domains), { brand: "stashbox", slug: "", scan: all });
+  assert.deepEqual(resolveRoute("ar.stashbox.com", "/covers", domains), { brand: "stashbox", slug: "covers", scan: all });
+  assert.deepEqual(resolveRoute("ar.charity.org", "/", domains), { brand: "charity", slug: "", scan: ["charity/main", "elettro/ar"] }); // a quarantined list of its own
+  assert.deepEqual(resolveRoute("ar.private.org", "/", domains), { brand: "private", slug: "" }); // "own": that brand only
+  assert.deepEqual(resolveRoute("localhost", "/stashbox/covers", domains), { brand: "stashbox", slug: "covers" }); // unknown host: no merging
+});
+
+test("mergeSets: prefixes names per brand, same cover = earlier brand wins", () => {
+  const trig = (id, name) => ({ id, name, target: { name, json: {} }, actions: [] });
+  const m = mergeSets([
+    { brand: "elettro", set: { triggers: [trig("im-waiting", "im-waiting"), trig("let-me-down", "let-me-down")] } },
+    { brand: "stashbox", set: { triggers: [trig("im-waiting", "im-waiting"), trig("super-funk", "super-funk")] } }
+  ]);
+  assert.deepEqual(m.triggers.map((x) => x.id), ["elettro--im-waiting", "elettro--let-me-down", "stashbox--super-funk"]);
+  assert.deepEqual(m.triggers.map((x) => x.target.name), ["elettro--im-waiting", "elettro--let-me-down", "stashbox--super-funk"]);
+  assert.equal(mergeSets([]).triggers.length, 0);
+  assert.equal(mergeSets([{ brand: "x", set: null }]).triggers.length, 0);
+});
+
+test("sortActions picks the form", () => {
+  const s = sortActions([{ type: "form", title: "t", fields: [] }, { type: "link", label: "A", url: "https://a.test" }]);
+  assert.equal(s.form.title, "t");
+  assert.equal(s.card, null);
 });

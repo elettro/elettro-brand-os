@@ -20,8 +20,8 @@ export const LIMITS = {
   imageBytes: 15 * 1024 * 1024,
   targetBytes: 5 * 1024 * 1024
 };
-export const ACTION_TYPES = ["video", "link", "card", "gallery", "model"]; // radio / audio / uploaded 3D models arrive in later PRs
-export const MODEL_BUILTINS = ["vinyl"];
+export const ACTION_TYPES = ["video", "link", "card", "gallery", "model", "form"]; // radio / audio / uploaded 3D models arrive in later PRs
+export const MODEL_BUILTINS = ["vinyl", "solarpanel"];
 export const FIT_MODES = ["crop", "fill", "float"];
 export const QR_MODES = ["scanner", "experience", "url"];
 export const UPLOAD_KINDS = {
@@ -135,6 +135,25 @@ export function action(input, existing = {}) {
       imageKey: it.imageKey ? ownedKey(it.imageKey, `items[${n}].imageKey`) : undefined,
       cta: it.cta ? text(it.cta, `items[${n}].cta`, { max: 24, required: false }) : undefined
     }));
+  } else if (type === "form") {
+    // A look-only form on the screen: nothing in it is ever sent anywhere. Fields are labels and placeholders.
+    a.title = text(i.title, "title", { max: 80 });
+    a.subtitle = i.subtitle ? text(i.subtitle, "subtitle", { max: 140, required: false }) : "";
+    if (i.toggle != null) {
+      const tg = i.toggle;
+      if (!tg || !Array.isArray(tg.options) || tg.options.length < 2 || tg.options.length > 3) throw bad("a toggle needs 2-3 options");
+      a.toggle = { label: tg.label ? text(tg.label, "toggle.label", { max: 40, required: false }) : "", options: tg.options.map((o, n) => text(o, `toggle.options[${n}]`, { max: 30 })) };
+    }
+    if (!Array.isArray(i.fields) || !i.fields.length || i.fields.length > 6) throw bad("a form needs 1-6 fields");
+    a.fields = i.fields.map((f, n) => ({
+      label: text(f && f.label, `fields[${n}].label`, { max: 40 }),
+      placeholder: f.placeholder ? text(f.placeholder, `fields[${n}].placeholder`, { max: 40, required: false }) : "",
+      suffix: f.suffix ? text(f.suffix, `fields[${n}].suffix`, { max: 12, required: false }) : "",
+      mode: f.mode === "numeric" ? "numeric" : "text"
+    }));
+    a.cta = text(i.cta, "cta", { max: 40 });
+    a.note = i.note ? text(i.note, "note", { max: 200, required: false }) : "";
+    if (i.accent != null) { if (!/^#[0-9a-f]{6}$/i.test(String(i.accent))) throw bad("accent must be a color like #43b02a"); a.accent = String(i.accent).toLowerCase(); }
   } else if (type === "gallery") {
     if (!Array.isArray(i.imageKeys) || !i.imageKeys.length || i.imageKeys.length > 12) throw bad("a gallery needs 1-12 images");
     a.imageKeys = i.imageKeys.map((k, n) => ownedKey(k, `imageKeys[${n}]`));

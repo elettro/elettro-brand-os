@@ -1,0 +1,23 @@
+{
+  "imagePath": "image-targets/montage_luminance.jpg",
+  "metadata": null,
+  "name": "montage",
+  "type": "PLANAR",
+  "properties": {
+    "left": 135,
+    "top": 0,
+    "width": 810,
+    "height": 1080,
+    "isRotated": true,
+    "originalWidth": 1080,
+    "originalHeight": 1080
+  },
+  "resources": {
+    "originalImage": "montage_original.jpg",
+    "croppedImage": "montage_cropped.jpg",
+    "thumbnailImage": "montage_thumbnail.jpg",
+    "luminanceImage": "montage_luminance.jpg"
+  },
+  "created": 1793037971124,
+  "updated": 1793037971124
+}

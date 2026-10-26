@@ -16,9 +16,30 @@ export function parsePath(pathname) {
 export function resolveRoute(hostname, pathname, domains) {
   const parts = String(pathname || "").split("/").filter(Boolean).map((p) => p.toLowerCase());
   const d = domains && domains[String(hostname || "").toLowerCase()];
-  if (d && !d.shared) return { brand: d.brand, slug: parts[0] || "" };
-  if (parts.length) return { brand: parts[0], slug: parts[1] || "" };
+  // Every known address scans every listed brand (domains._scan, or the host's own "scan" list; "own" turns it off), the address's own brand first.
+  const list = d ? (d.scan === "own" ? null : Array.isArray(d.scan) ? d.scan : Array.isArray(domains._scan) ? domains._scan : null) : null;
+  const withScan = (r) => (list && list.length ? { ...r, scan: list } : r);
+  if (d && !d.shared) return withScan({ brand: d.brand, slug: parts[0] || "" });
+  if (parts.length) return withScan({ brand: parts[0], slug: parts[1] || "" });
+  if (d && list && list.length) return { brand: d.brand, slug: "", scan: list, all: true }; // the bare shared address opens the whole list
   return { brand: d ? d.brand : "", slug: "" };
+}
+
+/**
+ * One scanner out of several brands' scanner sets. `parts` is [{ brand, set }] in priority order.
+ * Trigger ids and target names get the brand as a prefix so two brands can use the same names; when two triggers
+ * share an original target name it is the same cover, and the earlier brand wins.
+ */
+export function mergeSets(parts) {
+  const seen = new Set(), triggers = [];
+  for (const { brand, set } of parts) {
+    for (const t of (set && set.triggers) || []) {
+      if (seen.has(t.target.name)) continue;
+      seen.add(t.target.name);
+      triggers.push({ ...t, id: brand + "--" + t.id, brand, target: { ...t.target, name: brand + "--" + t.target.name } });
+    }
+  }
+  return { triggers };
 }
 
 /** Decide what the visitor sees from the brand manifest. */
@@ -79,7 +100,7 @@ export function targetData(triggers) {
 export function sortActions(actions) {
   const list = actions || [];
   const first = (type) => list.find((a) => a.type === type) || null;
-  return { video: first("video"), gallery: first("gallery"), model: first("model"), card: first("card"), links: linkButtons(list) };
+  return { video: first("video"), gallery: first("gallery"), model: first("model"), card: first("card"), form: first("form"), links: linkButtons(list) };
 }
 
 /** Which gallery picture is showing after `elapsedSeconds`. */

@@ -256,6 +256,12 @@ test("card, gallery and model actions validate and reach the public manifest", a
   const mdl = await post({ type: "model", name: "Vinyl", builtin: "vinyl" });
   assert.equal(mdl.status, 201);
   assert.equal((await post({ type: "model", name: "Nope", builtin: "dragon" })).status, 400);
+  assert.equal((await post({ type: "model", name: "Panel", builtin: "solarpanel" })).status, 201);
+  const form = { type: "form", name: "Preis", title: "Strompreis berechnen", toggle: { options: ["Privatkunde", "Gewerbekunde"] }, fields: [{ label: "PLZ", placeholder: "12345" }, { label: "Verbrauch", suffix: "kWh/Jahr", mode: "numeric" }], cta: "Preis berechnen", accent: "#43b02a" };
+  assert.equal((await post(form)).status, 201);
+  assert.equal((await post({ ...form, fields: [] })).status, 400); // a form needs fields
+  assert.equal((await post({ ...form, accent: "green" })).status, 400);
+  assert.equal((await post({ ...form, toggle: { options: ["nur eins"] } })).status, 400);
 
   const set = { id: "s", slug: "demo", name: "Demo", triggerIds: ["t"] };
   const trigger = { id: "t", name: "Cover", target: { name: "c", json: { type: "PLANAR" }, luminanceKey: "stashbox/targets/c.jpg" }, placement: { x: 0, y: 0, s: 1 } };
