@@ -1573,7 +1573,7 @@ export const handler = async (event = {}) => {
   if (iamOnly && event.action === "approve-month") return approvePlannerWeek({ weeks: 4, ...event }, connectDatabase, json);
   // IAM-only: record a milestone the database can't see yet (developer app review, OAuth) for the /status/connections feed.
   // IAM-only publishing loop, called by the YouTube upload worker every 15 minutes.
-  if (iamOnly && ["planner-tick", "claim-due-posts", "finish-post", "requeue-failed"].includes(event.action)) return handlePlannerOps(event, connectDatabase, json);
+  if (iamOnly && ["planner-tick", "claim-due-posts", "finish-post", "requeue-failed", "gmb-mix"].includes(event.action)) return handlePlannerOps(event, connectDatabase, json);
   if (iamOnly && event.action === "set-platform-milestone") return setPlatformMilestone(event, connectDatabase, json);
   // IAM-only: a token worker renewed an account's token (Threads every ~30 days); move its reconnect countdown.
   if (iamOnly && event.action === "set-token-expiry") return setTokenExpiry(event, connectDatabase, json);

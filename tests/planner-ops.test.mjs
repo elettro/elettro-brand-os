@@ -176,3 +176,10 @@ test("finish-post without a video id marks the post failed and keeps the error",
   assert.equal(r.body.status, "failed");
   assert.match(params[1], /quota exceeded/);
 });
+
+test("a week reset in Review stays empty: the tick skips it and moves on to the next week", () => {
+  const weekAfter = addDaysToYmd(nextWeek, 7);
+  const held = { ...brand, settings: { planner: {}, heldWeeks: [nextWeek] } };
+  assert.deepEqual(weekToPlan(held, { youtube: [] }), { weekStart: weekAfter, replace: false, destinations: ["youtube"] });
+  assert.equal(weekToPlan(held, { youtube: [weekAfter] }), null);
+});

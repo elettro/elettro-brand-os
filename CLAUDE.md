@@ -84,14 +84,15 @@ EventBridge, every 15 min ──> platform worker Lambda ──> network API
 | Piece | AWS name |
 |---|---|
 | API | `elettro-brand-os-dev-api` (+ HTTP API) |
-| Workers | `elettro-brand-os-dev-{threads,tiktok,pinterest,youtube-upload,meta,linkedin}` (`linkedin` once created) |
+| Workers | `elettro-brand-os-dev-{threads,tiktok,pinterest,youtube-upload,meta,linkedin,gmb}` (`linkedin` and `gmb` once created) |
 | Dropbox | `elettro-brand-os-dev-{dropbox-sync,dropbox-upload}` |
 | DB | RDS `elettro-brand-os-dev` |
 | Buckets | `elettro-brand-os-dev-assets`, `elettro-brand-os-dev-thumbnails` |
 | Web | Amplify app `d2k28tehm1a8zw` |
 | Secrets | Secrets Manager prefix `elettro-brand-os-dev/` (app secrets `*-oauth`; per-account tokens under `<platform>/<id>`) |
 | AR (created 2026-10-26) | Lambda `elettro-ar-dev-api`, DynamoDB `elettro-ar-dev`, bucket `elettro-ar-dev-media`, CloudFront for `ar.elettro.com`, role `elettro-ar-dev-api-role` |
-| Schedules | EventBridge, all `rate(15 minutes)`: `elettro-brand-os-dev-threads-refresh`, `…-tiktok-refresh`, `…-youtube-tick`, and **`elettro-pinterest-tick`** (different name pattern), `elettro-brand-os-dev-meta-tick` |
+| Schedules | EventBridge, all `rate(15 minutes)`: `elettro-brand-os-dev-threads-refresh`, `…-tiktok-refresh`, `…-youtube-tick`, `…-gmb-tick`, and **`elettro-pinterest-tick`** (different name pattern), `elettro-brand-os-dev-meta-tick` |
+
 
 (**verify** with `aws lambda list-functions` / `aws events list-rules`.)
 
@@ -123,7 +124,7 @@ Amplify auto-builds the web app from `develop`. After a merge, do the PR's "AWS 
   (Pinterest posting was merged in PR #144; re-check whether it is now live). Instagram/Facebook feed photos and wide
   videos are handled by the same worker (`services/meta-lambda`) but stay `planning` until one publishes on schedule.
   Stories are not built.
-- **integration** (not live): X. Google Business Profile is allowlisted (261023) and connected per brand; posting is not built and waits on the business-intelligence layer.
+- **integration** (not live): X. Google Business Profile is allowlisted (261023) and connected per brand. `services/gmb-lambda` publishes approved Update and Offer posts (one photo, one button, a pillar tag; every rule in `GMB_ASSET_SPEC.md` is a hard gate, plus the 30-day business-majority mix). Posts are queued by hand and the planner does not plan them (the format stays `integration`) until the business-intelligence layer and per-brand content policies exist. Its Lambda `elettro-brand-os-dev-gmb` and schedule are created by `scripts/gmb-publisher-setup.sh` (see its PR).
 - Token expiry matters: Threads/Pinterest/Meta tokens expire and must be renewed or reconnected by hand if a window is
   missed. Threads renewal is automatic (tick). Connection status/expiry feeds `elettro.com/dash`.
 - Each network has a hard daily cap of 10 posts across formats; Review page "posts per day" controls it.

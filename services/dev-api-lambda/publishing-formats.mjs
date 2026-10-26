@@ -33,7 +33,7 @@ export const PUBLISHING_FORMATS = [
   { destination: "linkedin", placement: "post", label: "Posts", status: "planning", note: "Publisher is built (services/linkedin-lambda); no post has published on schedule yet",
     rule: { kinds: ["image", "video"], aspectRatios: [] } },
   { destination: "x", placement: "video", label: "Videos", status: "integration", note: "X isn't connected to Elettro OS yet" },
-  { destination: "gmb", placement: "update", label: "Update posts", status: "integration", note: "Profiles connected; posting not built yet (waits on the business-content rules)" }
+  { destination: "gmb", placement: "update", label: "Update posts", status: "integration", note: "Profiles connected; publisher built (services/gmb-lambda) for Update and Offer posts queued by hand. Not planned automatically: waits on the business-content rules" }
 ];
 
 // A network takes at most 10 posts a day across all its formats.
