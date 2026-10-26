@@ -20,7 +20,8 @@ export const LIMITS = {
   imageBytes: 15 * 1024 * 1024,
   targetBytes: 5 * 1024 * 1024
 };
-export const ACTION_TYPES = ["video", "link"]; // M1; radio / shop / audio / model3d arrive in later PRs
+export const ACTION_TYPES = ["video", "link", "card", "gallery", "model"]; // radio / audio / uploaded 3D models arrive in later PRs
+export const MODEL_BUILTINS = ["vinyl"];
 export const FIT_MODES = ["crop", "fill", "float"];
 export const QR_MODES = ["scanner", "experience", "url"];
 export const UPLOAD_KINDS = {
@@ -120,6 +121,28 @@ export function action(input, existing = {}) {
     a.videoKey = ownedKey(i.videoKey, "videoKey");
     a.fit = FIT_MODES.includes(i.fit) ? i.fit : "crop";
     a.loop = i.loop !== false;
+    a.scale = num(i.scale, 1, 0.2, 3, "scale");
+  } else if (type === "card") {
+    // A sheet over the camera: a title and a short list of links or products (shop items carry an optional price and picture).
+    a.title = text(i.title, "title", { max: 80 });
+    a.subtitle = i.subtitle ? text(i.subtitle, "subtitle", { max: 140, required: false }) : "";
+    if (!Array.isArray(i.items) || !i.items.length || i.items.length > 12) throw bad("a card needs 1-12 items");
+    a.items = i.items.map((it, n) => ({
+      kind: it.kind === "product" ? "product" : "link",
+      label: text(it.label, `items[${n}].label`, { max: 80 }),
+      url: httpsUrl(it.url),
+      price: it.price ? text(it.price, `items[${n}].price`, { max: 20, required: false }) : undefined,
+      imageKey: it.imageKey ? ownedKey(it.imageKey, `items[${n}].imageKey`) : undefined,
+      cta: it.cta ? text(it.cta, `items[${n}].cta`, { max: 24, required: false }) : undefined
+    }));
+  } else if (type === "gallery") {
+    if (!Array.isArray(i.imageKeys) || !i.imageKeys.length || i.imageKeys.length > 12) throw bad("a gallery needs 1-12 images");
+    a.imageKeys = i.imageKeys.map((k, n) => ownedKey(k, `imageKeys[${n}]`));
+    a.seconds = num(i.seconds, 3, 1.5, 10, "seconds");
+    a.scale = num(i.scale, 1, 0.2, 3, "scale");
+  } else if (type === "model") {
+    if (!MODEL_BUILTINS.includes(i.builtin)) throw bad(`model must be one of the built-in shapes: ${MODEL_BUILTINS.join(", ")}`);
+    a.builtin = i.builtin;
     a.scale = num(i.scale, 1, 0.2, 3, "scale");
   } else {
     a.label = text(i.label, "label", { max: 40 });

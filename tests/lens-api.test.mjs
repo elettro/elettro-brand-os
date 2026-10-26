@@ -239,3 +239,32 @@ test("manifest builders: stub, brand index and missing pieces", () => {
   const idx = buildBrandManifest({ brand: "b", enabled: true, qrs: [{ slug: "x", mode: "scanner", setId: "gone" }], sets: [], actions: [], baseUrl: BASE });
   assert.deepEqual(idx.qrs, {}); // a QR pointing at a deleted set is left out instead of breaking the page
 });
+
+test("card, gallery and model actions validate and reach the public manifest", async () => {
+  const f = fakes();
+  await enable(f);
+  const post = (body) => call(f, "POST", "/lens/brands/stashbox/actions", body);
+  const card = await post({ type: "card", name: "Shop", title: "Get the merch", items: [
+    { kind: "product", label: "Super Funk tee", url: "https://stashbox.ai/products/tee", price: "$32", cta: "Buy now", imageKey: "stashbox/img/tee.jpg" },
+    { kind: "link", label: "Tour dates", url: "https://stashbox.com" } ] });
+  assert.equal(card.status, 201);
+  assert.equal((await post({ type: "card", name: "Empty", title: "x", items: [] })).status, 400);
+  assert.equal((await post({ type: "card", name: "Bad", title: "x", items: [{ label: "y", url: "http://insecure.test" }] })).status, 400);
+  const gal = await post({ type: "gallery", name: "Photos", imageKeys: ["stashbox/img/a.jpg", "stashbox/img/b.jpg"], seconds: 3 });
+  assert.equal(gal.status, 201);
+  assert.equal((await post({ type: "gallery", name: "Out", imageKeys: ["solarmeister/img/a.jpg"] })).status, 400);
+  const mdl = await post({ type: "model", name: "Vinyl", builtin: "vinyl" });
+  assert.equal(mdl.status, 201);
+  assert.equal((await post({ type: "model", name: "Nope", builtin: "dragon" })).status, 400);
+
+  const set = { id: "s", slug: "demo", name: "Demo", triggerIds: ["t"] };
+  const trigger = { id: "t", name: "Cover", target: { name: "c", json: { type: "PLANAR" }, luminanceKey: "stashbox/targets/c.jpg" }, placement: { x: 0, y: 0, s: 1 } };
+  const actions = [card.body.item, gal.body.item, mdl.body.item];
+  const { manifest, problems } = buildSetManifest({ brand: "stashbox", set, triggers: [trigger], rules: [{ triggerId: "t", order: 0, actionIds: actions.map((a) => a.id) }], actions, baseUrl: BASE });
+  assert.deepEqual(problems, []);
+  const [c, g, m] = manifest.triggers[0].actions;
+  assert.equal(c.items[0].image, `${BASE}/stashbox/img/tee.jpg`);
+  assert.equal(c.items[0].price, "$32");
+  assert.deepEqual(g.images, [`${BASE}/stashbox/img/a.jpg`, `${BASE}/stashbox/img/b.jpg`]);
+  assert.equal(m.builtin, "vinyl");
+});

@@ -60,3 +60,16 @@ export function withUtm(url) {
 export function targetData(triggers) {
   return triggers.map((t) => ({ ...t.target.json, name: t.target.name }));
 }
+
+/** Splits a trigger's actions by what the viewer does with them. Only the first of each AR kind is used. */
+export function sortActions(actions) {
+  const list = actions || [];
+  const first = (type) => list.find((a) => a.type === type) || null;
+  return { video: first("video"), gallery: first("gallery"), model: first("model"), card: first("card"), links: linkButtons(list) };
+}
+
+/** Which gallery picture is showing after `elapsedSeconds`. */
+export function galleryIndex(count, seconds, elapsedSeconds) {
+  if (count <= 1 || !(seconds > 0)) return 0;
+  return Math.floor(Math.max(0, elapsedSeconds) / seconds) % count;
+}

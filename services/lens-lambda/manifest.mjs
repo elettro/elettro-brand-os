@@ -24,6 +24,16 @@ function publicAction(action, baseUrl) {
   if (action.type === "video") {
     return { type: "video", id: action.id, name: action.name, url: mediaUrl(baseUrl, action.videoKey), fit: action.fit, loop: action.loop, scale: action.scale };
   }
+  if (action.type === "card") {
+    return {
+      type: "card", id: action.id, title: action.title, subtitle: action.subtitle,
+      items: action.items.map((it) => ({ kind: it.kind, label: it.label, url: it.url, price: it.price, cta: it.cta, image: it.imageKey ? mediaUrl(baseUrl, it.imageKey) : undefined }))
+    };
+  }
+  if (action.type === "gallery") {
+    return { type: "gallery", id: action.id, name: action.name, images: action.imageKeys.map((k) => mediaUrl(baseUrl, k)), seconds: action.seconds, scale: action.scale };
+  }
+  if (action.type === "model") return { type: "model", id: action.id, name: action.name, builtin: action.builtin, scale: action.scale };
   return { type: "link", id: action.id, label: action.label, url: action.url };
 }
 

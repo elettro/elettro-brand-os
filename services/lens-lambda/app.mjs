@@ -56,6 +56,8 @@ export function createApp({ store, files, cdn, config }) {
     ownBrandKey(brand, body.imageKey);
     ownBrandKey(brand, body.videoKey);
     ownBrandKey(brand, body.target?.luminanceKey);
+    for (const k of Array.isArray(body.imageKeys) ? body.imageKeys : []) ownBrandKey(brand, k);
+    for (const it of Array.isArray(body.items) ? body.items : []) ownBrandKey(brand, it?.imageKey);
   }
 
   async function republishIndex(brand) {
@@ -188,6 +190,11 @@ export function createApp({ store, files, cdn, config }) {
       if (!h) problems.push(`video "${a.name}" was never uploaded`);
       else if (h.contentType && h.contentType !== "video/mp4") problems.push(`video "${a.name}" is not an MP4`);
       else if (h.size > v.LIMITS.videoBytes) problems.push(`video "${a.name}" is too large`);
+    }
+    const picture = async (key, what) => { if (key && !(await files.head(key))) problems.push(`${what} was never uploaded`); };
+    for (const a of d.actions.filter((a) => usedVideos.has(a.id))) {
+      for (const k of a.type === "gallery" ? a.imageKeys : []) await picture(k, `gallery "${a.name}" picture`);
+      for (const it of a.type === "card" ? a.items : []) await picture(it.imageKey, `card "${a.name}" picture`);
     }
     if (problems.length) throw Object.assign(new HttpError(422, "set is not ready to publish"), { problems });
     const key = setManifestKey(brand, set.slug);

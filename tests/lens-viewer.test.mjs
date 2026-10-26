@@ -52,3 +52,18 @@ test("targetData feeds the engine with names", () => {
   const out = targetData([{ target: { name: "super-funk", json: { imagePath: "https://l/x.jpg", type: "PLANAR" } } }]);
   assert.deepEqual(out, [{ imagePath: "https://l/x.jpg", type: "PLANAR", name: "super-funk" }]);
 });
+
+import { sortActions, galleryIndex } from "../apps/lens-viewer/src/logic.js";
+test("sortActions picks one of each AR kind and keeps every link", () => {
+  const s = sortActions([{ type: "link", label: "A", url: "https://a.test" }, { type: "model", builtin: "vinyl" }, { type: "card", title: "t", items: [] }, { type: "link", label: "B", url: "https://b.test" }]);
+  assert.equal(s.model.builtin, "vinyl");
+  assert.equal(s.card.title, "t");
+  assert.equal(s.video, null);
+  assert.deepEqual(s.links.map((l) => l.label), ["A", "B"]);
+});
+test("galleryIndex cycles through the pictures", () => {
+  assert.equal(galleryIndex(3, 3, 0), 0);
+  assert.equal(galleryIndex(3, 3, 3.1), 1);
+  assert.equal(galleryIndex(3, 3, 9), 0);
+  assert.equal(galleryIndex(1, 3, 100), 0);
+});

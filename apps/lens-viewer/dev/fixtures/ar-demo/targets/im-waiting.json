@@ -1,0 +1,23 @@
+{
+  "imagePath": "image-targets/im-waiting_luminance.jpg",
+  "metadata": null,
+  "name": "im-waiting",
+  "type": "PLANAR",
+  "properties": {
+    "left": 128,
+    "top": 0,
+    "width": 768,
+    "height": 1024,
+    "isRotated": true,
+    "originalWidth": 1024,
+    "originalHeight": 1024
+  },
+  "resources": {
+    "originalImage": "im-waiting_original.jpg",
+    "croppedImage": "im-waiting_cropped.jpg",
+    "thumbnailImage": "im-waiting_thumbnail.jpg",
+    "luminanceImage": "im-waiting_luminance.jpg"
+  },
+  "created": 1793028866578,
+  "updated": 1793028866578
+}

@@ -1,0 +1,23 @@
+{
+  "imagePath": "image-targets/marie-claude_luminance.jpg",
+  "metadata": null,
+  "name": "marie-claude",
+  "type": "PLANAR",
+  "properties": {
+    "left": 128,
+    "top": 0,
+    "width": 768,
+    "height": 1024,
+    "isRotated": true,
+    "originalWidth": 1024,
+    "originalHeight": 1024
+  },
+  "resources": {
+    "originalImage": "marie-claude_original.jpg",
+    "croppedImage": "marie-claude_cropped.jpg",
+    "thumbnailImage": "marie-claude_thumbnail.jpg",
+    "luminanceImage": "marie-claude_luminance.jpg"
+  },
+  "created": 1793029186999,
+  "updated": 1793029186999
+}
