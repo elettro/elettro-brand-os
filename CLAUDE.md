@@ -64,7 +64,8 @@ EventBridge, every 15 min ──> platform worker Lambda ──> network API
 - **Elettro Lens** (WebAR; plan in `docs/lens/ELETTRO-LENS-PLAN.md`, setup in `docs/lens/AWS-SETUP.md`): `services/lens-lambda` is the admin API
   (Lambda Function URL, outside the VPC, **no Postgres**, DynamoDB + S3 + CloudFront only; same `x-elettro-connect-key`). It is fully separate from the Publishing Engine:
   Lens PRs must not edit the dev-api, the worker Lambdas, the schedules or the schema. Public pages and manifests are served by CloudFront at `lens.elettro.com`, not by the Lambda.
-  **Status 2026-10-25: API code added in the Lens PR1; the AWS resources are not created yet** (see the setup guide; needs the root profile).
+  The phone viewer is the static `apps/lens-viewer` (plain JS, no framework; `scripts/lens-deploy-viewer.sh` publishes it to the Lens bucket; not part of the `@elettro/web` build).
+  **Status 2026-10-26: API code merged (PR1), viewer built (PR2); the AWS resources are not created yet** (see the setup guide; needs the root profile).
 - **Other Lambdas**: `dropbox-sync` (change ingestion), `dropbox-upload` (browser upload links).
 - `packages/*` (ai, auth, connectors, database/prisma, media) and `services/worker` are the original Sprint-1 scaffold.
   The live backend is the Lambdas above; check before assuming a package is wired in.
