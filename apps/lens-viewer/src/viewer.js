@@ -1,6 +1,17 @@
 import { parsePath, resolveEntry, planeFor, pickVideo, linkButtons, targetData } from "/viewer/logic.js";
 
 const $ = (id) => document.getElementById(id);
+
+// On-screen log for phones (no console): add ?debug=1 to the address. Errors always show.
+const DEBUG = new URLSearchParams(location.search).has("debug");
+function dbg(text, force) {
+  if (!DEBUG && !force) return;
+  let el = $("dbg");
+  if (!el) { el = document.createElement("pre"); el.id = "dbg"; el.style.cssText = "position:fixed;left:0;right:0;top:0;z-index:99;margin:0;padding:8px;font:11px ui-monospace,monospace;background:#000c;color:#9f9;white-space:pre-wrap;pointer-events:none;max-height:45vh;overflow:hidden"; document.body.append(el); }
+  el.textContent += text + "\n";
+}
+window.addEventListener("error", (e) => dbg("error: " + e.message, true));
+window.addEventListener("unhandledrejection", (e) => dbg("rejected: " + (e.reason && e.reason.message || e.reason), true));
 const LOST_PAUSE_MS = 2000; // keep playing briefly after the cover leaves the frame so a wobble never flickers
 
 function say(title, msg, { note = "", brand } = {}) {
@@ -45,15 +56,19 @@ function showPlainVideo(brand, action) {
 
 async function prepareScanner(brand, set) {
   await xrReady;
-  const supported = XR8.XrDevice.isDeviceBrowserSupported({ allowedDevices: XR8.XrConfig.device().MOBILE });
-  if (!supported.supported) {
+  const supported = XR8.XrDevice.isDeviceBrowserCompatible({ allowedDevices: XR8.XrConfig.device().MOBILE });
+  if (!supported) {
     return say(brand, "Open this page on your phone to scan.", { brand, note: location.href });
   }
   XR8.XrController.configure({ imageTargetData: targetData(set.triggers) });
   say(brand, "Point your camera at the artwork.", { brand, note: "Your camera stays on your phone. Nothing is recorded." });
   const start = $("start");
   start.hidden = false;
-  start.onclick = () => { start.hidden = true; $("splash").hidden = true; startScene(set); };
+  start.onclick = () => {
+    dbg("start tapped");
+    start.hidden = true; $("splash").hidden = true;
+    try { startScene(set); dbg("scene added"); } catch (err) { dbg("startScene failed: " + err.message, true); }
+  };
 }
 
 function startScene(set) {
@@ -77,6 +92,7 @@ function startScene(set) {
     scene.append(holder);
     planes.set(t.id, plane);
   }
+  for (const ev of ["loaded", "realityready", "camerastatuschange", "xrerror"]) scene.addEventListener(ev, (e) => dbg(ev + " " + JSON.stringify(e.detail || {}).slice(0, 120)));
   $("stage").append(scene);
 
   let current = null;
