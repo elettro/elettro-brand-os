@@ -1,0 +1,23 @@
+{
+  "imagePath": "image-targets/kontakt_luminance.jpg",
+  "metadata": null,
+  "name": "kontakt",
+  "type": "PLANAR",
+  "properties": {
+    "left": 135,
+    "top": 0,
+    "width": 810,
+    "height": 1080,
+    "isRotated": true,
+    "originalWidth": 1080,
+    "originalHeight": 1080
+  },
+  "resources": {
+    "originalImage": "kontakt_original.jpg",
+    "croppedImage": "kontakt_cropped.jpg",
+    "thumbnailImage": "kontakt_thumbnail.jpg",
+    "luminanceImage": "kontakt_luminance.jpg"
+  },
+  "created": 1793041867315,
+  "updated": 1793041867315
+}

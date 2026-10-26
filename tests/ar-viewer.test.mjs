@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parsePath, resolveRoute, mergeSets, resolveEntry, cropUv, planeFor, pickVideo, linkButtons, withUtm, targetData } from "../apps/ar-viewer/src/logic.js";
+import { parsePath, resolveRoute, mergeSets, chunk, savings, resolveEntry, cropUv, planeFor, pickVideo, linkButtons, withUtm, targetData } from "../apps/ar-viewer/src/logic.js";
 
 test("parsePath reads brand and qr slug", () => {
   assert.deepEqual(parsePath("/stashbox/radio"), { brand: "stashbox", slug: "radio" });
@@ -109,4 +109,26 @@ test("sortActions picks the form", () => {
   const s = sortActions([{ type: "form", title: "t", fields: [] }, { type: "link", label: "A", url: "https://a.test" }]);
   assert.equal(s.form.title, "t");
   assert.equal(s.card, null);
+});
+
+test("chunk splits a list into groups of at most n", () => {
+  assert.deepEqual(chunk([1, 2, 3, 4, 5, 6, 7], 5), [[1, 2, 3, 4, 5], [6, 7]]);
+  assert.deepEqual(chunk([1, 2, 3], 5), [[1, 2, 3]]);
+  assert.deepEqual(chunk([], 5), []);
+  assert.deepEqual(chunk([1, 2, 3], 0), [[1], [2], [3]]); // a bad size never loops forever
+});
+
+test("savings: what a system saves a year and when it pays back", () => {
+  const r = savings({ use: 3200, kwp: 1, selfUse: 0.85, yieldPerKwp: 900, pricePerKwh: 0.35, price: 1379 });
+  assert.equal(Math.round(r.perYear), 268);
+  assert.equal(Math.round(r.years), 5);
+  // a house that uses less than the system makes is capped by what it uses
+  assert.equal(Math.round(savings({ use: 500, kwp: 2, selfUse: 0.8, yieldPerKwp: 900, pricePerKwh: 0.4, price: 1000 }).perYear), 200);
+  assert.equal(savings({ use: 0, kwp: 1, selfUse: 1, yieldPerKwp: 900, pricePerKwh: 0.3, price: 100 }).years, null);
+});
+
+test("withUtm leaves call and email links alone", () => {
+  assert.equal(withUtm("tel:+4915259725120"), "tel:+4915259725120");
+  assert.equal(withUtm("mailto:a@b.de"), "mailto:a@b.de");
+  assert.match(withUtm("https://x.test/a"), /utm_source=ar/);
 });

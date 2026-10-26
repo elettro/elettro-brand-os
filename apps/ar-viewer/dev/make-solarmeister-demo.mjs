@@ -19,7 +19,9 @@ const brand = "solarmeister";
 const SHOP = "https://solarmeister-shop.de";
 const shop = JSON.parse(fs.readFileSync(path.join(src, "shop.json"), "utf8")).products;
 
-const names = { lieferung: "Lieferung", montage: "Montagesystem", system: "Balkonkraftwerk", fassade: "Fassade", bifazial: "Bifaziale Module" };
+const names = { lieferung: "Lieferung", montage: "Montagesystem", system: "Balkonkraftwerk", fassade: "Fassade", bifazial: "Bifaziale Module",
+  // the four logo cards: the logo plus a different second picture, one per Brand scan outcome
+  kontakt: "Logo-Karte Kontakt", film: "Logo-Karte Film", rechner: "Logo-Karte Rechner", rubbeln: "Logo-Karte Rubbeln" };
 const triggers = Object.keys(names).map((n) => {
   const json = JSON.parse(fs.readFileSync(path.join(src, "targets", `${n}.json`), "utf8"));
   const luminanceKey = `${brand}/targets/${n}_luminance.jpg`;
@@ -41,14 +43,35 @@ const actions = [
     { kind: "link", label: "Alle Balkonkraftwerke", url: `${SHOP}/collections/balkonkraftwerke` } ] },
   { id: "a-gallery", type: "gallery", name: "Fassade und Systeme", imageKeys: [1, 6, 2, 3, 4, 5].map((i) => `${brand}/img/gallery-${i}.jpg`), seconds: 3, scale: 1 },
   { id: "a-panel", type: "model", name: "Solarmodul", builtin: "solarpanel", scale: 1 },
-  { id: "a-modules", type: "link", name: "Solarmodule", label: "Solarmodule", url: `${SHOP}/collections/solarmodule` }
+  { id: "a-modules", type: "link", name: "Solarmodule", label: "Solarmodule", url: `${SHOP}/collections/solarmodule` },
+
+  // --- the four logo-card outcomes. Contact details are the ones printed on solarmeister-shop.de (Kontakt/Impressum), read 2026-10-26.
+  { id: "a-contact", type: "card", name: "Kontakt", title: "Wir sind für dich da", subtitle: "SolarMeister Kundenservice", items: [
+    { kind: "link", label: "Jetzt anrufen: +49 1525 972 5120", url: "tel:+4915259725120" },
+    { kind: "link", label: "E-Mail an support@solarmeister-shop.de", url: "mailto:support@solarmeister-shop.de" },
+    { kind: "link", label: "Zur Kontaktseite", url: `${SHOP}/pages/contact` },
+    { kind: "link", label: "solarmeister-shop.de", url: SHOP } ] },
+  { id: "a-call", type: "link", name: "Anrufen", label: "Jetzt anrufen", url: "tel:+4915259725120" },
+  { id: "a-film-shop", type: "link", name: "Balkonkraftwerk ansehen", label: "Jetzt Balkonkraftwerk ansehen", url: `${SHOP}/collections/balkonkraftwerke` },
+  { id: "a-calc", type: "calculator", name: "Solar-Rechner", title: "Was spart mein Balkonkraftwerk?", subtitle: "Schieb auf deinen Stromverbrauch und wähle ein System.",
+    kwh: { min: 1500, max: 6000, step: 100, value: 3200 }, pricePerKwh: 0.35, yieldPerKwp: 900,
+    systems: [
+      { label: "Max 1000", sub: "+ Speicher", kwp: 1, selfUse: 0.85, price: Number(shop[0].price.replace(/\D/g, "")), url: `${SHOP}/products/${shop[0].handle}` },
+      { label: "Max 2000", sub: "+ Speicher", kwp: 2, selfUse: 0.8, price: Number(shop[1].price.replace(/\D/g, "")), url: `${SHOP}/products/${shop[1].handle}` } ],
+    cta: "Dieses System ansehen", note: "Beispielrechnung: 900 kWh pro kWp, 35 ct pro kWh. Keine Garantie.", accent: "#3fb62c" },
+  { id: "a-scratch", type: "scratch", name: "Rubbellos", title: "Rubbel dein Geschenk frei", subtitle: "Ein Überraschungs-Rabatt wartet.", prize: "5 % Rabatt", code: "BEISPIELCODE",
+    hint: "Mit dem Finger rubbeln.", cta: { label: "Im Shop einlösen", url: SHOP }, note: "Beispielcode für die Demo. Kein echter Gutschein.", accent: "#ffd21f" }
 ];
 const rules = [
   { triggerId: "lieferung", order: 0, actionIds: ["a-video", "a-shop-btn"] },
   { triggerId: "montage", order: 0, actionIds: ["a-links"] },
   { triggerId: "system", order: 0, actionIds: ["a-shop"] },
   { triggerId: "fassade", order: 0, actionIds: ["a-gallery", "a-shop-btn"] },
-  { triggerId: "bifazial", order: 0, actionIds: ["a-panel", "a-modules"] }
+  { triggerId: "bifazial", order: 0, actionIds: ["a-panel", "a-modules"] },
+  { triggerId: "kontakt", order: 0, actionIds: ["a-contact"] },
+  { triggerId: "film", order: 0, actionIds: ["a-video", "a-film-shop", "a-call"] },
+  { triggerId: "rechner", order: 0, actionIds: ["a-calc"] },
+  { triggerId: "rubbeln", order: 0, actionIds: ["a-scratch"] }
 ];
 const set = { id: "s-sm", slug: "demo", name: "SolarMeister AR demo", triggerIds: triggers.map((t) => t.id) };
 const { manifest, problems } = buildSetManifest({ brand, set, triggers, rules, actions, baseUrl });

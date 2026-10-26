@@ -82,6 +82,7 @@ export function linkButtons(actions) {
 }
 
 export function withUtm(url) {
+  if (!/^https?:/i.test(String(url))) return url; // tel: and mailto: links stay exactly as written
   try {
     const u = new URL(url);
     if (!u.searchParams.has("utm_source")) u.searchParams.set("utm_source", "ar");
@@ -92,6 +93,23 @@ export function withUtm(url) {
 }
 
 /** The 8th Wall engine wants every target's json with an absolute imagePath. */
+/**
+ * The savings estimate behind the calculator screen. A system of `kwp` kWp makes kwp * yieldPerKwp kWh a year; `selfUse`
+ * of that is used in the house instead of fed to the grid, capped by what the house uses at all.
+ */
+export function savings({ use, kwp, selfUse, yieldPerKwp, pricePerKwh, price }) {
+  const made = kwp * yieldPerKwp * selfUse;
+  const perYear = Math.min(made, use) * pricePerKwh;
+  return { perYear, years: perYear > 0 ? price / perYear : null };
+}
+
+/** Splits a list into groups of at most `size` (the engine can only watch so many covers at once, so big sets are watched in turns). */
+export function chunk(list, size) {
+  const n = Math.max(1, Math.floor(size) || 1), out = [];
+  for (let i = 0; i < list.length; i += n) out.push(list.slice(i, i + n));
+  return out;
+}
+
 export function targetData(triggers) {
   return triggers.map((t) => ({ ...t.target.json, name: t.target.name }));
 }
@@ -100,7 +118,7 @@ export function targetData(triggers) {
 export function sortActions(actions) {
   const list = actions || [];
   const first = (type) => list.find((a) => a.type === type) || null;
-  return { video: first("video"), gallery: first("gallery"), model: first("model"), card: first("card"), form: first("form"), links: linkButtons(list) };
+  return { video: first("video"), gallery: first("gallery"), model: first("model"), card: first("card"), form: first("form"), calculator: first("calculator"), scratch: first("scratch"), links: linkButtons(list) };
 }
 
 /** Which gallery picture is showing after `elapsedSeconds`. */
