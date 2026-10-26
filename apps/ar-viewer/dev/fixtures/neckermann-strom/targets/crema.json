@@ -1,0 +1,23 @@
+{
+  "imagePath": "image-targets/crema_luminance.jpg",
+  "metadata": null,
+  "name": "crema",
+  "type": "PLANAR",
+  "properties": {
+    "left": 135,
+    "top": 0,
+    "width": 810,
+    "height": 1080,
+    "isRotated": true,
+    "originalWidth": 1080,
+    "originalHeight": 1080
+  },
+  "resources": {
+    "originalImage": "crema_original.jpg",
+    "croppedImage": "crema_cropped.jpg",
+    "thumbnailImage": "crema_thumbnail.jpg",
+    "luminanceImage": "crema_luminance.jpg"
+  },
+  "created": 1793040685758,
+  "updated": 1793040685758
+}

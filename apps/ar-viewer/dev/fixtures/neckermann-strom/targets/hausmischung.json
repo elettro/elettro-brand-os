@@ -1,0 +1,23 @@
+{
+  "imagePath": "image-targets/hausmischung_luminance.jpg",
+  "metadata": null,
+  "name": "hausmischung",
+  "type": "PLANAR",
+  "properties": {
+    "left": 135,
+    "top": 0,
+    "width": 810,
+    "height": 1080,
+    "isRotated": true,
+    "originalWidth": 1080,
+    "originalHeight": 1080
+  },
+  "resources": {
+    "originalImage": "hausmischung_original.jpg",
+    "croppedImage": "hausmischung_cropped.jpg",
+    "thumbnailImage": "hausmischung_thumbnail.jpg",
+    "luminanceImage": "hausmischung_luminance.jpg"
+  },
+  "created": 1793040926038,
+  "updated": 1793040926038
+}
