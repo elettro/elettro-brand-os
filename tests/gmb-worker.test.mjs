@@ -62,10 +62,10 @@ test("the button link must be https, a real URL and not shortened", () => {
   blocked(post({}, { cta: { actionType: "BOOK", url: "https://www.bit.ly/abc" } }), /shortened/);
 });
 
-test("the text: 1,500 characters, no phone numbers, no shouting, few emojis, no gimmicks", () => {
+test("the text: 1,350 characters, no phone numbers, no shouting, few emojis, no gimmicks", () => {
   blocked(post({ caption: "  " }), /no text/);
-  blocked(post({ caption: "x ".repeat(751) }), /over 1500.*1501/);
-  assert.ok(postRequest(post({ caption: "y".repeat(1500) }), NOW));
+  blocked(post({ caption: "x ".repeat(676) }), /over 1350.*1351/);
+  assert.ok(postRequest(post({ caption: "y".repeat(1350) }), NOW));
   blocked(post({ caption: "Call us at (954) 555-1234 today" }), /phone/);
   blocked(post({ caption: "Call 954.555.1234" }), /phone/);
   blocked(post({ caption: "Ring 555-1234" }), /phone/);

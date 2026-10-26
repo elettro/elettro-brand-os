@@ -24,8 +24,8 @@ const BRANDS_ROOT = "/1---elettro-brand-os/brands/";
 // One post per tick keeps a backlog from bursting onto the profile.
 const POSTS_PER_TICK = 1;
 
-// GMB_ASSET_SPEC.md section 3 and 9 limits.
-export const SUMMARY_MAX = 1500;
+// GMB_ASSET_SPEC.md section 3 and 9 limits. Text cap is 1,350 (Dean 261026: aim 750-1,350, shorter is fine; Google allows 1,500).
+export const SUMMARY_MAX = 1350;
 export const TITLE_MAX = 58;
 export const PHOTO_MIN_BYTES = 10 * 1024;
 export const PHOTO_MAX_BYTES = 5 * 1024 * 1024;
