@@ -1,0 +1,23 @@
+{
+  "imagePath": "image-targets/hold-jamaica_luminance.jpg",
+  "metadata": null,
+  "name": "hold-jamaica",
+  "type": "PLANAR",
+  "properties": {
+    "left": 128,
+    "top": 0,
+    "width": 768,
+    "height": 1024,
+    "isRotated": true,
+    "originalWidth": 1024,
+    "originalHeight": 1024
+  },
+  "resources": {
+    "originalImage": "hold-jamaica_original.jpg",
+    "croppedImage": "hold-jamaica_cropped.jpg",
+    "thumbnailImage": "hold-jamaica_thumbnail.jpg",
+    "luminanceImage": "hold-jamaica_luminance.jpg"
+  },
+  "created": 1793029107167,
+  "updated": 1793029107167
+}

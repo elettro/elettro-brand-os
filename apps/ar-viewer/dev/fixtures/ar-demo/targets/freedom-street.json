@@ -1,0 +1,23 @@
+{
+  "imagePath": "image-targets/freedom-street_luminance.jpg",
+  "metadata": null,
+  "name": "freedom-street",
+  "type": "PLANAR",
+  "properties": {
+    "left": 128,
+    "top": 0,
+    "width": 768,
+    "height": 1024,
+    "isRotated": true,
+    "originalWidth": 1024,
+    "originalHeight": 1024
+  },
+  "resources": {
+    "originalImage": "freedom-street_original.jpg",
+    "croppedImage": "freedom-street_cropped.jpg",
+    "thumbnailImage": "freedom-street_thumbnail.jpg",
+    "luminanceImage": "freedom-street_luminance.jpg"
+  },
+  "created": 1793029026603,
+  "updated": 1793029026603
+}

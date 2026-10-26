@@ -61,11 +61,11 @@ EventBridge, every 15 min ──> platform worker Lambda ──> network API
   profile (member tokens last 60 days with no refresh, so there is no renewal step; with an expired login the tick skips and
   leaves posts approved). Its Lambda and schedule must be created in AWS by hand (see its PR); connect + test-post code is
   in dev-api/web.
-- **Elettro Lens** (WebAR; plan in `docs/lens/ELETTRO-LENS-PLAN.md`, setup in `docs/lens/AWS-SETUP.md`): `services/lens-lambda` is the admin API
+- **Elettro AR** (WebAR; plan in `docs/ar/ELETTRO-AR-PLAN.md`, setup in `docs/ar/AWS-SETUP.md`): `services/ar-lambda` is the admin API
   (Lambda Function URL, outside the VPC, **no Postgres**, DynamoDB + S3 + CloudFront only; same `x-elettro-connect-key`). It is fully separate from the Publishing Engine:
-  Lens PRs must not edit the dev-api, the worker Lambdas, the schedules or the schema. Public pages and manifests are served by CloudFront at `lens.elettro.com`, not by the Lambda.
-  The phone viewer is the static `apps/lens-viewer` (plain JS, no framework; `scripts/lens-deploy-viewer.sh` publishes it to the Lens bucket; not part of the `@elettro/web` build).
-  **Status 2026-10-26: API code merged (PR1), viewer built (PR2); the AWS resources are not created yet** (see the setup guide; needs the root profile).
+  AR PRs must not edit the dev-api, the worker Lambdas, the schedules or the schema. Public pages and manifests are served by CloudFront at `ar.elettro.com`, not by the Lambda.
+  The phone viewer is the static `apps/ar-viewer` (plain JS, no framework; `scripts/ar-deploy-viewer.sh` publishes it to the AR bucket; not part of the `@elettro/web` build).
+  **Status 2026-10-26: AWS resources created and live at `https://ar.elettro.com`** (API Lambda, DynamoDB, bucket, CloudFront; set up with the root profile per the setup guide; brands `stashbox` and `elettro` are enabled with demo data). The viewer is published with `scripts/ar-deploy-viewer.sh`; Lambda code is updated by hand with `aws lambda update-function-code`. Gotcha: `PUT /ar/brands/<brand>/entitlement` rewrites that brand's `manifest.json`, so seed demo data after it, not before. The earlier `elettro-lens-dev-*` stack was deleted on 2026-10-26; `lens.elettro.com` no longer exists.
 - **Other Lambdas**: `dropbox-sync` (change ingestion), `dropbox-upload` (browser upload links).
 - `packages/*` (ai, auth, connectors, database/prisma, media) and `services/worker` are the original Sprint-1 scaffold.
   The live backend is the Lambdas above; check before assuming a package is wired in.
@@ -90,7 +90,7 @@ EventBridge, every 15 min ──> platform worker Lambda ──> network API
 | Buckets | `elettro-brand-os-dev-assets`, `elettro-brand-os-dev-thumbnails` |
 | Web | Amplify app `d2k28tehm1a8zw` |
 | Secrets | Secrets Manager prefix `elettro-brand-os-dev/` (app secrets `*-oauth`; per-account tokens under `<platform>/<id>`) |
-| Lens (**planned, not created yet**) | Lambda `elettro-lens-dev-api`, DynamoDB `elettro-lens-dev`, bucket `elettro-lens-dev-media`, CloudFront for `lens.elettro.com`, role `elettro-lens-dev-api-role` |
+| AR (created 2026-10-26) | Lambda `elettro-ar-dev-api`, DynamoDB `elettro-ar-dev`, bucket `elettro-ar-dev-media`, CloudFront for `ar.elettro.com`, role `elettro-ar-dev-api-role` |
 | Schedules | EventBridge, all `rate(15 minutes)`: `elettro-brand-os-dev-threads-refresh`, `…-tiktok-refresh`, `…-youtube-tick`, and **`elettro-pinterest-tick`** (different name pattern), `elettro-brand-os-dev-meta-tick` |
 
 (**verify** with `aws lambda list-functions` / `aws events list-rules`.)

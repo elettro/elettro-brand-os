@@ -1,0 +1,23 @@
+{
+  "imagePath": "image-targets/let-me-down_luminance.jpg",
+  "metadata": null,
+  "name": "let-me-down",
+  "type": "PLANAR",
+  "properties": {
+    "left": 128,
+    "top": 0,
+    "width": 768,
+    "height": 1024,
+    "isRotated": true,
+    "originalWidth": 1024,
+    "originalHeight": 1024
+  },
+  "resources": {
+    "originalImage": "let-me-down_original.jpg",
+    "croppedImage": "let-me-down_cropped.jpg",
+    "thumbnailImage": "let-me-down_thumbnail.jpg",
+    "luminanceImage": "let-me-down_luminance.jpg"
+  },
+  "created": 1793028946569,
+  "updated": 1793028946569
+}
