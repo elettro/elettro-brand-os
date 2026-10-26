@@ -13,13 +13,13 @@ const require = createRequire(import.meta.url);
 
 rmSync(dist, { recursive: true, force: true });
 mkdirSync(join(dist, "viewer"), { recursive: true });
-for (const f of ["index.html", "viewer.js", "logic.js", "viewer.css"]) cpSync(join(here, "src", f), join(dist, "viewer", f));
+for (const f of ["index.html", "viewer.js", "logic.js", "sheet.js", "viewer.css"]) cpSync(join(here, "src", f), join(dist, "viewer", f));
 // Cache-bust the files that change with every deploy (phones cache them hard).
 const v = Date.now().toString(36);
 const indexPath = join(dist, "viewer", "index.html");
 writeFileSync(indexPath, readFileSync(indexPath, "utf8").replace('/viewer/viewer.css"', `/viewer/viewer.css?v=${v}"`).replace('/viewer/viewer.js"', `/viewer/viewer.js?v=${v}"`));
 const jsPath = join(dist, "viewer", "viewer.js");
-writeFileSync(jsPath, readFileSync(jsPath, "utf8").replace('"/viewer/logic.js"', `"/viewer/logic.js?v=${v}"`));
+writeFileSync(jsPath, readFileSync(jsPath, "utf8").replace('"/viewer/logic.js"', `"/viewer/logic.js?v=${v}"`).replace('"/viewer/sheet.js"', `"/viewer/sheet.js?v=${v}"`));
 cpSync(join(here, "vendor", "8frame-1.5.0.min.js"), join(dist, "viewer", "8frame-1.5.0.min.js"));
 cpSync(join(here, "vendor", "xrextras"), join(dist, "external", "xrextras"), { recursive: true });
 

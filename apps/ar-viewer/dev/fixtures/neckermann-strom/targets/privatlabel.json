@@ -1,0 +1,23 @@
+{
+  "imagePath": "image-targets/privatlabel_luminance.jpg",
+  "metadata": null,
+  "name": "privatlabel",
+  "type": "PLANAR",
+  "properties": {
+    "left": 135,
+    "top": 0,
+    "width": 810,
+    "height": 1080,
+    "isRotated": true,
+    "originalWidth": 1080,
+    "originalHeight": 1080
+  },
+  "resources": {
+    "originalImage": "privatlabel_original.jpg",
+    "croppedImage": "privatlabel_cropped.jpg",
+    "thumbnailImage": "privatlabel_thumbnail.jpg",
+    "luminanceImage": "privatlabel_luminance.jpg"
+  },
+  "created": 1793040845790,
+  "updated": 1793040845790
+}

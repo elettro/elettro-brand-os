@@ -1,0 +1,23 @@
+{
+  "imagePath": "image-targets/buero_luminance.jpg",
+  "metadata": null,
+  "name": "buero",
+  "type": "PLANAR",
+  "properties": {
+    "left": 135,
+    "top": 0,
+    "width": 810,
+    "height": 1080,
+    "isRotated": true,
+    "originalWidth": 1080,
+    "originalHeight": 1080
+  },
+  "resources": {
+    "originalImage": "buero_original.jpg",
+    "croppedImage": "buero_cropped.jpg",
+    "thumbnailImage": "buero_thumbnail.jpg",
+    "luminanceImage": "buero_luminance.jpg"
+  },
+  "created": 1793040765559,
+  "updated": 1793040765559
+}

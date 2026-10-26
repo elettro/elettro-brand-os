@@ -1,0 +1,23 @@
+{
+  "imagePath": "image-targets/espresso_luminance.jpg",
+  "metadata": null,
+  "name": "espresso",
+  "type": "PLANAR",
+  "properties": {
+    "left": 135,
+    "top": 0,
+    "width": 810,
+    "height": 1080,
+    "isRotated": true,
+    "originalWidth": 1080,
+    "originalHeight": 1080
+  },
+  "resources": {
+    "originalImage": "espresso_original.jpg",
+    "croppedImage": "espresso_cropped.jpg",
+    "thumbnailImage": "espresso_thumbnail.jpg",
+    "luminanceImage": "espresso_luminance.jpg"
+  },
+  "created": 1793041006283,
+  "updated": 1793041006283
+}
