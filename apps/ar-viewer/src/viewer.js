@@ -189,27 +189,98 @@ function startScene(set) {
   }
 
   // A record built from shapes, floating just above the cover and turning slowly. (Uploaded 3D models come later.)
+  // Built-in 3D shapes (no model files yet). Both can be turned, resized and moved by touch, on the cover and after it is pinned.
+  const solarPanelParts = (part) => {
+    const c = document.createElement("canvas");
+    c.width = 384; c.height = 640;
+    const g = c.getContext("2d");
+    const cols = 6, rows = 10, w = c.width / cols, h = c.height / rows;
+    g.fillStyle = "#c9ced6"; g.fillRect(0, 0, c.width, c.height); // the silver gaps between cells
+    for (let r = 0; r < rows; r++) for (let q = 0; q < cols; q++) {
+      const x = q * w + 2, y = r * h + 2, cw = w - 4, ch = h - 4;
+      const gr = g.createLinearGradient(x, y, x + cw, y + ch);
+      gr.addColorStop(0, "#12306a"); gr.addColorStop(1, "#071634");
+      g.fillStyle = gr; g.fillRect(x, y, cw, ch);
+      g.strokeStyle = "rgba(190,200,222,0.55)"; g.lineWidth = 1;
+      for (let b = 1; b <= 3; b++) { const bx = x + (cw * b) / 4; g.beginPath(); g.moveTo(bx, y); g.lineTo(bx, y + ch); g.stroke(); }
+    }
+    const glass = part('<a-plane width="0.68" height="1.08" position="0 0 0.024"></a-plane>');
+    glass.setAttribute("material", { src: c.toDataURL("image/png"), metalness: 0.35, roughness: 0.25 }); // object form: a data URL has a ";" in it
+    return [part('<a-box width="0.74" height="1.14" depth="0.045" material="color: #aeb4bd; metalness: 0.9; roughness: 0.35"></a-box>'), glass];
+  };
+  const vinylParts = (part) => [
+    part('<a-cylinder radius="0.44" height="0.03" segments-radial="64" material="color: #0b0b0d; metalness: 0.6; roughness: 0.3"></a-cylinder>'),
+    ...[0.2, 0.26, 0.32, 0.38].map((r) => part(`<a-ring radius-inner="${r}" radius-outer="${r + 0.006}" segments-theta="64" position="0 0.0165 0" rotation="-90 0 0" material="shader: flat; color: #26262c; side: double"></a-ring>`)),
+    part('<a-cylinder radius="0.15" height="0.036" segments-radial="48" material="color: #c8322a; roughness: 0.5"></a-cylinder>'),
+    part('<a-ring radius-inner="0.06" radius-outer="0.1" segments-theta="48" position="0 0.0195 0" rotation="-90 0 0" material="shader: flat; color: #ffd21f; side: double"></a-ring>'),
+    part('<a-cylinder radius="0.014" height="0.045" material="shader: flat; color: #050507"></a-cylinder>')
+  ];
+
   function modelPart(trigger, action, root) {
     const k = action.scale || 1;
-    const group = el("a-entity", { visible: "false", position: "0 0 0.3", rotation: "-14 0 0", scale: `${k} ${k} ${k}` });
-    const face = el("a-entity", { rotation: "90 0 0" });
-    const spin = el("a-entity");
+    const panel = action.builtin === "solarpanel";
     const part = (html) => { const t = document.createElement("template"); t.innerHTML = html.trim(); return t.content.firstChild; };
-    spin.append(
-      part('<a-cylinder radius="0.44" height="0.03" segments-radial="64" material="color: #0b0b0d; metalness: 0.6; roughness: 0.3"></a-cylinder>'),
-      ...[0.2, 0.26, 0.32, 0.38].map((r) => part(`<a-ring radius-inner="${r}" radius-outer="${r + 0.006}" segments-theta="64" position="0 0.0165 0" rotation="-90 0 0" material="shader: flat; color: #26262c; side: double"></a-ring>`)),
-      part('<a-cylinder radius="0.15" height="0.036" segments-radial="48" material="color: #c8322a; roughness: 0.5"></a-cylinder>'),
-      part('<a-ring radius-inner="0.06" radius-outer="0.1" segments-theta="48" position="0 0.0195 0" rotation="-90 0 0" material="shader: flat; color: #ffd21f; side: double"></a-ring>'),
-      part('<a-cylinder radius="0.014" height="0.045" material="shader: flat; color: #050507"></a-cylinder>')
-    );
-    face.append(spin); group.append(face); root.append(group);
-    let raf = 0, last = 0;
-    const loop = (now) => { spin.object3D.rotation.y += ((now - (last || now)) / 1000) * 1.1; last = now; raf = requestAnimationFrame(loop); };
+    const group = el("a-entity", { visible: "false" });
+    const spin = el("a-entity");
+    if (panel) { spin.append(...solarPanelParts(part)); group.append(spin); }
+    else { const face = el("a-entity", { rotation: "90 0 0" }); spin.append(...vinylParts(part)); face.append(spin); group.append(face); }
+    root.append(group);
+
+    // What the viewer did with their fingers; the base pose is where the shape sits before they touch it.
+    const u = { s: 1, rx: 0, ry: 0, x: 0, y: 0 };
+    let pinned = false, touched = false, raf = 0, last = 0, hint = null, hintTimer = 0;
+    const RAD = Math.PI / 180, baseTilt = panel ? -8 : -14;
+    const place = (now = 0) => {
+      const pos = pinned ? [0, 4, 8.7] : [0, 0, 0.3], f = pinned ? 1.6 : 1, sc = (pinned ? k * 0.85 : k) * u.s;
+      const sway = panel && !touched ? Math.sin(now / 1400) * 22 : 0; // a gentle turn until they take hold of it
+      group.object3D.position.set(pos[0] + u.x * f, pos[1] + u.y * f, pos[2]);
+      group.object3D.scale.set(sc, sc, sc);
+      group.object3D.rotation.set((baseTilt + u.rx) * RAD, (u.ry + sway + (panel ? 18 : 0)) * RAD, 0);
+    };
+    const loop = (now) => {
+      if (!panel) spin.object3D.rotation.y += ((now - (last || now)) / 1000) * 1.1;
+      last = now; place(now); raf = requestAnimationFrame(loop);
+    };
+
+    // One finger turns it, two fingers pinch to resize and drag to move, a double tap puts it back.
+    const stage = $("stage"), ptrs = new Map();
+    let lastTap = 0;
+    const centre = () => { let x = 0, y = 0; for (const p of ptrs.values()) { x += p.x; y += p.y; } return { x: x / ptrs.size, y: y / ptrs.size }; };
+    const spread = () => { const [a, b] = [...ptrs.values()]; return Math.hypot(a.x - b.x, a.y - b.y) || 1; };
+    const down = (e) => {
+      ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      try { stage.setPointerCapture(e.pointerId); } catch {}
+      if (ptrs.size === 1) { const now = Date.now(); if (now - lastTap < 320) Object.assign(u, { s: 1, rx: 0, ry: 0, x: 0, y: 0 }); lastTap = now; }
+    };
+    const move = (e) => {
+      const p = ptrs.get(e.pointerId); if (!p) return;
+      touched = true; hideHint();
+      const before = ptrs.size === 2 ? { c: centre(), d: spread() } : null;
+      const dx = e.clientX - p.x, dy = e.clientY - p.y;
+      p.x = e.clientX; p.y = e.clientY;
+      if (ptrs.size === 1) { u.ry += dx * 0.45; u.rx = Math.max(-80, Math.min(80, u.rx + dy * 0.45)); }
+      else if (ptrs.size === 2) {
+        const c = centre(), d = spread(), H = innerHeight, mv = pinned ? 1.25 : 0.8;
+        u.s = Math.max(0.25, Math.min(4, u.s * (d / before.d)));
+        u.x += ((c.x - before.c.x) / H) * mv; u.y -= ((c.y - before.c.y) / H) * mv;
+      }
+    };
+    const up = (e) => { ptrs.delete(e.pointerId); };
+    const hideHint = () => { clearTimeout(hintTimer); if (hint) { hint.remove(); hint = null; } };
+    const listen = (on) => { const m = on ? "addEventListener" : "removeEventListener"; stage[m]("pointerdown", down); stage[m]("pointermove", move); stage[m]("pointerup", up); stage[m]("pointercancel", up); };
+
     return {
-      start() { group.setAttribute("visible", "true"); cancelAnimationFrame(raf); last = 0; raf = requestAnimationFrame(loop); },
-      pin() { group.setAttribute("visible", "false"); cancelAnimationFrame(raf); },
-      unpin() { this.start(); },
-      stop() { group.setAttribute("visible", "false"); cancelAnimationFrame(raf); }
+      start() {
+        group.setAttribute("visible", "true"); cancelAnimationFrame(raf); last = 0; raf = requestAnimationFrame(loop); listen(false); listen(true);
+        hideHint(); hint = Object.assign(document.createElement("div"), { className: "hint", textContent: "Drag to turn · pinch to resize · two fingers to move" });
+        document.body.append(hint); hintTimer = setTimeout(hideHint, 5000);
+      },
+      pin() { pinned = true; scene.object3D.add(group.object3D); },
+      unpin() { pinned = false; root.object3D.add(group.object3D); },
+      stop() {
+        group.setAttribute("visible", "false"); cancelAnimationFrame(raf); listen(false); ptrs.clear(); hideHint();
+        pinned = false; touched = false; root.object3D.add(group.object3D); Object.assign(u, { s: 1, rx: 0, ry: 0, x: 0, y: 0 });
+      }
     };
   }
 

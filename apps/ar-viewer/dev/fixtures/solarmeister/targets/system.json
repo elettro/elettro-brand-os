@@ -1,0 +1,23 @@
+{
+  "imagePath": "image-targets/system_luminance.jpg",
+  "metadata": null,
+  "name": "system",
+  "type": "PLANAR",
+  "properties": {
+    "left": 135,
+    "top": 0,
+    "width": 810,
+    "height": 1080,
+    "isRotated": true,
+    "originalWidth": 1080,
+    "originalHeight": 1080
+  },
+  "resources": {
+    "originalImage": "system_original.jpg",
+    "croppedImage": "system_cropped.jpg",
+    "thumbnailImage": "system_thumbnail.jpg",
+    "luminanceImage": "system_luminance.jpg"
+  },
+  "created": 1793038051388,
+  "updated": 1793038051388
+}

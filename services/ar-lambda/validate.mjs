@@ -21,7 +21,7 @@ export const LIMITS = {
   targetBytes: 5 * 1024 * 1024
 };
 export const ACTION_TYPES = ["video", "link", "card", "gallery", "model"]; // radio / audio / uploaded 3D models arrive in later PRs
-export const MODEL_BUILTINS = ["vinyl"];
+export const MODEL_BUILTINS = ["vinyl", "solarpanel"];
 export const FIT_MODES = ["crop", "fill", "float"];
 export const QR_MODES = ["scanner", "experience", "url"];
 export const UPLOAD_KINDS = {

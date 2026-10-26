@@ -1,0 +1,23 @@
+{
+  "imagePath": "image-targets/bifazial_luminance.jpg",
+  "metadata": null,
+  "name": "bifazial",
+  "type": "PLANAR",
+  "properties": {
+    "left": 135,
+    "top": 0,
+    "width": 810,
+    "height": 1080,
+    "isRotated": true,
+    "originalWidth": 1080,
+    "originalHeight": 1080
+  },
+  "resources": {
+    "originalImage": "bifazial_original.jpg",
+    "croppedImage": "bifazial_cropped.jpg",
+    "thumbnailImage": "bifazial_thumbnail.jpg",
+    "luminanceImage": "bifazial_luminance.jpg"
+  },
+  "created": 1793038212112,
+  "updated": 1793038212112
+}

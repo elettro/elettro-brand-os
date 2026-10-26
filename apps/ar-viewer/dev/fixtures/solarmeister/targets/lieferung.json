@@ -1,0 +1,23 @@
+{
+  "imagePath": "image-targets/lieferung_luminance.jpg",
+  "metadata": null,
+  "name": "lieferung",
+  "type": "PLANAR",
+  "properties": {
+    "left": 135,
+    "top": 0,
+    "width": 810,
+    "height": 1080,
+    "isRotated": true,
+    "originalWidth": 1080,
+    "originalHeight": 1080
+  },
+  "resources": {
+    "originalImage": "lieferung_original.jpg",
+    "croppedImage": "lieferung_cropped.jpg",
+    "thumbnailImage": "lieferung_thumbnail.jpg",
+    "luminanceImage": "lieferung_luminance.jpg"
+  },
+  "created": 1793037891343,
+  "updated": 1793037891343
+}
