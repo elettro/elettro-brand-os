@@ -256,3 +256,20 @@ Build order: after PR4, one small PR per item: (a) `link`, `radio` and `shop` ac
 > you think you must, stop and ask. Don't do any AWS write, merge, or real-device publish without Dean's explicit OK.
 > When the step's checkpoint is reached, **stop** and report: what was built, how Dean tests it on his phone, and
 > what's next. Tick the step in §7 in the same PR.
+
+## 12. Addresses, brand domains and cross-brand scanning (Dean 2026-10-26)
+
+**Status:** the shared address and the domain map are built; everything else here is design only.
+
+**Addresses.** Every brand has up to two: the shared `ar.elettro.com/<brand>[/<qr-slug>]` and its own `ar.<brand>.com[/<qr-slug>]`. The bare `ar.elettro.com` opens Elettro's own demo scanner. `/domains.json` in the AR bucket maps each host to `{ "brand": "...", "shared": true? }`; the viewer reads it (`resolveRoute` in `apps/ar-viewer/src/logic.js`). Moving a domain between brands is an edit of that one file. A printed QR code contains the address, so an address that has been printed must keep working.
+
+**Connecting a brand domain** needs three things once per domain: an ACM certificate (validated by a DNS record the domain owner adds), a CloudFront entry for the name, and a DNS record pointing the name at CloudFront. Only the brand can add DNS records on its own domain. Stashbox's `ar.stashbox.com` is registered in `/domains.json` but not connected yet. Do it by hand while there are only a few domains.
+
+**Growing to many brand domains.** A normal CloudFront distribution holds one certificate, so one domain each means one distribution each (500 per account by default). CloudFront multi-tenant distributions put the domain on a small per-brand tenant of one shared setup. This is **not verified yet**: read the AWS multi-tenant quotas and per-tenant certificate pages before building. Then add an OS "connect your domain" step: the brand enters the domain, the OS requests the certificate and shows the DNS records to add, checks them, creates the tenant and updates `/domains.json`.
+
+**Cross-brand scanning (not built).** Default: everything works with everything. Any address scans every brand's covers unless restricted. Two controls, and a cover scans only if both allow it:
+1. *Viewing side:* the address may restrict who appears on it (e.g. a charity's address shows only itself + Elettro).
+2. *Owning side:* a brand may opt its covers out of other addresses.
+Elettro sets these for client brands. The server builds one ready-made cover list per address whenever a setting changes, so the phone makes one request and no permission logic runs on it. Make "may my covers appear on other addresses?" an explicit yes/no when a brand is switched on.
+
+Open items before building it: (1) the engine's limit on image targets watched at once is unknown (no limit found in the engine files): phone-test 10, 20 and 40+ covers; fallback is a "featured" list that loads everywhere; (2) CloudFront needs CORS headers so media and JSON load across origins; (3) stats must record both the address a scan came from and the brand it triggered. The phone never reads the database: it reads JSON files from CloudFront that the API writes.
