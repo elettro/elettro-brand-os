@@ -188,7 +188,13 @@ export async function runPlanWeek(event, connectDatabase, json, { modelId = proc
     });
 
     // planWeek marks past slots against `now`; without it, it read the real clock instead of the caller's.
-    const input = { assets, accounts, settings, weekStart, timeZone, uses, songFacts, now };
+    // What already went out today, per account and format: a replan tops today up to its daily count.
+    const todayStart = localDateTimeToUtc(ymdInTimeZone(now, timeZone), "00:00", timeZone);
+    const doneToday = Object.fromEntries((await client.query(
+      `SELECT "socialAccountId", "placement", COUNT(*)::int AS n FROM "PublicationLedger"
+       WHERE "brandId" = $1 AND "publishedAt" >= $2 AND "publishedAt" <= $3 GROUP BY 1, 2`,
+      [brand.id, todayStart, now])).rows.map((r) => [`${r.socialAccountId}:${r.placement}`, r.n]));
+    const input = { assets, accounts, settings, weekStart, timeZone, uses, songFacts, now, doneToday };
     let plan = planWeek(input);
     let curator = { enabled: false, reason: !modelId ? "EPE_BEDROCK_CURATOR_MODEL_ID not set" : "disabled in settings or request" };
     if (modelId && settings.curator?.enabled !== false && event.curator !== false) {
