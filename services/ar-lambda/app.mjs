@@ -2,13 +2,14 @@
  * AR admin API. `createApp` takes its dependencies (store, files, cdn, config) so tests run with fakes;
  * `adapters.mjs` provides the real DynamoDB / S3 / CloudFront versions.
  *
- * Every route needs the connect key. Writes (other than the entitlement switch) are refused for brands that
+ * Every route needs the connect key except the two public count routes (POST /ar/event, GET /ar/stats). Writes (other than the entitlement switch) are refused for brands that
  * don't have AR enabled. Slugs for sets and QR codes are never reused after deletion (tombstones).
  */
 import { gate } from "./api-gate.mjs";
 import * as v from "./validate.mjs";
 import { HttpError, newId } from "./validate.mjs";
 import { brandManifestKey, setManifestKey, buildBrandManifest, buildSetManifest, stubManifest } from "./manifest.mjs";
+import { createStats } from "./stats.mjs";
 
 const COLLECTIONS = {
   triggers: { prefix: "TRIGGER#", validate: v.trigger },
@@ -26,6 +27,7 @@ const strip = (item) => {
 const actorOf = (event) => String(event?.headers?.["x-elettro-actor"] ?? event?.headers?.["X-Elettro-Actor"] ?? "").slice(0, 120);
 
 export function createApp({ store, files, cdn, config }) {
+  const stats = createStats({ store, files, now: () => (config.now ? config.now() : new Date()) });
   const baseUrl = config.publicBaseUrl.replace(/\/$/, "");
   const now = () => (config.now ? config.now() : new Date());
 
@@ -206,6 +208,20 @@ export function createApp({ store, files, cdn, config }) {
 
   async function handle(event) {
     try {
+      // Two public routes, counts only (see stats.mjs): record a scan or tap, and read the totals. Everything else needs the connect key.
+      const rawMethod = event?.requestContext?.http?.method || event?.httpMethod || "GET";
+      const rawPath = (event.rawPath || event.path || "/").replace(/\/+$/, "") || "/";
+      if (rawPath === "/ar/stats" && rawMethod === "GET") {
+        return { statusCode: 200, headers: { "content-type": "application/json", "cache-control": "public, max-age=30" }, body: JSON.stringify(await stats.read()) };
+      }
+      if (rawPath === "/ar/event" && rawMethod === "POST") {
+        const raw = event.isBase64Encoded ? Buffer.from(event.body || "", "base64").toString("utf8") : event.body || "";
+        if (raw.length > 600) throw new HttpError(413, "event too large");
+        let parsed;
+        try { parsed = JSON.parse(raw); } catch { throw new HttpError(400, "body must be JSON"); }
+        await stats.record(parsed);
+        return { statusCode: 204, headers: { "cache-control": "no-store" }, body: "" };
+      }
       const denied = gate(event, json, config.apiKey);
       if (denied) return denied;
       const method = event?.requestContext?.http?.method || event?.httpMethod || "GET";

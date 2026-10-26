@@ -1,4 +1,4 @@
-import { parsePath, resolveRoute, mergeSets, resolveEntry, planeFor, sortActions, galleryIndex, withUtm, targetData, chunk, savings } from "/viewer/logic.js";
+import { parsePath, resolveRoute, mergeSets, resolveEntry, planeFor, sortActions, galleryIndex, withUtm, targetData, chunk, savings, eventRef } from "/viewer/logic.js";
 import { renderForm, renderCalculator, renderScratch } from "/viewer/sheet.js";
 
 const $ = (id) => document.getElementById(id);
@@ -36,6 +36,8 @@ async function main() {
   let domains = {};
   try { domains = await getJson("/domains.json"); } catch {}
   const { brand, slug, scan, all } = resolveRoute(location.hostname, location.pathname, domains);
+  statsApi = typeof domains._api === "string" ? domains._api.replace(/\/$/, "") : "";
+  routeBrand = brand;
   if (!brand) return say("Elettro AR", "Scan an AR code to start.");
   // Other brands' scanner sets, loaded in priority order; one that fails to load is skipped, not fatal.
   const loadScan = async (skipRef) => {
@@ -80,11 +82,27 @@ function showPlainVideo(brand, action) {
   $("splash").append(v);
 }
 
+// Scan counter: one small message when a marker is found or a button on it is tapped. Counts only, nothing about the person.
+// ?nostats=1 turns it off (for testing without adding to the numbers).
+let statsApi = "", routeBrand = "";
+const lastSent = new Map();
+function track(trigger, kind) {
+  if (!statsApi || QS_NOSTATS || !trigger) return;
+  const ref = eventRef(trigger, routeBrand);
+  const key = ref.brand + "/" + ref.trigger + "/" + kind, at = Date.now();
+  if (at - (lastSent.get(key) || 0) < (kind === "scan" ? 20000 : 3000)) return; // holding on a cover is one scan
+  lastSent.set(key, at);
+  const body = JSON.stringify({ ...ref, kind });
+  try { if (navigator.sendBeacon && navigator.sendBeacon(statsApi + "/event", new Blob([body], { type: "text/plain" }))) return; } catch {}
+  try { fetch(statsApi + "/event", { method: "POST", body, mode: "no-cors", keepalive: true }); } catch {}
+}
+
 // The engine may only watch a handful of covers at once, so a big set is watched in groups, one after the other, until a cover is found.
 // ?group=N sets the group size (default 5); ?rotate=0 loads everything at once.
 const QS = new URLSearchParams(location.search);
 const GROUP_SIZE = Math.max(1, Number(QS.get("group")) || 5);
 const ROTATE = QS.get("rotate") !== "0";
+const QS_NOSTATS = QS.get("nostats") === "1";
 const DWELL_MS = 1500;
 const scanGroups = (triggers) => (ROTATE ? chunk(triggers, GROUP_SIZE) : [triggers]);
 
@@ -95,7 +113,7 @@ async function prepareScanner(brand, set) {
     return say(brand, "Open this page on your phone to scan.", { brand, note: location.href });
   }
   XR8.XrController.configure({ imageTargetData: targetData(scanGroups(set.triggers)[0]) });
-  say(brand, "Point your camera at the artwork.", { brand, note: "Your camera stays on your phone. Nothing is recorded." });
+  say(brand, "Point your camera at the artwork.", { brand, note: "Your camera stays on your phone. Nothing is recorded. We only count scans." });
   const start = $("start");
   start.hidden = false;
   start.onclick = () => {
@@ -402,6 +420,7 @@ function startScene(set) {
     inView.add(e.detail.name);
     const trigger = byName.get(e.detail.name);
     if (!trigger || dismissed === trigger.target.name) return;
+    track(trigger, "scan");
     clearTimeout(pinTimer);
     if (active && active.trigger !== trigger) stop(active, { keepUi: true });
     let exp = experiences.get(trigger.id);
@@ -413,6 +432,11 @@ function startScene(set) {
     renderBar(exp);
     renderSheet(exp);
     for (const p of exp.parts) p.start(exp);
+  });
+
+  document.addEventListener("click", (e) => {
+    const link = e.target && e.target.closest && e.target.closest("#bar a, #sheet a");
+    if (link && active) track(active.trigger, "tap");
   });
 
   scene.addEventListener("xrimagelost", (e) => {

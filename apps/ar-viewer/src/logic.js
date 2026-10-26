@@ -103,6 +103,17 @@ export function savings({ use, kwp, selfUse, yieldPerKwp, pricePerKwh, price }) 
   return { perYear, years: perYear > 0 ? price / perYear : null };
 }
 
+/**
+ * What the scan counter is told. A trigger from a merged scanner carries its brand and an id prefixed "<brand>--";
+ * the counter wants the brand and the id the brand published.
+ */
+export function eventRef(trigger, routeBrand) {
+  const brand = trigger.brand || routeBrand;
+  const prefix = trigger.brand ? trigger.brand + "--" : "";
+  const id = prefix && String(trigger.id).startsWith(prefix) ? String(trigger.id).slice(prefix.length) : trigger.id;
+  return { brand, trigger: id };
+}
+
 /** Splits a list into groups of at most `size` (the engine can only watch so many covers at once, so big sets are watched in turns). */
 export function chunk(list, size) {
   const n = Math.max(1, Math.floor(size) || 1), out = [];

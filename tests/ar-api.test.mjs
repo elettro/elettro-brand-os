@@ -17,12 +17,20 @@ function fakes() {
     async list(brand) { return [...rows].filter(([k]) => k.startsWith(`${brand}|`)).map(([k, item]) => ({ ...item, PK: `BRAND#${brand}`, SK: k.split("|")[1] })); },
     async get(brand, sk) { return rows.get(`${brand}|${sk}`) || null; },
     async put(brand, sk, data) { rows.set(`${brand}|${sk}`, structuredClone(data)); },
-    async del(brand, sk) { rows.delete(`${brand}|${sk}`); }
+    async del(brand, sk) { rows.delete(`${brand}|${sk}`); },
+    async add(brand, sk, { inc = {}, set = {}, setIfMissing = {} }) {
+      const k = `${brand}|${sk}`, cur = rows.get(k) || {};
+      for (const [fld, n] of Object.entries(inc)) cur[fld] = (cur[fld] || 0) + n;
+      Object.assign(cur, set);
+      for (const [fld, val] of Object.entries(setIfMissing)) if (cur[fld] === undefined) cur[fld] = val;
+      rows.set(k, cur);
+    }
   };
   const files = {
     async presignPut({ key }) { return { url: `https://s3.example.test/${key}?sig=1` }; },
     async head(key) { return objects.get(key) || null; },
-    async putJson(key, obj) { written.set(key, structuredClone(obj)); }
+    async putJson(key, obj) { written.set(key, structuredClone(obj)); },
+    async getJson(key) { return written.has(key) ? structuredClone(written.get(key)) : null; }
   };
   const cdn = { async invalidate(paths) { invalidated.push(...paths); } };
   let n = 0;
@@ -284,4 +292,38 @@ test("card, gallery and model actions validate and reach the public manifest", a
   assert.equal(c.items[0].price, "$32");
   assert.deepEqual(g.images, [`${BASE}/stashbox/img/a.jpg`, `${BASE}/stashbox/img/b.jpg`]);
   assert.equal(m.builtin, "vinyl");
+});
+
+test("public scan counter: records scans and taps for real markers only, reads without a key, counts only", async () => {
+  const f = fakes();
+  f.written.set("stashbox/manifest.json", { v: 1, brand: "stashbox", enabled: true, qrs: { covers: { mode: "scanner", set: "demo" } } });
+  f.written.set("stashbox/sets/demo/manifest.json", { triggers: [{ id: "super-funk", name: "Super Funk", target: { json: { imagePath: "https://x.test/sf.jpg" } } }, { id: "dirty-bird", name: "Dirty Bird" }, { id: "never-scanned", name: "Never Scanned" }] });
+  f.written.set("domains.json", { _scan: ["stashbox/covers"] });
+  const none = {}; // no connect key on purpose: these two routes are public
+  assert.equal((await call(f, "POST", "/ar/event", { brand: "stashbox", trigger: "super-funk", kind: "scan" }, none)).status, 204);
+  assert.equal((await call(f, "POST", "/ar/event", { brand: "stashbox", trigger: "super-funk", kind: "scan" }, none)).status, 204);
+  assert.equal((await call(f, "POST", "/ar/event", { brand: "stashbox", trigger: "dirty-bird", kind: "scan" }, none)).status, 204);
+  assert.equal((await call(f, "POST", "/ar/event", { brand: "stashbox", trigger: "super-funk", kind: "tap" }, none)).status, 204);
+  // refused: a marker that does not exist, a brand with no manifest, a bad kind, junk ids, a body that is too big
+  assert.equal((await call(f, "POST", "/ar/event", { brand: "stashbox", trigger: "nope", kind: "scan" }, none)).status, 404);
+  assert.equal((await call(f, "POST", "/ar/event", { brand: "ghost", trigger: "x", kind: "scan" }, none)).status, 404);
+  assert.equal((await call(f, "POST", "/ar/event", { brand: "stashbox", trigger: "super-funk", kind: "like" }, none)).status, 400);
+  assert.equal((await call(f, "POST", "/ar/event", { brand: "../x", trigger: "super-funk", kind: "scan" }, none)).status, 400);
+  assert.equal((await call(f, "POST", "/ar/event", { brand: "stashbox", trigger: "super-funk", kind: "scan", pad: "x".repeat(700) }, none)).status, 413);
+
+  const s = await call(f, "GET", "/ar/stats", undefined, none);
+  assert.equal(s.status, 200);
+  assert.deepEqual(s.body.total, { scans: 3, taps: 1 });
+  assert.deepEqual(s.body.today, { scans: 3, taps: 1 });
+  assert.equal(s.body.days.length, 30);
+  assert.deepEqual(s.body.brands, [{ brand: "stashbox", scans: 3, taps: 1 }]);
+  assert.deepEqual(s.body.markers.map((x) => [x.id, x.name, x.scans, x.taps]), [["super-funk", "Super Funk", 2, 1], ["dirty-bird", "Dirty Bird", 1, 0], ["never-scanned", "Never Scanned", 0, 0]]); // unscanned markers are listed too
+  assert.equal(s.body.markers[0].thumb, "https://x.test/sf.jpg");
+  assert.equal(s.body.lastScan.id, "dirty-bird");
+  assert.ok(s.body.since);
+  // the stats carry nothing about people: only these keys
+  assert.deepEqual(Object.keys(s.body).sort(), ["brands", "days", "lastScan", "markers", "ok", "since", "today", "total", "updatedAt"]);
+  // everything else still needs the connect key
+  assert.equal((await call(f, "GET", "/ar/brands/stashbox", undefined, none)).status, 401);
+  assert.equal((await call(f, "GET", "/ar/health", undefined, none)).status, 401);
 });

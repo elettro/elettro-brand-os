@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parsePath, resolveRoute, mergeSets, chunk, savings, resolveEntry, cropUv, planeFor, pickVideo, linkButtons, withUtm, targetData } from "../apps/ar-viewer/src/logic.js";
+import { parsePath, resolveRoute, mergeSets, chunk, savings, eventRef, resolveEntry, cropUv, planeFor, pickVideo, linkButtons, withUtm, targetData } from "../apps/ar-viewer/src/logic.js";
 
 test("parsePath reads brand and qr slug", () => {
   assert.deepEqual(parsePath("/stashbox/radio"), { brand: "stashbox", slug: "radio" });
@@ -131,4 +131,10 @@ test("withUtm leaves call and email links alone", () => {
   assert.equal(withUtm("tel:+4915259725120"), "tel:+4915259725120");
   assert.equal(withUtm("mailto:a@b.de"), "mailto:a@b.de");
   assert.match(withUtm("https://x.test/a"), /utm_source=ar/);
+});
+
+test("eventRef gives the counter the brand and the published id", () => {
+  assert.deepEqual(eventRef({ id: "solarmeister--lieferung", brand: "solarmeister" }, "elettro"), { brand: "solarmeister", trigger: "lieferung" });
+  assert.deepEqual(eventRef({ id: "im-waiting" }, "elettro"), { brand: "elettro", trigger: "im-waiting" }); // a single-brand set has no prefix
+  assert.deepEqual(eventRef({ id: "a--b", brand: "x" }, "elettro"), { brand: "x", trigger: "a--b" }); // only its own prefix is removed
 });
