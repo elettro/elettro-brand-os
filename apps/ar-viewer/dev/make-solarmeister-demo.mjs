@@ -19,11 +19,9 @@ const brand = "solarmeister";
 const SHOP = "https://solarmeister-shop.de";
 const shop = JSON.parse(fs.readFileSync(path.join(src, "shop.json"), "utf8")).products;
 
-const names = { lieferung: "Delivery", montage: "Mounting system", system: "Balcony power plant", fassade: "Facade", bifazial: "Bifacial modules",
-  // the four logo cards: the logo plus a different second picture, one per Brand scan outcome
-  kontakt: "Logo card Contact", film: "Logo card Film", rechner: "Logo card Calculator", rubbeln: "Logo card Scratch",
-  // stronger pictures for the same screens (clearly different cards, richer photos); both generations trigger the same thing
-  fassade2: "Facade (new)", bifazial2: "Solar modules (new)", kontakt2: "Card Contact (new)", film2: "Card Film (new)", rechner2: "Card Calculator (new)", rubbeln2: "Card Scratch (new)" };
+const names = { lieferung: "Delivery", montage: "Mounting system", system: "Balcony power plant", fassade: "Facade", bifazial: "Solar modules",
+  // the four logo cards: the logo plus a different second picture, one per Brand scan outcome (four clearly different pictures, so they never confuse each other)
+  kontakt: "Logo card Contact", film: "Logo card Film", rechner: "Logo card Calculator", rubbeln: "Logo card Scratch" };
 const triggers = Object.keys(names).map((n) => {
   const json = JSON.parse(fs.readFileSync(path.join(src, "targets", `${n}.json`), "utf8"));
   const luminanceKey = `${brand}/targets/${n}_luminance.jpg`;
@@ -82,13 +80,7 @@ const rules = [
   { triggerId: "kontakt", order: 0, actionIds: ["a-contact"] },
   { triggerId: "film", order: 0, actionIds: ["a-video", "a-film-shop", "a-call"] },
   { triggerId: "rechner", order: 0, actionIds: ["a-calc"] },
-  { triggerId: "rubbeln", order: 0, actionIds: ["a-scratch"] },
-  { triggerId: "fassade2", order: 0, actionIds: ["a-gallery", "a-shop-btn"] },
-  { triggerId: "bifazial2", order: 0, actionIds: ["a-panel", "a-modules"] },
-  { triggerId: "kontakt2", order: 0, actionIds: ["a-contact"] },
-  { triggerId: "film2", order: 0, actionIds: ["a-video", "a-film-shop", "a-call"] },
-  { triggerId: "rechner2", order: 0, actionIds: ["a-calc"] },
-  { triggerId: "rubbeln2", order: 0, actionIds: ["a-scratch"] }
+  { triggerId: "rubbeln", order: 0, actionIds: ["a-scratch"] }
 ];
 const set = { id: "s-sm", slug: "demo", name: "SolarMeister AR demo", triggerIds: triggers.map((t) => t.id) };
 const { manifest, problems } = buildSetManifest({ brand, set, triggers, rules, actions, baseUrl });

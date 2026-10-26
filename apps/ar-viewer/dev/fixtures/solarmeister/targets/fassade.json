@@ -1,7 +1,7 @@
 {
-  "imagePath": "image-targets/fassade_luminance.jpg",
+  "imagePath": "image-targets/fac1_luminance.jpg",
   "metadata": null,
-  "name": "fassade",
+  "name": "fac1",
   "type": "PLANAR",
   "properties": {
     "left": 135,
@@ -13,11 +13,11 @@
     "originalHeight": 1080
   },
   "resources": {
-    "originalImage": "fassade_original.jpg",
-    "croppedImage": "fassade_cropped.jpg",
-    "thumbnailImage": "fassade_thumbnail.jpg",
-    "luminanceImage": "fassade_luminance.jpg"
+    "originalImage": "fac1_original.jpg",
+    "croppedImage": "fac1_cropped.jpg",
+    "thumbnailImage": "fac1_thumbnail.jpg",
+    "luminanceImage": "fac1_luminance.jpg"
   },
-  "created": 1793038131542,
-  "updated": 1793038131542
+  "created": 1793047401923,
+  "updated": 1793047401923
 }

@@ -1,7 +1,7 @@
 {
-  "imagePath": "image-targets/rechner_luminance.jpg",
+  "imagePath": "image-targets/rechner3_luminance.jpg",
   "metadata": null,
-  "name": "rechner",
+  "name": "rechner3",
   "type": "PLANAR",
   "properties": {
     "left": 135,
@@ -13,11 +13,11 @@
     "originalHeight": 1080
   },
   "resources": {
-    "originalImage": "rechner_original.jpg",
-    "croppedImage": "rechner_cropped.jpg",
-    "thumbnailImage": "rechner_thumbnail.jpg",
-    "luminanceImage": "rechner_luminance.jpg"
+    "originalImage": "rechner3_original.jpg",
+    "croppedImage": "rechner3_cropped.jpg",
+    "thumbnailImage": "rechner3_thumbnail.jpg",
+    "luminanceImage": "rechner3_luminance.jpg"
   },
-  "created": 1793042027015,
-  "updated": 1793042027015
+  "created": 1793050426956,
+  "updated": 1793050426956
 }
