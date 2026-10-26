@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="robots" content="noindex">
+<title>Elettro AR</title>
+<link rel="stylesheet" href="/viewer/viewer.css">
+<script src="/viewer/8frame-1.5.0.min.js"></script>
+<script async src="/external/xr/xr.js" data-preload-chunks="slam"></script>
+<script src="/external/xrextras/xrextras.js"></script>
+</head>
+<body>
+<main id="splash" class="panel">
+  <div id="brand" class="brand"></div>
+  <h1 id="title">Elettro AR</h1>
+  <p id="msg">Loading…</p>
+  <button id="start" class="primary" hidden>Start</button>
+  <p id="note" class="note"></p>
+</main>
+<div id="stage"></div>
+<div id="nudge" class="nudge" hidden>
+  <div id="nval" class="nval">point at a cover</div>
+  <span></span><button data-k="y" data-d="0.005">▲</button><button data-k="s" data-d="0.01">+</button>
+  <button data-k="x" data-d="-0.005">◀</button><button data-k="y" data-d="-0.005">▼</button><button data-k="x" data-d="0.005">▶</button>
+  <span></span><span></span><button data-k="s" data-d="-0.01">−</button>
+</div>
+<div id="sheet" class="sheet"></div>
+<div id="bar" class="bar" hidden></div>
+<button id="close" class="close" aria-label="Close" hidden><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+<script type="module" src="/viewer/viewer.js"></script>
+</body>
+</html>

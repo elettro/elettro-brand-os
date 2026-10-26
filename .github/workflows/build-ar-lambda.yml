@@ -1,0 +1,39 @@
+name: Build AR Lambda
+
+on:
+  push:
+    branches:
+      - develop
+    paths:
+      - "services/ar-lambda/**"
+      - ".github/workflows/build-ar-lambda.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/ar-lambda
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Check syntax
+        run: |
+          for f in index.mjs app.mjs api-gate.mjs validate.mjs manifest.mjs adapters.mjs; do node --check "$f"; done
+
+      - name: Package Lambda
+        run: zip -r elettro-ar-dev-api.zip index.mjs app.mjs api-gate.mjs validate.mjs manifest.mjs adapters.mjs package.json
+
+      - name: Upload Lambda package
+        uses: actions/upload-artifact@v4
+        with:
+          name: elettro-ar-dev-api
+          path: services/ar-lambda/elettro-ar-dev-api.zip
+          if-no-files-found: error

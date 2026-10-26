@@ -1,0 +1,23 @@
+{
+  "imagePath": "image-targets/out-left_luminance.png",
+  "metadata": null,
+  "name": "out-left",
+  "type": "PLANAR",
+  "properties": {
+    "top": 0,
+    "left": 0,
+    "width": 939,
+    "height": 1252,
+    "isRotated": false,
+    "originalWidth": 1254,
+    "originalHeight": 1254
+  },
+  "resources": {
+    "originalImage": "out-left_original.png",
+    "croppedImage": "out-left_cropped.png",
+    "thumbnailImage": "out-left_thumbnail.png",
+    "luminanceImage": "out-left_luminance.png"
+  },
+  "created": 1793027554443,
+  "updated": 1793027554443
+}

@@ -1,0 +1,23 @@
+{
+  "imagePath": "image-targets/fassade_luminance.jpg",
+  "metadata": null,
+  "name": "fassade",
+  "type": "PLANAR",
+  "properties": {
+    "left": 135,
+    "top": 0,
+    "width": 810,
+    "height": 1080,
+    "isRotated": true,
+    "originalWidth": 1080,
+    "originalHeight": 1080
+  },
+  "resources": {
+    "originalImage": "fassade_original.jpg",
+    "croppedImage": "fassade_cropped.jpg",
+    "thumbnailImage": "fassade_thumbnail.jpg",
+    "luminanceImage": "fassade_luminance.jpg"
+  },
+  "created": 1793038131542,
+  "updated": 1793038131542
+}
