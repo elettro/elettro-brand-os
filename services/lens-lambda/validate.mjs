@@ -11,7 +11,7 @@ const bad = (msg) => new HttpError(400, msg);
 
 export const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{0,58}[a-z0-9])?$/;
 // Top-level paths the viewer and CloudFront use on lens.elettro.com, so a brand can't be called these.
-export const RESERVED_SLUGS = new Set(["viewer", "api", "assets", "admin", "static", "e", "favicon", "robots", "lens", "www"]);
+export const RESERVED_SLUGS = new Set(["viewer", "external", "api", "assets", "admin", "static", "e", "favicon", "robots", "lens", "www"]);
 export const LIMITS = {
   triggersPerSet: 50,
   urlBytes: 2048,

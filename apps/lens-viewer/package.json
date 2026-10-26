@@ -1,0 +1,14 @@
+{
+  "name": "@elettro/lens-viewer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Elettro Lens phone viewer: static page served from lens.elettro.com (not part of the @elettro/web build)",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "serve": "node serve.mjs"
+  },
+  "dependencies": {
+    "@8thwall/engine-binary": "1.0.0"
+  }
+}
