@@ -31,8 +31,12 @@ async function getJson(url) {
 const xrReady = new Promise((resolve) => (window.XR8 ? resolve() : window.addEventListener("xrloaded", () => resolve())));
 
 async function main() {
-  const { brand, slug } = parsePath(location.pathname);
-  if (!brand) return say("Elettro AR", "Scan a AR code to start.");
+  let { brand, slug } = parsePath(location.pathname);
+  // The bare address (ar.elettro.com) opens whichever brand /home.json names, so it can be typed or printed short.
+  if (!brand) {
+    try { brand = String((await getJson("/home.json")).brand || "").toLowerCase(); } catch { brand = ""; }
+    if (!brand) return say("Elettro AR", "Scan an AR code to start.");
+  }
   say(brand, "Loading…", { brand });
 
   let manifest;
