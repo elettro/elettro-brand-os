@@ -72,6 +72,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <Link className="brandmark" href="/" aria-label="Elettro OS home"><img src="/brand/elettro-logo-white.png" alt="Elettro" width="407" height="161" /><span>OS</span></Link>
         <div className="app-header-tools">
           {scope && <Suspense fallback={null}><BrandSwitcher brands={brands} /></Suspense>}
+          <a className="app-ar" href="https://elettro.com/ar/" target="_blank" rel="noreferrer">AR</a>
           <a className="app-live" href="https://elettro.com/dash/" target="_blank" rel="noreferrer">
             <i aria-hidden="true" /> Live status
           </a>
