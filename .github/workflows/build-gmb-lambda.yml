@@ -1,0 +1,38 @@
+name: Build GBP Lambda
+
+on:
+  push:
+    branches:
+      - develop
+    paths:
+      - "services/gmb-lambda/**"
+      - ".github/workflows/build-gmb-lambda.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/gmb-lambda
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Check syntax
+        run: node --check index.mjs
+
+      - name: Package Lambda
+        run: zip -r elettro-brand-os-dev-gmb.zip index.mjs package.json
+
+      - name: Upload Lambda package
+        uses: actions/upload-artifact@v4
+        with:
+          name: elettro-brand-os-dev-gmb
+          path: services/gmb-lambda/elettro-brand-os-dev-gmb.zip
+          if-no-files-found: error
