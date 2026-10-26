@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parsePath, resolveEntry, cropUv, planeFor, pickVideo, linkButtons, withUtm, targetData } from "../apps/lens-viewer/src/logic.js";
+import { parsePath, resolveEntry, cropUv, planeFor, pickVideo, linkButtons, withUtm, targetData } from "../apps/ar-viewer/src/logic.js";
 
 test("parsePath reads brand and qr slug", () => {
   assert.deepEqual(parsePath("/stashbox/radio"), { brand: "stashbox", slug: "radio" });
@@ -11,7 +11,7 @@ test("parsePath reads brand and qr slug", () => {
 test("resolveEntry covers every QR mode and the off states", () => {
   const m = { enabled: true, main: "main", qrs: {
     main: { mode: "url", url: "https://stashbox.com/radio" },
-    covers: { mode: "scanner", set: "covers", manifest: "https://lens.elettro.com/stashbox/sets/covers/manifest.json" },
+    covers: { mode: "scanner", set: "covers", manifest: "https://ar.elettro.com/stashbox/sets/covers/manifest.json" },
     clip: { mode: "experience", action: { type: "video", url: "x.mp4" } }
   } };
   assert.deepEqual(resolveEntry(m, ""), { kind: "redirect", url: "https://stashbox.com/radio" });
@@ -43,7 +43,7 @@ test("actions: first video drives the overlay, links become buttons with utm", (
   const acts = [{ type: "link", label: "Listen", url: "https://stashbox.com/radio/?song=a" }, { type: "video", url: "v.mp4" }, { type: "video", url: "w.mp4" }];
   assert.equal(pickVideo(acts).url, "v.mp4");
   assert.equal(pickVideo([]), null);
-  assert.deepEqual(linkButtons(acts), [{ label: "Listen", url: "https://stashbox.com/radio/?song=a&utm_source=lens" }]);
+  assert.deepEqual(linkButtons(acts), [{ label: "Listen", url: "https://stashbox.com/radio/?song=a&utm_source=ar" }]);
   assert.equal(withUtm("https://x.com/?utm_source=ig"), "https://x.com/?utm_source=ig");
   assert.equal(withUtm("not a url"), "not a url");
 });
@@ -53,7 +53,7 @@ test("targetData feeds the engine with names", () => {
   assert.deepEqual(out, [{ imagePath: "https://l/x.jpg", type: "PLANAR", name: "super-funk" }]);
 });
 
-import { sortActions, galleryIndex } from "../apps/lens-viewer/src/logic.js";
+import { sortActions, galleryIndex } from "../apps/ar-viewer/src/logic.js";
 test("sortActions picks one of each AR kind and keeps every link", () => {
   const s = sortActions([{ type: "link", label: "A", url: "https://a.test" }, { type: "model", builtin: "vinyl" }, { type: "card", title: "t", items: [] }, { type: "link", label: "B", url: "https://b.test" }]);
   assert.equal(s.model.builtin, "vinyl");

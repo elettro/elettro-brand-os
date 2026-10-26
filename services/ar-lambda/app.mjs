@@ -1,9 +1,9 @@
 /**
- * Lens admin API. `createApp` takes its dependencies (store, files, cdn, config) so tests run with fakes;
+ * AR admin API. `createApp` takes its dependencies (store, files, cdn, config) so tests run with fakes;
  * `adapters.mjs` provides the real DynamoDB / S3 / CloudFront versions.
  *
  * Every route needs the connect key. Writes (other than the entitlement switch) are refused for brands that
- * don't have Lens enabled. Slugs for sets and QR codes are never reused after deletion (tombstones).
+ * don't have AR enabled. Slugs for sets and QR codes are never reused after deletion (tombstones).
  */
 import { gate } from "./api-gate.mjs";
 import * as v from "./validate.mjs";
@@ -35,7 +35,7 @@ export function createApp({ store, files, cdn, config }) {
     const ent = items.find((i) => i.SK === "ENTITLEMENT");
     return {
       items,
-      entitlement: ent ? strip(ent) : { lensEnabled: false },
+      entitlement: ent ? strip(ent) : { arEnabled: false },
       triggers: by("TRIGGER#"),
       actions: by("ACTION#"),
       rules: by("RULE#"),
@@ -45,7 +45,7 @@ export function createApp({ store, files, cdn, config }) {
   }
 
   const requireEnabled = (data) => {
-    if (!data.entitlement.lensEnabled) throw new HttpError(403, "Lens is not enabled for this brand");
+    if (!data.entitlement.arEnabled) throw new HttpError(403, "AR is not enabled for this brand");
   };
 
   // Media keys must live under this brand's own folder.
@@ -62,7 +62,7 @@ export function createApp({ store, files, cdn, config }) {
 
   async function republishIndex(brand) {
     const d = await load(brand);
-    const manifest = buildBrandManifest({ brand, enabled: !!d.entitlement.lensEnabled, qrs: d.qrs, sets: d.sets, actions: d.actions, baseUrl, now: now() });
+    const manifest = buildBrandManifest({ brand, enabled: !!d.entitlement.arEnabled, qrs: d.qrs, sets: d.sets, actions: d.actions, baseUrl, now: now() });
     await files.putJson(brandManifestKey(brand), manifest);
     await cdn.invalidate([`/${brandManifestKey(brand)}`]);
     return manifest;
@@ -150,13 +150,13 @@ export function createApp({ store, files, cdn, config }) {
   }
 
   async function setEntitlement(brand, body, event) {
-    if (typeof body.lensEnabled !== "boolean") throw new HttpError(400, "lensEnabled must be true or false");
+    if (typeof body.arEnabled !== "boolean") throw new HttpError(400, "arEnabled must be true or false");
     const prev = (await store.get(brand, "ENTITLEMENT")) || {};
     const ent = {
-      lensEnabled: body.lensEnabled,
+      arEnabled: body.arEnabled,
       plan: body.plan ? v.text(body.plan, "plan", { max: 40 }) : prev.plan || "standard",
-      enabledAt: body.lensEnabled ? prev.enabledAt || now().toISOString() : prev.enabledAt,
-      enabledBy: body.lensEnabled ? prev.enabledBy || actorOf(event) : prev.enabledBy,
+      enabledAt: body.arEnabled ? prev.enabledAt || now().toISOString() : prev.enabledAt,
+      enabledBy: body.arEnabled ? prev.enabledBy || actorOf(event) : prev.enabledBy,
       updatedAt: now().toISOString()
     };
     await store.put(brand, "ENTITLEMENT", ent);
@@ -219,9 +219,9 @@ export function createApp({ store, files, cdn, config }) {
           throw new HttpError(400, "body must be JSON");
         }
       }
-      const seg = path.split("/").filter(Boolean); // ["lens","brands",":brand",...]
-      if (seg[0] !== "lens") throw new HttpError(404, "not found");
-      if (seg[1] === "health" && method === "GET") return json(200, { ok: true, service: "elettro-lens-api" });
+      const seg = path.split("/").filter(Boolean); // ["ar","brands",":brand",...]
+      if (seg[0] !== "ar") throw new HttpError(404, "not found");
+      if (seg[1] === "health" && method === "GET") return json(200, { ok: true, service: "elettro-ar-api" });
       if (seg[1] !== "brands" || !seg[2]) throw new HttpError(404, "not found");
       const brand = v.slug(seg[2], "brand");
       const rest = seg.slice(3);
@@ -244,7 +244,7 @@ export function createApp({ store, files, cdn, config }) {
       throw new HttpError(404, "not found");
     } catch (e) {
       if (e instanceof HttpError) return json(e.status, { ok: false, error: e.message, ...(e.problems ? { problems: e.problems } : {}) });
-      console.error("lens-api error", e);
+      console.error("ar-api error", e);
       return json(500, { ok: false, error: "Internal error" });
     }
   }

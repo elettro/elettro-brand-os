@@ -1,7 +1,7 @@
 /**
  * Builds the public JSON that the phone viewer loads. Pure functions: no AWS.
  *
- *   <brand>/manifest.json                 brand manifest: is Lens on, which QR slug goes where
+ *   <brand>/manifest.json                 brand manifest: is AR on, which QR slug goes where
  *   <brand>/sets/<setSlug>/manifest.json  one scan set: its triggers (8th Wall targets), placement, actions
  *
  * Everything in a manifest is public once published, so only fields the viewer needs go in.
@@ -76,7 +76,7 @@ export function buildSetManifest({ brand, set, triggers, rules, actions, baseUrl
   };
 }
 
-/** The brand index: Lens on/off and where each QR slug sends the visitor. */
+/** The brand index: AR on/off and where each QR slug sends the visitor. */
 export function buildBrandManifest({ brand, enabled, qrs, sets, actions, baseUrl, now = new Date() }) {
   if (!enabled) return stubManifest(brand, now);
   const setById = new Map(sets.map((s) => [s.id, s]));

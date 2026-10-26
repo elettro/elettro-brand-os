@@ -1,4 +1,4 @@
-// Pure helpers for the Lens viewer. No DOM, so node can test them.
+// Pure helpers for the AR viewer. No DOM, so node can test them.
 
 /** /<brand>/<qrSlug> -> { brand, slug }. slug is "" when the visitor used the bare brand URL (use the main QR). */
 export function parsePath(pathname) {
@@ -39,7 +39,7 @@ export function pickVideo(actions) {
   return (actions || []).find((a) => a.type === "video") || null;
 }
 
-/** Link actions become buttons; utm_source=lens is added so Shopify and the Radio can see where the click came from. */
+/** Link actions become buttons; utm_source=ar is added so Shopify and the Radio can see where the click came from. */
 export function linkButtons(actions) {
   return (actions || [])
     .filter((a) => a.type === "link")
@@ -49,7 +49,7 @@ export function linkButtons(actions) {
 export function withUtm(url) {
   try {
     const u = new URL(url);
-    if (!u.searchParams.has("utm_source")) u.searchParams.set("utm_source", "lens");
+    if (!u.searchParams.has("utm_source")) u.searchParams.set("utm_source", "ar");
     return u.toString();
   } catch {
     return url;

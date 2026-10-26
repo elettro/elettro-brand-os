@@ -63,7 +63,7 @@ export async function createCdn({ distributionId }) {
   const cf = new CloudFrontClient({});
   return {
     async invalidate(paths) {
-      await cf.send(new CreateInvalidationCommand({ DistributionId: distributionId, InvalidationBatch: { CallerReference: `lens-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, Paths: { Quantity: paths.length, Items: paths } } }));
+      await cf.send(new CreateInvalidationCommand({ DistributionId: distributionId, InvalidationBatch: { CallerReference: `ar-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, Paths: { Quantity: paths.length, Items: paths } } }));
     }
   };
 }

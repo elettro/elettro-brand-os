@@ -1,8 +1,8 @@
 {
-  "name": "@elettro/lens-viewer",
+  "name": "@elettro/ar-viewer",
   "version": "0.1.0",
   "private": true,
-  "description": "Elettro Lens phone viewer: static page served from lens.elettro.com (not part of the @elettro/web build)",
+  "description": "Elettro AR phone viewer: static page served from ar.elettro.com (not part of the @elettro/web build)",
   "type": "module",
   "scripts": {
     "build": "node build.mjs",

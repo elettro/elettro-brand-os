@@ -1,10 +1,10 @@
 {
-  "name": "@elettro/lens-lambda",
+  "name": "@elettro/ar-lambda",
   "private": true,
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "build": "zip -r elettro-lens-dev-api.zip index.mjs app.mjs api-gate.mjs validate.mjs manifest.mjs adapters.mjs package.json"
+    "build": "zip -r elettro-ar-dev-api.zip index.mjs app.mjs api-gate.mjs validate.mjs manifest.mjs adapters.mjs package.json"
   },
   "dependencies": {
     "@aws-sdk/client-cloudfront": "^3.910.0",

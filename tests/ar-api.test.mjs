@@ -1,12 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createApp } from "../services/lens-lambda/app.mjs";
-import { gate } from "../services/lens-lambda/api-gate.mjs";
-import * as v from "../services/lens-lambda/validate.mjs";
-import { buildBrandManifest, buildSetManifest, stubManifest } from "../services/lens-lambda/manifest.mjs";
+import { createApp } from "../services/ar-lambda/app.mjs";
+import { gate } from "../services/ar-lambda/api-gate.mjs";
+import * as v from "../services/ar-lambda/validate.mjs";
+import { buildBrandManifest, buildSetManifest, stubManifest } from "../services/ar-lambda/manifest.mjs";
 
-const KEY = "lens-test-key";
-const BASE = "https://lens.example.test";
+const KEY = "ar-test-key";
+const BASE = "https://ar.example.test";
 
 function fakes() {
   const rows = new Map(); // `${brand}|${sk}` -> item
@@ -37,31 +37,31 @@ const call = async (f, method, path, body, headers) => {
   const r = await f.app.handle(ev(method, path, body, headers));
   return { status: r.statusCode, body: r.body ? JSON.parse(r.body) : null };
 };
-const enable = (f, brand = "stashbox") => call(f, "PUT", `/lens/brands/${brand}/entitlement`, { lensEnabled: true });
+const enable = (f, brand = "stashbox") => call(f, "PUT", `/ar/brands/${brand}/entitlement`, { arEnabled: true });
 
 // A ready-to-publish setup: one trigger with a target, a video action, a rule, and a set.
 async function readySet(f, brand = "stashbox") {
   await enable(f, brand);
   f.objects.set(`${brand}/targets/db_lum.jpg`, { size: 70000, contentType: "image/jpeg" });
   f.objects.set(`${brand}/video/clip.mp4`, { size: 9_000_000, contentType: "video/mp4" });
-  const t = (await call(f, "POST", `/lens/brands/${brand}/triggers`, {
+  const t = (await call(f, "POST", `/ar/brands/${brand}/triggers`, {
     name: "Dirty Bird cover", placement: { x: -0.048, y: -0.027, s: 1.14 },
     target: { name: "dirty-bird", luminanceKey: `${brand}/targets/db_lum.jpg`, json: { type: "PLANAR", name: "dirty-bird", imagePath: "image-targets/x.jpg", properties: { width: 768, height: 1024 } } }
   })).body.item;
-  const a = (await call(f, "POST", `/lens/brands/${brand}/actions`, { type: "video", name: "Dirty Bird clip", videoKey: `${brand}/video/clip.mp4`, fit: "crop" })).body.item;
-  const r = (await call(f, "POST", `/lens/brands/${brand}/rules`, { triggerId: t.id, actionIds: [a.id] })).body.item;
-  const s = (await call(f, "POST", `/lens/brands/${brand}/sets`, { name: "Dirty Bird", slug: "dirty-bird", triggerIds: [t.id] })).body.item;
+  const a = (await call(f, "POST", `/ar/brands/${brand}/actions`, { type: "video", name: "Dirty Bird clip", videoKey: `${brand}/video/clip.mp4`, fit: "crop" })).body.item;
+  const r = (await call(f, "POST", `/ar/brands/${brand}/rules`, { triggerId: t.id, actionIds: [a.id] })).body.item;
+  const s = (await call(f, "POST", `/ar/brands/${brand}/sets`, { name: "Dirty Bird", slug: "dirty-bird", triggerIds: [t.id] })).body.item;
   return { t, a, r, s };
 }
 
 test("every route needs the connect key", async () => {
   const f = fakes();
   for (const headers of [{}, { "x-elettro-connect-key": "wrong" }]) {
-    assert.equal((await call(f, "GET", "/lens/health", undefined, headers)).status, 401);
-    assert.equal((await call(f, "GET", "/lens/brands/stashbox", undefined, headers)).status, 401);
-    assert.equal((await call(f, "PUT", "/lens/brands/stashbox/entitlement", { lensEnabled: true }, headers)).status, 401);
+    assert.equal((await call(f, "GET", "/ar/health", undefined, headers)).status, 401);
+    assert.equal((await call(f, "GET", "/ar/brands/stashbox", undefined, headers)).status, 401);
+    assert.equal((await call(f, "PUT", "/ar/brands/stashbox/entitlement", { arEnabled: true }, headers)).status, 401);
   }
-  assert.equal((await call(f, "GET", "/lens/health")).status, 200);
+  assert.equal((await call(f, "GET", "/ar/health")).status, 200);
   // no configured secret: nothing passes, not even an empty key
   assert.equal(gate({ headers: {} }, (s) => s, ""), 401);
   assert.equal(gate({ headers: { "x-elettro-connect-key": "" } }, (s) => s, ""), 401);
@@ -69,28 +69,28 @@ test("every route needs the connect key", async () => {
 
 test("a brand is off by default and writes are refused until it is enabled", async () => {
   const f = fakes();
-  const g = await call(f, "GET", "/lens/brands/stashbox");
-  assert.equal(g.body.entitlement.lensEnabled, false);
-  assert.equal((await call(f, "POST", "/lens/brands/stashbox/actions", { type: "link", name: "x", label: "Buy", url: "https://stashbox.ai" })).status, 403);
-  assert.equal((await call(f, "POST", "/lens/brands/stashbox/uploads", { kind: "video", contentType: "video/mp4" })).status, 403);
+  const g = await call(f, "GET", "/ar/brands/stashbox");
+  assert.equal(g.body.entitlement.arEnabled, false);
+  assert.equal((await call(f, "POST", "/ar/brands/stashbox/actions", { type: "link", name: "x", label: "Buy", url: "https://stashbox.ai" })).status, 403);
+  assert.equal((await call(f, "POST", "/ar/brands/stashbox/uploads", { kind: "video", contentType: "video/mp4" })).status, 403);
   assert.equal((await enable(f)).status, 200);
-  assert.equal((await call(f, "POST", "/lens/brands/stashbox/actions", { type: "link", name: "x", label: "Buy", url: "https://stashbox.ai" })).status, 201);
+  assert.equal((await call(f, "POST", "/ar/brands/stashbox/actions", { type: "link", name: "x", label: "Buy", url: "https://stashbox.ai" })).status, 201);
 });
 
 test("brand and set slugs are validated and reserved names refused", async () => {
   const f = fakes();
-  assert.equal((await call(f, "GET", "/lens/brands/Bad_Slug")).status, 400);
-  assert.equal((await call(f, "GET", "/lens/brands/viewer")).status, 400);
+  assert.equal((await call(f, "GET", "/ar/brands/Bad_Slug")).status, 400);
+  assert.equal((await call(f, "GET", "/ar/brands/viewer")).status, 400);
   await enable(f);
-  assert.equal((await call(f, "POST", "/lens/brands/stashbox/sets", { name: "x", slug: "api", triggerIds: [] })).status, 400);
-  assert.equal((await call(f, "POST", "/lens/brands/stashbox/sets", { name: "x", slug: "ok-slug", triggerIds: [] })).status, 201);
+  assert.equal((await call(f, "POST", "/ar/brands/stashbox/sets", { name: "x", slug: "api", triggerIds: [] })).status, 400);
+  assert.equal((await call(f, "POST", "/ar/brands/stashbox/sets", { name: "x", slug: "ok-slug", triggerIds: [] })).status, 201);
 });
 
 test("enabling and disabling rewrites the brand manifest (disabled = stub)", async () => {
   const f = fakes();
   await enable(f);
   assert.equal(f.written.get("stashbox/manifest.json").enabled, true);
-  await call(f, "PUT", "/lens/brands/stashbox/entitlement", { lensEnabled: false });
+  await call(f, "PUT", "/ar/brands/stashbox/entitlement", { arEnabled: false });
   const m = f.written.get("stashbox/manifest.json");
   assert.equal(m.enabled, false);
   assert.equal(m.qrs, undefined);
@@ -100,7 +100,7 @@ test("enabling and disabling rewrites the brand manifest (disabled = stub)", asy
 test("publishing a ready set writes a manifest with placement, media urls and actions", async () => {
   const f = fakes();
   const { s } = await readySet(f);
-  const r = await call(f, "POST", `/lens/brands/stashbox/sets/${s.id}/publish`);
+  const r = await call(f, "POST", `/ar/brands/stashbox/sets/${s.id}/publish`);
   assert.equal(r.status, 200);
   assert.equal(r.body.manifestUrl, `${BASE}/stashbox/sets/dirty-bird/manifest.json`);
   const m = f.written.get("stashbox/sets/dirty-bird/manifest.json");
@@ -115,12 +115,12 @@ test("publishing a ready set writes a manifest with placement, media urls and ac
 test("publish reports every reason a set is not ready", async () => {
   const f = fakes();
   await enable(f);
-  const t = (await call(f, "POST", "/lens/brands/stashbox/triggers", { name: "No target yet" })).body.item;
-  const t2 = (await call(f, "POST", "/lens/brands/stashbox/triggers", { name: "Missing files", target: { name: "x", luminanceKey: "stashbox/targets/gone.jpg", json: { a: 1 } } })).body.item;
-  const a = (await call(f, "POST", "/lens/brands/stashbox/actions", { type: "video", name: "Ghost video", videoKey: "stashbox/video/ghost.mp4" })).body.item;
-  await call(f, "POST", "/lens/brands/stashbox/rules", { triggerId: t2.id, actionIds: [a.id] });
-  const s = (await call(f, "POST", "/lens/brands/stashbox/sets", { name: "Bad", slug: "bad", triggerIds: [t.id, t2.id] })).body.item;
-  const r = await call(f, "POST", `/lens/brands/stashbox/sets/${s.id}/publish`);
+  const t = (await call(f, "POST", "/ar/brands/stashbox/triggers", { name: "No target yet" })).body.item;
+  const t2 = (await call(f, "POST", "/ar/brands/stashbox/triggers", { name: "Missing files", target: { name: "x", luminanceKey: "stashbox/targets/gone.jpg", json: { a: 1 } } })).body.item;
+  const a = (await call(f, "POST", "/ar/brands/stashbox/actions", { type: "video", name: "Ghost video", videoKey: "stashbox/video/ghost.mp4" })).body.item;
+  await call(f, "POST", "/ar/brands/stashbox/rules", { triggerId: t2.id, actionIds: [a.id] });
+  const s = (await call(f, "POST", "/ar/brands/stashbox/sets", { name: "Bad", slug: "bad", triggerIds: [t.id, t2.id] })).body.item;
+  const r = await call(f, "POST", `/ar/brands/stashbox/sets/${s.id}/publish`);
   assert.equal(r.status, 422);
   const text = r.body.problems.join(" | ");
   assert.match(text, /No target yet.*no tracking target/);
@@ -133,32 +133,32 @@ test("an oversized or non-mp4 video blocks publishing", async () => {
   const f = fakes();
   const { s } = await readySet(f);
   f.objects.set("stashbox/video/clip.mp4", { size: 300 * 1024 * 1024, contentType: "video/mp4" });
-  assert.match((await call(f, "POST", `/lens/brands/stashbox/sets/${s.id}/publish`)).body.problems.join(), /too large/);
+  assert.match((await call(f, "POST", `/ar/brands/stashbox/sets/${s.id}/publish`)).body.problems.join(), /too large/);
   f.objects.set("stashbox/video/clip.mp4", { size: 1000, contentType: "video/quicktime" });
-  assert.match((await call(f, "POST", `/lens/brands/stashbox/sets/${s.id}/publish`)).body.problems.join(), /not an MP4/);
+  assert.match((await call(f, "POST", `/ar/brands/stashbox/sets/${s.id}/publish`)).body.problems.join(), /not an MP4/);
 });
 
 test("storage keys must sit under the brand's own folder", async () => {
   const f = fakes();
   await enable(f);
-  assert.equal((await call(f, "POST", "/lens/brands/stashbox/actions", { type: "video", name: "x", videoKey: "solarmeister/video/a.mp4" })).status, 400);
-  assert.equal((await call(f, "POST", "/lens/brands/stashbox/actions", { type: "video", name: "x", videoKey: "stashbox/../solarmeister/a.mp4" })).status, 400);
+  assert.equal((await call(f, "POST", "/ar/brands/stashbox/actions", { type: "video", name: "x", videoKey: "solarmeister/video/a.mp4" })).status, 400);
+  assert.equal((await call(f, "POST", "/ar/brands/stashbox/actions", { type: "video", name: "x", videoKey: "stashbox/../solarmeister/a.mp4" })).status, 400);
 });
 
 test("QR codes: url rules, one main, slugs never reused, changes are logged", async () => {
   const f = fakes();
   const { s } = await readySet(f);
-  const post = (b) => call(f, "POST", "/lens/brands/stashbox/qrs", b, { "x-elettro-connect-key": KEY, "x-elettro-actor": "dean@example.test" });
+  const post = (b) => call(f, "POST", "/ar/brands/stashbox/qrs", b, { "x-elettro-connect-key": KEY, "x-elettro-actor": "dean@example.test" });
   for (const url of ["http://stashbox.com/radio", "javascript:alert(1)", "data:text/html,hi", "https://user:pw@stashbox.com", "https://" + "a".repeat(2100) + ".com"]) {
     assert.equal((await post({ name: "Bad", slug: "bad", mode: "url", url })).status, 400, url);
   }
   const main = (await post({ name: "Main", slug: "main", mode: "url", url: "https://stashbox.com/radio", isMain: true })).body.item;
   const second = (await post({ name: "Album", slug: "dirty-bird", mode: "scanner", setId: s.id, isMain: true })).body.item;
-  const list = (await call(f, "GET", "/lens/brands/stashbox")).body.qrs;
+  const list = (await call(f, "GET", "/ar/brands/stashbox")).body.qrs;
   assert.equal(list.filter((q) => q.isMain).length, 1);
   assert.equal(list.find((q) => q.id === second.id).isMain, true);
   assert.equal((await post({ name: "Dup", slug: "main", mode: "url", url: "https://x.example.test" })).status, 409);
-  await call(f, "DELETE", `/lens/brands/stashbox/qrs/${main.id}`);
+  await call(f, "DELETE", `/ar/brands/stashbox/qrs/${main.id}`);
   assert.equal((await post({ name: "Reuse", slug: "main", mode: "url", url: "https://x.example.test" })).status, 409);
   const logs = [...f.rows].filter(([k]) => k.includes("|QRLOG#"));
   assert.ok(logs.length >= 2);
@@ -171,9 +171,9 @@ test("QR codes: url rules, one main, slugs never reused, changes are logged", as
 test("redirecting a QR changes the brand manifest without touching the QR slug", async () => {
   const f = fakes();
   const { s } = await readySet(f);
-  const q = (await call(f, "POST", "/lens/brands/stashbox/qrs", { name: "Main", slug: "main", mode: "url", url: "https://stashbox.com/radio", isMain: true })).body.item;
+  const q = (await call(f, "POST", "/ar/brands/stashbox/qrs", { name: "Main", slug: "main", mode: "url", url: "https://stashbox.com/radio", isMain: true })).body.item;
   assert.deepEqual(f.written.get("stashbox/manifest.json").qrs.main, { mode: "url", url: "https://stashbox.com/radio" });
-  const p = await call(f, "PATCH", `/lens/brands/stashbox/qrs/${q.id}`, { mode: "scanner", setId: s.id, slug: "something-else" });
+  const p = await call(f, "PATCH", `/ar/brands/stashbox/qrs/${q.id}`, { mode: "scanner", setId: s.id, slug: "something-else" });
   assert.equal(p.status, 200);
   assert.equal(p.body.item.slug, "main");
   assert.equal(f.written.get("stashbox/manifest.json").qrs.main.mode, "scanner");
@@ -182,14 +182,14 @@ test("redirecting a QR changes the brand manifest without touching the QR slug",
 test("references are checked and in-use items are protected", async () => {
   const f = fakes();
   const { t, a, s } = await readySet(f);
-  assert.equal((await call(f, "POST", "/lens/brands/stashbox/rules", { triggerId: "nope", actionIds: [a.id] })).status, 400);
-  assert.equal((await call(f, "POST", "/lens/brands/stashbox/qrs", { name: "q", slug: "q", mode: "scanner", setId: "nope" })).status, 400);
-  assert.equal((await call(f, "DELETE", `/lens/brands/stashbox/actions/${a.id}`)).status, 409);
-  await call(f, "POST", "/lens/brands/stashbox/qrs", { name: "q", slug: "q", mode: "scanner", setId: s.id });
-  assert.equal((await call(f, "DELETE", `/lens/brands/stashbox/sets/${s.id}`)).status, 409);
+  assert.equal((await call(f, "POST", "/ar/brands/stashbox/rules", { triggerId: "nope", actionIds: [a.id] })).status, 400);
+  assert.equal((await call(f, "POST", "/ar/brands/stashbox/qrs", { name: "q", slug: "q", mode: "scanner", setId: "nope" })).status, 400);
+  assert.equal((await call(f, "DELETE", `/ar/brands/stashbox/actions/${a.id}`)).status, 409);
+  await call(f, "POST", "/ar/brands/stashbox/qrs", { name: "q", slug: "q", mode: "scanner", setId: s.id });
+  assert.equal((await call(f, "DELETE", `/ar/brands/stashbox/sets/${s.id}`)).status, 409);
   // deleting a trigger removes its rules and drops it from sets
-  assert.equal((await call(f, "DELETE", `/lens/brands/stashbox/triggers/${t.id}`)).status, 200);
-  const d = (await call(f, "GET", "/lens/brands/stashbox")).body;
+  assert.equal((await call(f, "DELETE", `/ar/brands/stashbox/triggers/${t.id}`)).status, 200);
+  const d = (await call(f, "GET", "/ar/brands/stashbox")).body;
   assert.equal(d.rules.length, 0);
   assert.deepEqual(d.sets[0].triggerIds, []);
 });
@@ -197,13 +197,13 @@ test("references are checked and in-use items are protected", async () => {
 test("one trigger can fire several actions and many triggers can share one action", async () => {
   const f = fakes();
   const { t, a, s } = await readySet(f);
-  const link = (await call(f, "POST", "/lens/brands/stashbox/actions", { type: "link", name: "Listen", label: "Listen", url: "https://stashbox.com/radio/?song=dirty-bird-20a-stashbox" })).body.item;
-  await call(f, "POST", "/lens/brands/stashbox/rules", { triggerId: t.id, actionIds: [link.id], order: 1 });
+  const link = (await call(f, "POST", "/ar/brands/stashbox/actions", { type: "link", name: "Listen", label: "Listen", url: "https://stashbox.com/radio/?song=dirty-bird-20a-stashbox" })).body.item;
+  await call(f, "POST", "/ar/brands/stashbox/rules", { triggerId: t.id, actionIds: [link.id], order: 1 });
   f.objects.set("stashbox/targets/sf_lum.jpg", { size: 40000, contentType: "image/jpeg" });
-  const t2 = (await call(f, "POST", "/lens/brands/stashbox/triggers", { name: "Super Funk", target: { name: "super-funk", luminanceKey: "stashbox/targets/sf_lum.jpg", json: { name: "super-funk" } } })).body.item;
-  await call(f, "POST", "/lens/brands/stashbox/rules", { triggerId: t2.id, actionIds: [a.id] });
-  await call(f, "PATCH", `/lens/brands/stashbox/sets/${s.id}`, { triggerIds: [t.id, t2.id] });
-  assert.equal((await call(f, "POST", `/lens/brands/stashbox/sets/${s.id}/publish`)).status, 200);
+  const t2 = (await call(f, "POST", "/ar/brands/stashbox/triggers", { name: "Super Funk", target: { name: "super-funk", luminanceKey: "stashbox/targets/sf_lum.jpg", json: { name: "super-funk" } } })).body.item;
+  await call(f, "POST", "/ar/brands/stashbox/rules", { triggerId: t2.id, actionIds: [a.id] });
+  await call(f, "PATCH", `/ar/brands/stashbox/sets/${s.id}`, { triggerIds: [t.id, t2.id] });
+  assert.equal((await call(f, "POST", `/ar/brands/stashbox/sets/${s.id}/publish`)).status, 200);
   const m = f.written.get("stashbox/sets/dirty-bird/manifest.json");
   assert.deepEqual(m.triggers[0].actions.map((x) => x.type), ["video", "link"]);
   assert.equal(m.triggers[1].actions[0].id, m.triggers[0].actions[0].id);
@@ -212,9 +212,9 @@ test("one trigger can fire several actions and many triggers can share one actio
 test("upload links only allow known types and stay in the brand folder", async () => {
   const f = fakes();
   await enable(f);
-  assert.equal((await call(f, "POST", "/lens/brands/stashbox/uploads", { kind: "video", contentType: "video/quicktime" })).status, 400);
-  assert.equal((await call(f, "POST", "/lens/brands/stashbox/uploads", { kind: "exe", contentType: "video/mp4" })).status, 400);
-  const r = await call(f, "POST", "/lens/brands/stashbox/uploads", { kind: "video", contentType: "video/mp4" });
+  assert.equal((await call(f, "POST", "/ar/brands/stashbox/uploads", { kind: "video", contentType: "video/quicktime" })).status, 400);
+  assert.equal((await call(f, "POST", "/ar/brands/stashbox/uploads", { kind: "exe", contentType: "video/mp4" })).status, 400);
+  const r = await call(f, "POST", "/ar/brands/stashbox/uploads", { kind: "video", contentType: "video/mp4" });
   assert.equal(r.status, 200);
   assert.match(r.body.key, /^stashbox\/video\/[0-9a-f]{16}\.mp4$/);
   assert.equal(r.body.publicUrl, `${BASE}/${r.body.key}`);
@@ -243,7 +243,7 @@ test("manifest builders: stub, brand index and missing pieces", () => {
 test("card, gallery and model actions validate and reach the public manifest", async () => {
   const f = fakes();
   await enable(f);
-  const post = (body) => call(f, "POST", "/lens/brands/stashbox/actions", body);
+  const post = (body) => call(f, "POST", "/ar/brands/stashbox/actions", body);
   const card = await post({ type: "card", name: "Shop", title: "Get the merch", items: [
     { kind: "product", label: "Super Funk tee", url: "https://stashbox.ai/products/tee", price: "$32", cta: "Buy now", imageKey: "stashbox/img/tee.jpg" },
     { kind: "link", label: "Tour dates", url: "https://stashbox.com" } ] });

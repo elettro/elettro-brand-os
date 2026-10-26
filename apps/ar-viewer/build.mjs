@@ -1,6 +1,6 @@
 // Assembles dist/ exactly as it will sit in the bucket root:
 //   viewer/*          this app (index.html, viewer.js, logic.js, viewer.css, A-Frame fork)
-//   external/xr       8th Wall engine binary (npm @8thwall/engine-binary; face tracking files left out, Lens doesn't use them)
+//   external/xr       8th Wall engine binary (npm @8thwall/engine-binary; face tracking files left out, AR doesn't use them)
 //   external/xrextras 8th Wall xrextras (vendored: the npm build lays its resources out differently from the one we phone-tested)
 import { cpSync, mkdirSync, rmSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, basename } from "node:path";

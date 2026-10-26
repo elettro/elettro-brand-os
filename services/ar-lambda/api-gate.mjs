@@ -1,5 +1,5 @@
 /**
- * Connect-key gate for the Lens admin API. Same pattern as services/dev-api-lambda/api-gate.mjs (copied, not
+ * Connect-key gate for the AR admin API. Same pattern as services/dev-api-lambda/api-gate.mjs (copied, not
  * imported, so the two Lambdas deploy independently). The key is the shared CONNECTIONS_API_SHARED_SECRET, so the
  * Elettro OS web server's connectKeyHeaders() works unchanged. There are no public routes in this Lambda: scan
  * pages and manifests are served by CloudFront, and the public event ingest ships in a later PR.

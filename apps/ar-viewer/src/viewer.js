@@ -32,15 +32,15 @@ const xrReady = new Promise((resolve) => (window.XR8 ? resolve() : window.addEve
 
 async function main() {
   const { brand, slug } = parsePath(location.pathname);
-  if (!brand) return say("Elettro Lens", "Scan a Lens code to start.");
+  if (!brand) return say("Elettro AR", "Scan a AR code to start.");
   say(brand, "Loading…", { brand });
 
   let manifest;
   try { manifest = await getJson(`/${brand}/manifest.json`); }
-  catch { return say(brand, "This Lens code isn't active.", { brand }); }
+  catch { return say(brand, "This AR code isn't active.", { brand }); }
 
   const entry = resolveEntry(manifest, slug);
-  if (entry.kind === "inactive" || entry.kind === "unknown") return say(brand, "This Lens code isn't active.", { brand });
+  if (entry.kind === "inactive" || entry.kind === "unknown") return say(brand, "This AR code isn't active.", { brand });
   if (entry.kind === "redirect") return location.replace(entry.url);
   if (entry.kind === "experience") return showPlainVideo(brand, entry.action);
 

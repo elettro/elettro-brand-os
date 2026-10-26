@@ -1,4 +1,4 @@
-// Local stand-in for lens.elettro.com: serves dist/ plus a fixture "bucket" with CloudFront's bare-path rewrite.
+// Local stand-in for ar.elettro.com: serves dist/ plus a fixture "bucket" with CloudFront's bare-path rewrite.
 //   node dev/serve.mjs <cert.pem> <key.pem> [port]
 // Phones only allow the camera over https, so a (self-signed) cert is required.
 import https from "node:https";

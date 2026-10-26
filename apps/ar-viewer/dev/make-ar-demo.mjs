@@ -1,10 +1,10 @@
 // Seeds the public "elettro" demo brand behind elettro.com/ar: five Stashbox covers, five different experiences.
-// Builds a local fake bucket (.fixture-ar/) with the real manifest builders from the Lens Lambda; upload it with `aws s3 cp --recursive`.
+// Builds a local fake bucket (.fixture-ar/) with the real manifest builders from the AR Lambda; upload it with `aws s3 cp --recursive`.
 //   node dev/make-ar-demo.mjs <public-base-url>
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildSetManifest, buildBrandManifest, brandManifestKey, setManifestKey } from "../../../services/lens-lambda/manifest.mjs";
+import { buildSetManifest, buildBrandManifest, brandManifestKey, setManifestKey } from "../../../services/ar-lambda/manifest.mjs";
 
 const baseUrl = process.argv[2];
 if (!baseUrl) { console.error("usage: node dev/make-ar-demo.mjs <public-base-url>"); process.exit(1); }
@@ -40,7 +40,7 @@ const actions = [
     { kind: "link", label: "Play it on Stashbox Radio", url: radio("let-me-down-10b-stashbox") },
     { kind: "link", label: "Browse every Stashbox song", url: "https://stashbox.com/radio" },
     { kind: "link", label: "Shop Stashbox", url: "https://stashbox.ai" },
-    { kind: "link", label: "Make your own Lens", url: "https://elettro.com/ar" } ] },
+    { kind: "link", label: "Make your own AR", url: "https://elettro.com/ar" } ] },
   { id: "a-shop", type: "card", name: "Shop", title: "Shop Stashbox", subtitle: "Live from the Stashbox Shopify store.", items: [
     ...shop.map((p) => ({ kind: "product", label: p.label, url: `https://stashbox.ai/products/${p.handle}`, price: p.price, cta: "Buy now" })),
     { kind: "link", label: "See everything", url: "https://stashbox.ai" } ] },

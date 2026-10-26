@@ -1,12 +1,12 @@
-name: Build Lens Lambda
+name: Build AR Lambda
 
 on:
   push:
     branches:
       - develop
     paths:
-      - "services/lens-lambda/**"
-      - ".github/workflows/build-lens-lambda.yml"
+      - "services/ar-lambda/**"
+      - ".github/workflows/build-ar-lambda.yml"
   workflow_dispatch:
 
 jobs:
@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: services/lens-lambda
+        working-directory: services/ar-lambda
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -29,11 +29,11 @@ jobs:
           for f in index.mjs app.mjs api-gate.mjs validate.mjs manifest.mjs adapters.mjs; do node --check "$f"; done
 
       - name: Package Lambda
-        run: zip -r elettro-lens-dev-api.zip index.mjs app.mjs api-gate.mjs validate.mjs manifest.mjs adapters.mjs package.json
+        run: zip -r elettro-ar-dev-api.zip index.mjs app.mjs api-gate.mjs validate.mjs manifest.mjs adapters.mjs package.json
 
       - name: Upload Lambda package
         uses: actions/upload-artifact@v4
         with:
-          name: elettro-lens-dev-api
-          path: services/lens-lambda/elettro-lens-dev-api.zip
+          name: elettro-ar-dev-api
+          path: services/ar-lambda/elettro-ar-dev-api.zip
           if-no-files-found: error

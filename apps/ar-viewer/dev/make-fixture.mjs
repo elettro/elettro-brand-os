@@ -1,10 +1,10 @@
-// Builds a local fake bucket (.fixture/) from the 8th Wall spike files, using the real manifest builders from the Lens Lambda,
+// Builds a local fake bucket (.fixture/) from the 8th Wall spike files, using the real manifest builders from the AR Lambda,
 // so the viewer is tested against exactly what the API will publish.
 //   node dev/make-fixture.mjs <spike-site-dir> <public-base-url>
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildSetManifest, buildBrandManifest, brandManifestKey, setManifestKey } from "../../../services/lens-lambda/manifest.mjs";
+import { buildSetManifest, buildBrandManifest, brandManifestKey, setManifestKey } from "../../../services/ar-lambda/manifest.mjs";
 
 const [spike, baseUrl] = process.argv.slice(2);
 if (!spike || !baseUrl) { console.error("usage: node dev/make-fixture.mjs <spike-site-dir> <public-base-url>"); process.exit(1); }
