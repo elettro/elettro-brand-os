@@ -23,6 +23,15 @@ for (const n of Object.keys(names)) {
   copy(`8w/image-targets/${n}_luminance.jpg`, luminanceKey);
   triggers.push({ id: n, name: names[n], target: { name: n, json, luminanceKey }, placement: nudge[n] });
 }
+// Second target for the same Dirty Bird card: the left three-quarters of the artwork (busier: poster wall, lettering), so the engine has more to grip.
+{
+  const dir = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures", "dirty-bird-b");
+  const json = JSON.parse(fs.readFileSync(path.join(dir, "target.json"), "utf8"));
+  const luminanceKey = `${brand}/targets/dirty-bird-b_luminance.png`;
+  put(luminanceKey, fs.readFileSync(path.join(dir, "luminance.png")));
+  // The crop is centered 0.125 left of the cover's center (cover = 1 unit tall), so the overlay shifts right by that much.
+  triggers.push({ id: "dirty-bird-b", name: "Dirty Bird (left crop)", target: { name: "dirty-bird-b", json, luminanceKey }, placement: { x: 0.125, y: 0, s: 1 } });
+}
 copy("8w/assets/waiting-9x16-30s.mp4", `${brand}/media/im-waiting.mp4`);
 copy("8w/assets/overlay-square.mp4", `${brand}/media/dirty-bird.mp4`);
 const actions = [
@@ -33,7 +42,8 @@ const actions = [
 rules.push(
   { triggerId: "super-funk", order: 0, actionIds: ["v-iw", "l-listen"] },
   { triggerId: "im-waiting", order: 0, actionIds: ["v-iw", "l-listen"] },
-  { triggerId: "dirty-bird", order: 0, actionIds: ["v-db", "l-listen"] }
+  { triggerId: "dirty-bird", order: 0, actionIds: ["v-db", "l-listen"] },
+  { triggerId: "dirty-bird-b", order: 0, actionIds: ["v-db", "l-listen"] }
 );
 const set = { id: "s1", slug: "covers", name: "Covers", triggerIds: triggers.map((t) => t.id) };
 const { manifest, problems } = buildSetManifest({ brand, set, triggers, rules, actions, baseUrl });
