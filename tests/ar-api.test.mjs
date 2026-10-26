@@ -262,6 +262,17 @@ test("card, gallery and model actions validate and reach the public manifest", a
   assert.equal((await post({ ...form, fields: [] })).status, 400); // a form needs fields
   assert.equal((await post({ ...form, accent: "green" })).status, 400);
   assert.equal((await post({ ...form, toggle: { options: ["nur eins"] } })).status, 400);
+  const calc = { type: "calculator", name: "Rechner", title: "Was spart mein Balkonkraftwerk?", systems: [{ label: "Max 1000", kwp: 1, selfUse: 0.85, price: 1379, url: "https://shop.test/p" }], accent: "#3fb62c" };
+  assert.equal((await post(calc)).status, 201);
+  assert.equal((await post({ ...calc, systems: [] })).status, 400);
+  assert.equal((await post({ ...calc, kwh: { min: 5000, max: 1000 } })).status, 400);
+  const scr = { type: "scratch", name: "Rubbeln", title: "Rubbel dein Geschenk frei", prize: "5 % Rabatt", code: "BEISPIEL5", cta: { label: "Zum Shop", url: "https://shop.test" } };
+  assert.equal((await post(scr)).status, 201);
+  assert.equal((await post({ ...scr, prize: "" })).status, 400);
+  assert.equal((await post({ ...scr, cta: { label: "x", url: "http://insecure.test" } })).status, 400);
+  const callCard = await post({ type: "card", name: "Kontakt", title: "Kontakt", items: [{ kind: "link", label: "Anrufen", url: "tel:+49 1525 972 5120" }, { kind: "link", label: "E-Mail", url: "mailto:support@solarmeister-shop.de" }] });
+  assert.equal(callCard.status, 201);
+  assert.equal((await post({ type: "card", name: "Bad", title: "Bad", items: [{ kind: "link", label: "x", url: "javascript:alert(1)" }] })).status, 400);
 
   const set = { id: "s", slug: "demo", name: "Demo", triggerIds: ["t"] };
   const trigger = { id: "t", name: "Cover", target: { name: "c", json: { type: "PLANAR" }, luminanceKey: "stashbox/targets/c.jpg" }, placement: { x: 0, y: 0, s: 1 } };

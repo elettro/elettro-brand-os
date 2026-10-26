@@ -1,5 +1,5 @@
-import { parsePath, resolveRoute, mergeSets, resolveEntry, planeFor, sortActions, galleryIndex, withUtm, targetData } from "/viewer/logic.js";
-import { renderForm } from "/viewer/sheet.js";
+import { parsePath, resolveRoute, mergeSets, resolveEntry, planeFor, sortActions, galleryIndex, withUtm, targetData, chunk, savings } from "/viewer/logic.js";
+import { renderForm, renderCalculator, renderScratch } from "/viewer/sheet.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -80,13 +80,21 @@ function showPlainVideo(brand, action) {
   $("splash").append(v);
 }
 
+// The engine may only watch a handful of covers at once, so a big set is watched in groups, one after the other, until a cover is found.
+// ?group=N sets the group size (default 5); ?rotate=0 loads everything at once.
+const QS = new URLSearchParams(location.search);
+const GROUP_SIZE = Math.max(1, Number(QS.get("group")) || 5);
+const ROTATE = QS.get("rotate") !== "0";
+const DWELL_MS = 1500;
+const scanGroups = (triggers) => (ROTATE ? chunk(triggers, GROUP_SIZE) : [triggers]);
+
 async function prepareScanner(brand, set) {
   await xrReady;
   const supported = XR8.XrDevice.isDeviceBrowserCompatible({ allowedDevices: XR8.XrConfig.device().MOBILE });
   if (!supported) {
     return say(brand, "Open this page on your phone to scan.", { brand, note: location.href });
   }
-  XR8.XrController.configure({ imageTargetData: targetData(set.triggers) });
+  XR8.XrController.configure({ imageTargetData: targetData(scanGroups(set.triggers)[0]) });
   say(brand, "Point your camera at the artwork.", { brand, note: "Your camera stays on your phone. Nothing is recorded." });
   const start = $("start");
   start.hidden = false;
@@ -321,7 +329,7 @@ function startScene(set) {
     bar.replaceChildren();
     for (const b of exp.s.links) {
       const a = document.createElement("a");
-      a.className = "btn primary"; a.textContent = b.label; a.href = b.url; a.target = "_blank"; a.rel = "noopener";
+      a.className = "btn primary"; a.textContent = b.label; a.href = b.url; if (/^https?:/i.test(b.url)) { a.target = "_blank"; a.rel = "noopener"; }
       bar.append(a);
     }
     const video = exp.video;
@@ -333,7 +341,7 @@ function startScene(set) {
       label();
       bar.append(snd);
     }
-    bar.hidden = !bar.children.length || !!exp.s.card || !!exp.s.form;
+    bar.hidden = !bar.children.length || !!(exp.s.card || exp.s.form || exp.s.calculator || exp.s.scratch);
     $("close").hidden = false;
   };
 
@@ -341,13 +349,15 @@ function startScene(set) {
     const sheet = $("sheet");
     const card = exp.s.card;
     if (!card && exp.s.form) { renderForm(sheet, exp.s.form); return; }
+    if (!card && exp.s.calculator) { renderCalculator(sheet, exp.s.calculator, savings); return; }
+    if (!card && exp.s.scratch) { renderScratch(sheet, exp.s.scratch); return; }
     if (!card) { sheet.classList.remove("open"); return; }
     sheet.style.removeProperty("--accent");
     sheet.replaceChildren();
     const h = el("h2"); h.textContent = card.title; sheet.append(h);
     if (card.subtitle) { const p = el("p", { class: "sub" }); p.textContent = card.subtitle; sheet.append(p); }
     for (const it of card.items) {
-      const a = el("a", { class: "item " + it.kind, href: withUtm(it.url), target: "_blank", rel: "noopener" });
+      const a = el("a", { class: "item " + it.kind, href: withUtm(it.url), ...(/^https?:/i.test(it.url) ? { target: "_blank", rel: "noopener" } : {}) });
       if (it.kind === "product") {
         const th = el("span", { class: "thumb" }); if (it.image) th.style.backgroundImage = `url(${it.image})`;
         const tx = el("span", { class: "txt" }); const nm = el("b"); nm.textContent = it.label; tx.append(nm);
@@ -376,7 +386,20 @@ function startScene(set) {
     stop(active); active = null;
   };
 
+  // Watch the covers in groups while nothing is in view; stay on the group that has a cover in view.
+  const groups = scanGroups(set.triggers), inView = new Set();
+  if (groups.length > 1) {
+    let gi = 0;
+    dbg("scanning " + set.triggers.length + " covers in " + groups.length + " groups of up to " + GROUP_SIZE);
+    setInterval(() => {
+      if (inView.size) return;
+      gi = (gi + 1) % groups.length;
+      XR8.XrController.configure({ imageTargetData: targetData(groups[gi]) });
+    }, DWELL_MS);
+  }
+
   scene.addEventListener("xrimagefound", (e) => {
+    inView.add(e.detail.name);
     const trigger = byName.get(e.detail.name);
     if (!trigger || dismissed === trigger.target.name) return;
     clearTimeout(pinTimer);
@@ -393,6 +416,7 @@ function startScene(set) {
   });
 
   scene.addEventListener("xrimagelost", (e) => {
+    inView.delete(e.detail.name);
     if (dismissed === e.detail.name) dismissed = null;
     if (!active || active.trigger.target.name !== e.detail.name) return;
     clearTimeout(pinTimer);

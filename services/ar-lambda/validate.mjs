@@ -20,7 +20,7 @@ export const LIMITS = {
   imageBytes: 15 * 1024 * 1024,
   targetBytes: 5 * 1024 * 1024
 };
-export const ACTION_TYPES = ["video", "link", "card", "gallery", "model", "form"]; // radio / audio / uploaded 3D models arrive in later PRs
+export const ACTION_TYPES = ["video", "link", "card", "gallery", "model", "form", "calculator", "scratch"]; // radio / audio / uploaded 3D models arrive in later PRs
 export const MODEL_BUILTINS = ["vinyl", "solarpanel"];
 export const FIT_MODES = ["crop", "fill", "float"];
 export const QR_MODES = ["scanner", "experience", "url"];
@@ -68,6 +68,22 @@ export function httpsUrl(value, what = "url") {
   if (u.username || u.password) throw bad(`${what} must not contain a login`);
   return u.toString();
 }
+
+/** Like httpsUrl, but a button may also place a call (tel:+49...) or start an email (mailto:...). */
+export function linkUrl(value, what = "url") {
+  if (typeof value === "string") {
+    const v = value.trim();
+    if (/^tel:\+?[0-9 ()-]{6,24}$/.test(v)) return "tel:" + v.slice(4).replace(/[ ()-]/g, "");
+    if (v.length <= 200 && /^mailto:[^\s@<>"]+@[^\s@<>"]+\.[^\s@<>"]+$/.test(v)) return v;
+  }
+  return httpsUrl(value, what);
+}
+
+const accentColor = (v) => {
+  if (v == null) return undefined;
+  if (!/^#[0-9a-f]{6}$/i.test(String(v))) throw bad("accent must be a color like #43b02a");
+  return String(v).toLowerCase();
+};
 
 const num = (v, def, min, max, what) => {
   if (v == null) return def;
@@ -130,7 +146,7 @@ export function action(input, existing = {}) {
     a.items = i.items.map((it, n) => ({
       kind: it.kind === "product" ? "product" : "link",
       label: text(it.label, `items[${n}].label`, { max: 80 }),
-      url: httpsUrl(it.url),
+      url: linkUrl(it.url),
       price: it.price ? text(it.price, `items[${n}].price`, { max: 20, required: false }) : undefined,
       imageKey: it.imageKey ? ownedKey(it.imageKey, `items[${n}].imageKey`) : undefined,
       cta: it.cta ? text(it.cta, `items[${n}].cta`, { max: 24, required: false }) : undefined
@@ -153,7 +169,38 @@ export function action(input, existing = {}) {
     }));
     a.cta = text(i.cta, "cta", { max: 40 });
     a.note = i.note ? text(i.note, "note", { max: 200, required: false }) : "";
-    if (i.accent != null) { if (!/^#[0-9a-f]{6}$/i.test(String(i.accent))) throw bad("accent must be a color like #43b02a"); a.accent = String(i.accent).toLowerCase(); }
+    a.accent = accentColor(i.accent);
+  } else if (type === "calculator") {
+    // A savings estimate that runs on the phone. All numbers are the brand's own assumptions; nothing is sent anywhere.
+    a.title = text(i.title, "title", { max: 80 });
+    a.subtitle = i.subtitle ? text(i.subtitle, "subtitle", { max: 140, required: false }) : "";
+    const k = i.kwh || {};
+    a.kwh = { min: num(k.min, 1500, 100, 50000, "kwh.min"), max: num(k.max, 6000, 200, 100000, "kwh.max"), step: num(k.step, 100, 10, 1000, "kwh.step"), value: num(k.value, 3200, 100, 100000, "kwh.value") };
+    if (a.kwh.max <= a.kwh.min || a.kwh.value < a.kwh.min || a.kwh.value > a.kwh.max) throw bad("kwh needs min < max and a value between them");
+    a.pricePerKwh = num(i.pricePerKwh, 0.35, 0.05, 2, "pricePerKwh");
+    a.yieldPerKwp = num(i.yieldPerKwp, 900, 300, 1500, "yieldPerKwp");
+    if (!Array.isArray(i.systems) || !i.systems.length || i.systems.length > 3) throw bad("a calculator needs 1-3 systems");
+    a.systems = i.systems.map((s, n) => ({
+      label: text(s && s.label, `systems[${n}].label`, { max: 30 }),
+      sub: s.sub ? text(s.sub, `systems[${n}].sub`, { max: 30, required: false }) : "",
+      kwp: num(s.kwp, 1, 0.1, 20, `systems[${n}].kwp`),
+      selfUse: num(s.selfUse, 0.8, 0.1, 1, `systems[${n}].selfUse`),
+      price: num(s.price, 1000, 1, 100000, `systems[${n}].price`),
+      url: s.url ? httpsUrl(s.url, `systems[${n}].url`) : undefined
+    }));
+    a.cta = i.cta ? text(i.cta, "cta", { max: 40, required: false }) : "Dieses System ansehen";
+    a.note = i.note ? text(i.note, "note", { max: 200, required: false }) : "";
+    a.accent = accentColor(i.accent);
+  } else if (type === "scratch") {
+    // A scratch card that reveals a prize and a code. It sends nothing; the optional button just opens a link.
+    a.title = text(i.title, "title", { max: 80 });
+    a.subtitle = i.subtitle ? text(i.subtitle, "subtitle", { max: 140, required: false }) : "";
+    a.prize = text(i.prize, "prize", { max: 40 });
+    a.code = i.code ? text(i.code, "code", { max: 24, required: false }) : "";
+    a.hint = i.hint ? text(i.hint, "hint", { max: 140, required: false }) : "";
+    if (i.cta != null) a.cta = { label: text(i.cta && i.cta.label, "cta.label", { max: 40 }), url: httpsUrl(i.cta && i.cta.url, "cta.url") };
+    a.note = i.note ? text(i.note, "note", { max: 200, required: false }) : "";
+    a.accent = accentColor(i.accent);
   } else if (type === "gallery") {
     if (!Array.isArray(i.imageKeys) || !i.imageKeys.length || i.imageKeys.length > 12) throw bad("a gallery needs 1-12 images");
     a.imageKeys = i.imageKeys.map((k, n) => ownedKey(k, `imageKeys[${n}]`));
@@ -165,7 +212,7 @@ export function action(input, existing = {}) {
     a.scale = num(i.scale, 1, 0.2, 3, "scale");
   } else {
     a.label = text(i.label, "label", { max: 40 });
-    a.url = httpsUrl(i.url);
+    a.url = linkUrl(i.url);
   }
   return a;
 }

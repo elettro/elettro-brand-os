@@ -1,0 +1,23 @@
+{
+  "imagePath": "image-targets/rubbeln_luminance.jpg",
+  "metadata": null,
+  "name": "rubbeln",
+  "type": "PLANAR",
+  "properties": {
+    "left": 135,
+    "top": 0,
+    "width": 810,
+    "height": 1080,
+    "isRotated": true,
+    "originalWidth": 1080,
+    "originalHeight": 1080
+  },
+  "resources": {
+    "originalImage": "rubbeln_original.jpg",
+    "croppedImage": "rubbeln_cropped.jpg",
+    "thumbnailImage": "rubbeln_thumbnail.jpg",
+    "luminanceImage": "rubbeln_luminance.jpg"
+  },
+  "created": 1793042107184,
+  "updated": 1793042107184
+}
