@@ -278,7 +278,8 @@ async function claimDuePosts(event, connectDatabase, json) {
                  a."filename", a."title" AS "assetTitle", sp."scoreBreakdown"->'tiktok' AS "tiktok", a."tags" AS "assetTags", sp."brandId",
                  sp."scoreBreakdown"->>'syntheticDisclosure' AS "plannedSynthetic", sp."scoreBreakdown"->>'sector' AS "sector",
                  a."topic" AS "assetTopic", sp."scoreBreakdown"->'copy'->>'primaryLink' AS "primaryLink",
-                 a."kind" AS "assetKind"`, [destination, limit, placements])).rows;
+                 a."kind" AS "assetKind", sp."scoreBreakdown"->'gmb' AS "gmb", a."width" AS "assetWidth", a."height" AS "assetHeight",
+                 a."mimeType" AS "assetMime", a."fileSizeBytes" AS "assetBytes"`, [destination, limit, placements])).rows;
     // AI-made content must be declared to the network. Judged from the clip being posted (it may have
     // been swapped since planning) with the brand's own AI tags; the planner's flag can only add to it.
     // Language: the clip's tags, else the brand's language (SolarMeister and Neckermann Strom are German).
@@ -358,10 +359,30 @@ async function finishPost(event, connectDatabase, json) {
   });
 }
 
+// Google Business Profile content mix (GMB_ASSET_SPEC section 9): what a profile published over the last 30 days, by pillar.
+// The GBP worker asks before each post so a fan/release post can be blocked when it would break the business-majority rule.
+async function gmbMix(event, connectDatabase, json) {
+  const location = String(event.locationId || "");
+  if (!location) return json(400, { ok: false, error: "locationId is required" });
+  return withClient(connectDatabase, json, "gmb-mix", async (client) => {
+    const rows = (await client.query(
+      `SELECT sp."scoreBreakdown"->'gmb'->>'pillar' AS "pillar", COUNT(*)::int AS "posts"
+       FROM "PublicationLedger" pl
+       JOIN "SocialAccount" sa ON sa."id" = pl."socialAccountId"
+       JOIN "ScheduledPost" sp ON sp."id" = pl."scheduledPostId"
+       WHERE sa."destination" = 'gmb' AND sa."externalAccountId" = $1 AND pl."publishedAt" > CURRENT_TIMESTAMP - INTERVAL '30 days'
+       GROUP BY 1`, [location])).rows;
+    const counts = { A: 0, B: 0, C: 0, F: 0 };
+    for (const r of rows) if (r.pillar in counts) counts[r.pillar] = r.posts;
+    return json(200, { ok: true, counts });
+  });
+}
+
 export async function handlePlannerOps(event, connectDatabase, json) {
   if (event.action === "planner-tick") return plannerTick(connectDatabase, json);
   if (event.action === "claim-due-posts") return claimDuePosts(event, connectDatabase, json);
   if (event.action === "requeue-failed") return requeueFailed(event, connectDatabase, json);
   if (event.action === "finish-post") return finishPost(event, connectDatabase, json);
+  if (event.action === "gmb-mix") return gmbMix(event, connectDatabase, json);
   return json(400, { ok: false, error: "Unknown planner operation" });
 }
