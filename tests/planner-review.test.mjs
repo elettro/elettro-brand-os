@@ -241,6 +241,11 @@ test("reset-week deletes only the week's unsent posts and un-approves a whole we
   assert.ok(!del.params[1].includes("published") && !del.params[1].includes("queued"));
   const settings = client.seen.find((q) => q.sql.includes("approvedWeeks"));
   assert.deepEqual(JSON.parse(settings.params[1]), ["2026-11-09"]);
+  // A whole-week reset holds the week so the planner tick doesn't refill it; it also clears unapproved posts whose slot already passed.
+  const held = client.seen.find((q) => q.sql.includes("heldWeeks"));
+  assert.deepEqual(JSON.parse(held.params[1]), ["2026-10-26"]);
+  assert.equal(new Date(del.params[5]).toISOString(), new Date(del.params[5]).toISOString());
+  assert.match(del.sql, /status" <> 'approved'/);
 });
 
 test("reset-week keeps today's already-past posts and leaves approval alone when narrowed to some networks", async () => {
@@ -252,5 +257,6 @@ test("reset-week keeps today's already-past posts and leaves approval alone when
   assert.equal(new Date(del.params[2]).toISOString(), now.toISOString());
   assert.deepEqual(del.params[4], ["instagram"]);
   assert.ok(!client.seen.some((q) => q.sql.includes("approvedWeeks")));
+  assert.ok(!client.seen.some((q) => q.sql.includes("heldWeeks")));
   assert.equal((await handlePlannerReview(event, { brand: "stashbox", action: "reset-week", from: "x", to: "y" }, async () => client, json)).statusCode, 400);
 });
