@@ -30,6 +30,9 @@ function publicAction(action, baseUrl) {
       items: action.items.map((it) => ({ kind: it.kind, label: it.label, url: it.url, price: it.price, cta: it.cta, image: it.imageKey ? mediaUrl(baseUrl, it.imageKey) : undefined }))
     };
   }
+  if (action.type === "form") {
+    return { type: "form", id: action.id, name: action.name, title: action.title, subtitle: action.subtitle, toggle: action.toggle, fields: action.fields, cta: action.cta, note: action.note, accent: action.accent };
+  }
   if (action.type === "gallery") {
     return { type: "gallery", id: action.id, name: action.name, images: action.imageKeys.map((k) => mediaUrl(baseUrl, k)), seconds: action.seconds, scale: action.scale };
   }

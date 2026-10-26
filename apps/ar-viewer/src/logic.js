@@ -100,7 +100,7 @@ export function targetData(triggers) {
 export function sortActions(actions) {
   const list = actions || [];
   const first = (type) => list.find((a) => a.type === type) || null;
-  return { video: first("video"), gallery: first("gallery"), model: first("model"), card: first("card"), links: linkButtons(list) };
+  return { video: first("video"), gallery: first("gallery"), model: first("model"), card: first("card"), form: first("form"), links: linkButtons(list) };
 }
 
 /** Which gallery picture is showing after `elapsedSeconds`. */

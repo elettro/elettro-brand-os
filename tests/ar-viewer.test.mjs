@@ -104,3 +104,9 @@ test("mergeSets: prefixes names per brand, same cover = earlier brand wins", () 
   assert.equal(mergeSets([]).triggers.length, 0);
   assert.equal(mergeSets([{ brand: "x", set: null }]).triggers.length, 0);
 });
+
+test("sortActions picks the form", () => {
+  const s = sortActions([{ type: "form", title: "t", fields: [] }, { type: "link", label: "A", url: "https://a.test" }]);
+  assert.equal(s.form.title, "t");
+  assert.equal(s.card, null);
+});
