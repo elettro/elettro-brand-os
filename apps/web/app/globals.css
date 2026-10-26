@@ -82,6 +82,7 @@ input {
 }
 
 .app-live,
+.app-ar,
 .app-logout {
   color: #d9dee7;
   text-decoration: none;
