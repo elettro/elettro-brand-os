@@ -5,7 +5,7 @@ import { DEV_ORIGIN } from "@/lib/cognito-auth";
 export const PINTEREST_APP_ID = process.env.PINTEREST_APP_ID || "1627333";
 export const PINTEREST_CALLBACK = DEV_ORIGIN + "/api/connections/pinterest/callback";
 // Publish Pins to the account's own boards and read its own Pins, boards and analytics.
-export const PINTEREST_SCOPES = ["user_accounts:read", "boards:read", "boards:write", "pins:write"];
+export const PINTEREST_SCOPES = ["user_accounts:read", "boards:read", "boards:write", "pins:read", "pins:write"];
 export const PINTEREST_STATE_COOKIE = "elettro_dev_pinterest_state";
 // One Pinterest account (Dean, 261020): pinterest.com/elettro. It pins Elettro content and, connected
 // a second time under Stashbox, Stashbox content to a Stashbox board (Dean, 261021). Each brand pins to
