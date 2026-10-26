@@ -34,10 +34,10 @@ function publicAction(action, baseUrl) {
     return { type: "form", id: action.id, name: action.name, title: action.title, subtitle: action.subtitle, toggle: action.toggle, fields: action.fields, cta: action.cta, note: action.note, accent: action.accent };
   }
   if (action.type === "calculator") {
-    return { type: "calculator", id: action.id, name: action.name, title: action.title, subtitle: action.subtitle, kwh: action.kwh, pricePerKwh: action.pricePerKwh, yieldPerKwp: action.yieldPerKwp, systems: action.systems, cta: action.cta, note: action.note, accent: action.accent };
+    return { type: "calculator", id: action.id, name: action.name, title: action.title, subtitle: action.subtitle, kwh: action.kwh, pricePerKwh: action.pricePerKwh, yieldPerKwp: action.yieldPerKwp, systems: action.systems, cta: action.cta, labels: action.labels, note: action.note, accent: action.accent };
   }
   if (action.type === "scratch") {
-    return { type: "scratch", id: action.id, name: action.name, title: action.title, subtitle: action.subtitle, prize: action.prize, code: action.code, hint: action.hint, cta: action.cta, note: action.note, accent: action.accent };
+    return { type: "scratch", id: action.id, name: action.name, title: action.title, subtitle: action.subtitle, prize: action.prize, code: action.code, hint: action.hint, coverText: action.coverText, doneText: action.doneText, cta: action.cta, note: action.note, accent: action.accent };
   }
   if (action.type === "gallery") {
     return { type: "gallery", id: action.id, name: action.name, images: action.imageKeys.map((k) => mediaUrl(baseUrl, k)), seconds: action.seconds, scale: action.scale };

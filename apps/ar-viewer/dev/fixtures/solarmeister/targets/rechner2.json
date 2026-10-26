@@ -1,0 +1,23 @@
+{
+  "imagePath": "image-targets/rechner3_luminance.jpg",
+  "metadata": null,
+  "name": "rechner3",
+  "type": "PLANAR",
+  "properties": {
+    "left": 135,
+    "top": 0,
+    "width": 810,
+    "height": 1080,
+    "isRotated": true,
+    "originalWidth": 1080,
+    "originalHeight": 1080
+  },
+  "resources": {
+    "originalImage": "rechner3_original.jpg",
+    "croppedImage": "rechner3_cropped.jpg",
+    "thumbnailImage": "rechner3_thumbnail.jpg",
+    "luminanceImage": "rechner3_luminance.jpg"
+  },
+  "created": 1793050426956,
+  "updated": 1793050426956
+}

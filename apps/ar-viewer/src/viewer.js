@@ -98,10 +98,10 @@ function track(trigger, kind) {
 }
 
 // The engine may only watch a handful of covers at once, so a big set is watched in groups, one after the other, until a cover is found.
-// ?group=N sets the group size (default 5); ?rotate=0 loads everything at once.
+// ?rotate=1 (with ?group=N, default 5) watches them in turns instead. Off by default: tested with 23 markers loaded at once, the engine finds every one.
 const QS = new URLSearchParams(location.search);
 const GROUP_SIZE = Math.max(1, Number(QS.get("group")) || 5);
-const ROTATE = QS.get("rotate") !== "0";
+const ROTATE = QS.get("rotate") === "1"; // off by default: the engine holds every marker at once (tested with 23), grouping is only an option
 const QS_NOSTATS = QS.get("nostats") === "1";
 const DWELL_MS = 1500;
 const scanGroups = (triggers) => (ROTATE ? chunk(triggers, GROUP_SIZE) : [triggers]);

@@ -1,0 +1,23 @@
+{
+  "imagePath": "image-targets/fac1_luminance.jpg",
+  "metadata": null,
+  "name": "fac1",
+  "type": "PLANAR",
+  "properties": {
+    "left": 135,
+    "top": 0,
+    "width": 810,
+    "height": 1080,
+    "isRotated": true,
+    "originalWidth": 1080,
+    "originalHeight": 1080
+  },
+  "resources": {
+    "originalImage": "fac1_original.jpg",
+    "croppedImage": "fac1_cropped.jpg",
+    "thumbnailImage": "fac1_thumbnail.jpg",
+    "luminanceImage": "fac1_luminance.jpg"
+  },
+  "created": 1793047401923,
+  "updated": 1793047401923
+}

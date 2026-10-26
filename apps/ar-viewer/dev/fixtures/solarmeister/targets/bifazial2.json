@@ -1,0 +1,23 @@
+{
+  "imagePath": "image-targets/roof1_luminance.jpg",
+  "metadata": null,
+  "name": "roof1",
+  "type": "PLANAR",
+  "properties": {
+    "left": 135,
+    "top": 0,
+    "width": 810,
+    "height": 1080,
+    "isRotated": true,
+    "originalWidth": 1080,
+    "originalHeight": 1080
+  },
+  "resources": {
+    "originalImage": "roof1_original.jpg",
+    "croppedImage": "roof1_cropped.jpg",
+    "thumbnailImage": "roof1_thumbnail.jpg",
+    "luminanceImage": "roof1_luminance.jpg"
+  },
+  "created": 1793047801076,
+  "updated": 1793047801076
+}
