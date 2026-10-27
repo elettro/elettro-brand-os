@@ -1,0 +1,27 @@
+{
+  "note": "Seed for Brand.settings.planner + the YouTube SocialAccount/CadenceRule rows of the google-review demo brand (Google OAuth reviewer). YouTube only. Only assets tagged google-review-demo are planned. The unlinked YouTube row is adopted by the reviewer's channel when they connect. Load with: aws lambda invoke ... {\"action\":\"configure-planner-brand\",\"brandSlug\":\"google-review\",\"settings\":<settings>,\"accounts\":<accounts>}",
+  "settings": {
+    "version": 1,
+    "pool": { "kinds": ["video"], "excludeTagsAny": [] },
+    "placements": {
+      "youtube:short": { "aspectRatios": ["9x16"], "maxDurationBucket": "30-60s" },
+      "youtube:video": { "aspectRatios": ["16x9"], "minDurationBucket": "1-3min" }
+    },
+    "sectors": [
+      { "slug": "demo", "priority": 1, "share": 1, "match": { "tagsAny": ["google-review-demo"] } }
+    ],
+    "minPoolForSector": 1,
+    "exploration": { "default": 0 },
+    "cooldowns": { "assetDays": 0, "songDays": 0, "productDays": 0 },
+    "newBatchBoostDays": 0,
+    "syntheticTagsAny": [],
+    "readyTagsAny": [],
+    "candidatesPerSlot": 5,
+    "curator": { "enabled": false },
+    "copy": { "enabled": true, "task": "write_copy", "concurrency": 2 }
+  },
+  "accounts": [
+    { "destination": "youtube", "accountName": "Google Review YouTube", "placement": "video", "postsPerWeek": 2, "preferredStartTime": "09:00", "preferredEndTime": "19:00", "publishingMode": "approval" },
+    { "destination": "youtube", "accountName": "Google Review YouTube", "placement": "short", "postsPerWeek": 2, "preferredStartTime": "09:00", "preferredEndTime": "19:00", "publishingMode": "approval" }
+  ]
+}
