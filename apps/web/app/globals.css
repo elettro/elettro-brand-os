@@ -729,6 +729,8 @@ button:disabled {
 .review-title-edit textarea { width: 100%; box-sizing: border-box; padding: 8px 8px 20px; border: 1px solid var(--line); border-radius: 8px; font: inherit; font-weight: 700; background: transparent; color: inherit; resize: none; }
 .review-count { position: absolute; right: 8px; bottom: 6px; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .review-count.full { color: var(--accent); font-weight: 700; }
+.review-when { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; font-size: 13px; }
+.review-when input { padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; font: inherit; background: transparent; color: inherit; color-scheme: dark; }
 .review-edit textarea { width: 100%; padding: 8px; border: 1px solid var(--line); border-radius: 8px; font: inherit; }
 .review-swap { display: flex; gap: 8px; flex-wrap: wrap; }
 .review-swap button { padding: 0; border: 2px solid transparent; border-radius: 10px; background: none; cursor: pointer; }
