@@ -21,7 +21,7 @@
     "copy": { "enabled": true, "task": "write_copy", "concurrency": 2 }
   },
   "accounts": [
-    { "destination": "youtube", "accountName": "Google Review YouTube", "placement": "video", "postsPerWeek": 2, "preferredStartTime": "09:00", "preferredEndTime": "19:00", "publishingMode": "approval" },
+    { "destination": "youtube", "accountName": "Google Review YouTube", "placement": "video", "postsPerWeek": 2, "preferredStartTime": "13:00", "preferredEndTime": "19:00", "publishingMode": "approval" },
     { "destination": "youtube", "accountName": "Google Review YouTube", "placement": "short", "postsPerWeek": 2, "preferredStartTime": "09:00", "preferredEndTime": "19:00", "publishingMode": "approval" }
   ]
 }
