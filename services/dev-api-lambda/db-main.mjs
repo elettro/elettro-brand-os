@@ -18,6 +18,7 @@ const DROPBOX_BRAND_ROOTS = [
   ["therasbox", "/1---elettro-brand-os/brands/therasbox"],
   ["pianomusicsoothing", "/1---elettro-brand-os/brands/pianomusicsoothing"],
   ["reggaeland", "/1---elettro-brand-os/brands/reggaeland"],
+  ["google-review", "/1---elettro-brand-os/brands/google-review"],
   ["elettro", "/1---elettro-brand-os/brands/elettro"]
 ];
 
