@@ -12,6 +12,9 @@ const NETWORK: Record<string, string> = {
 const STATUS: Record<PublishingFormat["status"], string> = {
   live: "Manually approved, set to auto-publish", planning: "planned only", review: "awaiting app review", integration: "awaiting integration"
 };
+// YouTube leads the posts-per-day list and Google Business follows; every other network keeps the API order (the sort is stable).
+const FIRST = ["youtube", "gmb"];
+const rank = (destination: string) => { const i = FIRST.indexOf(destination); return i < 0 ? FIRST.length : i; };
 // A planner month is 4 weeks (plan-month / approve-month).
 const WEEKS_PER_MONTH = 4;
 // One posts-per-day setting per format of each connected account; a network with no connected
@@ -64,8 +67,7 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
   // list.accounts has one row per account and cadence rule; one entry per connected account here.
   const connectedAccounts = useMemo(() => [...new Map(list.accounts.filter((a) => a.externalAccountId)
     .map((a) => [a.socialAccountId, a])).values()], [list.accounts]);
-  // YouTube leads the list; every other network keeps the API order (the sort is stable).
-  const slots = useMemo(() => [...(list.formats ?? [])].sort((a, b) => Number(b.destination === "youtube") - Number(a.destination === "youtube")).flatMap((format): Slot[] => {
+  const slots = useMemo(() => [...(list.formats ?? [])].sort((a, b) => rank(a.destination) - rank(b.destination)).flatMap((format): Slot[] => {
     const accounts = format.status === "integration" ? [] : connectedAccounts.filter((a) => a.destination === format.destination);
     if (!accounts.length) return [{ key: `${format.destination}:${format.placement}`, format, account: null }];
     return accounts.map((account) => ({ key: `${account.socialAccountId}:${format.placement}`, format, account }));
