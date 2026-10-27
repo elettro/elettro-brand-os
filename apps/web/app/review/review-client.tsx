@@ -270,17 +270,17 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
                 {p.copyStatus && p.copyStatus !== "ready" && <p className="review-warn">Caption needs work ({p.copyStatus}).</p>}
                 {editing === p.id ? <div className="review-edit">
                   {TITLE_NETWORKS.includes(p.destination) && <div className="review-title-edit">
-                    <input type="text" aria-label="Title" maxLength={TITLE_MAX} value={titleDraft} onChange={(e) => setTitleDraft(e.target.value.replace(/[<>]/g, ""))} />
+                    <input type="text" aria-label="Title" placeholder="Title" maxLength={TITLE_MAX} value={titleDraft} onChange={(e) => setTitleDraft(e.target.value.replace(/[<>]/g, ""))} />
                     <span className={`review-count${titleDraft.length >= TITLE_MAX ? " full" : ""}`}>{titleDraft.length}/{TITLE_MAX}</span>
                   </div>}
-                  <textarea rows={6} maxLength={2200} value={draft} onChange={(e) => setDraft(e.target.value)} />
+                  <textarea rows={6} maxLength={2200} aria-label="Caption" placeholder="Caption" value={draft} onChange={(e) => setDraft(e.target.value)} />
                   <div className="review-actions">
                     <button className="status-chip" disabled={!!busy || !draft.trim() || (TITLE_NETWORKS.includes(p.destination) && !titleDraft.trim())} onClick={async () => {
                       const [text, ...tags] = draft.split(/\n\s*(?=#)/);
                       const withTitle = TITLE_NETWORKS.includes(p.destination) ? { title: titleDraft.trim() } : {};
                       await run(p.id, { action: "edit", id: p.id, caption: text.trim(), hashtags: tags.join(" ").split(/\s+/).filter((t) => t.startsWith("#")), ...withTitle }, withTitle.title ? "Title and caption saved." : "Caption saved.");
                       setEditing(null);
-                    }}>{TITLE_NETWORKS.includes(p.destination) ? "Save title & caption" : "Save caption"}</button>
+                    }}>Save text</button>
                     <button className="status-chip" onClick={() => setEditing(null)}>Cancel</button>
                   </div>
                 </div> : <p className="review-caption">{p.caption || <span className="muted">No caption yet</span>}
@@ -298,7 +298,7 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
                     setEditing(p.id);
                     setTitleDraft(p.title || "");
                     setDraft([p.caption || "", p.hashtags.map(tag).join(" ")].filter(Boolean).join("\n\n"));
-                  }}>{TITLE_NETWORKS.includes(p.destination) ? "Edit title & caption" : "Edit caption"}</button>}
+                  }}>Edit text</button>}
                   {p.candidates.length > 0 && <button className="status-chip" disabled={!!busy} onClick={() => setSwapping(swapping === p.id ? null : p.id)}>Swap clip</button>}
                 </div>}
                 {swapping === p.id && <div className="review-swap">
