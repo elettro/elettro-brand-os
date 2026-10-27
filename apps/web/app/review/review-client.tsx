@@ -64,7 +64,8 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
   // list.accounts has one row per account and cadence rule; one entry per connected account here.
   const connectedAccounts = useMemo(() => [...new Map(list.accounts.filter((a) => a.externalAccountId)
     .map((a) => [a.socialAccountId, a])).values()], [list.accounts]);
-  const slots = useMemo(() => (list.formats ?? []).flatMap((format): Slot[] => {
+  // YouTube leads the list; every other network keeps the API order (the sort is stable).
+  const slots = useMemo(() => [...(list.formats ?? [])].sort((a, b) => Number(b.destination === "youtube") - Number(a.destination === "youtube")).flatMap((format): Slot[] => {
     const accounts = format.status === "integration" ? [] : connectedAccounts.filter((a) => a.destination === format.destination);
     if (!accounts.length) return [{ key: `${format.destination}:${format.placement}`, format, account: null }];
     return accounts.map((account) => ({ key: `${account.socialAccountId}:${format.placement}`, format, account }));
