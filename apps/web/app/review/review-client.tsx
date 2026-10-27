@@ -10,7 +10,7 @@ const NETWORK: Record<string, string> = {
   pinterest: "Pinterest", linkedin: "LinkedIn", x: "X", gmb: "Google Business"
 };
 const STATUS: Record<PublishingFormat["status"], string> = {
-  live: "auto-publishes", planning: "planned only", review: "awaiting app review", integration: "awaiting integration"
+  live: "Manually approved, set to auto-publish", planning: "planned only", review: "awaiting app review", integration: "awaiting integration"
 };
 // A planner month is 4 weeks (plan-month / approve-month).
 const WEEKS_PER_MONTH = 4;
