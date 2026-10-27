@@ -9,7 +9,7 @@ import { MetaTestPosts } from "@/components/meta-test-posts";
 import { THREADS_BRANDS } from "@/lib/threads-connect";
 import { TIKTOK_BRANDS } from "@/lib/tiktok-connect";
 import { TiktokPost } from "@/components/tiktok-post";
-import { TiktokDisconnect } from "@/components/tiktok-disconnect";
+import { ConnectionDisconnect } from "@/components/connection-disconnect";
 import { PINTEREST_BOARDS, PINTEREST_BRANDS } from "@/lib/pinterest-connect";
 import { PinterestPost } from "@/components/pinterest-post";
 import { ReconnectCountdown } from "@/components/reconnect-countdown";
@@ -75,15 +75,18 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
     if (network === "pinterest") pinterest[brand] = { handle: connected, expiresAt: expires };
   }
   // Same cache after a disconnect: the brand is no longer linked even if the feed still says so.
-  if (brand && disconnected && network === "tiktok") {
-    delete tiktok[brand];
+  if (brand && disconnected) {
+    const feeds: Record<string, Array<Record<string, Linked>>> = {
+      youtube: [youtube], gmb: [gmb], linkedin: [linkedin], threads: [threads], tiktok: [tiktok], pinterest: [pinterest], meta: [facebook, instagram]
+    };
+    for (const feed of feeds[network || ""] || []) delete feed[brand];
   }
   return <main className="main">
     <div className="eyebrow">Publishing · Social connections</div>
     <h1>Connections</h1>
     <p className="muted">Connect each brand&apos;s accounts to Elettro OS. Google asks which YouTube channel to use; pick the one that belongs to the brand. LinkedIn logins last 60 days, so each one counts down to its reconnect date.</p>
     {connected && <p className="card" style={{ marginTop: 16 }}>Connected <b>{connected}</b>{brandName ? <> to {brandName}</> : null}.</p>}
-    {disconnected && <p className="card" style={{ marginTop: 16 }}>Disconnected <b>{disconnected}</b>{brandName ? <> from {brandName}</> : null}. Elettro OS no longer has access to it.</p>}
+    {disconnected && <p className="card" style={{ marginTop: 16 }}>Disconnected <b>{disconnected}</b>{brandName ? <> from {brandName}</> : null}. Elettro OS will not post to it, and posts already approved for it are back to planned. To also remove its permission, use the account&apos;s own security settings (for Google, myaccount.google.com/permissions).</p>}
     {error && network !== "linkedin" && <p className="card" style={{ marginTop: 16 }}>Could not connect{brandName ? ` ${brandName}` : ""}: {error}</p>}
     {brands.length > 0 && <>
     <div className="grid" style={{ marginTop: 20 }}>
@@ -96,7 +99,10 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
             <p className="muted" style={{ margin: "0 0 12px" }}>
               {handle ? <>● Connected · <b>{handle}</b></> : "○ Not connected"}
             </p>
-            <a className="status-chip" href={`/api/connections/youtube/start?brand=${b.id}`}>{handle ? "Reconnect" : "Connect YouTube"}</a>
+            <div className="connect-row">
+              <a className="status-chip" href={`/api/connections/youtube/start?brand=${b.id}`}>{handle ? "Reconnect" : "Connect YouTube"}</a>
+              {handle && <ConnectionDisconnect brand={b.id} network="youtube" handle={handle} />}
+            </div>
           </article>
         );
       })}
@@ -116,7 +122,10 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
             <p className="muted" style={{ margin: "0 0 12px" }}>
               {profile ? <>● Connected · <b>{profile}</b></> : "○ Not connected"}
             </p>
-            <a className="status-chip" href={`/api/connections/gbp/start?brand=${b.id}`}>{profile ? "Reconnect" : "Connect Google Business Profile"}</a>
+            <div className="connect-row">
+              <a className="status-chip" href={`/api/connections/gbp/start?brand=${b.id}`}>{profile ? "Reconnect" : "Connect Google Business Profile"}</a>
+              {profile && <ConnectionDisconnect brand={b.id} network="gmb" handle={profile} />}
+            </div>
           </article>
         );
       })}
@@ -136,7 +145,10 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
             <p className="muted" style={{ margin: "0 0 12px" }}>
               {page ? <>● Facebook · <b>{page}</b>{ig ? <><br />● Instagram · <b>{ig}</b></> : <><br />○ No Instagram linked to this Page</>}</> : "○ Not connected"}
             </p>
-            <a className="status-chip" href={`/api/connections/meta/start?brand=${b.id}`}>{page ? "Reconnect" : "Connect Facebook + Instagram"}</a>
+            <div className="connect-row">
+              <a className="status-chip" href={`/api/connections/meta/start?brand=${b.id}`}>{page ? "Reconnect" : "Connect Facebook + Instagram"}</a>
+              {page && <ConnectionDisconnect brand={b.id} network="meta" handle={page} />}
+            </div>
             {page && <MetaTestPosts brand={b.id} page={page} instagram={ig || null} />}
           </article>
         );
@@ -159,6 +171,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
             <div className="connect-row">
               <a className="status-chip" href={`/api/connections/threads/start?brand=${b.id}`}>{linked ? "Reconnect" : "Connect Threads"}</a>
               {linked?.expiresAt && <ReconnectCountdown expiresAt={linked.expiresAt} />}
+              {linked && <ConnectionDisconnect brand={b.id} network="threads" handle={linked.handle || "this account"} />}
             </div>
           </article>
         );
@@ -182,7 +195,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
             <div className="connect-row">
               <a className="status-chip" href={`/api/connections/tiktok/start?brand=${b.id}`}>{linked ? "Reconnect" : "Connect TikTok"}</a>
               {linked?.expiresAt && <ReconnectCountdown expiresAt={linked.expiresAt} />}
-              {linked && <TiktokDisconnect brand={b.id} handle={linked.handle || "this account"} />}
+              {linked && <ConnectionDisconnect brand={b.id} network="tiktok" handle={linked.handle || "this account"} />}
             </div>
             {linked && <TiktokPost brand={b.id} />}
           </article>
@@ -206,6 +219,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
             <div className="connect-row">
               <a className="status-chip" href={`/api/connections/pinterest/start?brand=${b.id}`}>{linked ? "Reconnect" : "Connect Pinterest"}</a>
               {linked?.expiresAt && <ReconnectCountdown expiresAt={linked.expiresAt} />}
+              {linked && <ConnectionDisconnect brand={b.id} network="pinterest" handle={linked.handle || "this account"} />}
             </div>
             {linked && <PinterestPost brand={b.id} boardName={PINTEREST_BOARDS[b.id] || b.name} />}
           </article>
@@ -232,6 +246,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
             <div className="connect-row">
               <a className="status-chip" href={`/api/connections/linkedin/start?brand=${b.id}`}>{linked ? "Reconnect" : "Connect LinkedIn"}</a>
               {linked?.expiresAt && <ReconnectCountdown expiresAt={linked.expiresAt} />}
+              {linked && <ConnectionDisconnect brand={b.id} network="linkedin" handle={linked.handle || "this account"} />}
             </div>
             {linked?.expiresAt && (
               <p className="muted" style={{ margin: "12px 0 0" }}>

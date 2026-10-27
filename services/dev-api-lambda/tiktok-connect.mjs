@@ -62,29 +62,9 @@ async function linkSocialAccount(client, brandId, user, expiresAt) {
   return inserted.rows[0].id;
 }
 
-// Disconnect: the web app has already revoked the grant at TikTok (worker); unlink the brand's row.
-async function disconnectTiktok(brand, connectDatabase, json) {
-  if (!/^[a-z0-9-]{2,40}$/.test(brand)) return json(400, { ok: false, error: "brand is required" });
-  let client;
-  try {
-    client = await connectDatabase();
-    const r = await client.query(`
-      UPDATE "SocialAccount" sa SET "externalAccountId"=NULL, "tokenExpiresAt"=NULL, "updatedAt"=CURRENT_TIMESTAMP
-      FROM "Brand" b WHERE b."id"=sa."brandId" AND b."slug"=$1 AND sa."destination"='tiktok' AND sa."externalAccountId" IS NOT NULL
-      RETURNING sa."id"`, [brand]);
-    return json(200, { ok: true, brand, disconnected: r.rowCount });
-  } catch (error) {
-    console.error("[tiktok-connect] disconnect failed", error?.name, error?.message);
-    return json(500, { ok: false, error: "TikTok disconnect failed" });
-  } finally {
-    if (client) { try { await client.end(); } catch {} }
-  }
-}
-
 export async function completeTiktokConnect(event, body, connectDatabase, json, now = new Date(), store = storeTokens) {
   const headers = event?.headers || {};
   if (!keyMatches(headers["x-elettro-connect-key"])) return json(401, { ok: false, error: "Connect key required" });
-  if (body?.action === "disconnect") return disconnectTiktok(String(body.brand || ""), connectDatabase, json);
   const brand = String(body?.brand || "");
   const raw = body?.user || {};
   const accessToken = String(body?.accessToken || "");
