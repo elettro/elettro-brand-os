@@ -42,7 +42,7 @@ const BRANDS = [{ id: "all", name: "All brands", timezone: "" }, ...brandConfigs
 // What a user who is not the owner (a client) sees in the rail. Pages not listed show greyed as "soon";
 // each follow-up that opens a page for clients flips it to "active" here.
 const CLIENT_NAV: Record<string, "active" | "soon" | "hidden"> = {
-  "/": "active", "/review": "active", "/assets": "active", "/content-pool": "active",
+  "/": "active", "/review": "active", "/assets": "active", "/content-pool": "active", "/connections": "active",
   "/collections": "hidden", "/ai-gateway": "hidden"
 };
 
