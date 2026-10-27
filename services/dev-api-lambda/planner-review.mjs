@@ -188,15 +188,20 @@ async function resetWeek(client, brand, body, now = new Date()) {
   return { code: 200, body: { ok: true, deleted: r.rowCount, weekApproved: wholeWeek ? false : undefined } };
 }
 
+// YouTube and Pinterest titles stop at 100 characters; YouTube also rejects < and >.
+const TITLE_MAX = 100;
+
 async function editCaption(client, brand, body) {
   const caption = String(body.caption ?? "").trim();
+  const title = body.title === undefined ? null : String(body.title).trim();
+  if (title !== null && (!title || title.length > TITLE_MAX || /[<>]/.test(title))) return { code: 400, body: { ok: false, error: `A title needs 1-${TITLE_MAX} characters and no < or >` } };
   const hashtags = (Array.isArray(body.hashtags) ? body.hashtags : []).map((h) => String(h).replace(/^#*/, "").trim()).filter(Boolean).slice(0, 30);
   if (!UUID.test(String(body.id || "")) || !caption || caption.length > 2200) return { code: 400, body: { ok: false, error: "id and a caption up to 2,200 characters are required" } };
   const r = await client.query(`
-    UPDATE "ScheduledPost" SET "generatedCaption"=$3, "generatedHashtags"=$4,
+    UPDATE "ScheduledPost" SET "generatedCaption"=$3, "generatedHashtags"=$4, "generatedTitle"=COALESCE($6, "generatedTitle"),
       "scoreBreakdown" = COALESCE("scoreBreakdown",'{}'::jsonb) || jsonb_build_object('captionEditedAt', to_jsonb(CURRENT_TIMESTAMP), 'captionEditedAfterSwap', COALESCE("scoreBreakdown" ? 'swappedFrom', false)),
       "updatedAt"=CURRENT_TIMESTAMP
-    WHERE "brandId"=$1 AND "id"=$2 AND "status" = ANY($5) RETURNING "id"`, [brand.id, body.id, caption, hashtags, REVIEWABLE]);
+    WHERE "brandId"=$1 AND "id"=$2 AND "status" = ANY($5) RETURNING "id"`, [brand.id, body.id, caption, hashtags, REVIEWABLE, title]);
   return r.rowCount ? { code: 200, body: { ok: true } } : { code: 404, body: { ok: false, error: "Post not found or already queued" } };
 }
 
