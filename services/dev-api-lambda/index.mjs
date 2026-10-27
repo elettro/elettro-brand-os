@@ -23,6 +23,7 @@ import { handlePlannerWeb, handlePlannerOps } from "./planner-ops.mjs";
 import { setPostingWindow } from "./posting-window.mjs";
 import { completeThreadsConnect } from "./threads-connect.mjs";
 import { completeTiktokConnect } from "./tiktok-connect.mjs";
+import { disconnectNetwork } from "./connection-disconnect.mjs";
 import { completePinterestConnect } from "./pinterest-connect.mjs";
 import { handlePlannerReview } from "./planner-review.mjs";
 
@@ -1790,6 +1791,11 @@ export const handler = async (event = {}) => {
   // "Connect TikTok": same handshake; one TikTok account per brand, refresh-token expiry as the reconnect date.
   if (requestPath === "/connections/tiktok/complete" && event?.requestContext?.http?.method === "POST") {
     return completeTiktokConnect(event, parseJsonBody(event), connectDatabase, json);
+  }
+
+  // "Disconnect" on Connections, any network: unlink the brand's account rows and hold its approved posts.
+  if (requestPath === "/connections/disconnect" && event?.requestContext?.http?.method === "POST") {
+    return disconnectNetwork(event, parseJsonBody(event), connectDatabase, json);
   }
 
   // "Connect Pinterest": same handshake as TikTok; one Pinterest account per brand, refresh-token expiry as the reconnect date.

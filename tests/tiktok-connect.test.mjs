@@ -60,15 +60,3 @@ test("no rows are written when the tokens cannot be stored", async () => {
     async () => client, json, NOW, async () => { throw new Error("AccessDenied"); });
   assert.equal(r.statusCode, 500);
 });
-
-test("disconnect unlinks the brand's TikTok row and needs the connect key", async () => {
-  process.env.CONNECTIONS_API_SHARED_SECRET = KEY;
-  assert.equal((await completeTiktokConnect({ headers: {} }, { action: "disconnect", brand: "solarmeister" }, noDatabase, json)).statusCode, 401);
-  const seen = [];
-  const client = { async query(sql, params) { seen.push({ sql, params }); return { rows: [{ id: "sa" }], rowCount: 1 }; }, async end() {} };
-  const r = await completeTiktokConnect(event, { action: "disconnect", brand: "solarmeister" }, async () => client, json);
-  assert.equal(r.statusCode, 200);
-  assert.equal(r.body.disconnected, 1);
-  assert.match(seen[0].sql, /"externalAccountId"=NULL/);
-  assert.deepEqual(seen[0].params, ["solarmeister"]);
-});
