@@ -7,7 +7,7 @@ const apiBaseUrl =
 
 // Brands that appear on the Review page: the Connect Meta brands, plus Neckermann Strom (no Meta login yet, but it has posts to review).
 import { META_BRANDS } from "@/lib/meta-connect";
-export const REVIEW_BRANDS = [...META_BRANDS, "neckermann-strom"];
+export const REVIEW_BRANDS = [...META_BRANDS, "neckermann-strom", "google-review"];
 
 export type TiktokSettings = { privacyLevel: string; allowComment: boolean; allowDuet: boolean; allowStitch: boolean; yourBrand: boolean; brandedContent: boolean };
 export type TiktokCreator = {

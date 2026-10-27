@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
-import { DEV_ORIGIN, authenticated, serverSetting, unseal } from "@/lib/cognito-auth";
+import { DEV_ORIGIN, authenticatedFor, serverSetting, unseal } from "@/lib/cognito-auth";
 import { YOUTUBE_CALLBACK, YOUTUBE_STATE_COOKIE } from "@/lib/youtube-connect";
 export const runtime = "nodejs";
 
@@ -42,9 +42,10 @@ async function pickedChannel(accessToken: string) {
 }
 
 export async function GET(request: NextRequest) {
-  if (!(await authenticated())) return done({ error: "Log in to Elettro OS first" });
   const sealed = await unseal(request.cookies.get(YOUTUBE_STATE_COOKIE)?.value);
   const [state, brand] = (sealed || "").split("|");
+  // The brand comes from the sealed state cookie set at start; the user must still have access to it.
+  if (!(await authenticatedFor(brand || ""))) return done({ error: "Log in to Elettro OS first" });
   if (!state || state !== request.nextUrl.searchParams.get("state")) return done({ error: "The connect link expired; try again" });
   const denied = request.nextUrl.searchParams.get("error");
   if (denied) return done({ brand, error: denied === "access_denied" ? "Google access was not granted" : denied });
