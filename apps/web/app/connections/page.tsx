@@ -102,7 +102,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
       })}
     </div>
     </>}
-    {inView("google-review") && <p className="muted" style={{ marginTop: 20 }}>Other networks (Instagram, Facebook, Threads, TikTok, LinkedIn, Pinterest, Google Business) are turned off for Google Review.</p>}
+    {inView("google-review") && (picked === "google-review" || accessible.length === 1) && <p className="muted" style={{ marginTop: 20 }}>Other networks (Instagram, Facebook, Threads, TikTok, LinkedIn, Pinterest, Google Business) are turned off for Google Review.</p>}
     {gbpBrands.length > 0 && <>
     <h2 style={{ marginTop: 32 }}>Google Business Profile</h2>
     <p className="muted">Sign in with the Google account that manages the profile. Elettro OS picks the brand&apos;s profile automatically; nothing is posted until the business-content rules are in place.</p>
