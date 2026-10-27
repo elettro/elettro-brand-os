@@ -36,6 +36,9 @@ async function act(body: Record<string, unknown>) {
 
 // The planner stores hashtags with their "#"; edited ones are stored without. Show exactly one.
 const tag = (h: string) => "#" + h.replace(/^#+/, "");
+// Networks that publish a title with the post; YouTube and Pinterest cap it at 100 characters.
+const TITLE_NETWORKS = ["youtube", "pinterest"];
+const TITLE_MAX = 100;
 
 export function ReviewClient({ initial }: { initial: ReviewList }) {
   const [list, setList] = useState(initial);
@@ -43,6 +46,7 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
   const [notice, setNotice] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
+  const [titleDraft, setTitleDraft] = useState("");
   const [swapping, setSwapping] = useState<string | null>(null);
   // A single TikTok post's settings open only on request; the week's TikTok box handles the rest.
   const [tiktokOpen, setTiktokOpen] = useState<string | null>(null);
@@ -265,13 +269,18 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
                 {p.captionStale && <p className="review-warn">Clip was swapped. Check the caption still fits.</p>}
                 {p.copyStatus && p.copyStatus !== "ready" && <p className="review-warn">Caption needs work ({p.copyStatus}).</p>}
                 {editing === p.id ? <div className="review-edit">
-                  <textarea rows={6} maxLength={2200} value={draft} onChange={(e) => setDraft(e.target.value)} />
+                  {TITLE_NETWORKS.includes(p.destination) && <div className="review-title-edit">
+                    <input type="text" aria-label="Title" placeholder="Title" maxLength={TITLE_MAX} value={titleDraft} onChange={(e) => setTitleDraft(e.target.value.replace(/[<>]/g, ""))} />
+                    <span className={`review-count${titleDraft.length >= TITLE_MAX ? " full" : ""}`}>{titleDraft.length}/{TITLE_MAX}</span>
+                  </div>}
+                  <textarea rows={6} maxLength={2200} aria-label="Caption" placeholder="Caption" value={draft} onChange={(e) => setDraft(e.target.value)} />
                   <div className="review-actions">
-                    <button className="status-chip" disabled={!!busy || !draft.trim()} onClick={async () => {
+                    <button className="status-chip" disabled={!!busy || !draft.trim() || (TITLE_NETWORKS.includes(p.destination) && !titleDraft.trim())} onClick={async () => {
                       const [text, ...tags] = draft.split(/\n\s*(?=#)/);
-                      await run(p.id, { action: "edit", id: p.id, caption: text.trim(), hashtags: tags.join(" ").split(/\s+/).filter((t) => t.startsWith("#")) }, "Caption saved.");
+                      const withTitle = TITLE_NETWORKS.includes(p.destination) ? { title: titleDraft.trim() } : {};
+                      await run(p.id, { action: "edit", id: p.id, caption: text.trim(), hashtags: tags.join(" ").split(/\s+/).filter((t) => t.startsWith("#")), ...withTitle }, withTitle.title ? "Title and caption saved." : "Caption saved.");
                       setEditing(null);
-                    }}>Save caption</button>
+                    }}>Save text</button>
                     <button className="status-chip" onClick={() => setEditing(null)}>Cancel</button>
                   </div>
                 </div> : <p className="review-caption">{p.caption || <span className="muted">No caption yet</span>}
@@ -287,8 +296,9 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
                   {p.status !== "planned" && <button className="status-chip" disabled={!!busy} onClick={() => run(p.id, { action: "set-status", ids: [p.id], status: "planned" })}>Undo</button>}
                   {editing !== p.id && <button className="status-chip" disabled={!!busy} onClick={() => {
                     setEditing(p.id);
+                    setTitleDraft(p.title || "");
                     setDraft([p.caption || "", p.hashtags.map(tag).join(" ")].filter(Boolean).join("\n\n"));
-                  }}>Edit caption</button>}
+                  }}>Edit text</button>}
                   {p.candidates.length > 0 && <button className="status-chip" disabled={!!busy} onClick={() => setSwapping(swapping === p.id ? null : p.id)}>Swap clip</button>}
                 </div>}
                 {swapping === p.id && <div className="review-swap">
