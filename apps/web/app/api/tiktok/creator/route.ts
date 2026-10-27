@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authenticated } from "@/lib/cognito-auth";
+import { authenticatedFor } from "@/lib/cognito-auth";
 import { TIKTOK_BRANDS } from "@/lib/tiktok-connect";
 import { tiktokWorker } from "@/lib/tiktok-worker";
 export const runtime = "nodejs";
@@ -8,8 +8,9 @@ export const runtime = "nodejs";
 // settings read fresh from creator_info whenever the creator is about to approve or send a post.
 // The token lives with the TikTok worker, so the worker asks TikTok.
 export async function GET(request: NextRequest) {
-  if (!(await authenticated())) return NextResponse.json({ ok: false, error: "Log in to Elettro OS first" }, { status: 401 });
   const brand = request.nextUrl.searchParams.get("brand") || "";
+  // Owner, or a user in this brand's Cognito group, so a brand-only account sees its own TikTok card.
+  if (!(await authenticatedFor(brand))) return NextResponse.json({ ok: false, error: "Log in to Elettro OS first" }, { status: 401 });
   if (!TIKTOK_BRANDS.includes(brand)) return NextResponse.json({ ok: false, error: "Unknown brand" }, { status: 400 });
   try {
     const info = await tiktokWorker({ action: "creator-info", brand });
