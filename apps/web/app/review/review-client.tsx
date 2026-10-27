@@ -270,7 +270,7 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
                 {p.copyStatus && p.copyStatus !== "ready" && <p className="review-warn">Caption needs work ({p.copyStatus}).</p>}
                 {editing === p.id ? <div className="review-edit">
                   {TITLE_NETWORKS.includes(p.destination) && <div className="review-title-edit">
-                    <input type="text" aria-label="Title" placeholder="Title" maxLength={TITLE_MAX} value={titleDraft} onChange={(e) => setTitleDraft(e.target.value.replace(/[<>]/g, ""))} />
+                    <textarea rows={2} aria-label="Title" placeholder="Title" maxLength={TITLE_MAX} value={titleDraft} onChange={(e) => setTitleDraft(e.target.value.replace(/[<>\n]/g, ""))} />
                     <span className={`review-count${titleDraft.length >= TITLE_MAX ? " full" : ""}`}>{titleDraft.length}/{TITLE_MAX}</span>
                   </div>}
                   <textarea rows={6} maxLength={2200} aria-label="Caption" placeholder="Caption" value={draft} onChange={(e) => setDraft(e.target.value)} />

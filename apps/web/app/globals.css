@@ -706,7 +706,7 @@ button:disabled {
 .review-chevron { display: inline-block; transition: transform 120ms ease; color: var(--muted); }
 .review-week.open .review-chevron { transform: rotate(90deg); }
 .review-day h3 { margin: 20px 0 8px; font-size: 15px; color: var(--muted); }
-.review-posts { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); }
+.review-posts { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(760px, 1fr)); }
 .review-post { display: flex; gap: 12px; padding: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
 .review-post.status-approved { border-color: var(--success); }
 .review-post.status-skipped { opacity: .55; }
@@ -726,8 +726,8 @@ button:disabled {
 .review-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .review-actions button { cursor: pointer; }
 .review-title-edit { position: relative; margin-bottom: 6px; }
-.review-title-edit input { width: 100%; box-sizing: border-box; padding: 8px 56px 8px 8px; border: 1px solid var(--line); border-radius: 8px; font: inherit; font-weight: 700; background: transparent; color: inherit; }
-.review-count { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.review-title-edit textarea { width: 100%; box-sizing: border-box; padding: 8px 8px 20px; border: 1px solid var(--line); border-radius: 8px; font: inherit; font-weight: 700; background: transparent; color: inherit; resize: none; }
+.review-count { position: absolute; right: 8px; bottom: 6px; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .review-count.full { color: var(--accent); font-weight: 700; }
 .review-edit textarea { width: 100%; padding: 8px; border: 1px solid var(--line); border-radius: 8px; font: inherit; }
 .review-swap { display: flex; gap: 8px; flex-wrap: wrap; }
