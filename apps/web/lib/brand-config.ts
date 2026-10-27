@@ -6,5 +6,6 @@ export const brandConfigs = [
   { id: "therasbox", name: "Therasbox", timezone: "America/New_York", dropboxRoot: "/1---elettro-brand-os/brands/therasbox" },
   { id: "elettro", name: "Elettro", timezone: "America/New_York", dropboxRoot: "/1---elettro-brand-os/brands/elettro" },
   { id: "pianomusicsoothing", name: "Piano Music Soothing", timezone: "America/New_York", dropboxRoot: "/1---elettro-brand-os/brands/pianomusicsoothing" },
-  { id: "reggaeland", name: "Reggae.Land", timezone: "America/New_York", dropboxRoot: "/1---elettro-brand-os/brands/reggaeland" }
+  { id: "reggaeland", name: "Reggae.Land", timezone: "America/New_York", dropboxRoot: "/1---elettro-brand-os/brands/reggaeland" },
+  { id: "google-review", name: "Google Review", timezone: "America/New_York", dropboxRoot: "/1---elettro-brand-os/brands/google-review" }
 ] as const;

@@ -6,7 +6,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const base = path.resolve(__dirname, "..");
 const read = p => fs.readFileSync(path.join(base,p),"utf8");
-const brands = ["stashbox","elettro","solarmeister","neckermann-strom","weightlossdavie","therasbox","pianomusicsoothing","reggaeland"];
+const brands = ["stashbox","elettro","solarmeister","neckermann-strom","weightlossdavie","therasbox","pianomusicsoothing","reggaeland","google-review"];
 test("six brands use the consolidated media root",()=>{
  const config = read("apps/web/lib/brand-config.ts");
  const api = read("services/dev-api-lambda/index.mjs");

@@ -1,4 +1,4 @@
-const BRANDS=new Set(['stashbox','elettro','solarmeister','weightlossdavie','neckermann-strom','therasbox','pianomusicsoothing','reggaeland']);
+const BRANDS=new Set(['stashbox','elettro','solarmeister','weightlossdavie','neckermann-strom','therasbox','pianomusicsoothing','reggaeland','google-review']);
 const ENDPOINTS=new Set(['get_metadata','list_folder','list_folder/continue','move_v2']);
 export async function handleFolderRelay(event,getToken){
  let mutationSent=false;
