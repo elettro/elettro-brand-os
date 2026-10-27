@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authenticated, challenge, cookieSettings, seal } from "@/lib/cognito-auth";
+import { authenticatedFor, challenge, cookieSettings, seal } from "@/lib/cognito-auth";
 import { GOOGLE_CLIENT_ID, YOUTUBE_BRANDS, YOUTUBE_CALLBACK, YOUTUBE_SCOPES, YOUTUBE_STATE_COOKIE } from "@/lib/youtube-connect";
 export const runtime = "nodejs";
 export async function GET(request: NextRequest) {
-  if (!(await authenticated())) return NextResponse.redirect(new URL("/api/auth/login", request.url));
   const brand = request.nextUrl.searchParams.get("brand") || "";
+  // Owner, or a user in this brand's Cognito group.
+  if (!(await authenticatedFor(brand))) return NextResponse.redirect(new URL("/api/auth/login", request.url));
   if (!YOUTUBE_BRANDS.includes(brand)) return NextResponse.json({ error: "Unknown brand" }, { status: 400 });
   if (!GOOGLE_CLIENT_ID) return NextResponse.json({ error: "GOOGLE_OAUTH_CLIENT_ID is not configured" }, { status: 503 });
   const state = challenge();

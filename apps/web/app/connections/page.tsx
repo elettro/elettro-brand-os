@@ -1,4 +1,4 @@
-import { authenticated, session } from "@/lib/cognito-auth";
+import { session } from "@/lib/cognito-auth";
 import { visibleBrands } from "@/lib/brand-access";
 import { brandConfigs } from "@/lib/brand-config";
 import { YOUTUBE_BRANDS } from "@/lib/youtube-connect";
@@ -44,7 +44,8 @@ async function connectionStatus(): Promise<Record<string, Record<string, Linked>
 }
 
 export default async function ConnectionsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
-  if (!(await authenticated())) redirect("/api/auth/login");
+  // Owner or a brand-scoped user: the page below only lists the brands this session may see.
+  if (!(await session())) redirect("/api/auth/login");
   const [{ brand, connected, disconnected, error, network, expires, posted }, status] = await Promise.all([searchParams, connectionStatus()]);
   // The header dropdown drives ?brand=: one brand shows only its connections, "All brands" (no param) shows every brand this user may see.
   const accessible: string[] = visibleBrands(await session(), brandConfigs).map((b) => b.id);
