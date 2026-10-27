@@ -12,7 +12,7 @@
     ],
     "minPoolForSector": 1,
     "exploration": { "default": 0 },
-    "cooldowns": { "assetDays": 0, "songDays": 0, "productDays": 0 },
+    "cooldowns": { "assetDays": 7, "songDays": 0, "productDays": 0 },
     "newBatchBoostDays": 0,
     "syntheticTagsAny": [],
     "readyTagsAny": [],
@@ -21,7 +21,7 @@
     "copy": { "enabled": true, "task": "write_copy", "concurrency": 2 }
   },
   "accounts": [
-    { "destination": "youtube", "accountName": "Google Review YouTube", "placement": "video", "postsPerWeek": 2, "preferredStartTime": "09:00", "preferredEndTime": "19:00", "publishingMode": "approval" },
+    { "destination": "youtube", "accountName": "Google Review YouTube", "placement": "video", "postsPerWeek": 2, "preferredStartTime": "13:00", "preferredEndTime": "19:00", "publishingMode": "approval" },
     { "destination": "youtube", "accountName": "Google Review YouTube", "placement": "short", "postsPerWeek": 2, "preferredStartTime": "09:00", "preferredEndTime": "19:00", "publishingMode": "approval" }
   ]
 }
