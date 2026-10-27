@@ -4,7 +4,7 @@
     "version": 1,
     "pool": { "kinds": ["video"], "excludeTagsAny": [] },
     "placements": {
-      "youtube:short": { "aspectRatios": ["9x16"], "maxDurationBucket": "30-60s" },
+      "youtube:short": { "aspectRatios": ["9x16"], "maxDurationBucket": "1-3min" },
       "youtube:video": { "aspectRatios": ["16x9"], "minDurationBucket": "1-3min" }
     },
     "sectors": [
