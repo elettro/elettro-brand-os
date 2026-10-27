@@ -260,3 +260,38 @@ test("reset-week keeps today's already-past posts and leaves approval alone when
   assert.ok(!client.seen.some((q) => q.sql.includes("heldWeeks")));
   assert.equal((await handlePlannerReview(event, { brand: "stashbox", action: "reset-week", from: "x", to: "y" }, async () => client, json)).statusCode, 400);
 });
+
+test("edit saves a title of 1-100 characters and refuses one that YouTube would reject", async () => {
+  process.env.CONNECTIONS_API_SHARED_SECRET = KEY;
+  const id = "0f8c2c62-6c5e-4a8e-9a0f-0b7f5a1d2e3f";
+  const client = fakeClient([['UPDATE "ScheduledPost" SET "generatedCaption"', { rows: [{ id }], rowCount: 1 }]]);
+  const ok = await handlePlannerReview(event, { brand: "stashbox", action: "edit", id, caption: "Caption", title: "  A fine title  " }, async () => client, json);
+  assert.equal(ok.statusCode, 200);
+  const update = client.seen.find((q) => q.sql.includes('"generatedTitle"'));
+  assert.equal(update.params[5], "A fine title");
+  for (const title of ["", "x".repeat(101), "bad <b> title"]) {
+    const bad = await handlePlannerReview(event, { brand: "stashbox", action: "edit", id, caption: "Caption", title }, async () => client, json);
+    assert.equal(bad.statusCode, 400, `title ${JSON.stringify(title).slice(0, 20)} should be refused`);
+  }
+  // No title sent: the stored title is left alone.
+  const keep = fakeClient([['UPDATE "ScheduledPost" SET "generatedCaption"', { rows: [{ id }], rowCount: 1 }]]);
+  await handlePlannerReview(event, { brand: "stashbox", action: "edit", id, caption: "Caption" }, async () => keep, json);
+  assert.equal(keep.seen.find((q) => q.sql.includes('"generatedTitle"')).params[5], null);
+});
+
+test("reschedule moves one unsent post, and only to a sensible time", async () => {
+  process.env.CONNECTIONS_API_SHARED_SECRET = KEY;
+  const id = "0f8c2c62-6c5e-4a8e-9a0f-0b7f5a1d2e3f";
+  const soon = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+  const client = fakeClient([['SET "scheduledFor"=$3', { rows: [{ id, scheduledFor: soon }], rowCount: 1 }]]);
+  const ok = await handlePlannerReview(event, { brand: "stashbox", action: "reschedule", id, scheduledFor: soon }, async () => client, json);
+  assert.equal(ok.statusCode, 200);
+  const q = client.seen.find((x) => x.sql.includes('SET "scheduledFor"=$3'));
+  assert.deepEqual(q.params[3], ["planned", "approved", "skipped"]);
+  for (const scheduledFor of ["not a date", new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(), new Date(Date.now() + 500 * 24 * 60 * 60 * 1000).toISOString()]) {
+    const bad = await handlePlannerReview(event, { brand: "stashbox", action: "reschedule", id, scheduledFor }, async () => client, json);
+    assert.equal(bad.statusCode, 400);
+  }
+  const gone = await handlePlannerReview(event, { brand: "stashbox", action: "reschedule", id, scheduledFor: soon }, async () => fakeClient(), json);
+  assert.equal(gone.statusCode, 404);
+});

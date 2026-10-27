@@ -15,6 +15,22 @@ const STATUS: Record<PublishingFormat["status"], string> = {
 // YouTube leads the posts-per-day list and Google Business follows; every other network keeps the API order (the sort is stable).
 const FIRST = ["youtube", "gmb"];
 const rank = (destination: string) => { const i = FIRST.indexOf(destination); return i < 0 ? FIRST.length : i; };
+// The time box works in the brand's own time zone: "2026-10-28T09:00" in, a UTC instant out, and back.
+function localInput(iso: string, tz: string) {
+  const p = Object.fromEntries(new Intl.DateTimeFormat("en-CA", { timeZone: tz, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).formatToParts(new Date(iso)).map((x) => [x.type, x.value]));
+  return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
+}
+function instantOf(local: string, tz: string) {
+  const [d, t] = local.split("T");
+  const [y, mo, da] = d.split("-").map(Number);
+  const [h, mi] = t.split(":").map(Number);
+  const guess = Date.UTC(y, mo - 1, da, h, mi);
+  // The zone's offset at that moment, found by reading the guess back in the zone.
+  const back = localInput(new Date(guess).toISOString(), tz).split("T");
+  const [by, bmo, bda] = back[0].split("-").map(Number);
+  const [bh, bmi] = back[1].split(":").map(Number);
+  return new Date(guess - (Date.UTC(by, bmo - 1, bda, bh, bmi) - guess)).toISOString();
+}
 // A planner month is 4 weeks (plan-month / approve-month).
 const WEEKS_PER_MONTH = 4;
 // One posts-per-day setting per format of each connected account; a network with no connected
@@ -47,6 +63,7 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [titleDraft, setTitleDraft] = useState("");
+  const [whenDraft, setWhenDraft] = useState("");
   const [swapping, setSwapping] = useState<string | null>(null);
   // A single TikTok post's settings open only on request; the week's TikTok box handles the rest.
   const [tiktokOpen, setTiktokOpen] = useState<string | null>(null);
@@ -273,12 +290,20 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
                     <textarea rows={2} aria-label="Title" placeholder="Title" maxLength={TITLE_MAX} value={titleDraft} onChange={(e) => setTitleDraft(e.target.value.replace(/[<>\n]/g, ""))} />
                     <span className={`review-count${titleDraft.length >= TITLE_MAX ? " full" : ""}`}>{titleDraft.length}/{TITLE_MAX}</span>
                   </div>}
+                  <div className="review-when">
+                    <label>Post at <input type="datetime-local" value={whenDraft} onChange={(e) => setWhenDraft(e.target.value)} /></label>
+                    <button type="button" className="status-chip" onClick={() => setWhenDraft(localInput(new Date().toISOString(), tz))}>Now</button>
+                    <span className="muted">{tz.replace("_", " ")}</span>
+                  </div>
                   <textarea rows={6} maxLength={2200} aria-label="Caption" placeholder="Caption" value={draft} onChange={(e) => setDraft(e.target.value)} />
                   <div className="review-actions">
                     <button className="status-chip" disabled={!!busy || !draft.trim() || (TITLE_NETWORKS.includes(p.destination) && !titleDraft.trim())} onClick={async () => {
                       const [text, ...tags] = draft.split(/\n\s*(?=#)/);
                       const withTitle = TITLE_NETWORKS.includes(p.destination) ? { title: titleDraft.trim() } : {};
                       await run(p.id, { action: "edit", id: p.id, caption: text.trim(), hashtags: tags.join(" ").split(/\s+/).filter((t) => t.startsWith("#")), ...withTitle }, withTitle.title ? "Title and caption saved." : "Caption saved.");
+                      if (whenDraft && whenDraft !== localInput(p.scheduledFor, tz)) {
+                        await run(p.id, { action: "reschedule", id: p.id, scheduledFor: instantOf(whenDraft, tz) }, "Time saved. Approved posts go out on the next 15-minute run once the time has come.");
+                      }
                       setEditing(null);
                     }}>Save text</button>
                     <button className="status-chip" onClick={() => setEditing(null)}>Cancel</button>
@@ -297,6 +322,7 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
                   {editing !== p.id && <button className="status-chip" disabled={!!busy} onClick={() => {
                     setEditing(p.id);
                     setTitleDraft(p.title || "");
+                    setWhenDraft(localInput(p.scheduledFor, tz));
                     setDraft([p.caption || "", p.hashtags.map(tag).join(" ")].filter(Boolean).join("\n\n"));
                   }}>Edit text</button>}
                   {p.candidates.length > 0 && <button className="status-chip" disabled={!!busy} onClick={() => setSwapping(swapping === p.id ? null : p.id)}>Swap clip</button>}

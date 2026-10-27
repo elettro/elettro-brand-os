@@ -205,6 +205,21 @@ async function editCaption(client, brand, body) {
   return r.rowCount ? { code: 200, body: { ok: true } } : { code: 404, body: { ok: false, error: "Post not found or already queued" } };
 }
 
+// Moves one post to a new time: a later slot, or "now" so the next 15-minute run sends it. Only posts
+// that have not gone out can move; a time more than an hour in the past is refused (it would count as missed).
+async function reschedulePost(client, brand, body) {
+  const at = new Date(String(body.scheduledFor || ""));
+  if (!UUID.test(String(body.id || "")) || Number.isNaN(at.getTime())) return { code: 400, body: { ok: false, error: "id and a valid scheduledFor time are required" } };
+  const now = Date.now();
+  if (at.getTime() < now - 60 * 60 * 1000 || at.getTime() > now + 400 * 24 * 60 * 60 * 1000) return { code: 400, body: { ok: false, error: "Pick a time from an hour ago to a year ahead" } };
+  const r = await client.query(`
+    UPDATE "ScheduledPost" SET "scheduledFor"=$3,
+      "scoreBreakdown" = COALESCE("scoreBreakdown",'{}'::jsonb) || jsonb_build_object('rescheduledAt', to_jsonb(CURRENT_TIMESTAMP)),
+      "updatedAt"=CURRENT_TIMESTAMP
+    WHERE "brandId"=$1 AND "id"=$2 AND "status" = ANY($4) RETURNING "id","scheduledFor"`, [brand.id, body.id, at.toISOString(), REVIEWABLE]);
+  return r.rowCount ? { code: 200, body: { ok: true, scheduledFor: r.rows[0].scheduledFor } } : { code: 404, body: { ok: false, error: "Post not found or already queued" } };
+}
+
 async function swapAsset(client, brand, body) {
   if (!UUID.test(String(body.id || "")) || !UUID.test(String(body.assetId || ""))) return { code: 400, body: { ok: false, error: "id and assetId are required" } };
   const asset = (await client.query(
@@ -342,6 +357,7 @@ export async function handlePlannerReview(event, body, connectDatabase, json, de
     edit: (c, b) => editCaption(c, b, body),
     "tiktok-approve": (c, b) => tiktokApprove(c, b, body),
     swap: (c, b) => swapAsset(c, b, body),
+    reschedule: (c, b) => reschedulePost(c, b, body),
     cadence: (c, b) => setCadence(c, b, body),
     plan: (c, b) => startPlanning(c, b, body, { invoke: deps.invoke || selfInvoke, readSeed: deps.readSeed || readRepoSeed, now: deps.now }),
     // Connections page test posts: library picker + publication log (library-publications.mjs).
