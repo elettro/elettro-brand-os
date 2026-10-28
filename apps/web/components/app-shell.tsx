@@ -34,6 +34,15 @@ const NAV: Array<{ label: string; items: Array<{ label: string; href?: string }>
   ] }
 ];
 
+// The AR section: shown to the owner always, and to a client only when one of their brands has AR on.
+const AR_SECTION = { label: "AR", items: [
+  { label: "Experiences", href: "/ar" },
+  { label: "Actions" },
+  { label: "Scan sets" },
+  { label: "QR codes" },
+  { label: "Settings" }
+] };
+
 // Pages that stand alone (sign-in errors) keep no frame.
 const BARE = ["/auth", "/welcome"];
 
@@ -42,7 +51,7 @@ const BRANDS = [{ id: "all", name: "All brands", timezone: "" }, ...brandConfigs
 // What a user who is not the owner (a client) sees in the rail. Pages not listed show greyed as "soon";
 // each follow-up that opens a page for clients flips it to "active" here.
 const CLIENT_NAV: Record<string, "active" | "soon" | "hidden"> = {
-  "/": "active", "/review": "active", "/assets": "active", "/content-pool": "active", "/connections": "active",
+  "/": "active", "/ar": "active", "/review": "active", "/assets": "active", "/content-pool": "active", "/connections": "active",
   "/collections": "hidden", "/ai-gateway": "hidden"
 };
 
@@ -52,6 +61,7 @@ type Scope = { owner: boolean; brands: string[] | null };
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() || "/";
   const [scope, setScope] = useState<Scope | null>(null);
+  const [showAr, setShowAr] = useState(false);
   const bare = BARE.some((p) => pathname.startsWith(p));
   useEffect(() => {
     if (bare) return;
@@ -60,6 +70,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       .then((s) => setScope(s.signedIn ? { owner: !!s.owner, brands: s.brands ?? null } : null))
       .catch(() => setScope(null));
   }, [bare]);
+  useEffect(() => {
+    if (bare || !scope) return;
+    if (scope.owner) { setShowAr(true); return; }
+    fetch("/api/ar/brands", { cache: "no-store" })
+      .then((r) => r.json() as Promise<{ brands?: string[] }>)
+      .then((d) => setShowAr((d.brands?.length ?? 0) > 0))
+      .catch(() => setShowAr(false));
+  }, [bare, scope]);
   if (bare) return <>{children}</>;
   const client = !!scope && !scope.owner;
   const itemState = (item: { href?: string }) => (!client ? "active" : item.href ? CLIENT_NAV[item.href] ?? "soon" : "soon");
@@ -81,7 +99,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </header>
       <div className="shell">
         <nav className="sidebar" aria-label="Main">
-          {NAV.map((section) => (
+          {(showAr ? [...NAV.slice(0, 3), AR_SECTION, ...NAV.slice(3)] : NAV).map((section) => (
             <div className="nav-section" key={section.label}>
               <div className="nav-label">{section.label}</div>
               {section.items.filter((item) => itemState(item) !== "hidden").map((item) =>

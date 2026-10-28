@@ -9,7 +9,7 @@ export type BrandOption = {
 };
 
 // Pages that always show one brand (no "all brands" view) and open on this one when ?brand= is absent.
-const SINGLE_BRAND_PAGES = ["/review", "/planner"];
+const SINGLE_BRAND_PAGES = ["/review", "/planner", "/ar"];
 const DEFAULT_SINGLE_BRAND = "stashbox";
 
 // The header dropdown and each page's own brand row share one value: the ?brand= query.
