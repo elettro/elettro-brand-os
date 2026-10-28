@@ -9,6 +9,7 @@ import {authorizeMcp,requireMcpScope,McpAuthorizationError} from "@/lib/ai-mcp-a
 import {authorizeChatGptOauth,oauthChallenge} from "@/lib/ai-mcp-oauth";
 import {findAuthorizedTool,toolsForClient} from "@/lib/ai-mcp-tools";
 import {mcpErrorText} from "@/lib/ai-mcp-errors";
+import {executeArTool} from "@/lib/ar-gateway";
 
 export const runtime="nodejs";
 export const dynamic="force-dynamic";
@@ -128,10 +129,12 @@ export async function POST(request:NextRequest){
     ? await prepareClaudeTransfer(args,identity)
     : tool.action==="complete_claude_transfer"
     ? await completeClaudeTransfer(args,identity)
+    : tool.action.startsWith("ar_")
+    ? await executeArTool(args,tool.action,identity.clientId)
     : await executeAiGateway({...args,action:tool.action,scope:"brand"});
    const readOnlyActions=new Set(["search_assets","get_asset","inspect_registered_asset",
      "inspect_global_dropbox_id","inspect_brand_registration","list_folders",
-     "prepare_chat_file_intake"]);
+     "prepare_chat_file_intake","ar_overview"]);
    if(!readOnlyActions.has(tool.action))
     console.info("Elettro MCP audit",JSON.stringify({
       provider:identity.clientId,action:tool.action,brandSlug:args.brandSlug,

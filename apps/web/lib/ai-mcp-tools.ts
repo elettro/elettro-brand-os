@@ -49,11 +49,27 @@ export const MCP_TOOLS:ToolDefinition[]=[
  {name:"elettro_list_brand_folders",description:"List Dropbox directories for the specified brand",permission:"folders:read",action:"list_folders",
   inputSchema:schema({path:{type:"string"}},[])},
  {name:"elettro_create_brand_folder",description:"Create a folder in the selected brand with approval",permission:"folders:write",action:"create_folder",
-  inputSchema:schema({path:{type:"string"},name:{type:"string"},confirmed:approval},["name","confirmed"])}
+  inputSchema:schema({path:{type:"string"},name:{type:"string"},confirmed:approval},["name","confirmed"])},
+ // Elettro AR. Everything here creates DRAFTS; nothing publishes media (that is a button in the OS).
+ {name:"elettro_ar_overview",description:"Elettro AR: list a brand's covers (what each does when scanned), actions, scan sets and QR codes. Read-only.",permission:"ar:read",action:"ar_overview",
+  inputSchema:schema({},[])},
+ {name:"elettro_ar_prepare_upload",description:"Elettro AR: get a short-lived link to upload a cover image (JPEG/PNG) or an MP4 video for AR with an HTTP PUT. Use the returned key in elettro_ar_add_cover or elettro_ar_add_action.",permission:"ar:write",action:"ar_prepare_upload",
+  inputSchema:schema({kind:{type:"string",enum:["image","video"]},contentType:{type:"string",enum:["image/jpeg","image/png"]},confirmed:approval},["kind","confirmed"])},
+ {name:"elettro_ar_add_cover",description:"Elettro AR: make a cover (album art, poster, package) scannable. Pass the attached file (ChatGPT) or imageKey from elettro_ar_prepare_upload. Creates a DRAFT; compiles the tracking image (centered 3:4 crop unless crop is given). JPEG/PNG only, at least 480x640.",permission:"ar:write",action:"ar_add_cover",
+  _meta:{"openai/fileParams":["file"]},
+  inputSchema:schema({name:{type:"string"},file:chatFile,imageKey:{type:"string"},crop:{type:"object",properties:{left:{type:"integer"},top:{type:"integer"},width:{type:"integer"},height:{type:"integer"}},additionalProperties:false},confirmed:approval},["name","confirmed"])},
+ {name:"elettro_ar_add_action",description:"Elettro AR: create a reusable action, a video overlay (videoKey from elettro_ar_prepare_upload) or a link button (label + https url). Draft only.",permission:"ar:write",action:"ar_add_action",
+  inputSchema:schema({type:{type:"string",enum:["video","link"]},name:{type:"string"},videoKey:{type:"string"},fit:{type:"string",enum:["crop","fill","float"]},loop:{type:"boolean"},label:{type:"string"},url:{type:"string"},confirmed:approval},["type","name","confirmed"])},
+ {name:"elettro_ar_connect",description:"Elettro AR: set which actions fire, in order, when a cover is scanned (replaces its current list).",permission:"ar:write",action:"ar_connect",
+  inputSchema:schema({triggerId:{type:"string"},actionIds:{type:"array",items:{type:"string"},minItems:1,maxItems:10},confirmed:approval},["triggerId","actionIds","confirmed"])},
+ {name:"elettro_ar_add_to_set",description:"Elettro AR: add covers to a scan set (a group one scanner loads). Give setId for an existing set or setName to create one. Draft only; publishing a set is done in Elettro OS.",permission:"ar:write",action:"ar_add_to_set",
+  inputSchema:schema({setId:{type:"string"},setName:{type:"string"},triggerIds:{type:"array",items:{type:"string"},minItems:1,maxItems:50},confirmed:approval},["triggerIds","confirmed"])},
+ {name:"elettro_ar_set_qr",description:"Elettro AR: create a QR code or repoint an existing one (qrId) to a scanner (setId), one experience (actionId) or a web link (https url). Changing an existing code takes effect immediately for everyone who scans the printed code.",permission:"ar:write",action:"ar_set_qr",
+  inputSchema:schema({qrId:{type:"string"},name:{type:"string"},slug:{type:"string"},mode:{type:"string",enum:["scanner","experience","url"]},setId:{type:"string"},actionId:{type:"string"},url:{type:"string"},confirmed:approval},["mode","confirmed"])}
 ];
 export function toolsForClient(identity:McpIdentity){
  return MCP_TOOLS.filter(t=>(!t.claudeOnly||["claude_code","claude_web"].includes(identity.clientId))&&identity.permissions.includes(t.permission)&&(!t.chatgptOnly||(identity.clientId==="chatgpt_oauth"||identity.clientId==="chatgpt_private"))).map(t=>{
-  const readOnly=t.permission==="assets:read"||t.permission==="folders:read";
+  const readOnly=t.permission==="assets:read"||t.permission==="folders:read"||t.permission==="ar:read";
   return {
    name:t.name,description:t.description,
    ...(t._meta?{_meta:t._meta}:{}),
