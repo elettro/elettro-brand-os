@@ -150,8 +150,8 @@ test("the tick claims Reels and feed posts per network, publishes, and reports e
   };
   const tick = await publishingTick({ callApi, publish });
   assert.deepEqual(sent.filter((s) => s.action === "claim-due-posts"),
-    [{ action: "claim-due-posts", destination: "instagram", placements: ["reel", "post", "story"], limit: 1 },
-     { action: "claim-due-posts", destination: "facebook", placements: ["reel", "post", "story"], limit: 1 }]);
+    [{ action: "claim-due-posts", destination: "instagram", placements: ["reel", "post", "story", "carousel"], limit: 1 },
+     { action: "claim-due-posts", destination: "facebook", placements: ["reel", "post", "story", "carousel"], limit: 1 }]);
   assert.deepEqual(sent.filter((s) => s.action === "finish-post"), [
     { action: "finish-post", id: "instagram-1", externalPostId: "m1", externalUrl: "https://www.instagram.com/p/x/" },
     { action: "finish-post", id: "facebook-1", error: "Meta Facebook photo failed: (#200) permission denied" }
@@ -253,4 +253,68 @@ test("every Instagram post carries the AI label unless the request opts out", as
   sent.length = 0;
   await publishInstagram(record, { ...req, aiGenerated: false }, deps);
   assert.ok(!("is_ai_generated" in sent[0]));
+});
+
+const slides = (n, ext = "jpg") => Array.from({ length: n }, (_, i) => ({ assetId: `a${i}`, dropboxPath: `${ROOT}img${i}.${ext}` }));
+const carousel = (over = {}) => post({ placement: "carousel", dropboxPath: ROOT + "img0.jpg", slides: slides(3), ...over });
+
+test("a carousel needs 2-10 safe image slides for its network", () => {
+  const req = publishRequest("instagram", carousel());
+  assert.equal(req.placement, "carousel");
+  assert.deepEqual(req.slidePaths, [ROOT + "img0.jpg", ROOT + "img1.jpg", ROOT + "img2.jpg"]);
+  assert.equal(req.caption, "Live at the Dirty Bird\n\n#reggae #stashbox");
+  assert.equal(publishRequest("facebook", carousel({ slides: slides(10, "png") })).slidePaths.length, 10);
+  assert.throws(() => publishRequest("instagram", carousel({ slides: slides(1) })), /needs 2-10 images; this one has 1/);
+  assert.throws(() => publishRequest("instagram", carousel({ slides: slides(11) })), /needs 2-10 images/);
+  assert.throws(() => publishRequest("instagram", carousel({ slides: [] })), /this one has 0/, "a vanished slide leaves no shorter carousel");
+  assert.throws(() => publishRequest("instagram", carousel({ slides: slides(3, "png") })), /JPEG/);
+  assert.throws(() => publishRequest("facebook", carousel({ slides: slides(3, "mp4") })), /\.jpg or \.png image/);
+  assert.throws(() => publishRequest("facebook", carousel({ slides: [...slides(2), { dropboxPath: "/elsewhere/x.jpg" }] })), /must be inside/);
+  assert.throws(() => publishRequest("facebook", carousel({ caption: "" })), /no caption/);
+});
+
+test("an Instagram carousel makes a child container per image, one CAROUSEL container, waits on each, then publishes", async () => {
+  const calls = [];
+  let n = 0;
+  const call = async (method, path, params, what) => {
+    calls.push({ method, path, params, what });
+    if (path === "222/media") return { id: `c${++n}` };
+    if (/^c\d$/.test(path)) return { status_code: "FINISHED" };
+    if (path === "222/media_publish") return { id: "m1" };
+    return { permalink: "https://www.instagram.com/p/xyz/" };
+  };
+  const out = await publishInstagram(record, publishRequest("instagram", carousel()), { call, link: async (p) => "https://dl/" + p.split("/").pop(), wait: async () => {} });
+  assert.deepEqual(out, { postId: "m1", permalink: "https://www.instagram.com/p/xyz/" });
+  const creates = calls.filter((c) => c.path === "222/media");
+  assert.deepEqual(creates.slice(0, 3).map((c) => c.params), [0, 1, 2].map((i) => ({ image_url: `https://dl/img${i}.jpg`, is_carousel_item: "true" })));
+  assert.deepEqual(creates[3].params, { media_type: "CAROUSEL", children: "c1,c2,c3", caption: "Live at the Dirty Bird\n\n#reggae #stashbox", is_ai_generated: "true" });
+  assert.deepEqual(calls.filter((c) => c.path === "222/media_publish").map((c) => c.params), [{ creation_id: "c4" }]);
+  assert.deepEqual(calls.filter((c) => /^c\d$/.test(c.path)).map((c) => c.path), ["c1", "c2", "c3", "c4"]);
+});
+
+test("an Instagram carousel publishes nothing when one image fails to process", async () => {
+  const calls = [];
+  let n = 0;
+  const call = async (method, path, params, what) => {
+    calls.push(path);
+    if (path === "222/media") return { id: `c${++n}` };
+    return { status_code: path === "c2" ? "ERROR" : "FINISHED", status: "bad image" };
+  };
+  await assert.rejects(publishInstagram(record, publishRequest("instagram", carousel()), { call, link: async () => "u", wait: async () => {} }), /could not process the media: bad image/);
+  assert.ok(!calls.includes("222/media_publish"));
+});
+
+test("a Facebook multi-photo post uploads each photo unpublished, then attaches them all in order", async () => {
+  const calls = [];
+  let n = 0;
+  const call = async (method, path, params, what) => {
+    calls.push({ path, params });
+    if (path === "111/photos") return { id: `ph${++n}` };
+    return { id: "111_999" };
+  };
+  const out = await publishFacebook(record, publishRequest("facebook", carousel({ channelId: "111" })), { call, link: async (p) => "https://dl/" + p.split("/").pop() });
+  assert.deepEqual(out, { postId: "111_999", permalink: "https://www.facebook.com/111_999" });
+  assert.deepEqual(calls.filter((c) => c.path === "111/photos").map((c) => c.params), [0, 1, 2].map((i) => ({ url: `https://dl/img${i}.jpg`, published: "false" })));
+  assert.deepEqual(calls.at(-1), { path: "111/feed", params: { message: "Live at the Dirty Bird\n\n#reggae #stashbox",
+    "attached_media[0]": '{"media_fbid":"ph1"}', "attached_media[1]": '{"media_fbid":"ph2"}', "attached_media[2]": '{"media_fbid":"ph3"}' } });
 });

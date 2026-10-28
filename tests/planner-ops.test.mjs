@@ -183,3 +183,32 @@ test("a week reset in Review stays empty: the tick skips it and moves on to the 
   assert.deepEqual(weekToPlan(held, { youtube: [] }), { weekStart: weekAfter, replace: false, destinations: ["youtube"] });
   assert.equal(weekToPlan(held, { youtube: [weekAfter] }), null);
 });
+
+test("claim-due-posts hands a carousel its images in slide order, and none at all if one is gone", async () => {
+  const ASSETS = [
+    { id: "a1", brandId: "b1", dropboxPath: "/r/1.jpg", filename: "1.jpg", kind: "image" },
+    { id: "a2", brandId: "b1", dropboxPath: "/r/2.jpg", filename: "2.jpg", kind: "image" },
+    { id: "a3", brandId: "other", dropboxPath: "/r/3.jpg", filename: "3.jpg", kind: "image" }
+  ];
+  const base = { placement: "carousel", brandId: "b1", assetTags: [], filename: "1.jpg" };
+  const rows = [{ ...base, id: "ok", slideIds: ["a2", "a1"] }, { ...base, id: "wrong-brand", slideIds: ["a1", "a3"] }, { ...base, id: "single", placement: "post", slideIds: null }];
+  const seen = [];
+  const client = {
+    query: async (text, params) => {
+      seen.push({ text, params });
+      if (text.includes("RETURNING sp.\"id\"")) return { rowCount: 3, rows };
+      if (text.includes('FROM "Asset" WHERE "id" = ANY')) return { rows: ASSETS };
+      if (text.includes('FROM "Brand"')) return { rows: [{ slug: "stashbox", settings: {} }] };
+      return { rowCount: 0, rows: [] };
+    },
+    end: async () => {}
+  };
+  const r = await handlePlannerOps({ action: "claim-due-posts", destination: "instagram", placements: ["carousel"] }, async () => client, json);
+  const by = Object.fromEntries(r.body.posts.map((p) => [p.id, p]));
+  assert.deepEqual(by.ok.slides.map((s) => s.assetId), ["a2", "a1"]);
+  assert.deepEqual(by["wrong-brand"].slides, [], "a slide from another brand empties the carousel so the worker fails it");
+  assert.equal(by.single.slides, undefined);
+  assert.ok(!("slideIds" in by.ok));
+  const claim = seen.find((q) => q.text.includes("RETURNING sp.\"id\""));
+  assert.match(claim.text, /'carousel' = ANY\(\$3::text\[\]\)/, "carousels are claimed only when a worker names them");
+});
