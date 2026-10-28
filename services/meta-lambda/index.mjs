@@ -5,7 +5,9 @@ import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
 // graph.facebook.com) and is only invoked directly through IAM: no HTTP route points at it. Way in:
 //   an EventBridge schedule (every 15 min)   the tick: for Instagram, then Facebook, claim the next due
 //                                             approved planner post (claim-due-posts) -> publish -> finish-post
-// Reels, feed posts and Stories (placement "reel" / "post" / "story") are claimed. Stories are
+// Reels, feed posts, Stories and carousels (placement "reel" / "post" / "story" / "carousel") are claimed.
+// An Instagram carousel is child image containers + a CAROUSEL container; a Facebook one is unpublished photos
+// attached to one Page post. Stories are
 // published without a caption (neither network's Story API takes one).
 // Page tokens come from "Connect Meta" (elettro-brand-os-dev/meta/<pageId>) and don't expire, so
 // there is no renewal step. Media goes up by URL: a 4-hour Dropbox temporary link Meta downloads itself.
@@ -21,7 +23,9 @@ const GRAPH = `https://graph.facebook.com/${GRAPH_VERSION}`;
 const REEL_UPLOAD = `https://rupload.facebook.com/video-upload/${GRAPH_VERSION}`;
 const BRANDS_ROOT = "/1---elettro-brand-os/brands/";
 const DESTINATIONS = ["instagram", "facebook"];
-const PLACEMENTS = ["reel", "post", "story"];
+const PLACEMENTS = ["reel", "post", "story", "carousel"];
+// Images per carousel each network accepts here (publishing-formats.mjs holds the same limits for planning).
+const CAROUSEL_SLIDES = { instagram: { min: 2, max: 10 }, facebook: { min: 2, max: 10 } };
 // One post per network per tick keeps a backlog from bursting onto the feed.
 const POSTS_PER_TICK = 1;
 // Reels take a while to process; poll every 5 s for up to 5 minutes (Lambda timeout 15 min).
@@ -50,10 +54,27 @@ export function captionFor(destination, post) {
 export function publishRequest(destination, post) {
   const placement = String(post.placement || "");
   if (!PLACEMENTS.includes(placement)) throw new Error(`${destination} ${placement || "unknown"} posts aren't published automatically yet`);
-  const dropboxPath = String(post.dropboxPath || "").replace(/\\/g, "/");
-  if (!dropboxPath.toLowerCase().startsWith(BRANDS_ROOT) || dropboxPath.split("/").some((p) => p === ".." || p === ".")) {
-    throw new Error(`dropboxPath must be inside ${BRANDS_ROOT}`);
+  const safePath = (raw) => {
+    const path = String(raw || "").replace(/\\/g, "/");
+    if (!path.toLowerCase().startsWith(BRANDS_ROOT) || path.split("/").some((p) => p === ".." || p === ".")) {
+      throw new Error(`dropboxPath must be inside ${BRANDS_ROOT}`);
+    }
+    return path;
+  };
+  if (placement === "carousel") {
+    const limits = CAROUSEL_SLIDES[destination];
+    const slides = Array.isArray(post.slides) ? post.slides : [];
+    if (!limits || slides.length < limits.min || slides.length > limits.max) {
+      throw new Error(`a ${destination} carousel needs ${limits?.min ?? 2}-${limits?.max ?? 10} images; this one has ${slides.length}`);
+    }
+    const slidePaths = slides.map((slide) => safePath(slide.dropboxPath));
+    for (const path of slidePaths) {
+      if (!/\.(jpe?g|png)$/i.test(path)) throw new Error("every carousel slide must be a .jpg or .png image");
+      if (destination === "instagram" && !/\.jpe?g$/i.test(path)) throw new Error("Instagram carousels take JPEG photos only; pick .jpg slides");
+    }
+    return { destination, placement, kind: "image", dropboxPath: slidePaths[0], slidePaths, caption: captionFor(destination, post), channelId: String(post.channelId || "") };
   }
+  const dropboxPath = safePath(post.dropboxPath);
   const kind = /\.(mp4|mov)$/i.test(dropboxPath) ? "video" : /\.(jpe?g|png)$/i.test(dropboxPath) ? "image" : null;
   if (!kind) throw new Error("the clip must be an .mp4 or .mov video or a .jpg or .png image");
   if (placement === "reel" && kind !== "video") throw new Error(`a ${destination} Reel needs a video`);
@@ -153,6 +174,34 @@ export async function publishInstagram(record, request, deps = {}) {
   const { call = (method, path, params, what) => graph(method, path, params, record.pageAccessToken, what), link = dropboxLink,
     wait = (ms) => new Promise((r) => setTimeout(r, ms)), pollMs = POLL_MS, limitMs = POLL_LIMIT_MS } = deps;
   if (!record.instagramId) throw new Error("No Instagram account is linked to this Page");
+  const waitFinished = async (containerId) => {
+    for (let waited = 0; ; waited += pollMs) {
+      const state = await call("GET", containerId, { fields: "status_code,status" }, "Instagram status");
+      if (state.status_code === "FINISHED") return;
+      if (state.status_code === "ERROR" || state.status_code === "EXPIRED") {
+        throw new Error(`Instagram could not process the media: ${state.status || state.status_code}`);
+      }
+      if (waited >= limitMs) throw new Error(`Instagram was still processing the media after ${Math.round(limitMs / 1000)} s`);
+      await wait(pollMs);
+    }
+  };
+  if (request.placement === "carousel") {
+    const children = [];
+    for (const path of request.slidePaths) {
+      const child = await call("POST", `${record.instagramId}/media`, { image_url: await link(path), is_carousel_item: "true" }, "Instagram carousel image");
+      if (!child.id) throw new Error("Instagram returned no media container for a carousel image");
+      children.push(child.id);
+    }
+    for (const id of children) await waitFinished(id);
+    const parent = await call("POST", `${record.instagramId}/media`,
+      { media_type: "CAROUSEL", children: children.join(","), caption: request.caption, ...aiLabel(request) }, "Instagram carousel");
+    if (!parent.id) throw new Error("Instagram returned no carousel container");
+    await waitFinished(parent.id);
+    const live = await call("POST", `${record.instagramId}/media_publish`, { creation_id: parent.id }, "Instagram publish");
+    if (!live.id) throw new Error("Instagram returned no post id");
+    const link2 = await call("GET", live.id, { fields: "permalink" }, "Instagram link").then((r) => r.permalink || null, () => null);
+    return { postId: live.id, permalink: link2 };
+  }
   const url = await link(request.dropboxPath);
   const media = request.kind === "image" ? { image_url: url } : { video_url: url };
   const params = request.placement === "story"
@@ -162,15 +211,7 @@ export async function publishInstagram(record, request, deps = {}) {
       : { media_type: "REELS", video_url: url, caption: request.caption, share_to_feed: "true" };
   const container = await call("POST", `${record.instagramId}/media`, { ...params, ...aiLabel(request) }, "Instagram upload");
   if (!container.id) throw new Error("Instagram returned no media container");
-  for (let waited = 0; ; waited += pollMs) {
-    const state = await call("GET", container.id, { fields: "status_code,status" }, "Instagram status");
-    if (state.status_code === "FINISHED") break;
-    if (state.status_code === "ERROR" || state.status_code === "EXPIRED") {
-      throw new Error(`Instagram could not process the media: ${state.status || state.status_code}`);
-    }
-    if (waited >= limitMs) throw new Error(`Instagram was still processing the media after ${Math.round(limitMs / 1000)} s`);
-    await wait(pollMs);
-  }
+  await waitFinished(container.id);
   const published = await call("POST", `${record.instagramId}/media_publish`, { creation_id: container.id }, "Instagram publish");
   if (!published.id) throw new Error("Instagram returned no post id");
   // The post is live at this point; a missing permalink only leaves the ledger without a link.
@@ -205,6 +246,18 @@ export async function publishFacebook(record, request, deps = {}) {
   const { call = (method, path, params, what) => graph(method, path, params, record.pageAccessToken, what), link = dropboxLink,
     upload = fetch } = deps;
   if (!record.pageId) throw new Error("No Facebook Page is connected");
+  if (request.placement === "carousel") {
+    // Photos go up unpublished, then one Page post attaches them all in order.
+    const attached = {};
+    for (const [i, path] of request.slidePaths.entries()) {
+      const photo = await call("POST", `${record.pageId}/photos`, { url: await link(path), published: "false" }, "Facebook carousel photo");
+      if (!photo.id) throw new Error("Facebook returned no photo id for a carousel image");
+      attached[`attached_media[${i}]`] = JSON.stringify({ media_fbid: photo.id });
+    }
+    const feed = await call("POST", `${record.pageId}/feed`, { message: request.caption, ...attached }, "Facebook multi-photo post");
+    if (!feed.id) throw new Error("Facebook returned no post id");
+    return { postId: feed.id, permalink: `https://www.facebook.com/${feed.id}` };
+  }
   const url = await link(request.dropboxPath);
   if (request.placement === "story") return publishFacebookStory(record, request, url, { call, upload });
   if (request.kind === "image") {

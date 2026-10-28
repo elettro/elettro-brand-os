@@ -280,7 +280,19 @@ async function claimDuePosts(event, connectDatabase, json) {
                  sp."scoreBreakdown"->>'syntheticDisclosure' AS "plannedSynthetic", sp."scoreBreakdown"->>'sector' AS "sector",
                  a."topic" AS "assetTopic", sp."scoreBreakdown"->'copy'->>'primaryLink' AS "primaryLink",
                  a."kind" AS "assetKind", sp."scoreBreakdown"->'gmb' AS "gmb", a."width" AS "assetWidth", a."height" AS "assetHeight",
-                 a."mimeType" AS "assetMime", a."fileSizeBytes" AS "assetBytes"`, [destination, limit, placements])).rows;
+                 a."mimeType" AS "assetMime", a."fileSizeBytes" AS "assetBytes",
+                 sp."scoreBreakdown"->'slideIds' AS "slideIds"`, [destination, limit, placements])).rows;
+    // A carousel's images, in slide order, by the same path a single clip is posted from.
+    const slideIds = [...new Set(posts.flatMap((p) => (Array.isArray(p.slideIds) ? p.slideIds : [])))];
+    const slideAssets = slideIds.length ? new Map((await client.query(
+      `SELECT "id", "brandId", COALESCE("sourcePath", "sourceUrl") AS "dropboxPath", "filename", "kind" FROM "Asset" WHERE "id" = ANY($1::uuid[])`, [slideIds])).rows.map((a) => [a.id, a])) : new Map();
+    for (const post of posts) {
+      if (!Array.isArray(post.slideIds)) continue;
+      post.slides = post.slideIds.map((id) => slideAssets.get(id)).filter((a) => a && a.brandId === post.brandId && a.kind === "image")
+        .map((a) => ({ assetId: a.id, dropboxPath: a.dropboxPath, filename: a.filename }));
+      // A slide that vanished (retired or wrong brand) must fail the post, not publish a shorter carousel.
+      if (post.slides.length !== post.slideIds.length) post.slides = [];
+    }
     // AI-made content must be declared to the network. Judged from the clip being posted (it may have
     // been swapped since planning) with the brand's own AI tags; the planner's flag can only add to it.
     // Language: the clip's tags, else the brand's language (SolarMeister and Neckermann Strom are German).
@@ -293,7 +305,7 @@ async function claimDuePosts(event, connectDatabase, json) {
         slug: row?.slug || null, keywords: row?.settings?.youtubeKeywords || null
       });
     }
-    const out = posts.map(({ assetTags, brandId, plannedSynthetic, sector, assetTopic, ...p }) => ({
+    const out = posts.map(({ slideIds: _slideIds, assetTags, brandId, plannedSynthetic, sector, assetTopic, ...p }) => ({
       // Pinterest picks the brand's board; one Pinterest account serves several brands.
       ...p, brand: brands.get(brandId).slug, synthetic: plannedSynthetic === "true" || isSynthetic({ tags: assetTags }, brands.get(brandId).settings),
       language: languageOf({ tags: assetTags }, brands.get(brandId).language),
