@@ -3,9 +3,9 @@
 
 export type ArAccess = { owner: boolean; brands: string[] };
 
-export type ArTrigger = { id: string; name: string; status?: string; imageKey?: string; quality?: number; target?: { luminanceKey?: string } };
+export type ArTrigger = { id: string; name: string; status?: string; imageKey?: string; quality?: number; placement?: { x: number; y: number; s: number }; target?: { luminanceKey?: string } };
 export type ArAction = { id: string; name: string; type: string; label?: string };
-export type ArRule = { triggerId: string; actionIds?: string[]; order?: number };
+export type ArRule = { id?: string; triggerId: string; actionIds?: string[]; order?: number };
 export type ArSet = { id: string; name: string; slug: string; triggerIds?: string[] };
 export type ArQr = { id: string; name: string; slug: string; mode: string; isMain?: boolean; url?: string; setId?: string; actionId?: string };
 export type ArDoc = {
@@ -82,4 +82,80 @@ export const QR_MODE_LABEL: Record<string, string> = { scanner: "Scanner", exper
 export function mainQr(doc: ArDoc): ArQr | null {
   const qrs = doc.qrs || [];
   return qrs.find((q) => q.isMain) || qrs.find((q) => q.slug === "main") || null;
+}
+
+// The address a printed code contains: the main code answers at the bare brand address, every other at /<brand>/<slug>.
+export function qrAddress(base: string, brand: string, qr: Pick<ArQr, "slug" | "isMain">): string {
+  const root = `${base.replace(/\/+$/, "")}/${brand}`;
+  return qr.isMain ? root : `${root}/${qr.slug}`;
+}
+
+// Where a code sends people, in words: the web address, the set's name, or the experience's name.
+export function qrDestination(qr: ArQr, sets: readonly ArSet[], actions: readonly ArAction[]): string {
+  if (qr.mode === "url") return qr.url || "";
+  if (qr.mode === "scanner") return `Set “${sets.find((s) => s.id === qr.setId)?.name ?? "missing set"}”`;
+  return actions.find((a) => a.id === qr.actionId)?.name ?? "missing experience";
+}
+
+// The only fields the QR routes pass on to the AR API; it validates the values itself.
+export function qrFields(body: unknown): Record<string, unknown> {
+  const b = (body && typeof body === "object" ? body : {}) as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const k of ["name", "slug", "mode", "setId", "actionId", "url"]) if (typeof b[k] === "string") out[k] = b[k];
+  if (typeof b.isMain === "boolean") out.isMain = b.isMain;
+  return out;
+}
+
+// The only fields the set routes pass on; the AR API validates the values itself.
+export function setFields(body: unknown): Record<string, unknown> {
+  const b = (body && typeof body === "object" ? body : {}) as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const k of ["name", "slug"]) if (typeof b[k] === "string") out[k] = b[k];
+  if (Array.isArray(b.triggerIds)) out.triggerIds = b.triggerIds.filter((x): x is string => typeof x === "string");
+  return out;
+}
+
+export type ReadinessItem = { ok: boolean; text: string };
+
+// A quick "before you publish" read of one set from data already on the page. The AR API runs the real checks when you publish
+// (it also confirms every file is in storage), so this only catches the common gaps early.
+export function setReadiness(doc: ArDoc, set: ArSet): { ready: boolean; items: ReadinessItem[]; qrCount: number } {
+  const triggers = doc.triggers || [], rules = doc.rules || [], actions = doc.actions || [];
+  const items: ReadinessItem[] = [];
+  const ids = set.triggerIds || [];
+  if (!ids.length) items.push({ ok: false, text: "This set has no covers yet" });
+  for (const id of ids) {
+    const t = triggers.find((x) => x.id === id);
+    if (!t) { items.push({ ok: false, text: "A cover in this set no longer exists" }); continue; }
+    const n = rules.filter((r) => r.triggerId === id).flatMap((r) => r.actionIds || []).filter((a) => actions.some((x) => x.id === a)).length;
+    if (!t.target) items.push({ ok: false, text: `${t.name}: no tracking image yet` });
+    else if (!n) items.push({ ok: false, text: `${t.name}: nothing happens when it is scanned` });
+    else items.push({ ok: true, text: `${t.name}: ready, ${n} action${n === 1 ? "" : "s"}` });
+  }
+  const qrCount = (doc.qrs || []).filter((q) => q.mode === "scanner" && q.setId === set.id).length;
+  return { ready: items.length > 0 && items.every((i) => i.ok), items, qrCount };
+}
+
+// Fields the cover and rule routes pass on; the AR API validates ranges (placement x/y within +-1, size 0.2-3).
+export function coverFields(body: unknown): Record<string, unknown> {
+  const b = (body && typeof body === "object" ? body : {}) as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  if (typeof b.name === "string") out.name = b.name;
+  const p = b.placement as Record<string, unknown> | undefined;
+  if (p && typeof p === "object" && [p.x, p.y, p.s].every((n) => typeof n === "number" && Number.isFinite(n))) out.placement = { x: p.x, y: p.y, s: p.s };
+  return out;
+}
+
+export function ruleFields(body: unknown): Record<string, unknown> {
+  const b = (body && typeof body === "object" ? body : {}) as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  if (typeof b.triggerId === "string") out.triggerId = b.triggerId;
+  if (Array.isArray(b.actionIds)) out.actionIds = b.actionIds.filter((x): x is string => typeof x === "string");
+  return out;
+}
+
+// Public scanner addresses that load a set holding this cover (a phone test of how it lines up).
+export function coverScanLinks(doc: ArDoc, brand: string, coverId: string, base: string): string[] {
+  const setIds = (doc.sets || []).filter((s) => (s.triggerIds || []).includes(coverId)).map((s) => s.id);
+  return (doc.qrs || []).filter((q) => q.mode === "scanner" && q.setId && setIds.includes(q.setId)).map((q) => qrAddress(base, brand, q));
 }
