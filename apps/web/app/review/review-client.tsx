@@ -184,20 +184,8 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
     }
   }
 
-  return <div className="review">
-    <section className="card review-settings">
-      <div>
-        <div className="eyebrow">Posts per day</div>
-        {networkGroups.map((group) => {
-          const first = group[0];
-          const week = groupWeekly(group);
-          return <div key={first.key} className="review-network">
-            <div>
-              <b>{NETWORK[first.format.destination] || first.format.destination}</b>{" "}
-              {first.account ? <b>{first.account.accountName}</b> : <span className="muted">{first.format.status === "integration" ? first.format.note : "not connected"}</span>}
-              {first.account && <span className={week > maxWeek ? "review-warn" : "muted"}> {totals(week)}{week > maxWeek ? ` · over ${maxWeek / 7} a day` : ""}</span>}
-            </div>
-            {group.map((s) => {
+  // One format's posts-per-day row (and, for carousels, its images-per-carousel min/max).
+  const renderRow = (s: Slot) => {
               const editable = Boolean(s.account) && s.format.status !== "integration";
               const wk = Boolean(perWeek[s.key]);
               const value = weeklyOf(s);
@@ -231,7 +219,39 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
                   <span className="muted">{NETWORK[s.format.destination]} allows {s.format.slides.min}-{s.format.slides.max} · best {s.format.slides.recommended[0]}-{s.format.slides.recommended[1]}</span>
                 </span>}
               </label>;
-            })}
+  };
+
+  // Carousels get their own block at the top of the settings: one row per network, same boxes as every format.
+  const carouselSlots = slots.filter((s) => s.format.placement === "carousel");
+
+  return <div className="review">
+    <section className="card review-settings">
+      <div>
+        {carouselSlots.length > 0 && <>
+          <div className="eyebrow">Carousels</div>
+          <p className="muted" style={{ margin: "0 0 8px" }}>
+            Each carousel is built from one pillar's images. Set how many a day, and the fewest and most images each one holds;
+            the network's own limits are shown and can't be passed.
+          </p>
+          {carouselSlots.map((s) => <div key={s.key} className="review-network">
+            <div>
+              <b>{NETWORK[s.format.destination] || s.format.destination}</b>{" "}
+              {s.account ? <b>{s.account.accountName}</b> : <span className="muted">not connected</span>}
+            </div>
+            {renderRow(s)}
+          </div>)}
+        </>}
+        <div className="eyebrow">Posts per day</div>
+        {networkGroups.map((group) => {
+          const first = group[0];
+          const week = groupWeekly(group);
+          return <div key={first.key} className="review-network">
+            <div>
+              <b>{NETWORK[first.format.destination] || first.format.destination}</b>{" "}
+              {first.account ? <b>{first.account.accountName}</b> : <span className="muted">{first.format.status === "integration" ? first.format.note : "not connected"}</span>}
+              {first.account && <span className={week > maxWeek ? "review-warn" : "muted"}> {totals(week)}{week > maxWeek ? ` · over ${maxWeek / 7} a day` : ""}</span>}
+            </div>
+            {group.filter((s) => s.format.placement !== "carousel").map(renderRow)}
           </div>;
         })}
         <div className="review-network">
