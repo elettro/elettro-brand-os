@@ -201,6 +201,8 @@ export function createApp({ store, files, cdn, config }) {
     if (problems.length) throw Object.assign(new HttpError(422, "set is not ready to publish"), { problems });
     const key = setManifestKey(brand, set.slug);
     await files.putJson(key, manifest);
+    // Covers in a published set are live (the OS shows Draft until then).
+    for (const t of usedTriggers.filter((t) => t.status !== "live")) await store.put(brand, `TRIGGER#${t.id}`, { ...t, status: "live", updatedAt: now().toISOString() });
     await republishIndex(brand);
     await cdn.invalidate([`/${key}`]);
     return { ok: true, manifestUrl: `${baseUrl}/${key}`, triggers: manifest.triggers.length };

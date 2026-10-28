@@ -1080,3 +1080,8 @@ code {
 .ar-checks { list-style: none; padding: 0; margin: 0 0 12px; display: grid; gap: 4px; }
 .ar-checks li.ok { color: var(--success); }
 .ar-checks li.bad { color: var(--warn); }
+
+/* AR cover editor (/ar/cover/[id]) */
+.ar-cover-layout { margin-top: 18px; display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 900px) { .ar-cover-layout { grid-template-columns: 1fr; } }
+.ar-edit input[type="range"] { width: 100%; }

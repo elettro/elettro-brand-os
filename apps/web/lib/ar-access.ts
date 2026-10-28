@@ -3,9 +3,9 @@
 
 export type ArAccess = { owner: boolean; brands: string[] };
 
-export type ArTrigger = { id: string; name: string; status?: string; imageKey?: string; quality?: number; target?: { luminanceKey?: string } };
+export type ArTrigger = { id: string; name: string; status?: string; imageKey?: string; quality?: number; placement?: { x: number; y: number; s: number }; target?: { luminanceKey?: string } };
 export type ArAction = { id: string; name: string; type: string; label?: string };
-export type ArRule = { triggerId: string; actionIds?: string[]; order?: number };
+export type ArRule = { id?: string; triggerId: string; actionIds?: string[]; order?: number };
 export type ArSet = { id: string; name: string; slug: string; triggerIds?: string[] };
 export type ArQr = { id: string; name: string; slug: string; mode: string; isMain?: boolean; url?: string; setId?: string; actionId?: string };
 export type ArDoc = {
@@ -134,4 +134,28 @@ export function setReadiness(doc: ArDoc, set: ArSet): { ready: boolean; items: R
   }
   const qrCount = (doc.qrs || []).filter((q) => q.mode === "scanner" && q.setId === set.id).length;
   return { ready: items.length > 0 && items.every((i) => i.ok), items, qrCount };
+}
+
+// Fields the cover and rule routes pass on; the AR API validates ranges (placement x/y within +-1, size 0.2-3).
+export function coverFields(body: unknown): Record<string, unknown> {
+  const b = (body && typeof body === "object" ? body : {}) as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  if (typeof b.name === "string") out.name = b.name;
+  const p = b.placement as Record<string, unknown> | undefined;
+  if (p && typeof p === "object" && [p.x, p.y, p.s].every((n) => typeof n === "number" && Number.isFinite(n))) out.placement = { x: p.x, y: p.y, s: p.s };
+  return out;
+}
+
+export function ruleFields(body: unknown): Record<string, unknown> {
+  const b = (body && typeof body === "object" ? body : {}) as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  if (typeof b.triggerId === "string") out.triggerId = b.triggerId;
+  if (Array.isArray(b.actionIds)) out.actionIds = b.actionIds.filter((x): x is string => typeof x === "string");
+  return out;
+}
+
+// Public scanner addresses that load a set holding this cover (a phone test of how it lines up).
+export function coverScanLinks(doc: ArDoc, brand: string, coverId: string, base: string): string[] {
+  const setIds = (doc.sets || []).filter((s) => (s.triggerIds || []).includes(coverId)).map((s) => s.id);
+  return (doc.qrs || []).filter((q) => q.mode === "scanner" && q.setId && setIds.includes(q.setId)).map((q) => qrAddress(base, brand, q));
 }

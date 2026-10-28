@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { arBrandsFor, canToggleAr, experienceCards, mainQr, pickBrand, publicUrl, qualityBars, qrAddress, qrDestination, qrFields, setFields, setReadiness } from "../apps/web/lib/ar-access.ts";
+import { arBrandsFor, canToggleAr, experienceCards, mainQr, pickBrand, publicUrl, qualityBars, qrAddress, qrDestination, qrFields, setFields, setReadiness, coverFields, ruleFields, coverScanLinks } from "../apps/web/lib/ar-access.ts";
 
 const ALL = ["solarmeister", "stashbox", "neckermann-strom", "elettro"];
 const OWNER = { owner: true, brands: [] };
@@ -122,4 +122,21 @@ test("setReadiness names each gap and is ready only when every cover is", () => 
   assert.match(bad.items[3].text, /no longer exists/);
   assert.equal(bad.qrCount, 0);
   assert.equal(setReadiness(doc, { id: "e", name: "E", slug: "e", triggerIds: [] }).ready, false);
+});
+
+test("coverFields and ruleFields pass only what the routes expect", () => {
+  assert.deepEqual(coverFields({ brand: "x", name: "Dirty Bird", placement: { x: 0.01, y: -0.02, s: 1.1, extra: 1 }, evil: 1 }), { name: "Dirty Bird", placement: { x: 0.01, y: -0.02, s: 1.1 } });
+  assert.deepEqual(coverFields({ placement: { x: "a", y: 0, s: 1 } }), {}); // not numbers
+  assert.deepEqual(coverFields({ placement: { x: NaN, y: 0, s: 1 } }), {});
+  assert.deepEqual(ruleFields({ triggerId: "t1", actionIds: ["a", 3, "b"], x: 1 }), { triggerId: "t1", actionIds: ["a", "b"] });
+  assert.deepEqual(ruleFields(undefined), {});
+});
+
+test("coverScanLinks lists the public scanner addresses that load a set holding the cover", () => {
+  const doc = {
+    sets: [{ id: "s1", name: "A", slug: "a", triggerIds: ["t1"] }, { id: "s2", name: "B", slug: "b", triggerIds: ["t2"] }],
+    qrs: [{ id: "q1", name: "Main", slug: "main", mode: "scanner", setId: "s1", isMain: true }, { id: "q2", name: "Other", slug: "other", mode: "scanner", setId: "s2" }, { id: "q3", name: "Web", slug: "web", mode: "url", url: "https://x.com" }]
+  };
+  assert.deepEqual(coverScanLinks(doc, "stashbox", "t1", "https://ar.elettro.com"), ["https://ar.elettro.com/stashbox"]);
+  assert.deepEqual(coverScanLinks(doc, "stashbox", "t9", "https://ar.elettro.com"), []);
 });
