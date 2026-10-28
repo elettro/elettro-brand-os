@@ -28,7 +28,7 @@ test("every carousel network has hard limits and a recommended range inside them
     const [lo, hi] = f.slides.recommended;
     assert.ok(f.slides.min >= 2 && f.slides.min <= lo && lo <= hi && hi <= f.slides.max, `${f.destination} recommended range`);
     assert.equal(isPlannable(f), true);
-    assert.equal(f.status, "planning", "no carousel publisher exists yet");
+    assert.equal(f.status, f.destination === "tiktok" ? "review" : "planning", "a carousel goes live only after it publishes once on schedule");
     assert.deepEqual(f.rule.kinds, ["image"]);
   }
   assert.equal(slidesOf("pinterest", "carousel").max, 5);

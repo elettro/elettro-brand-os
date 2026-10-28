@@ -1,5 +1,6 @@
 import { SecretsManagerClient, GetSecretValueCommand, ListSecretsCommand, PutSecretValueCommand } from "@aws-sdk/client-secrets-manager";
 import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 
 // TikTok worker for Elettro OS. Runs outside the VPC (it needs open.tiktokapis.com) and is only
 // invoked directly through IAM: no HTTP route points at it. Ways in:
@@ -16,6 +17,10 @@ import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
 //                                             next Connect shows TikTok's consent screen again
 //   { action: "creator-info", brand }         the account's name, avatar and allowed settings,
 //                                             fresh from TikTok, for the Review page's TikTok card
+// A photo carousel (placement "carousel", 2-35 images) goes through /post/publish/content/init/. TikTok takes photos
+// only by URL (PULL_FROM_URL) and only from a domain/URL prefix verified in the TikTok developer portal, so each slide
+// is first copied from Dropbox to the S3 bucket behind that domain (TIKTOK_PHOTO_BUCKET / TIKTOK_PHOTO_BASE_URL;
+// scripts/tiktok-photo-host-setup.sh). Without those settings a carousel post fails with a clear message.
 // TikTok access tokens last 24 hours; the 365-day refresh token renews them, and each refresh
 // can hand back a new refresh token, so the whole token record is rewritten every time.
 
@@ -38,6 +43,16 @@ const RENEW_WITHIN_MS = 12 * 3600 * 1000;
 const PRIVACY_OVERRIDE = process.env.TIKTOK_PRIVACY || "";
 const BRANDS_ROOT = "/1---elettro-brand-os/brands/";
 const MB = 1024 * 1024;
+// Photo carousels: image host (a TikTok-verified domain in front of an S3 bucket), image count and text limits.
+const PHOTO_BUCKET = process.env.TIKTOK_PHOTO_BUCKET || "";
+const PHOTO_BASE_URL = (process.env.TIKTOK_PHOTO_BASE_URL || "").replace(/\/+$/, "");
+const PHOTO_MIN = 2;
+const PHOTO_MAX = 35;
+const PHOTO_TITLE_MAX = 90;
+const PHOTO_DESCRIPTION_MAX = 4000;
+const PHOTO_TYPES = { jpg: "image/jpeg", jpeg: "image/jpeg", webp: "image/webp" };
+// The planner placements this worker publishes.
+const PLACEMENTS = ["video", "carousel"];
 // TikTok chunks: 5-64 MB each, the last one may run up to 128 MB; videos up to 64 MB go in one piece.
 const CHUNK = 10 * MB;
 
@@ -331,6 +346,74 @@ async function postVideo(request) {
   };
 }
 
+// A planner carousel as a photo-post request: 2-35 safe JPEG/WebP slides, caption plus hashtags as the description.
+export function photoRequestFromPost(post, mode) {
+  const slides = Array.isArray(post.slides) ? post.slides : [];
+  if (slides.length < PHOTO_MIN || slides.length > PHOTO_MAX) {
+    throw new Error(`a TikTok photo carousel needs ${PHOTO_MIN}-${PHOTO_MAX} images; this one has ${slides.length}`);
+  }
+  const slidePaths = slides.map((slide) => {
+    const path = String(slide.dropboxPath || "").replace(/\\/g, "/");
+    if (!path.toLowerCase().startsWith(BRANDS_ROOT) || path.split("/").some((part) => part === ".." || part === ".")) throw new Error(`dropboxPath must be inside ${BRANDS_ROOT}`);
+    if (!PHOTO_TYPES[path.split(".").pop().toLowerCase()]) throw new Error("every TikTok carousel slide must be a .jpg, .jpeg or .webp image");
+    return path;
+  });
+  if (!["draft", "direct"].includes(mode)) throw new Error('mode must be "draft" or "direct"');
+  const tags = (post.hashtags || []).map((h) => String(h).replace(/^#/, "").trim()).filter(Boolean);
+  const description = [post.caption, tags.map((t) => `#${t}`).join(" ")].map((part) => String(part || "").trim()).filter(Boolean).join("\n\n").slice(0, PHOTO_DESCRIPTION_MAX);
+  if (!description) throw new Error("the planned post has no caption");
+  const title = String(post.title || description.split("\n")[0]).trim().slice(0, PHOTO_TITLE_MAX);
+  return { brand: "planner", slidePaths, title, description, mode, openId: String(post.channelId || ""), settings: post.tiktok || null, aigc: post.synthetic === true, postId: String(post.id || "") };
+}
+
+// The /post/publish/content/init/ body: a draft needs only the text, a direct post also the creator's choices.
+export function photoPayload(request, urls, creator) {
+  const source_info = { source: "PULL_FROM_URL", photo_cover_index: 0, photo_images: urls };
+  const post_info = { title: request.title, description: request.description };
+  if (request.mode !== "direct") return { media_type: "PHOTO", post_mode: "MEDIA_UPLOAD", post_info, source_info };
+  const settings = postInfo(request.settings, request.title);
+  if (!(creator?.privacy_level_options || []).includes(settings.privacy_level)) {
+    throw new Error(`TikTok does not allow ${settings.privacy_level} here (options: ${(creator?.privacy_level_options || []).join(", ")})`);
+  }
+  // Interactions the creator turned off in the TikTok app stay off. Photo posts have no duet or stitch.
+  return {
+    media_type: "PHOTO", post_mode: "DIRECT_POST", source_info,
+    post_info: {
+      ...post_info, privacy_level: settings.privacy_level, disable_comment: settings.disable_comment || creator?.comment_disabled === true,
+      auto_add_music: false, brand_organic_toggle: settings.brand_organic_toggle, brand_content_toggle: settings.brand_content_toggle
+    },
+    ...(request.aigc === true ? { is_aigc: true } : {})
+  };
+}
+
+let s3;
+// Copies each slide from Dropbox to the verified image host and returns the public URLs, in order.
+export async function hostImages(request, deps = {}) {
+  const { bucket = PHOTO_BUCKET, baseUrl = PHOTO_BASE_URL, link = async (path) => (await dropboxFile(path)).link,
+    get = fetch, put = (params) => (s3 ||= new S3Client({})).send(new PutObjectCommand(params)), stamp = Date.now() } = deps;
+  if (!bucket || !baseUrl) throw new Error("TikTok photo carousels need the verified image host: set TIKTOK_PHOTO_BUCKET and TIKTOK_PHOTO_BASE_URL (scripts/tiktok-photo-host-setup.sh)");
+  const urls = [];
+  for (const [i, path] of request.slidePaths.entries()) {
+    const ext = path.split(".").pop().toLowerCase();
+    const source = await get(await link(path), { signal: AbortSignal.timeout(60000) });
+    if (!source.ok) throw new Error(`Dropbox download failed (HTTP ${source.status})`);
+    const key = `tiktok/${request.postId || stamp}-${stamp}/${i + 1}.${ext === "jpeg" ? "jpg" : ext}`;
+    await put({ Bucket: bucket, Key: key, Body: Buffer.from(await source.arrayBuffer()), ContentType: PHOTO_TYPES[ext], CacheControl: "public, max-age=86400" });
+    urls.push(`${baseUrl}/${key}`);
+  }
+  return urls;
+}
+
+export async function postPhotos(request, deps = {}) {
+  const { account = () => brandAccount(request.brand, request.openId), host = (r) => hostImages(r), call = tiktok } = deps;
+  const urls = await host(request);
+  const who = await account();
+  // TikTok requires a fresh creator_info query before every direct post.
+  const creator = request.mode === "direct" ? await call("/post/publish/creator_info/query/", who.accessToken) : null;
+  const init = await call("/post/publish/content/init/", who.accessToken, photoPayload(request, urls, creator));
+  return { handle: who.username ? "@" + who.username : who.openId, mode: request.mode, images: urls.length, publishId: init.publish_id };
+}
+
 async function postStatus(brand, publishId) {
   if (!/^[A-Za-z0-9_.~-]{4,200}$/.test(String(publishId || ""))) throw new Error("publishId is required");
   const account = await brandAccount(String(brand || ""));
@@ -356,13 +439,13 @@ async function api(payload) {
 }
 
 async function publishingTick() {
-  const claimed = await api({ action: "claim-due-posts", destination: "tiktok", limit: POSTS_PER_TICK, retryStuck: true });
+  const claimed = await api({ action: "claim-due-posts", destination: "tiktok", placements: PLACEMENTS, limit: POSTS_PER_TICK, retryStuck: true });
   if (!claimed.ok) throw new Error(`claim-due-posts failed: ${claimed.error}`);
   const published = [];
   for (const post of claimed.posts) {
     let outcome;
     try {
-      const sent = await postVideo(requestFromPost(post, TICK_MODE));
+      const sent = post.placement === "carousel" ? await postPhotos(photoRequestFromPost(post, TICK_MODE)) : await postVideo(requestFromPost(post, TICK_MODE));
       // TikTok gives a publish_id at once; the public post id only exists after the creator
       // finishes a draft (or after a direct post is processed), so the ledger keeps the publish_id.
       outcome = { externalPostId: sent.publishId };
