@@ -14,7 +14,7 @@ const all={
 test("brand-only tools are exposed, without stock, deletion or publishing; Claude-only folder moves are explicit",()=>{
  const names=MCP_TOOLS.map(t=>t.name);
  assert.equal(names.length,new Set(names).size);
- assert.equal(names.length,17);
+ assert.equal(names.length,24); // 17 asset/folder tools + 7 Elettro AR tools (drafts only; none publishes)
  assert.ok(!names.some(name=>/stock|delete|publish/.test(name)));
 });
 

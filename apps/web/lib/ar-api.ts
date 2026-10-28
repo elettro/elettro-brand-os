@@ -24,8 +24,10 @@ export async function arCall<T>(path: string, init: { method?: string; body?: un
     cache: "no-store",
     signal: AbortSignal.timeout(8000)
   });
-  const data = (await response.json().catch(() => ({}))) as T & { ok?: boolean; error?: string };
-  if (!response.ok || data.ok === false) throw new Error(data.error || `AR API answered ${response.status}`);
+  const data = (await response.json().catch(() => ({}))) as T & { ok?: boolean; error?: string; problems?: string[] };
+  if (!response.ok || data.ok === false) {
+    throw Object.assign(new Error(data.error || `AR API answered ${response.status}`), { status: response.status, problems: data.problems });
+  }
   return data;
 }
 
