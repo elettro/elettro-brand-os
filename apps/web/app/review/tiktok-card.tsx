@@ -21,16 +21,13 @@ export function TiktokCard({ post, creator, creatorError, busy, onApprove, actio
   onApprove: (settings: TiktokSettings & { disclose: boolean }) => void; actionLabel?: string;
 }) {
   const saved = post.tiktok;
-  // Defaults: Everyone + all three Allow boxes on (Dean sets these on every post). A saved choice or a manual change wins.
-  const [privacyChoice, setPrivacy] = useState<string | null>(saved?.privacyLevel || null);
-  const [allowComment, setComment] = useState(saved?.allowComment ?? true);
-  const [allowDuet, setDuet] = useState(saved?.allowDuet ?? true);
-  const [allowStitch, setStitch] = useState(saved?.allowStitch ?? true);
+  const [privacyLevel, setPrivacy] = useState(saved?.privacyLevel || "");
+  const [allowComment, setComment] = useState(saved?.allowComment ?? false);
+  const [allowDuet, setDuet] = useState(saved?.allowDuet ?? false);
+  const [allowStitch, setStitch] = useState(saved?.allowStitch ?? false);
   const [disclose, setDisclose] = useState(Boolean(saved?.yourBrand || saved?.brandedContent));
   const [yourBrand, setYourBrand] = useState(saved?.yourBrand ?? false);
   const [brandedContent, setBranded] = useState(saved?.brandedContent ?? false);
-
-  const privacyLevel = privacyChoice ?? (creator?.privacyLevelOptions.includes("PUBLIC_TO_EVERYONE") ? "PUBLIC_TO_EVERYONE" : "");
 
   if (creatorError) return <p className="review-warn">TikTok account unavailable: {creatorError}</p>;
   if (!creator) return <p className="muted tiktok-card">Checking the TikTok account…</p>;
