@@ -26,10 +26,18 @@ jobs:
 
       - name: Check syntax
         run: |
-          for f in index.mjs app.mjs api-gate.mjs validate.mjs manifest.mjs adapters.mjs; do node --check "$f"; done
+          for f in index.mjs app.mjs api-gate.mjs validate.mjs manifest.mjs adapters.mjs stats.mjs compile.mjs; do node --check "$f"; done
 
       - name: Package Lambda
-        run: zip -r elettro-ar-dev-api.zip index.mjs app.mjs api-gate.mjs validate.mjs manifest.mjs adapters.mjs package.json
+        # sharp (the cover compiler) ships a native library, so install the Linux x64 build the Lambda runtime uses.
+        run: |
+          rm -rf pkg && mkdir pkg
+          cp index.mjs app.mjs api-gate.mjs validate.mjs manifest.mjs adapters.mjs stats.mjs compile.mjs pkg/
+          SHARP=$(node -p "require('./package.json').dependencies.sharp")
+          printf '{"name":"elettro-ar-dev-api","private":true,"type":"module","dependencies":{"sharp":"%s"}}' "$SHARP" > pkg/package.json
+          (cd pkg && npm install --omit=dev --os=linux --cpu=x64 --libc=glibc --no-audit --no-fund)
+          test -d pkg/node_modules/@img/sharp-linux-x64 || { echo "sharp Linux build missing"; exit 1; }
+          (cd pkg && zip -qr ../elettro-ar-dev-api.zip .)
 
       - name: Upload Lambda package
         uses: actions/upload-artifact@v4

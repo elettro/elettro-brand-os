@@ -60,7 +60,7 @@ jobs:
         run: node --test tests/youtube-upload.test.mjs tests/planner-topup.test.mjs tests/planner-ops.test.mjs tests/dashboard-stats.test.mjs
 
       - name: Test Elettro AR admin API
-        run: node --test tests/ar-api.test.mjs tests/ar-viewer.test.mjs
+        run: node --test tests/ar-api.test.mjs tests/ar-viewer.test.mjs tests/ar-compile.test.mjs
 
       - name: Test TikTok and Threads connect and token refresh
         run: node --test tests/tiktok-connect.test.mjs tests/tiktok-refresh.test.mjs tests/pinterest-connect.test.mjs tests/pinterest-worker.test.mjs tests/threads-connect.test.mjs tests/threads-refresh.test.mjs tests/meta-worker.test.mjs tests/linkedin-worker.test.mjs tests/gmb-worker.test.mjs tests/posting-window.test.mjs tests/connection-disconnect.test.mjs

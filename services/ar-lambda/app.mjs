@@ -26,7 +26,12 @@ const strip = (item) => {
 };
 const actorOf = (event) => String(event?.headers?.["x-elettro-actor"] ?? event?.headers?.["X-Elettro-Actor"] ?? "").slice(0, 120);
 
-export function createApp({ store, files, cdn, config }) {
+// The cover compiler pulls in sharp, so it loads only when a cover is actually compiled.
+const defaultCompile = async (input) => (await import("./compile.mjs")).compileTarget(input);
+
+const slugOf = (text) => String(text).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "cover";
+
+export function createApp({ store, files, cdn, config, compile = defaultCompile }) {
   const stats = createStats({ store, files, now: () => (config.now ? config.now() : new Date()) });
   const baseUrl = config.publicBaseUrl.replace(/\/$/, "");
   const now = () => (config.now ? config.now() : new Date());
@@ -175,6 +180,36 @@ export function createApp({ store, files, cdn, config }) {
     return { key, url: signed.url, method: "PUT", headers: { "content-type": req.contentType }, maxBytes: req.max, publicUrl: `${baseUrl}/${key}` };
   }
 
+  // Cover image (already uploaded with POST .../uploads, kind "image") -> tracking files + a draft trigger that can scan.
+  async function compileTrigger(brand, body, event) {
+    const d = await load(brand);
+    requireEnabled(d);
+    const name = v.text(body.name, "name");
+    if (typeof body.imageKey !== "string" || !body.imageKey) throw new HttpError(400, "imageKey is required (upload the cover first)");
+    ownBrandKey(brand, body.imageKey);
+    const head = await files.head(body.imageKey);
+    if (!head) throw new HttpError(404, "that cover was never uploaded");
+    if (head.size > v.LIMITS.imageBytes) throw new HttpError(413, "that cover is too large");
+    let crop;
+    if (body.crop != null) {
+      const c = body.crop;
+      crop = { left: Number(c?.left), top: Number(c?.top), width: Number(c?.width), height: Number(c?.height) };
+    }
+    const targetName = `${slugOf(name)}-${newId().slice(0, 6)}`;
+    const result = await compile({ buffer: await files.getBuffer(body.imageKey), name: targetName, crop });
+    const base = `${brand}/targets/${targetName}`;
+    await Promise.all([
+      files.putBuffer(`${base}_luminance.jpg`, result.files.luminance, "image/jpeg"),
+      files.putBuffer(`${base}_thumbnail.jpg`, result.files.thumbnail, "image/jpeg"),
+      files.putBuffer(`${base}_cropped.jpg`, result.files.cropped, "image/jpeg")
+    ]);
+    const item = await create(brand, "triggers", {
+      name, status: "draft", imageKey: body.imageKey, placement: body.placement,
+      target: { name: targetName, luminanceKey: `${base}_luminance.jpg`, json: result.json }
+    }, event);
+    return { item, crop: result.crop, source: result.source };
+  }
+
   async function publishSet(brand, setId) {
     const d = await load(brand);
     requireEnabled(d);
@@ -250,6 +285,8 @@ export function createApp({ store, files, cdn, config }) {
       if (rest[0] === "uploads" && method === "POST") return json(200, { ok: true, ...(await upload(brand, body)) });
 
       if (rest[0] === "sets" && rest[2] === "publish" && method === "POST") return json(200, await publishSet(brand, rest[1]));
+
+      if (rest[0] === "triggers" && rest[1] === "compile" && rest.length === 2 && method === "POST") return json(201, { ok: true, ...(await compileTrigger(brand, body, event)) });
 
       if (COLLECTIONS[rest[0]]) {
         const coll = rest[0];
