@@ -9,6 +9,8 @@ import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
 // author urn:li:person:<id>. A post is a photo or a video with its caption; images go up through the
 // Images API, videos through the Videos API in 4 MB parts that are read from Dropbox one at a time,
 // so a large video never has to fit in memory. Company Pages join once Community Management is approved.
+// A carousel (placement "carousel", 2-20 images) is a multi-image post: each image goes up through the Images API
+// and the post lists them in order; the planner's claim-due-posts only hands carousels to a worker that asks.
 // Member tokens last 60 days and LinkedIn issues no refresh token, so there is no renewal step: when
 // the login expires the tick leaves approved posts alone until Dean reconnects (the Connections page
 // counts the days down), instead of failing every post that comes due in the gap.
@@ -25,6 +27,11 @@ const API_VERSION = process.env.LINKEDIN_API_VERSION || "202608";
 const BRANDS_ROOT = "/1---elettro-brand-os/brands/";
 const COMMENTARY_MAX = 3000;
 const MAX_HASHTAGS = 3;
+// Images per multi-image post.
+const CAROUSEL_MIN = 2;
+const CAROUSEL_MAX = 20;
+// The planner placements this worker publishes.
+const PLACEMENTS = ["post", "carousel"];
 // One post per tick keeps a backlog from bursting onto the feed.
 const POSTS_PER_TICK = 1;
 // Video processing: poll every 5 s for up to 8 minutes (Lambda timeout 15 min).
@@ -54,10 +61,26 @@ export function commentaryFor(post) {
 
 // Validates a claimed post, or throws with a readable reason.
 export function publishRequest(post) {
-  const dropboxPath = String(post.dropboxPath || "").replace(/\\/g, "/");
-  if (!dropboxPath.toLowerCase().startsWith(BRANDS_ROOT) || dropboxPath.split("/").some((p) => p === ".." || p === ".")) {
-    throw new Error(`dropboxPath must be inside ${BRANDS_ROOT}`);
+  const safePath = (raw) => {
+    const path = String(raw || "").replace(/\\/g, "/");
+    if (!path.toLowerCase().startsWith(BRANDS_ROOT) || path.split("/").some((p) => p === ".." || p === ".")) {
+      throw new Error(`dropboxPath must be inside ${BRANDS_ROOT}`);
+    }
+    return path;
+  };
+  if (post.placement === "carousel") {
+    const slides = Array.isArray(post.slides) ? post.slides : [];
+    if (slides.length < CAROUSEL_MIN || slides.length > CAROUSEL_MAX) {
+      throw new Error(`a LinkedIn multi-image post needs ${CAROUSEL_MIN}-${CAROUSEL_MAX} images; this one has ${slides.length}`);
+    }
+    const slidePaths = slides.map((slide) => safePath(slide.dropboxPath));
+    for (const path of slidePaths) if (!/\.(jpe?g|png)$/i.test(path)) throw new Error("every carousel slide must be a .jpg or .png image");
+    const channelId = String(post.channelId || "");
+    if (!/^urn:li:person:[A-Za-z0-9_-]{4,64}$/.test(channelId)) throw new Error("the post has no LinkedIn member id");
+    const title = String(post.title || post.assetTitle || "").trim().slice(0, 200);
+    return { kind: "carousel", dropboxPath: slidePaths[0], slidePaths, channelId, commentary: commentaryFor(post), title, altText: (title || String(post.assetTitle || "")).slice(0, 1000) };
   }
+  const dropboxPath = safePath(post.dropboxPath);
   const kind = /\.(mp4|mov)$/i.test(dropboxPath) ? "video" : /\.(jpe?g|png|gif)$/i.test(dropboxPath) ? "image" : null;
   if (!kind) throw new Error("the clip must be an .mp4 or .mov video or a .jpg, .png or .gif image");
   const channelId = String(post.channelId || "");
@@ -219,6 +242,25 @@ async function uploadVideo(token, request, deps) {
 export async function publish(record, post, deps = {}) {
   const { call = (method, path, body, what) => linkedin(record.accessToken, method, path, body, what), upload } = deps;
   const request = publishRequest(post);
+  if (request.kind === "carousel") {
+    // One upload per image, in order; any failure stops before the post is created.
+    const images = [];
+    for (const path of request.slidePaths) {
+      images.push({ id: await (upload?.image || uploadImage)(record, { ...request, kind: "image", dropboxPath: path }, deps), ...(request.altText ? { altText: request.altText } : {}) });
+    }
+    const made = await call("POST", "/posts", {
+      author: request.channelId,
+      commentary: request.commentary,
+      visibility: "PUBLIC",
+      distribution: { feedDistribution: "MAIN_FEED", targetEntities: [], thirdPartyDistributionChannels: [] },
+      content: { multiImage: { images } },
+      lifecycleState: "PUBLISHED",
+      isReshareDisabledByAuthor: false
+    }, "multi-image post");
+    const postUrn = made.headers?.get?.("x-restli-id") || "";
+    if (!postUrn) throw new Error("LinkedIn returned no post id");
+    return { postId: postUrn, permalink: `https://www.linkedin.com/feed/update/${postUrn}/` };
+  }
   const mediaId = request.kind === "video" ? await (upload?.video || uploadVideo)(record, request, deps) : await (upload?.image || uploadImage)(record, request, deps);
   const created = await call("POST", "/posts", {
     author: request.channelId,
@@ -241,7 +283,7 @@ export async function publishingTick(deps = {}) {
     console.error("LinkedIn login missing or expired; reconnect it on /connections. Approved posts are waiting.");
     return { missed: 0, stuck: 0, published: [], skipped: "No valid LinkedIn login; reconnect it on /connections" };
   }
-  const claimed = await callApi({ action: "claim-due-posts", destination: "linkedin", limit: POSTS_PER_TICK });
+  const claimed = await callApi({ action: "claim-due-posts", destination: "linkedin", placements: PLACEMENTS, limit: POSTS_PER_TICK });
   if (!claimed.ok) throw new Error(`claim-due-posts failed: ${claimed.error}`);
   const published = [];
   for (const post of claimed.posts) {

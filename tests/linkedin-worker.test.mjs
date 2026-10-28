@@ -134,7 +134,7 @@ test("the tick claims one LinkedIn post, publishes it and records the outcome", 
   const calls = [];
   const callApi = async (payload) => { calls.push(payload); return payload.action === "claim-due-posts" ? { ok: true, missed: 0, stuck: 0, posts: [post()] } : { ok: true }; };
   const tick = await publishingTick({ callApi, loginOk: async () => true, publishOne: async () => ({ postId: "urn:li:share:1", permalink: "https://www.linkedin.com/feed/update/urn:li:share:1/" }) });
-  assert.deepEqual(calls[0], { action: "claim-due-posts", destination: "linkedin", limit: 1 });
+  assert.deepEqual(calls[0], { action: "claim-due-posts", destination: "linkedin", placements: ["post", "carousel"], limit: 1 });
   assert.deepEqual(calls[1], { action: "finish-post", id: "p1", externalPostId: "urn:li:share:1", externalUrl: "https://www.linkedin.com/feed/update/urn:li:share:1/" });
   assert.equal(tick.published.length, 1);
 });
@@ -163,4 +163,43 @@ test("the handler refuses web requests and unknown actions", async () => {
   assert.equal((await handler({ requestContext: {} })).statusCode, 403);
   assert.equal((await handler({ rawPath: "/x" })).statusCode, 403);
   assert.equal((await handler({ action: "nope" })).statusCode, 400);
+});
+
+const slideList = (n, ext = "jpg") => Array.from({ length: n }, (_, i) => ({ assetId: `a${i}`, dropboxPath: `${ROOT}img${i}.${ext}` }));
+const carouselPost = (over = {}) => post({ placement: "carousel", slides: slideList(3), ...over });
+
+test("a LinkedIn multi-image post needs 2-20 safe image slides", () => {
+  const r = publishRequest(carouselPost());
+  assert.deepEqual([r.kind, r.slidePaths.length, r.channelId], ["carousel", 3, MEMBER]);
+  assert.equal(publishRequest(carouselPost({ slides: slideList(20, "png") })).slidePaths.length, 20);
+  assert.throws(() => publishRequest(carouselPost({ slides: slideList(1) })), /needs 2-20 images; this one has 1/);
+  assert.throws(() => publishRequest(carouselPost({ slides: slideList(21) })), /needs 2-20 images/);
+  assert.throws(() => publishRequest(carouselPost({ slides: [] })), /this one has 0/);
+  assert.throws(() => publishRequest(carouselPost({ slides: slideList(3, "gif") })), /\.jpg or \.png/);
+  assert.throws(() => publishRequest(carouselPost({ slides: [...slideList(2), { dropboxPath: "/Personal/x.jpg" }] })), /brands/);
+  assert.throws(() => publishRequest(carouselPost({ channelId: "nope" })), /no LinkedIn member id/);
+});
+
+test("a multi-image post uploads each image in order, then creates one post listing them", async () => {
+  const sent = [], uploaded = [];
+  let n = 0;
+  const out = await publish(record, carouselPost(), {
+    upload: { image: async (_t, req) => { uploaded.push(req.dropboxPath); return `urn:li:image:C${++n}`; } },
+    call: async (method, path, body) => { sent.push({ method, path, body }); return { status: 201, headers: headers({ "x-restli-id": "urn:li:share:88" }), body: {} }; }
+  });
+  assert.deepEqual(out, { postId: "urn:li:share:88", permalink: "https://www.linkedin.com/feed/update/urn:li:share:88/" });
+  assert.deepEqual(uploaded, [0, 1, 2].map((i) => `${ROOT}img${i}.jpg`));
+  assert.equal(sent.length, 1);
+  assert.deepEqual(sent[0].body.content, { multiImage: { images: [1, 2, 3].map((i) => ({ id: `urn:li:image:C${i}`, altText: "Fix it" })) } });
+  assert.equal(sent[0].body.author, MEMBER);
+});
+
+test("a failed image upload creates no post", async () => {
+  const sent = [];
+  let n = 0;
+  await assert.rejects(publish(record, carouselPost(), {
+    upload: { image: async () => { if (++n === 2) throw new Error("LinkedIn image upload failed (HTTP 500)"); return "urn:li:image:C1"; } },
+    call: async (...args) => { sent.push(args); return { status: 201, headers: headers({ "x-restli-id": "x" }), body: {} }; }
+  }), /image upload failed/);
+  assert.equal(sent.length, 0);
 });

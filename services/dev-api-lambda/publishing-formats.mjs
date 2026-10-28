@@ -45,7 +45,7 @@ export const PUBLISHING_FORMATS = [
     rule: { kinds: ["video"], aspectRatios: [] } },
   { destination: "linkedin", placement: "post", label: "Posts", status: "planning", note: "Publisher is built (services/linkedin-lambda); no post has published on schedule yet",
     rule: { kinds: ["image", "video"], aspectRatios: [] } },
-  { destination: "linkedin", placement: "carousel", label: "Multi-image posts", status: "planning", note: "Multi-image publishing isn't built yet",
+  { destination: "linkedin", placement: "carousel", label: "Multi-image posts", status: "planning", note: "Scheduled publishing is built; goes live after the first scheduled multi-image post",
     slides: { min: 2, max: 20, recommended: [3, 9] }, rule: { kinds: ["image"], aspectRatios: [] } },
   { destination: "x", placement: "video", label: "Videos", status: "integration", note: "X isn't connected to Elettro OS yet" },
   { destination: "gmb", placement: "update", label: "Update posts", status: "integration", note: "Profiles connected; publisher built (services/gmb-lambda) for Update and Offer posts queued by hand. Not planned automatically: waits on the business-content rules" }
