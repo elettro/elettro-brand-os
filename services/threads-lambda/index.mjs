@@ -10,6 +10,8 @@ import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
 //   { action: "post", brand, text, dropboxPath? }
 //                                             publish now to the brand's Threads: a text post, or
 //                                             with a Dropbox image or video under the brands root
+// A carousel (placement "carousel", 2-20 images) is one item container per image (is_carousel_item) plus a CAROUSEL
+// container that lists them; the planner's claim-due-posts only hands carousels to a worker that asks for them.
 // Threads publishes in two steps: create a media container (Threads fetches the media from a
 // short-lived Dropbox link), wait until it is FINISHED, then publish it.
 // Threads has no refresh token: the 60-day access token renews itself (th_refresh_token) once it
@@ -27,6 +29,11 @@ const REFRESH_URL = `${GRAPH}/refresh_access_token`;
 const BRANDS_ROOT = "/1---elettro-brand-os/brands/";
 // Threads rejects text over 500 characters and links one topic tag per post.
 const MAX_TEXT = 500;
+// Images per carousel Threads accepts.
+const CAROUSEL_MIN = 2;
+const CAROUSEL_MAX = 20;
+// The planner placements this worker publishes.
+const PLACEMENTS = ["post", "carousel"];
 // One post per tick keeps a backlog from bursting onto the feed.
 const POSTS_PER_TICK = 1;
 // Video containers take a while to process; poll every 5 s for up to 4 minutes (Lambda timeout 5 min).
@@ -144,6 +151,19 @@ export function postText(caption, hashtags = []) {
 }
 
 export function requestFromPost(post) {
+  if (post.placement === "carousel") {
+    const slides = Array.isArray(post.slides) ? post.slides : [];
+    if (slides.length < CAROUSEL_MIN || slides.length > CAROUSEL_MAX) {
+      throw new Error(`a Threads carousel needs ${CAROUSEL_MIN}-${CAROUSEL_MAX} images; this one has ${slides.length}`);
+    }
+    const slidePaths = slides.map((slide) => {
+      const path = String(slide.dropboxPath || "").replace(/\\/g, "/");
+      if (!path.toLowerCase().startsWith(BRANDS_ROOT) || path.split("/").some((p) => p === ".." || p === ".")) throw new Error(`dropboxPath must be inside ${BRANDS_ROOT}`);
+      if (!/\.(jpe?g|png)$/i.test(path)) throw new Error("every carousel slide must be a .jpg or .png image");
+      return path;
+    });
+    return { brand: "planner", text: postText(post.caption, post.hashtags), dropboxPath: slidePaths[0], slidePaths, mediaType: "CAROUSEL", userId: String(post.channelId || "") };
+  }
   return { ...postRequest({ brand: "planner", text: postText(post.caption, post.hashtags), dropboxPath: post.dropboxPath }), userId: String(post.channelId || "") };
 }
 
@@ -205,18 +225,31 @@ async function dropboxLink(path) {
 export async function publish(record, request, deps = {}) {
   const { call = (path, opts) => threads(path, record.accessToken, opts), link = dropboxLink, wait = (ms) => new Promise((r) => setTimeout(r, ms)),
     pollMs = POLL_MS, limitMs = POLL_LIMIT_MS } = deps;
+  const waitFinished = async (containerId) => {
+    for (let waited = 0; ; waited += pollMs) {
+      const state = await call(containerId, { params: { fields: "status,error_message" } });
+      if (state.status === "FINISHED") return;
+      if (state.status === "ERROR" || state.status === "EXPIRED") throw new Error(`Threads could not process the media: ${state.error_message || state.status}`);
+      if (waited >= limitMs) throw new Error(`Threads was still processing the media after ${Math.round(limitMs / 1000)} s`);
+      await wait(pollMs);
+    }
+  };
   const params = { media_type: request.mediaType, ...(request.text ? { text: request.text } : {}) };
+  if (request.mediaType === "CAROUSEL") {
+    const items = [];
+    for (const path of request.slidePaths) {
+      const item = await call(`${record.userId}/threads`, { method: "POST", params: { media_type: "IMAGE", is_carousel_item: "true", image_url: await link(path) } });
+      if (!item.id) throw new Error("Threads returned no container for a carousel image");
+      items.push(item.id);
+    }
+    for (const id of items) await waitFinished(id);
+    params.children = items.join(",");
+  }
   if (request.mediaType === "VIDEO") params.video_url = await link(request.dropboxPath);
   if (request.mediaType === "IMAGE") params.image_url = await link(request.dropboxPath);
   const container = await call(`${record.userId}/threads`, { method: "POST", params });
   if (!container.id) throw new Error("Threads returned no media container");
-  for (let waited = 0; ; waited += pollMs) {
-    const state = await call(container.id, { params: { fields: "status,error_message" } });
-    if (state.status === "FINISHED") break;
-    if (state.status === "ERROR" || state.status === "EXPIRED") throw new Error(`Threads could not process the media: ${state.error_message || state.status}`);
-    if (waited >= limitMs) throw new Error(`Threads was still processing the media after ${Math.round(limitMs / 1000)} s`);
-    await wait(pollMs);
-  }
+  await waitFinished(container.id);
   const published = await call(`${record.userId}/threads_publish`, { method: "POST", params: { creation_id: container.id } });
   if (!published.id) throw new Error("Threads returned no post id");
   // The post is live at this point; a missing permalink only leaves the ledger without a link.
@@ -225,7 +258,7 @@ export async function publish(record, request, deps = {}) {
 }
 
 async function publishingTick() {
-  const claimed = await api({ action: "claim-due-posts", destination: "threads", limit: POSTS_PER_TICK });
+  const claimed = await api({ action: "claim-due-posts", destination: "threads", placements: PLACEMENTS, limit: POSTS_PER_TICK });
   if (!claimed.ok) throw new Error(`claim-due-posts failed: ${claimed.error}`);
   const published = [];
   for (const post of claimed.posts) {
