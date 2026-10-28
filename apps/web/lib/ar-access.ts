@@ -83,3 +83,25 @@ export function mainQr(doc: ArDoc): ArQr | null {
   const qrs = doc.qrs || [];
   return qrs.find((q) => q.isMain) || qrs.find((q) => q.slug === "main") || null;
 }
+
+// The address a printed code contains: the main code answers at the bare brand address, every other at /<brand>/<slug>.
+export function qrAddress(base: string, brand: string, qr: Pick<ArQr, "slug" | "isMain">): string {
+  const root = `${base.replace(/\/+$/, "")}/${brand}`;
+  return qr.isMain ? root : `${root}/${qr.slug}`;
+}
+
+// Where a code sends people, in words: the web address, the set's name, or the experience's name.
+export function qrDestination(qr: ArQr, sets: readonly ArSet[], actions: readonly ArAction[]): string {
+  if (qr.mode === "url") return qr.url || "";
+  if (qr.mode === "scanner") return `Set “${sets.find((s) => s.id === qr.setId)?.name ?? "missing set"}”`;
+  return actions.find((a) => a.id === qr.actionId)?.name ?? "missing experience";
+}
+
+// The only fields the QR routes pass on to the AR API; it validates the values itself.
+export function qrFields(body: unknown): Record<string, unknown> {
+  const b = (body && typeof body === "object" ? body : {}) as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const k of ["name", "slug", "mode", "setId", "actionId", "url"]) if (typeof b[k] === "string") out[k] = b[k];
+  if (typeof b.isMain === "boolean") out.isMain = b.isMain;
+  return out;
+}

@@ -39,7 +39,7 @@ const AR_SECTION = { label: "AR", items: [
   { label: "Experiences", href: "/ar" },
   { label: "Actions" },
   { label: "Scan sets" },
-  { label: "QR codes" },
+  { label: "QR codes", href: "/ar/qr" },
   { label: "Settings" }
 ] };
 
@@ -51,7 +51,7 @@ const BRANDS = [{ id: "all", name: "All brands", timezone: "" }, ...brandConfigs
 // What a user who is not the owner (a client) sees in the rail. Pages not listed show greyed as "soon";
 // each follow-up that opens a page for clients flips it to "active" here.
 const CLIENT_NAV: Record<string, "active" | "soon" | "hidden"> = {
-  "/": "active", "/ar": "active", "/review": "active", "/assets": "active", "/content-pool": "active", "/connections": "active",
+  "/": "active", "/ar": "active", "/ar/qr": "active", "/review": "active", "/assets": "active", "/content-pool": "active", "/connections": "active",
   "/collections": "hidden", "/ai-gateway": "hidden"
 };
 
@@ -82,7 +82,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const client = !!scope && !scope.owner;
   const itemState = (item: { href?: string }) => (!client ? "active" : item.href ? CLIENT_NAV[item.href] ?? "soon" : "soon");
   const brands = scope?.brands ? BRANDS.filter((b) => scope.brands!.includes(b.id)) : BRANDS;
-  const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
+  const isActive = (href: string) => (href === "/" || href === "/ar" ? pathname === href : pathname.startsWith(href));
 
   return (
     <div className="app">

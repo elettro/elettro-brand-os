@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { arBrandsFor, canToggleAr, experienceCards, mainQr, pickBrand, publicUrl, qualityBars } from "../apps/web/lib/ar-access.ts";
+import { arBrandsFor, canToggleAr, experienceCards, mainQr, pickBrand, publicUrl, qualityBars, qrAddress, qrDestination, qrFields } from "../apps/web/lib/ar-access.ts";
 
 const ALL = ["solarmeister", "stashbox", "neckermann-strom", "elettro"];
 const OWNER = { owner: true, brands: [] };
@@ -76,4 +76,24 @@ test("an empty or missing brand document gives no cards and no main code", () =>
 test("the main code is the one marked main, else slug main", () => {
   assert.equal(mainQr(DOC).id, "q2");
   assert.equal(mainQr({ qrs: [{ id: "x", name: "A", slug: "a", mode: "scanner", isMain: true }, ...DOC.qrs] }).id, "x");
+});
+
+test("the main code answers at the bare brand address, others at /<brand>/<slug>", () => {
+  assert.equal(qrAddress("https://ar.elettro.com/", "stashbox", { slug: "main", isMain: true }), "https://ar.elettro.com/stashbox");
+  assert.equal(qrAddress("https://ar.elettro.com", "stashbox", { slug: "covers" }), "https://ar.elettro.com/stashbox/covers");
+});
+
+test("destinations read in words and tolerate missing references", () => {
+  const sets = [{ id: "s1", name: "Covers", slug: "covers" }];
+  const actions = [{ id: "a1", name: "Dirty Bird video", type: "video" }];
+  assert.equal(qrDestination({ id: "1", name: "a", slug: "a", mode: "url", url: "https://stashbox.com/radio" }, sets, actions), "https://stashbox.com/radio");
+  assert.equal(qrDestination({ id: "1", name: "a", slug: "a", mode: "scanner", setId: "s1" }, sets, actions), "Set “Covers”");
+  assert.equal(qrDestination({ id: "1", name: "a", slug: "a", mode: "scanner", setId: "gone" }, sets, actions), "Set “missing set”");
+  assert.equal(qrDestination({ id: "1", name: "a", slug: "a", mode: "experience", actionId: "a1" }, sets, actions), "Dirty Bird video");
+});
+
+test("qrFields passes only the QR fields and drops everything else", () => {
+  assert.deepEqual(qrFields({ brand: "stashbox", mode: "url", url: "https://x.com", isMain: true, evil: "x", name: 5, setId: "s1" }), { mode: "url", url: "https://x.com", isMain: true, setId: "s1" });
+  assert.deepEqual(qrFields(null), {});
+  assert.deepEqual(qrFields("text"), {});
 });
