@@ -177,3 +177,48 @@ test("Graph calls send the token, use POST bodies for writes, and surface Thread
 test("post requests with bad input are refused before anything is sent", async () => {
   assert.equal((await handler({ action: "post", brand: "stashbox" })).statusCode, 400);
 });
+
+const ROOT_B = "/1---elettro-brand-os/brands/stashbox/";
+const slideList = (n, ext = "jpg") => Array.from({ length: n }, (_, i) => ({ assetId: `a${i}`, dropboxPath: `${ROOT_B}img${i}.${ext}` }));
+const carouselPost = (over = {}) => ({ placement: "carousel", caption: "Gear day.", hashtags: ["#stashbox"], channelId: "29725971673672893", slides: slideList(3), ...over });
+
+test("a Threads carousel needs 2-20 safe image slides", () => {
+  const r = requestFromPost(carouselPost());
+  assert.deepEqual([r.mediaType, r.userId, r.text, r.slidePaths.length], ["CAROUSEL", "29725971673672893", "Gear day.\n\n#stashbox", 3]);
+  assert.equal(requestFromPost(carouselPost({ slides: slideList(20, "png") })).slidePaths.length, 20);
+  assert.throws(() => requestFromPost(carouselPost({ slides: slideList(1) })), /needs 2-20 images; this one has 1/);
+  assert.throws(() => requestFromPost(carouselPost({ slides: slideList(21) })), /needs 2-20 images/);
+  assert.throws(() => requestFromPost(carouselPost({ slides: [] })), /this one has 0/);
+  assert.throws(() => requestFromPost(carouselPost({ slides: slideList(3, "mp4") })), /\.jpg or \.png/);
+  assert.throws(() => requestFromPost(carouselPost({ slides: [...slideList(2), { dropboxPath: "/Personal/x.jpg" }] })), /brands/);
+});
+
+test("a carousel makes an item container per image, one CAROUSEL container listing them, then publishes", async () => {
+  const calls = [];
+  let n = 0;
+  const call = async (path, opts = {}) => {
+    calls.push([path, opts.method || "GET", opts.params]);
+    if (path === "29725971673672893/threads") return { id: `c${++n}` };
+    if (/^c\d$/.test(path)) return { status: "FINISHED" };
+    if (path.endsWith("threads_publish")) return { id: "p1" };
+    return { permalink: "https://www.threads.com/@stashboxmusic/post/car" };
+  };
+  const out = await publish(record, requestFromPost(carouselPost()), { call, link: async (p) => "https://dl/" + p.split("/").pop(), wait: async () => {}, pollMs: 1, limitMs: 10 });
+  assert.equal(out.postId, "p1");
+  const creates = calls.filter(([p]) => p === "29725971673672893/threads").map((c) => c[2]);
+  assert.deepEqual(creates.slice(0, 3), [0, 1, 2].map((i) => ({ media_type: "IMAGE", is_carousel_item: "true", image_url: `https://dl/img${i}.jpg` })));
+  assert.deepEqual(creates[3], { media_type: "CAROUSEL", text: "Gear day.\n\n#stashbox", children: "c1,c2,c3" });
+  assert.deepEqual(calls.find(([p]) => p.endsWith("threads_publish"))[2], { creation_id: "c4" });
+});
+
+test("a carousel image that fails to process stops the post before anything is published", async () => {
+  const seen = [];
+  let n = 0;
+  const call = async (path) => {
+    seen.push(path);
+    if (path.endsWith("/threads")) return { id: `c${++n}` };
+    return { status: path === "c2" ? "ERROR" : "FINISHED", error_message: "bad image" };
+  };
+  await assert.rejects(publish(record, requestFromPost(carouselPost()), { call, link: async () => "u", wait: async () => {}, pollMs: 1, limitMs: 10 }), /could not process the media: bad image/);
+  assert.ok(!seen.some((p) => p.endsWith("threads_publish")));
+});

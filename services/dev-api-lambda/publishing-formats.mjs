@@ -32,7 +32,7 @@ export const PUBLISHING_FORMATS = [
   { destination: "tiktok", placement: "carousel", label: "Photo carousels", status: "planning", note: "Photo carousels need TikTok's photo posting and aren't built yet",
     slides: { min: 2, max: 35, recommended: [6, 10] }, rule: { kinds: ["image"], aspectRatios: [] } },
   { destination: "threads", placement: "post", label: "Posts", status: "live" },
-  { destination: "threads", placement: "carousel", label: "Carousels", status: "planning", note: "Carousel publishing isn't built yet",
+  { destination: "threads", placement: "carousel", label: "Carousels", status: "planning", note: "Scheduled publishing is built; goes live after the first scheduled carousel posts",
     slides: { min: 2, max: 20, recommended: [3, 6] }, rule: { kinds: ["image"], aspectRatios: [] } },
   { destination: "youtube", placement: "short", label: "Shorts", status: "live" },
   { destination: "youtube", placement: "video", label: "Long-form videos", status: "live",
