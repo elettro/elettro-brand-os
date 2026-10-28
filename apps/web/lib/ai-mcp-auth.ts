@@ -4,7 +4,7 @@ import {brandConfigs} from "@/lib/brand-config";
 
 const KEY="/amplify/d2k28tehm1a8zw/develop-branch-b11b55647b/ELETTRO_AI_MCP_CLIENTS_JSON";
 const ssm=new SSMClient({region:"us-east-1"});
-const permissions=["assets:read","assets:write","assets:upload","assets:register","folders:read","folders:write"] as const;
+const permissions=["assets:read","assets:write","assets:upload","assets:register","folders:read","folders:write","ar:read","ar:write"] as const;
 export type McpPermission=typeof permissions[number];
 export type McpIdentity={clientId:string;brandSlugs:string[];permissions:McpPermission[]};
 type Client={id:string;tokenSha256:string;brandSlugs:string[];permissions:McpPermission[];enabled?:boolean};

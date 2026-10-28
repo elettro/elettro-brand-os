@@ -120,6 +120,19 @@ test("publishing a ready set writes a manifest with placement, media urls and ac
   assert.ok(f.invalidated.includes("/stashbox/sets/dirty-bird/manifest.json"));
 });
 
+test("publishing marks the covers in the set live, and a failed publish does not", async () => {
+  const f = fakes();
+  const { t, s } = await readySet(f);
+  const status = async () => (await call(f, "GET", "/ar/brands/stashbox")).body.triggers.find((x) => x.id === t.id).status;
+  assert.equal(await status(), "draft");
+  f.objects.delete("stashbox/video/clip.mp4");
+  assert.equal((await call(f, "POST", `/ar/brands/stashbox/sets/${s.id}/publish`)).status, 422);
+  assert.equal(await status(), "draft");
+  f.objects.set("stashbox/video/clip.mp4", { size: 9_000_000, contentType: "video/mp4" });
+  assert.equal((await call(f, "POST", `/ar/brands/stashbox/sets/${s.id}/publish`)).status, 200);
+  assert.equal(await status(), "live");
+});
+
 test("publish reports every reason a set is not ready", async () => {
   const f = fakes();
   await enable(f);
