@@ -138,3 +138,22 @@ test("eventRef gives the counter the brand and the published id", () => {
   assert.deepEqual(eventRef({ id: "im-waiting" }, "elettro"), { brand: "elettro", trigger: "im-waiting" }); // a single-brand set has no prefix
   assert.deepEqual(eventRef({ id: "a--b", brand: "x" }, "elettro"), { brand: "x", trigger: "a--b" }); // only its own prefix is removed
 });
+
+test("localizeUrls points known AR hosts at the visitor's own address and leaves other links alone", async () => {
+  const { localizeUrls } = await import("../apps/ar-viewer/src/logic.js");
+  const hosts = new Set(["ar.elettro.com", "ar.stashbox.com"]);
+  const origin = "https://ar.stashbox.com";
+  const set = {
+    qrs: { covers: { mode: "scanner", manifest: "https://ar.elettro.com/stashbox/sets/covers/manifest.json" }, main: { mode: "url", url: "https://stashbox.com/radio?x=1" } },
+    triggers: [{ target: { json: { imagePath: "https://ar.elettro.com/stashbox/targets/a.jpg?v=2", properties: { top: 0 } } }, actions: [{ url: "https://AR.Elettro.com/stashbox/media/a.mp4#t=1" }, { url: "rel/b.mp4" }] }],
+    n: 3, ok: true, none: null
+  };
+  const out = localizeUrls(set, hosts, origin);
+  assert.equal(out.qrs.covers.manifest, "https://ar.stashbox.com/stashbox/sets/covers/manifest.json");
+  assert.equal(out.qrs.main.url, "https://stashbox.com/radio?x=1");
+  assert.equal(out.triggers[0].target.json.imagePath, "https://ar.stashbox.com/stashbox/targets/a.jpg?v=2");
+  assert.equal(out.triggers[0].actions[0].url, "https://ar.stashbox.com/stashbox/media/a.mp4#t=1");
+  assert.equal(out.triggers[0].actions[1].url, "rel/b.mp4");
+  assert.deepEqual([out.n, out.ok, out.none], [3, true, null]);
+  assert.equal(set.qrs.covers.manifest.startsWith("https://ar.elettro.com"), true, "input is not mutated");
+});

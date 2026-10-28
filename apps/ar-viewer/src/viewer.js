@@ -1,4 +1,4 @@
-import { parsePath, resolveRoute, mergeSets, resolveEntry, planeFor, sortActions, galleryIndex, withUtm, targetData, chunk, savings, eventRef } from "/viewer/logic.js";
+import { parsePath, localizeUrls, resolveRoute, mergeSets, resolveEntry, planeFor, sortActions, galleryIndex, withUtm, targetData, chunk, savings, eventRef } from "/viewer/logic.js";
 import { renderForm, renderCalculator, renderScratch } from "/viewer/sheet.js";
 
 const $ = (id) => document.getElementById(id);
@@ -23,10 +23,13 @@ function say(title, msg, { note = "", brand } = {}) {
   if (brand !== undefined) $("brand").textContent = brand;
 }
 
+// AR hostnames from /domains.json: a manifest URL on one of them is fetched from the address the visitor is on (see localizeUrls).
+let arHosts = new Set();
 async function getJson(url) {
   const res = await fetch(url, { cache: "no-cache" });
   if (!res.ok) throw new Error(`${res.status} ${url}`);
-  return res.json();
+  const data = await res.json();
+  return arHosts.size ? localizeUrls(data, arHosts, location.origin) : data;
 }
 
 const xrReady = new Promise((resolve) => (window.XR8 ? resolve() : window.addEventListener("xrloaded", () => resolve())));
@@ -35,6 +38,7 @@ async function main() {
   // /domains.json says which brand owns which address (ar.elettro.com is shared; ar.stashbox.com belongs to Stashbox).
   let domains = {};
   try { domains = await getJson("/domains.json"); } catch {}
+  arHosts = new Set(Object.keys(domains).filter((k) => !k.startsWith("_")).map((k) => k.toLowerCase()));
   const { brand, slug, scan, all } = resolveRoute(location.hostname, location.pathname, domains);
   statsApi = typeof domains._api === "string" ? domains._api.replace(/\/$/, "") : "";
   routeBrand = brand;
