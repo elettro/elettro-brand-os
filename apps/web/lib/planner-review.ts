@@ -24,10 +24,13 @@ export type ReviewPost = {
 export type ReviewAccount = { socialAccountId: string; destination: string; accountName: string; externalAccountId: string | null; publishingMode: string; placement: string | null; postsPerWeek: number | null; active: boolean | null };
 // live: approved posts auto-publish · planning: planned, publisher not built · review: waiting on the network's app review
 // · integration: not connected to Elettro OS yet (never editable). The list comes from the API (publishing-formats.mjs).
-export type PublishingFormat = { destination: string; placement: string; label: string; status: "live" | "planning" | "review" | "integration"; note?: string };
+export type PublishingFormat = { destination: string; placement: string; label: string; status: "live" | "planning" | "review" | "integration"; note?: string;
+  // Carousel formats: the network's hard limits and the advisory best range of images.
+  slides?: { min: number; max: number; recommended: [number, number] } };
 export type ReviewList = {
   ok: boolean; error?: string; brand: string; timeZone: string; weekStart: string; weeks: number; destinations: string[]; approvedWeeks?: string[];
   hasPlannerSettings: boolean; accounts: ReviewAccount[]; posts: ReviewPost[]; formats: PublishingFormat[]; maxPostsPerWeek: number;
+  slideRanges?: Record<string, { min: number; max: number } | null>;
 };
 
 // Server-side only: forwards one review action to the dev API with the shared connect key.

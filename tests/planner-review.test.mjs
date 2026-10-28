@@ -185,7 +185,7 @@ test("list hands the page every publishing format, without planner rules, and ea
     externalAccountId: "UC1", publishingMode: "approval", placement: "short", postsPerWeek: 21, active: true }] }]]);
   const r = await handlePlannerReview(event, { brand: "stashbox", action: "list" }, async () => client, json);
   assert.equal(r.statusCode, 200);
-  assert.equal(r.body.formats.length, 15);
+  assert.equal(r.body.formats.length, 21);
   assert.ok(r.body.formats.every((f) => !("rule" in f)));
   assert.equal(r.body.formats.find((f) => f.destination === "gmb").status, "integration");
   assert.equal(r.body.maxPostsPerWeek, 70);
@@ -195,7 +195,7 @@ test("list hands the page every publishing format, without planner rules, and ea
 
 test("cadence refuses unknown formats and formats still waiting on an integration", async () => {
   process.env.CONNECTIONS_API_SHARED_SECRET = KEY;
-  const unknown = await handlePlannerReview(event, { brand: "stashbox", action: "cadence", destination: "instagram", placement: "carousel", postsPerWeek: 7 }, async () => fakeClient(), json);
+  const unknown = await handlePlannerReview(event, { brand: "stashbox", action: "cadence", destination: "instagram", placement: "hologram", postsPerWeek: 7 }, async () => fakeClient(), json);
   assert.equal(unknown.statusCode, 400);
   const x = await handlePlannerReview(event, { brand: "stashbox", action: "cadence", destination: "x", placement: "video", postsPerWeek: 7 }, async () => fakeClient(), json);
   assert.equal(x.statusCode, 409);

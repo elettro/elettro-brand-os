@@ -2,7 +2,7 @@
 // cadence, sector mix); an optional curator may only choose among candidates that
 // already passed them, and every choice is re-validated here.
 import { createHash } from "node:crypto";
-import { placementRule } from "./publishing-formats.mjs";
+import { placementRule, slideRange } from "./publishing-formats.mjs";
 
 export const PLANNER_VERSION = "planner-v2.0";
 export const DURATION_BUCKETS = ["under-15s", "15-30s", "30-60s", "1-3min", "3min-plus"];
@@ -36,7 +36,9 @@ export function resolvePlannerSettings(brandSettings) {
     pool: { ...DEFAULT_PLANNER_SETTINGS.pool, ...(raw.pool || {}) },
     placements: { ...DEFAULT_PLANNER_SETTINGS.placements, ...(raw.placements || {}) },
     exploration: { ...DEFAULT_PLANNER_SETTINGS.exploration, ...(raw.exploration || {}) },
-    cooldowns: { ...DEFAULT_PLANNER_SETTINGS.cooldowns, ...(raw.cooldowns || {}) }
+    cooldowns: { ...DEFAULT_PLANNER_SETTINGS.cooldowns, ...(raw.cooldowns || {}) },
+    // Carousel slide ranges set from Review live beside the planner block so a reseed never wipes them.
+    carouselSlides: (brandSettings && typeof brandSettings === "object" && brandSettings.carouselSlides) || {}
   };
 }
 
@@ -445,8 +447,26 @@ export function planWeek({ assets, accounts, settings, weekStart, timeZone, uses
 
     const asset = winner.asset;
     const song = songKeyOf(asset);
-    planned.push({ socialAccountId: slot.socialAccountId, assetId: asset.id, songKey: song,
-      shopifyProductId: asset.shopifyProductId || null, contentGroup: asset.contentGroup || null, at: slot.scheduledFor });
+    // A carousel is the winner plus the next-best images of the same sector (one pillar per carousel); the
+    // slide count comes from the brand's min..max range and varies slot to slot.
+    let slideIds = null;
+    const range = slideRange(settings, slot.destination, String(slot.placement).toLowerCase());
+    if (range) {
+      const target = range.min + Math.floor((jitter(slot.slotId, "slides") / 3) * (range.max - range.min + 1));
+      const others = rank(sector).map((c) => c.asset.id).filter((id) => id !== asset.id);
+      slideIds = [asset.id, ...others].slice(0, Math.min(range.max, target));
+      if (slideIds.length < range.min) {
+        const reason = `Only ${slideIds.length} ${sector} image(s) passed the rules; a carousel needs at least ${range.min}`;
+        gaps.push({ slotId: slot.slotId, destination: slot.destination, ymd: slot.ymd, sector: slot.sector, reason });
+        results.push({ ...slot, status: "gap", gap: reason, selectedBy: "rules", candidates: candidateView });
+        continue;
+      }
+    }
+    for (const id of slideIds || [asset.id]) {
+      const a = assetById.get(id);
+      planned.push({ socialAccountId: slot.socialAccountId, assetId: id, songKey: songKeyOf(a),
+        shopifyProductId: a.shopifyProductId || null, contentGroup: a.contentGroup || null, at: slot.scheduledFor });
+    }
     if (fallbackFrom) gaps.push({ slotId: slot.slotId, destination: slot.destination, ymd: slot.ymd, sector: fallbackFrom,
       reason: `No ${fallbackFrom} clip available; filled with ${sector}` });
 
@@ -458,6 +478,7 @@ export function planWeek({ assets, accounts, settings, weekStart, timeZone, uses
       sectorFallbackFrom: fallbackFrom,
       status: "planned",
       assetId: asset.id,
+      slideIds,
       filename: asset.filename,
       songKey: song,
       contentGroup: asset.contentGroup || null,

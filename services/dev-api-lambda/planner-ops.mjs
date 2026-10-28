@@ -240,7 +240,7 @@ async function claimDuePosts(event, connectDatabase, json) {
   const destination = String(event.destination || "youtube");
   const limit = Math.min(5, Math.max(1, Number(event.limit) || 2));
   // A worker that only publishes some placements (e.g. a worker for only some formats) names them;
-  // the others stay approved. Omitted, every placement of the destination is claimed.
+  // the others stay approved. Omitted, every placement except carousels is claimed: a carousel needs several images, so only a worker that names it (and handles slides) gets one.
   const placements = Array.isArray(event.placements) && event.placements.length ? event.placements.map(String) : null;
   return withClient(connectDatabase, json, "claim-due-posts", async (client) => {
     // A slot more than a day late is skipped, and an upload that never reported back is not retried
@@ -269,6 +269,7 @@ async function claimDuePosts(event, connectDatabase, json) {
          WHERE sa."destination" = $1 AND sa."status" = 'active' AND sa."externalAccountId" IS NOT NULL
            AND sp."status" = 'approved' AND sp."scheduledFor" <= CURRENT_TIMESTAMP
            AND ($3::text[] IS NULL OR sp."placement"::text = ANY($3::text[]))
+           AND (sp."placement"::text <> 'carousel' OR 'carousel' = ANY($3::text[]))
          ORDER BY sp."scheduledFor" LIMIT $2 FOR UPDATE OF sp SKIP LOCKED)
        UPDATE "ScheduledPost" sp SET "status" = 'publishing', "updatedAt" = CURRENT_TIMESTAMP
        FROM due, "SocialAccount" sa, "Asset" a
