@@ -4,13 +4,14 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "build": "zip -r elettro-ar-dev-api.zip index.mjs app.mjs api-gate.mjs validate.mjs manifest.mjs adapters.mjs package.json"
+    "build": "zip -r elettro-ar-dev-api.zip index.mjs app.mjs api-gate.mjs validate.mjs manifest.mjs adapters.mjs stats.mjs compile.mjs package.json"
   },
   "dependencies": {
     "@aws-sdk/client-cloudfront": "^3.910.0",
     "@aws-sdk/client-dynamodb": "^3.910.0",
     "@aws-sdk/client-s3": "^3.910.0",
     "@aws-sdk/lib-dynamodb": "^3.910.0",
-    "@aws-sdk/s3-request-presigner": "^3.910.0"
+    "@aws-sdk/s3-request-presigner": "^3.910.0",
+    "sharp": "0.34.5"
   }
 }

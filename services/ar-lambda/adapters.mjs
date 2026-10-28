@@ -71,6 +71,13 @@ export async function createFiles({ bucket }) {
     },
     async putJson(key, obj) {
       await s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: JSON.stringify(obj), ContentType: "application/json", CacheControl: "public, max-age=60" }));
+    },
+    async getBuffer(key) {
+      const r = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+      return Buffer.from(await r.Body.transformToByteArray());
+    },
+    async putBuffer(key, buffer, contentType) {
+      await s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: buffer, ContentType: contentType, CacheControl: "public, max-age=300" }));
     }
   };
 }
