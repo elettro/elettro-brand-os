@@ -98,3 +98,33 @@ test("every brand's planner pins photos to pinterest:pin and 9:16 clips to pinte
   assert.equal(poolRejection({ kind: "video", aspectRatioLabel: "9x16", tags: [], durationMs: 20000 }, { destination: "pinterest", placement: "video" }, settings), null);
   assert.deepEqual(settings.placements["youtube:video"], { aspectRatios: ["16x9"] });
 });
+
+const ROOT_P = "/1---elettro-brand-os/brands/stashbox/";
+const slideList = (n, ext = "jpg") => Array.from({ length: n }, (_, i) => ({ assetId: `a${i}`, dropboxPath: `${ROOT_P}img${i}.${ext}` }));
+const carouselPost = (over = {}) => ({ brand: "stashbox", placement: "carousel", title: "Gear day", caption: "Five pieces.", primaryLink: "https://stashbox.ai", slides: slideList(3), ...over });
+
+test("a Pinterest carousel needs 2-5 safe image slides", () => {
+  const pin = pinFromPost(carouselPost());
+  assert.deepEqual([pin.kind, pin.slidePaths.length, pin.title, pin.link], ["carousel", 3, "Gear day", "https://stashbox.ai"]);
+  assert.equal(pinFromPost(carouselPost({ slides: slideList(5, "png") })).slidePaths.length, 5);
+  assert.throws(() => pinFromPost(carouselPost({ slides: slideList(1) })), /needs 2-5 images; this one has 1/);
+  assert.throws(() => pinFromPost(carouselPost({ slides: slideList(6) })), /needs 2-5 images/);
+  assert.throws(() => pinFromPost(carouselPost({ slides: [] })), /this one has 0/);
+  assert.throws(() => pinFromPost(carouselPost({ slides: slideList(3, "mp4") })), /\.jpg or \.png/);
+  assert.throws(() => pinFromPost(carouselPost({ slides: [...slideList(2), { dropboxPath: "/Personal/x.jpg" }] })), /brands/);
+});
+
+test("a carousel Pin is one Pin with a multiple_image_urls source, links on each image", async () => {
+  const pins = [];
+  const call = async (method, path, body) => {
+    if (method === "GET" && path.startsWith("/boards")) return { items: [{ id: "b1", name: "Stashbox" }] };
+    if (method === "POST" && path === "/pins") { pins.push(body); return { id: "777" }; }
+    throw new Error("unexpected " + method + " " + path);
+  };
+  const out = await publish({ accessToken: "a" }, carouselPost(), { call, link: async (p) => "https://dl/" + p.split("/").pop() });
+  assert.equal(out.url, "https://www.pinterest.com/pin/777/");
+  assert.equal(pins.length, 1);
+  assert.deepEqual(pins[0].media_source, { source_type: "multiple_image_urls", index: 0,
+    items: [0, 1, 2].map((i) => ({ url: `https://dl/img${i}.jpg`, link: "https://stashbox.ai" })) });
+  assert.deepEqual([pins[0].board_id, pins[0].title, pins[0].description], ["b1", "Gear day", "Five pieces."]);
+});

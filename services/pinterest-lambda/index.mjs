@@ -10,6 +10,8 @@ import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
 // One Pinterest account (pinterest.com/elettro) serves several brands; each brand pins to its own
 // board (BOARDS, created on first use). Images go up by URL (a 4-hour Dropbox link Pinterest
 // fetches); videos are copied from Dropbox into Pinterest's upload form, processed, then pinned.
+// A carousel Pin (placement "carousel", 2-5 images) is one Pin with media_source multiple_image_urls; the
+// planner's claim-due-posts only hands carousels to a worker that asks for them.
 // Access tokens last 30 days. With continuous refresh, each renewal also returns a new refresh
 // token, so an account that keeps posting never needs reconnecting.
 
@@ -27,6 +29,12 @@ export const BOARDS = { elettro: "Elettro Digital Marketing Agency", stashbox: "
 // Pinterest limits.
 const MAX_TITLE = 100;
 const MAX_DESCRIPTION = 800;
+// Images per carousel Pin.
+const CAROUSEL_MIN = 2;
+const CAROUSEL_MAX = 5;
+const BRANDS_ROOT = "/1---elettro-brand-os/brands/";
+// The planner placements this worker publishes.
+const PLACEMENTS = ["pin", "video", "carousel"];
 // One post per tick keeps a backlog from bursting onto the feed.
 const POSTS_PER_TICK = 1;
 // Video processing: poll every 5 s for up to 8 minutes (Lambda timeout 15 min).
@@ -132,6 +140,19 @@ export function pinFromPost(post) {
   const title = String(post.title || description.split("\n")[0] || post.assetTitle || "").trim().slice(0, MAX_TITLE);
   if (!title) throw new Error("The post has no title or caption");
   const link = /^https:\/\/\S+$/.test(String(post.primaryLink || "")) ? post.primaryLink : null;
+  if (post.placement === "carousel") {
+    const slides = Array.isArray(post.slides) ? post.slides : [];
+    if (slides.length < CAROUSEL_MIN || slides.length > CAROUSEL_MAX) {
+      throw new Error(`a Pinterest carousel needs ${CAROUSEL_MIN}-${CAROUSEL_MAX} images; this one has ${slides.length}`);
+    }
+    const slidePaths = slides.map((slide) => {
+      const path = String(slide.dropboxPath || "").replace(/\\/g, "/");
+      if (!path.toLowerCase().startsWith(BRANDS_ROOT) || path.split("/").some((p) => p === ".." || p === ".")) throw new Error(`dropboxPath must be inside ${BRANDS_ROOT}`);
+      if (!/\.(jpe?g|png)$/i.test(path)) throw new Error("every carousel slide must be a .jpg or .png image");
+      return path;
+    });
+    return { title, description, link, kind: "carousel", slidePaths, altText: String(post.assetTitle || title).slice(0, 500) };
+  }
   const kind = post.assetKind === "video" || /\.(mp4|mov)$/i.test(post.dropboxPath || "") ? "video" : "image";
   return { title, description, link, kind, altText: String(post.assetTitle || title).slice(0, 500) };
 }
@@ -225,6 +246,15 @@ export async function publish(record, post, deps = {}) {
   const { call = (method, path, body) => pinterest(record.accessToken, method, path, body), link = dropboxLink, upload = uploadVideo } = deps;
   const pin = pinFromPost(post);
   const board = await boardId(call, post.brand);
+  if (pin.kind === "carousel") {
+    const items = [];
+    for (const path of pin.slidePaths) items.push({ url: await link(path), ...(pin.link ? { link: pin.link } : {}) });
+    const created = await call("POST", "/pins", {
+      board_id: board, title: pin.title, description: pin.description, media_source: { source_type: "multiple_image_urls", items, index: 0 }
+    });
+    if (!created.id) throw new Error("Pinterest returned no Pin id");
+    return { pinId: created.id, url: `https://www.pinterest.com/pin/${created.id}/`, boardId: board };
+  }
   const media_source = pin.kind === "video"
     // Cover = the frame one second in, so a fade-in from black never becomes the thumbnail.
     ? { source_type: "video_id", media_id: await upload(call, post.dropboxPath, post.filename, deps), cover_image_key_frame_time: 1 }
@@ -237,7 +267,7 @@ export async function publish(record, post, deps = {}) {
 }
 
 async function publishingTick() {
-  const claimed = await api({ action: "claim-due-posts", destination: "pinterest", limit: POSTS_PER_TICK });
+  const claimed = await api({ action: "claim-due-posts", destination: "pinterest", placements: PLACEMENTS, limit: POSTS_PER_TICK });
   if (!claimed.ok) throw new Error(`claim-due-posts failed: ${claimed.error}`);
   const published = [];
   for (const post of claimed.posts) {
