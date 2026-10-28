@@ -39,7 +39,7 @@ export const PUBLISHING_FORMATS = [
     rule: { aspectRatios: ["16x9"], minDurationBucket: "3min-plus" } },
   { destination: "pinterest", placement: "pin", label: "Image pins", status: "planning", note: "Publisher is deployed; no pin has published on schedule yet",
     rule: { kinds: ["image"], aspectRatios: [] } },
-  { destination: "pinterest", placement: "carousel", label: "Carousel Pins", status: "planning", note: "Carousel Pin publishing isn't built yet",
+  { destination: "pinterest", placement: "carousel", label: "Carousel Pins", status: "planning", note: "Scheduled publishing is built; goes live after the first scheduled carousel Pin",
     slides: { min: 2, max: 5, recommended: [3, 5] }, rule: { kinds: ["image"], aspectRatios: [] } },
   { destination: "pinterest", placement: "video", label: "Video pins", status: "planning", note: "Publisher is deployed; no video pin has published on schedule yet",
     rule: { kinds: ["video"], aspectRatios: [] } },
