@@ -105,3 +105,33 @@ export function qrFields(body: unknown): Record<string, unknown> {
   if (typeof b.isMain === "boolean") out.isMain = b.isMain;
   return out;
 }
+
+// The only fields the set routes pass on; the AR API validates the values itself.
+export function setFields(body: unknown): Record<string, unknown> {
+  const b = (body && typeof body === "object" ? body : {}) as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const k of ["name", "slug"]) if (typeof b[k] === "string") out[k] = b[k];
+  if (Array.isArray(b.triggerIds)) out.triggerIds = b.triggerIds.filter((x): x is string => typeof x === "string");
+  return out;
+}
+
+export type ReadinessItem = { ok: boolean; text: string };
+
+// A quick "before you publish" read of one set from data already on the page. The AR API runs the real checks when you publish
+// (it also confirms every file is in storage), so this only catches the common gaps early.
+export function setReadiness(doc: ArDoc, set: ArSet): { ready: boolean; items: ReadinessItem[]; qrCount: number } {
+  const triggers = doc.triggers || [], rules = doc.rules || [], actions = doc.actions || [];
+  const items: ReadinessItem[] = [];
+  const ids = set.triggerIds || [];
+  if (!ids.length) items.push({ ok: false, text: "This set has no covers yet" });
+  for (const id of ids) {
+    const t = triggers.find((x) => x.id === id);
+    if (!t) { items.push({ ok: false, text: "A cover in this set no longer exists" }); continue; }
+    const n = rules.filter((r) => r.triggerId === id).flatMap((r) => r.actionIds || []).filter((a) => actions.some((x) => x.id === a)).length;
+    if (!t.target) items.push({ ok: false, text: `${t.name}: no tracking image yet` });
+    else if (!n) items.push({ ok: false, text: `${t.name}: nothing happens when it is scanned` });
+    else items.push({ ok: true, text: `${t.name}: ready, ${n} action${n === 1 ? "" : "s"}` });
+  }
+  const qrCount = (doc.qrs || []).filter((q) => q.mode === "scanner" && q.setId === set.id).length;
+  return { ready: items.length > 0 && items.every((i) => i.ok), items, qrCount };
+}
