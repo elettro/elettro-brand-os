@@ -92,7 +92,27 @@ export function withUtm(url) {
   }
 }
 
-/** The 8th Wall engine wants every target's json with an absolute imagePath. */
+/**
+ * Published manifests carry absolute addresses on the host that compiled them (https://ar.elettro.com/...). On another AR address
+ * (ar.stashbox.com) a phone reuses its open connection for that second host; CloudFront refuses the mismatch and every fetch fails.
+ * All AR addresses serve identical content, so a URL on a known AR host is pointed at the address the visitor is on. The 8th Wall
+ * engine wants target images as absolute URLs, so the result keeps the origin. `hosts` is the set of AR hostnames from /domains.json.
+ */
+export function localizeUrls(value, hosts, origin) {
+  if (typeof value === "string") {
+    if (!/^https?:\/\//i.test(value)) return value;
+    try {
+      const u = new URL(value);
+      return hosts.has(u.hostname.toLowerCase()) ? origin + u.pathname + u.search + u.hash : value;
+    } catch {
+      return value;
+    }
+  }
+  if (Array.isArray(value)) return value.map((v) => localizeUrls(v, hosts, origin));
+  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, localizeUrls(v, hosts, origin)]));
+  return value;
+}
+
 /**
  * The savings estimate behind the calculator screen. A system of `kwp` kWp makes kwp * yieldPerKwp kWh a year; `selfUse`
  * of that is used in the house instead of fed to the grid, capped by what the house uses at all.
