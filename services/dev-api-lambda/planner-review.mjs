@@ -12,6 +12,7 @@
  *              approved any other way
  *   swap        replace a post's clip with another approved clip of the brand
  *   cadence     posts per week for one format (destination+placement) of a connected account
+ *   slides      min/max images per carousel for one carousel format (within the network's limits)
  *   plan        start the week planner in the background (async self-invoke of plan-week)
  *   assets, asset, record-publication, recent-publications  test posts (library-publications.mjs)
  *
@@ -22,7 +23,7 @@ import { readFileSync } from "node:fs";
 import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
 import { nextWeekStart, ymdInTimeZone, addDaysToYmd, localDateTimeToUtc } from "./planner-v2.mjs";
 import { searchLibrary, libraryAsset, recordPublication, recentPublications } from "./library-publications.mjs";
-import { PUBLISHING_FORMATS, FORMAT_DESTINATIONS, PLANNABLE_DESTINATIONS, MAX_POSTS_PER_WEEK, formatOf, isPlannable } from "./publishing-formats.mjs";
+import { PUBLISHING_FORMATS, FORMAT_DESTINATIONS, PLANNABLE_DESTINATIONS, MAX_POSTS_PER_WEEK, formatOf, isPlannable, slideRange } from "./publishing-formats.mjs";
 
 const lambda = new LambdaClient({});
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
@@ -105,6 +106,7 @@ async function listPosts(client, brand, body) {
     destinations: destinations || REVIEW_DESTINATIONS, approvedWeeks: approvedWeeksOf(brand.settings),
     hasPlannerSettings: Boolean(brand.settings?.planner?.sectors?.length), accounts,
     formats: PUBLISHING_FORMATS.map(({ rule, ...f }) => f), maxPostsPerWeek: MAX_POSTS_PER_WEEK,
+    slideRanges: Object.fromEntries(PUBLISHING_FORMATS.filter((f) => f.slides).map((f) => [`${f.destination}:${f.placement}`, slideRange(brand.settings, f.destination, f.placement)])),
     posts: posts.map((p) => ({
       id: p.id, destination: p.destination, accountName: p.accountName, placement: p.placement,
       scheduledFor: new Date(p.scheduledFor).toISOString(), status: p.status,
@@ -306,6 +308,25 @@ async function setCadence(client, brand, body) {
   return { code: 200, body: { ok: true, destination, placement, socialAccountId: account.id, postsPerWeek } };
 }
 
+// Min and max images per carousel for one carousel format. Stored on Brand.settings.carouselSlides, clamped by
+// the planner to the network's limits; the request is refused outside them rather than silently adjusted.
+async function setSlides(client, brand, body) {
+  const destination = String(body.destination || "").toLowerCase();
+  const placement = String(body.placement || "").toLowerCase();
+  const limits = formatOf(destination, placement)?.slides;
+  const min = Math.floor(Number(body.min)), max = Math.floor(Number(body.max));
+  if (!limits) return { code: 400, body: { ok: false, error: "destination and placement must be a carousel format" } };
+  if (!(min >= limits.min && max <= limits.max && min <= max)) {
+    return { code: 400, body: { ok: false, error: `${destination} carousels take ${limits.min}-${limits.max} images; min must not exceed max` } };
+  }
+  const key = `${destination}:${placement}`;
+  await client.query(
+    `UPDATE "Brand" SET "settings" = jsonb_set(COALESCE("settings",'{}'::jsonb), '{carouselSlides}',
+       COALESCE("settings"->'carouselSlides','{}'::jsonb) || jsonb_build_object($2::text, $3::jsonb), true), "updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$1`,
+    [brand.id, key, JSON.stringify({ min, max })]);
+  return { code: 200, body: { ok: true, destination, placement, min, max } };
+}
+
 // Brands without Brand.settings.planner get the repo seed (intelligence/brands/<slug>/planner.json).
 async function ensurePlannerSettings(client, brand, readSeed) {
   if (brand.settings?.planner?.sectors?.length) return true;
@@ -359,6 +380,7 @@ export async function handlePlannerReview(event, body, connectDatabase, json, de
     swap: (c, b) => swapAsset(c, b, body),
     reschedule: (c, b) => reschedulePost(c, b, body),
     cadence: (c, b) => setCadence(c, b, body),
+    slides: (c, b) => setSlides(c, b, body),
     plan: (c, b) => startPlanning(c, b, body, { invoke: deps.invoke || selfInvoke, readSeed: deps.readSeed || readRepoSeed, now: deps.now }),
     // Connections page test posts: library picker + publication log (library-publications.mjs).
     assets: (c, b) => searchLibrary(c, b, body),

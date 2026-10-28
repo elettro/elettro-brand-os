@@ -9,6 +9,9 @@
  *   review       planned and scheduled; waiting on the network's app review
  *   integration  not connected to Elettro OS yet: shown, never editable or planned
  *
+ * slides (carousel formats): the network's hard limits (min..max, enforced), the recommended range (shown
+ *   next to the boxes, advisory) and the default a brand gets until it sets its own.
+ *
  * rule: the planner's pool rule for the placement when the brand's planner settings don't set one
  * (photo formats take images, not the brand's default vertical video pool).
  */
@@ -17,21 +20,33 @@ export const PUBLISHING_FORMATS = [
   { destination: "instagram", placement: "story", label: "Stories", status: "live" },
   { destination: "instagram", placement: "post", label: "Feed photos", status: "live",
     rule: { kinds: ["image"], aspectRatios: [] } },
+  { destination: "instagram", placement: "carousel", label: "Carousels", status: "planning", note: "Carousel publishing isn't built yet",
+    slides: { min: 2, max: 10, recommended: [5, 8] }, rule: { kinds: ["image"], aspectRatios: [] } },
   { destination: "facebook", placement: "reel", label: "Reels", status: "live" },
   { destination: "facebook", placement: "story", label: "Stories", status: "live" },
   { destination: "facebook", placement: "post", label: "Photo / wide video posts", status: "live",
     rule: { kinds: ["image", "video"], aspectRatios: [] } },
+  { destination: "facebook", placement: "carousel", label: "Multi-photo posts", status: "planning", note: "Multi-photo publishing isn't built yet",
+    slides: { min: 2, max: 10, recommended: [3, 6] }, rule: { kinds: ["image"], aspectRatios: [] } },
   { destination: "tiktok", placement: "video", label: "Videos", status: "review", note: "Scheduled publishing is built; waiting on TikTok's app review" },
+  { destination: "tiktok", placement: "carousel", label: "Photo carousels", status: "planning", note: "Photo carousels need TikTok's photo posting and aren't built yet",
+    slides: { min: 2, max: 35, recommended: [6, 10] }, rule: { kinds: ["image"], aspectRatios: [] } },
   { destination: "threads", placement: "post", label: "Posts", status: "live" },
+  { destination: "threads", placement: "carousel", label: "Carousels", status: "planning", note: "Carousel publishing isn't built yet",
+    slides: { min: 2, max: 20, recommended: [3, 6] }, rule: { kinds: ["image"], aspectRatios: [] } },
   { destination: "youtube", placement: "short", label: "Shorts", status: "live" },
   { destination: "youtube", placement: "video", label: "Long-form videos", status: "live",
     rule: { aspectRatios: ["16x9"], minDurationBucket: "3min-plus" } },
   { destination: "pinterest", placement: "pin", label: "Image pins", status: "planning", note: "Publisher is deployed; no pin has published on schedule yet",
     rule: { kinds: ["image"], aspectRatios: [] } },
+  { destination: "pinterest", placement: "carousel", label: "Carousel Pins", status: "planning", note: "Carousel Pin publishing isn't built yet",
+    slides: { min: 2, max: 5, recommended: [3, 5] }, rule: { kinds: ["image"], aspectRatios: [] } },
   { destination: "pinterest", placement: "video", label: "Video pins", status: "planning", note: "Publisher is deployed; no video pin has published on schedule yet",
     rule: { kinds: ["video"], aspectRatios: [] } },
   { destination: "linkedin", placement: "post", label: "Posts", status: "planning", note: "Publisher is built (services/linkedin-lambda); no post has published on schedule yet",
     rule: { kinds: ["image", "video"], aspectRatios: [] } },
+  { destination: "linkedin", placement: "carousel", label: "Multi-image posts", status: "planning", note: "Multi-image publishing isn't built yet",
+    slides: { min: 2, max: 20, recommended: [3, 9] }, rule: { kinds: ["image"], aspectRatios: [] } },
   { destination: "x", placement: "video", label: "Videos", status: "integration", note: "X isn't connected to Elettro OS yet" },
   { destination: "gmb", placement: "update", label: "Update posts", status: "integration", note: "Profiles connected; publisher built (services/gmb-lambda) for Update and Offer posts queued by hand. Not planned automatically: waits on the business-content rules" }
 ];
@@ -50,4 +65,21 @@ export const PLANNABLE_DESTINATIONS = [...new Set(PUBLISHING_FORMATS.filter(isPl
 export function placementRule(settings, destination, placement) {
   const key = `${destination}:${placement}`;
   return settings?.placements?.[key] || formatOf(destination, placement)?.rule || {};
+}
+
+/** Carousel limits for a format, or null when it isn't a carousel format. */
+export const slidesOf = (destination, placement) => formatOf(destination, placement)?.slides || null;
+
+/**
+ * The slide range for one carousel format: the brand's own min/max (Brand.settings.carouselSlides["<dest>:carousel"], set from Review)
+ * clamped to the network's hard limits, else the recommended range. Null for non-carousel formats.
+ */
+export function slideRange(settings, destination, placement) {
+  const limits = slidesOf(destination, placement);
+  if (!limits) return null;
+  const own = settings?.carouselSlides?.[`${destination}:${placement}`] || settings?.placements?.[`${destination}:${placement}`]?.slides || {};
+  const clamp = (n) => Math.min(limits.max, Math.max(limits.min, Math.round(Number(n))));
+  const min = Number.isFinite(Number(own.min)) ? clamp(own.min) : limits.recommended[0];
+  const max = Number.isFinite(Number(own.max)) ? Math.max(min, clamp(own.max)) : Math.max(min, limits.recommended[1]);
+  return { min, max };
 }

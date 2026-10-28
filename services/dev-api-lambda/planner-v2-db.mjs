@@ -300,6 +300,7 @@ export async function runPlanWeek(event, connectDatabase, json, { modelId = proc
              exploration: slot.exploration, songKey: slot.songKey, syntheticDisclosure: slot.synthetic,
              selectedBy: slot.selectedBy, curatorOverridden: slot.curatorOverridden, score: slot.score, breakdown: slot.breakdown,
              candidateIds: (slot.candidates || []).map((c) => c.assetId),
+             ...(slot.slideIds ? { slideIds: slot.slideIds } : {}),
              curator: run && !run.error ? { modelId: run.modelId, intelligenceVersion: run.intelligenceVersion, files: run.intelligenceFiles } : null,
              copy: slot.copy ? {
                source: slot.copy.source, status: slot.copy.status, angle: slot.copy.angle || null, primaryLink: slot.copy.primaryLink || null,

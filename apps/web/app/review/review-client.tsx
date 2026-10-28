@@ -109,6 +109,12 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
   const [weekly, setWeekly] = useState<Record<string, number>>(() => Object.fromEntries(slots.map((s) => [s.key, savedWeekly(s)])));
   const [perWeek, setPerWeek] = useState<Record<string, boolean>>(() => Object.fromEntries(slots.map((s) => [s.key, savedWeekly(s) % 7 !== 0])));
   const weeklyOf = (s: Slot) => weekly[s.key] ?? savedWeekly(s);
+  // Carousel formats also take a min and max number of images, per brand and format.
+  const slideKey = (s: Slot) => `${s.format.destination}:${s.format.placement}`;
+  const savedSlides = (s: Slot) => list.slideRanges?.[slideKey(s)] ?? s.format.slides ?? { min: 2, max: 2 };
+  const [slides, setSlides] = useState<Record<string, { min: number; max: number }>>({});
+  const slidesOf = (s: Slot) => slides[slideKey(s)] ?? savedSlides(s);
+  const slidesChanged = (s: Slot) => Boolean(s.account && s.format.slides) && (slidesOf(s).min !== savedSlides(s).min || slidesOf(s).max !== savedSlides(s).max);
   const networkGroups = useMemo(() => {
     const groups = new Map<string, Slot[]>();
     for (const s of slots) {
@@ -151,9 +157,10 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
 
   // Saves only the boxes that changed, lowering ones first so a network never passes 10 a day mid-save.
   async function saveCadence() {
+    const slidesToSave = [...new Map(slots.filter(slidesChanged).map((s) => [slideKey(s), s])).values()];
     const changed = slots.filter((s) => s.account && s.format.status !== "integration" && weeklyOf(s) !== savedWeekly(s))
       .sort((a, b) => (weeklyOf(a) - savedWeekly(a)) - (weeklyOf(b) - savedWeekly(b)));
-    if (!changed.length) { setNotice("Nothing changed."); return; }
+    if (!changed.length && !slidesToSave.length) { setNotice("Nothing changed."); return; }
     setBusy("cadence");
     setNotice(null);
     const done: string[] = [];
@@ -162,6 +169,10 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
         await act({ brand, action: "cadence", destination: s.format.destination, placement: s.format.placement,
           socialAccountId: s.account!.socialAccountId, postsPerWeek: weeklyOf(s) });
         done.push(`${NETWORK[s.format.destination] || s.format.destination} ${s.format.label} ${perWeek[s.key] ? `${weeklyOf(s)}/wk` : `${weeklyOf(s) / 7}/day`}`);
+      }
+      for (const s of slidesToSave) {
+        await act({ brand, action: "slides", destination: s.format.destination, placement: s.format.placement, min: slidesOf(s).min, max: slidesOf(s).max });
+        done.push(`${NETWORK[s.format.destination] || s.format.destination} ${s.format.label} ${slidesOf(s).min}-${slidesOf(s).max} images`);
       }
       setNotice(`Saved: ${done.join(", ")}. Plan a week to use it.`);
     } catch (error) {
@@ -202,6 +213,23 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
                   title={wk ? "Switch to posts per day" : "Switch to posts per week"}
                   onClick={() => setPerWeek({ ...perWeek, [s.key]: !wk })}>{wk ? "/wk" : "/day"}</button>
                 {editable && <span className="muted">{totals(value)}</span>}
+                {s.format.slides && <span className="review-slides">
+                  images per carousel
+                  <input type="number" aria-label={`${s.format.label} minimum images`} min={s.format.slides.min} max={slidesOf(s).max} value={slidesOf(s).min} disabled={!editable}
+                    onChange={(e) => {
+                      const lim = s.format.slides!;
+                      const n = Math.min(lim.max, Math.max(lim.min, Math.floor(Number(e.target.value) || lim.min)));
+                      setSlides({ ...slides, [slideKey(s)]: { min: n, max: Math.max(n, slidesOf(s).max) } });
+                    }} />
+                  to
+                  <input type="number" aria-label={`${s.format.label} maximum images`} min={slidesOf(s).min} max={s.format.slides.max} value={slidesOf(s).max} disabled={!editable}
+                    onChange={(e) => {
+                      const lim = s.format.slides!;
+                      const n = Math.min(lim.max, Math.max(lim.min, Math.floor(Number(e.target.value) || lim.max)));
+                      setSlides({ ...slides, [slideKey(s)]: { min: Math.min(n, slidesOf(s).min), max: n } });
+                    }} />
+                  <span className="muted">{NETWORK[s.format.destination]} allows {s.format.slides.min}-{s.format.slides.max} · best {s.format.slides.recommended[0]}-{s.format.slides.recommended[1]}</span>
+                </span>}
               </label>;
             })}
           </div>;
