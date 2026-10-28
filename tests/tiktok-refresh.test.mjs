@@ -137,3 +137,69 @@ test("disconnect treats a login TikTok already rejects as disconnected, but not 
   assert.equal(revoked, true);
   await assert.rejects(revokeTokens(fresh, app, { revoke: async () => { throw new Error("TikTok revoke failed: 503"); }, now: NOW }), /503/);
 });
+
+import { photoRequestFromPost, photoPayload, hostImages, postPhotos } from "../services/tiktok-lambda/index.mjs";
+
+const PHOTO_ROOT = "/1---elettro-brand-os/brands/stashbox/";
+const photoSlides = (n, ext = "jpg") => Array.from({ length: n }, (_, i) => ({ assetId: `a${i}`, dropboxPath: `${PHOTO_ROOT}img${i}.${ext}` }));
+const photoPost = (over = {}) => ({ id: "p1", placement: "carousel", caption: "Gear day.\nFive pieces.", hashtags: ["#stashbox"], channelId: "open1", slides: photoSlides(3), ...over });
+
+test("a TikTok photo carousel needs 2-35 safe JPEG/WebP slides and a caption", () => {
+  const r = photoRequestFromPost(photoPost(), "draft");
+  assert.deepEqual([r.slidePaths.length, r.title, r.description, r.openId, r.mode], [3, "Gear day.", "Gear day.\nFive pieces.\n\n#stashbox", "open1", "draft"]);
+  assert.equal(photoRequestFromPost(photoPost({ slides: photoSlides(35, "webp") }), "draft").slidePaths.length, 35);
+  assert.equal(photoRequestFromPost(photoPost({ caption: "x".repeat(100) }), "draft").title.length, 90);
+  assert.throws(() => photoRequestFromPost(photoPost({ slides: photoSlides(1) }), "draft"), /needs 2-35 images; this one has 1/);
+  assert.throws(() => photoRequestFromPost(photoPost({ slides: photoSlides(36) }), "draft"), /needs 2-35 images/);
+  assert.throws(() => photoRequestFromPost(photoPost({ slides: [] }), "draft"), /this one has 0/);
+  assert.throws(() => photoRequestFromPost(photoPost({ slides: photoSlides(3, "png") }), "draft"), /\.jpg, \.jpeg or \.webp/);
+  assert.throws(() => photoRequestFromPost(photoPost({ slides: [...photoSlides(2), { dropboxPath: "/Personal/x.jpg" }] }), "draft"), /brands/);
+  assert.throws(() => photoRequestFromPost(photoPost({ caption: "", hashtags: [] }), "draft"), /no caption/);
+  assert.throws(() => photoRequestFromPost(photoPost(), "later"), /draft/);
+});
+
+test("a draft carousel sends only the text and the image URLs; a direct one adds the creator's choices", () => {
+  const urls = ["https://media.example.com/a.jpg", "https://media.example.com/b.jpg"];
+  const draft = photoPayload(photoRequestFromPost(photoPost(), "draft"), urls, null);
+  assert.deepEqual(draft, { media_type: "PHOTO", post_mode: "MEDIA_UPLOAD",
+    post_info: { title: "Gear day.", description: "Gear day.\nFive pieces.\n\n#stashbox" },
+    source_info: { source: "PULL_FROM_URL", photo_cover_index: 0, photo_images: urls } });
+  const settings = { privacyLevel: "SELF_ONLY", allowComment: true, yourBrand: false, brandedContent: false };
+  const direct = photoPayload(photoRequestFromPost(photoPost({ tiktok: settings, synthetic: true }), "direct"), urls, { privacy_level_options: ["SELF_ONLY"], comment_disabled: true });
+  assert.equal(direct.post_mode, "DIRECT_POST");
+  assert.deepEqual([direct.post_info.privacy_level, direct.post_info.disable_comment, direct.is_aigc], ["SELF_ONLY", true, true]);
+  assert.throws(() => photoPayload(photoRequestFromPost(photoPost({ tiktok: { privacyLevel: "PUBLIC_TO_EVERYONE" } }), "direct"), urls, { privacy_level_options: ["SELF_ONLY"] }), /does not allow PUBLIC_TO_EVERYONE/);
+  assert.throws(() => photoPayload(photoRequestFromPost(photoPost(), "direct"), urls, { privacy_level_options: ["SELF_ONLY"] }), /No TikTok settings/);
+});
+
+test("slides are copied from Dropbox to the verified image host, in order, and fail clearly without one", async () => {
+  const puts = [];
+  const request = photoRequestFromPost(photoPost(), "draft");
+  const urls = await hostImages(request, { bucket: "media-bucket", baseUrl: "https://media.example.com", stamp: 7,
+    link: async (p) => "https://dl/" + p.split("/").pop(), get: async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(4) }),
+    put: async (params) => { puts.push(params); } });
+  assert.deepEqual(urls, [1, 2, 3].map((i) => `https://media.example.com/tiktok/p1-7/${i}.jpg`));
+  assert.deepEqual(puts.map((p) => [p.Bucket, p.Key, p.ContentType]), [1, 2, 3].map((i) => ["media-bucket", `tiktok/p1-7/${i}.jpg`, "image/jpeg"]));
+  await assert.rejects(hostImages(request, { bucket: "", baseUrl: "" }), /TIKTOK_PHOTO_BUCKET/);
+  await assert.rejects(hostImages(request, { bucket: "b", baseUrl: "https://x", link: async () => "u", get: async () => ({ ok: false, status: 403 }), put: async () => {} }), /Dropbox download failed \(HTTP 403\)/);
+});
+
+test("a carousel post hosts the images, then makes one content/init call with their URLs", async () => {
+  const calls = [];
+  const out = await postPhotos(photoRequestFromPost(photoPost(), "draft"), {
+    account: async () => ({ accessToken: "tok", username: "stashboxmusic" }),
+    host: async () => ["https://m/1.jpg", "https://m/2.jpg", "https://m/3.jpg"],
+    call: async (path, token, body) => { calls.push({ path, token, body }); return { publish_id: "pub1" }; }
+  });
+  assert.deepEqual(out, { handle: "@stashboxmusic", mode: "draft", images: 3, publishId: "pub1" });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].path, "/post/publish/content/init/");
+  assert.deepEqual(calls[0].body.source_info.photo_images, ["https://m/1.jpg", "https://m/2.jpg", "https://m/3.jpg"]);
+  // A direct post asks TikTok for the creator's options first.
+  calls.length = 0;
+  await postPhotos(photoRequestFromPost(photoPost({ tiktok: { privacyLevel: "SELF_ONLY" } }), "direct"), {
+    account: async () => ({ accessToken: "tok", openId: "o" }), host: async () => ["https://m/1.jpg", "https://m/2.jpg"],
+    call: async (path) => { calls.push(path); return path.includes("creator_info") ? { privacy_level_options: ["SELF_ONLY"] } : { publish_id: "pub2" }; }
+  });
+  assert.deepEqual(calls, ["/post/publish/creator_info/query/", "/post/publish/content/init/"]);
+});

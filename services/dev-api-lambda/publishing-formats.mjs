@@ -29,7 +29,7 @@ export const PUBLISHING_FORMATS = [
   { destination: "facebook", placement: "carousel", label: "Multi-photo posts", status: "planning", note: "Scheduled publishing is built; goes live after the first scheduled multi-photo post",
     slides: { min: 2, max: 10, recommended: [3, 6] }, rule: { kinds: ["image"], aspectRatios: [] } },
   { destination: "tiktok", placement: "video", label: "Videos", status: "review", note: "Scheduled publishing is built; waiting on TikTok's app review" },
-  { destination: "tiktok", placement: "carousel", label: "Photo carousels", status: "planning", note: "Photo carousels need TikTok's photo posting and aren't built yet",
+  { destination: "tiktok", placement: "carousel", label: "Photo carousels", status: "review", note: "Scheduled publishing is built; needs the verified image host and TikTok's app review",
     slides: { min: 2, max: 35, recommended: [6, 10] }, rule: { kinds: ["image"], aspectRatios: [] } },
   { destination: "threads", placement: "post", label: "Posts", status: "live" },
   { destination: "threads", placement: "carousel", label: "Carousels", status: "planning", note: "Scheduled publishing is built; goes live after the first scheduled carousel posts",
