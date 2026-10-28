@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { session } from "@/lib/cognito-auth";
 import { visibleBrands } from "@/lib/brand-access";
@@ -58,6 +59,7 @@ export default async function ArExperiencesPage({ searchParams }: { searchParams
             <span className={`ar-badge ${c.live ? "live" : "draft"}`}>{c.live ? "Live" : "Draft"}</span>
           </div>
           <h3>{c.name}</h3>
+          <Link className="ar-btn" href={`/ar/cover/${c.id}?brand=${brand.id}`}>Edit</Link>
           <div className={c.hasActions ? "ar-muted" : "ar-warn"}>{c.hasActions ? "" : "⚠ "}{c.summary}</div>
           <div className="ar-muted ar-small">
             Tracking <span className="ar-meter" aria-label={`${c.qualityBars} of 4`}>{[1, 2, 3, 4].map((n) => <i key={n} className={n <= c.qualityBars ? "on" : ""} />)}</span>

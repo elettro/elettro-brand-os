@@ -1070,3 +1070,18 @@ code {
 .ar-qr-side { display: grid; gap: 10px; justify-items: center; text-align: center; }
 .ar-qr-img { width: 200px; height: 200px; background: #fff; border-radius: 8px; padding: 4px; }
 .ar-qr-img svg { width: 100%; height: 100%; display: block; }
+
+/* AR scan sets (/ar/sets) */
+.ar-sets-layout { margin-top: 18px; display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 900px) { .ar-sets-layout { grid-template-columns: 1fr; } }
+.ar-lbl { margin: 14px 0 6px; font-size: 13px; color: var(--muted); }
+.ar-members { list-style: none; padding: 0; margin: 0 0 10px; display: grid; gap: 6px; }
+.ar-members li { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-soft); }
+.ar-checks { list-style: none; padding: 0; margin: 0 0 12px; display: grid; gap: 4px; }
+.ar-checks li.ok { color: var(--success); }
+.ar-checks li.bad { color: var(--warn); }
+
+/* AR cover editor (/ar/cover/[id]) */
+.ar-cover-layout { margin-top: 18px; display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 900px) { .ar-cover-layout { grid-template-columns: 1fr; } }
+.ar-edit input[type="range"] { width: 100%; }
