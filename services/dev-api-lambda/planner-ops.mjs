@@ -281,7 +281,8 @@ async function claimDuePosts(event, connectDatabase, json) {
                  a."topic" AS "assetTopic", sp."scoreBreakdown"->'copy'->>'primaryLink' AS "primaryLink",
                  a."kind" AS "assetKind", sp."scoreBreakdown"->'gmb' AS "gmb", a."width" AS "assetWidth", a."height" AS "assetHeight",
                  a."mimeType" AS "assetMime", a."fileSizeBytes" AS "assetBytes",
-                 sp."scoreBreakdown"->'slideIds' AS "slideIds"`, [destination, limit, placements])).rows;
+                 sp."scoreBreakdown"->'slideIds' AS "slideIds",
+                 sp."scoreBreakdown"->'custom' AS "custom"`, [destination, limit, placements])).rows;
     // A carousel's images, in slide order, by the same path a single clip is posted from.
     const slideIds = [...new Set(posts.flatMap((p) => (Array.isArray(p.slideIds) ? p.slideIds : [])))];
     const slideAssets = slideIds.length ? new Map((await client.query(
