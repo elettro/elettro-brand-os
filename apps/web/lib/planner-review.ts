@@ -19,7 +19,7 @@ export type ReviewPost = {
   id: string; destination: string; accountName: string; placement: string; scheduledFor: string; status: string;
   title: string | null; caption: string | null; hashtags: string[]; reason: string | null; sector: string | null;
   copyStatus: string | null; captionStale: boolean; asset: ReviewAsset; candidates: ReviewAsset[];
-  tiktok: TiktokSettings | null;
+  tiktok: TiktokSettings | null; failureReason: string | null;
 };
 export type ReviewAccount = { socialAccountId: string; destination: string; accountName: string; externalAccountId: string | null; publishingMode: string; placement: string | null; postsPerWeek: number | null; active: boolean | null };
 // live: approved posts auto-publish · planning: planned, publisher not built · review: waiting on the network's app review

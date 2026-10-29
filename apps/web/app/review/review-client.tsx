@@ -331,6 +331,7 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
                   <span className={`review-status ${p.status}`}>{p.status === "planned" ? "to review" : p.status}</span>
                 </div>
                 {p.title && <p className="review-title"><b>{p.title}</b></p>}
+                {p.status === "failed" && <p className="review-warn"><b>Failed:</b> {p.failureReason || "No reason was recorded."}</p>}
                 {p.captionStale && <p className="review-warn">Clip was swapped. Check the caption still fits.</p>}
                 {p.copyStatus && p.copyStatus !== "ready" && <p className="review-warn">Caption needs work ({p.copyStatus}).</p>}
                 {editing === p.id ? <div className="review-edit">
