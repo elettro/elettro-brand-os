@@ -53,6 +53,25 @@ test("a Bluesky account links to the brand's bluesky row with a 180-day reconnec
   assert.deepEqual(writes.map((p) => [p[1], p[2]]), [["@stashboxmusic.bsky.social", account.did]]);
 });
 
+test("a server address with a trailing slash (what the OAuth library returns) is accepted and stored bare", async () => {
+  process.env.CONNECTIONS_API_SHARED_SECRET = KEY;
+  const client = {
+    async query(sql) {
+      if (sql.includes('FROM "Brand"')) return { rows: [{ id: "brand-1" }] };
+      if (sql.includes('"brandId"<>')) return { rows: [] };
+      if (sql.startsWith("ALTER TABLE") || sql.startsWith("\n    SELECT")) return { rows: [] };
+      if (sql.includes("INSERT INTO")) return { rows: [{ id: "sa-bluesky" }] };
+      throw new Error("unexpected query " + sql);
+    },
+    async end() {}
+  };
+  const stored = [];
+  const body = { brand: "stashbox", account: { ...account, pds: account.pds + "/" }, session };
+  const r = await completeBlueskyConnect(event, body, async () => client, json, NOW, async (...args) => { stored.push(args); });
+  assert.equal(r.statusCode, 200);
+  assert.equal(stored.length, 1);
+});
+
 test("an account already linked to another brand is refused, and nothing is written", async () => {
   process.env.CONNECTIONS_API_SHARED_SECRET = KEY;
   const client = {

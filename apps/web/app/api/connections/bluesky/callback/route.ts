@@ -37,7 +37,8 @@ export async function GET(request: NextRequest) {
     const did = session.did;
     const saved1 = sessions.get(did);
     if (!saved1) throw Error("Bluesky returned no session");
-    const pds = String(saved1.tokenSet.aud);
+    // The library hands back a URL with a trailing slash; the API and the publisher want the bare origin.
+    const pds = new URL(String(saved1.tokenSet.aud)).origin;
     const handle = await handleOf(pds, did);
     const key = await serverSetting("CONNECTIONS_API_SHARED_SECRET");
     const response = await fetch(`${apiBaseUrl}/connections/bluesky/complete`, {

@@ -74,7 +74,8 @@ export async function completeBlueskyConnect(event, body, connectDatabase, json,
   const session = body?.session;
   const did = String(raw.did || "");
   const handleName = /^[A-Za-z0-9.-]{3,253}$/.test(String(raw.handle || "")) ? String(raw.handle) : null;
-  const pds = /^https:\/\/[A-Za-z0-9.-]+(:\d+)?$/.test(String(raw.pds || "")) ? String(raw.pds) : null;
+  const pdsOrigin = (() => { try { return new URL(String(raw.pds || "")).origin; } catch { return ""; } })();
+  const pds = /^https:\/\/[A-Za-z0-9.-]+(:\d+)?$/.test(pdsOrigin) ? pdsOrigin : null;
   const sessionOk = session && typeof session === "object" && session.tokenSet?.refresh_token && session.dpopJwk;
   if (!/^[a-z0-9-]{2,40}$/.test(brand) || !/^did:(plc|web):[A-Za-z0-9._:-]{4,200}$/.test(did) || !pds || !sessionOk) {
     return json(400, { ok: false, error: "brand, account (did, pds) and a saved session are required" });
