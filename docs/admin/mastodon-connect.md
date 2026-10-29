@@ -22,8 +22,12 @@ Connect + Disconnect + a hand-written test post on `/connections`. **Not built**
 1. Deploy the dev-api (see `deploy-dev-api-lambda.md`); Amplify builds the web app from `develop`.
 2. API route: gateway route **and** Lambda permission for `POST /connections/mastodon/complete` (see `new-api-route.md`).
 3. `scripts/mastodon-app-setup.sh mastodon.social` registers the app and creates secret `elettro-brand-os-dev/mastodon-oauth`.
-4. Check the web app's IAM role can read `elettro-brand-os-dev/mastodon-oauth` and list/read `elettro-brand-os-dev/mastodon/*`
-   (it already does this for `linkedin-oauth` and `linkedin/*`; the policy may be per-secret, in which case it needs the root profile: ask Dean first).
+4. **Two IAM inline policies, root profile only (ask Dean first).** Checked 2026-10-29: policies are per network, so Mastodon has none yet.
+   - Web role `elettro-brand-os-dev-amplify-compute`: policy `mastodon-connect-oauth` allowing `secretsmanager:GetSecretValue` on
+     `arn:aws:secretsmanager:us-east-1:656260749296:secret:elettro-brand-os-dev/mastodon-oauth-*` and `.../mastodon/*`
+     (`ListSecrets` on `*` already comes from `linkedin-connect-oauth`).
+   - dev-api role `elettro-brand-os-dev-api-role-ddsp99yg`: policy `mastodon-connect-secrets` allowing `secretsmanager:CreateSecret` and
+     `PutSecretValue` on `.../secret:elettro-brand-os-dev/mastodon/*` (same shape as `meta-connect-secrets`).
 5. Dean creates the three profiles on mastodon.social, marks each as an automated account, then clicks Connect on `/connections`.
 
 ## Never verified
