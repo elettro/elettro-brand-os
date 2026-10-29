@@ -89,7 +89,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
     {disconnected && <p className="card" style={{ marginTop: 16 }}>Disconnected <b>{disconnected}</b>{brandName ? <> from {brandName}</> : null}. Elettro OS will not post to it, and posts already approved for it are back to planned. To also remove its permission, use the account&apos;s own security settings (for Google, myaccount.google.com/permissions).</p>}
     {error && network !== "linkedin" && <p className="card" style={{ marginTop: 16 }}>Could not connect{brandName ? ` ${brandName}` : ""}: {error}</p>}
     {brands.length > 0 && <>
-    <div className="grid" style={{ marginTop: 20 }}>
+    <div className="grid" id="youtube" style={{ marginTop: 20 }}>
       {brands.map((b) => {
         const handle = youtube[b.id]?.handle;
         return (
@@ -110,7 +110,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
     </>}
     {inView("google-review") && (picked === "google-review" || accessible.length === 1) && <p className="muted" style={{ marginTop: 20 }}>Other networks (Instagram, Facebook, Threads, TikTok, LinkedIn, Pinterest, Google Business) are turned off for Google Review.</p>}
     {gbpBrands.length > 0 && <>
-    <h2 style={{ marginTop: 32 }}>Google Business Profile</h2>
+    <h2 id="gmb" style={{ marginTop: 32 }}>Google Business Profile</h2>
     <p className="muted">Sign in with the Google account that manages the profile. Elettro OS picks the brand&apos;s profile automatically; nothing is posted until the business-content rules are in place.</p>
     <div className="grid" style={{ marginTop: 20 }}>
       {gbpBrands.map((b) => {
@@ -132,7 +132,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
     </div>
     </>}
     {metaBrands.length > 0 && <>
-    <h2 style={{ marginTop: 32 }}>Facebook + Instagram</h2>
+    <h2 id="meta" style={{ marginTop: 32 }}>Facebook + Instagram</h2>
     <p className="muted">One Meta login per brand: Facebook asks which Pages and Instagram accounts Elettro OS may use; tick only the brand&apos;s Page and the Instagram account linked to it. Page tokens do not expire.</p>
     <div className="grid" style={{ marginTop: 20 }}>
       {metaBrands.map((b) => {
@@ -156,7 +156,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
     </div>
     </>}
     {threadsBrands.length > 0 && <>
-    <h2 style={{ marginTop: 32 }}>Threads</h2>
+    <h2 id="threads" style={{ marginTop: 32 }}>Threads</h2>
     <p className="muted">Threads has its own login, separate from Facebook. Sign in to the brand&apos;s Threads profile when asked. Logins last 60 days, so each one counts down to its reconnect date.</p>
     <div className="grid" style={{ marginTop: 20 }}>
       {threadsBrands.map((b) => {
@@ -179,7 +179,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
     </div>
     </>}
     {tiktokBrands.length > 0 && <>
-    <h2 style={{ marginTop: 32 }}>TikTok</h2>
+    <h2 id="tiktok" style={{ marginTop: 32 }}>TikTok</h2>
     <p className="muted">Sign in to the brand&apos;s TikTok account when asked. Until TikTok approves the Elettro OS app, only sandbox target users can connect and posts go out private. A login lasts a year, so each one counts down to its reconnect date.</p>
     <div className="grid" style={{ marginTop: 20 }}>
       {tiktokBrands.map((b) => {
@@ -204,7 +204,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
     </div>
     </>}
     {pinterestBrands.length > 0 && <>
-    <h2 style={{ marginTop: 32 }}>Pinterest</h2>
+    <h2 id="pinterest" style={{ marginTop: 32 }}>Pinterest</h2>
     <p className="muted">One Pinterest business account, pinterest.com/elettro, for Elettro and Stashbox: connect it under each brand (same login); Stashbox Pins go to the Stashbox board. While the Elettro OS app has Trial access, Pins it creates are visible only to that account. The login renews itself each time it is used; the countdown shows when it lapses if unused.</p>
     <div className="grid" style={{ marginTop: 20 }}>
       {pinterestBrands.map((b) => {
