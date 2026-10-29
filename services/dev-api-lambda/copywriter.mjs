@@ -68,6 +68,8 @@ export function postFacts(asset, slotIn, songFacts = {}, links = {}, { promotion
     song: slug && slot.sector !== "merch" ? song?.title || asset.topic || titleCase(slug) : null,
     // A product post (Shopify item) is named by the asset's own title, e.g. "Rastaman Portrait AOP Tee".
     product: slot.sector === "merch" ? String(asset.title || asset.topic || "").trim() || null : null,
+    // The asset's own name, the only title a non-Stashbox brand's template may use.
+    assetName: String(asset.title || asset.topic || "").trim() || null,
     show: showTag && slot.sector !== "merch" ? SHOWS[showTag] : null,
     isCover: tags.some((t) => ["cover", "licensed-cover", "bob-dylan-cover"].includes(t)),
     originalArtist: valueOf("original-artist") ? titleCase(valueOf("original-artist")) : null,
@@ -105,11 +107,34 @@ function hashtagsFor(f) {
   return [...new Set(tags)];
 }
 
+/** Every template below is written in Stashbox's voice; any other brand must never fall back to it. */
+const isOtherBrand = (f) => Boolean(f.brandSlug) && f.brandSlug !== "stashbox";
+
+/**
+ * Template copy for a brand that has no templates of its own: the asset's name and nothing else
+ * (no brand wording, hashtags, link or ask). It is a draft to edit on Review; no name means no draft.
+ */
+function neutralCopy(f) {
+  const name = f.song || f.product || f.assetName;
+  if (!name) return null;
+  const youtube = f.destination === "youtube";
+  const titled = youtube || f.destination === "pinterest";
+  return {
+    status: "ready", source: "template", angle: null, hook: name,
+    caption: youtube ? null : name,
+    title: titled ? name.slice(0, 70) : null,
+    description: youtube ? name : null,
+    hashtags: [], primaryLink: null, onScreenText: null,
+    notes: ["no copy templates for this brand: asset name only, edit before approving"]
+  };
+}
+
 /**
  * Deterministic fallback copy. When the sector's link is missing (e.g. a song with no radio page or
  * streaming link on file) the post gets a plain caption with no link or ask, never a blank one.
  */
 export function templateCopy(f, seed) {
+  if (isOtherBrand(f)) return neutralCopy(f);
   if (!f.primaryLink) return { ...plainCopy(f, seed), notes: ["no link on file for this pillar: plain caption"] };
   if (f.promotional === false) return plainCopy(f, seed);
   const credited = f.originalArtist && f.song?.toLowerCase().includes(f.originalArtist.toLowerCase());
@@ -236,6 +261,7 @@ export function validateCopy(copy, f) {
     if (!f.allowedLinks.includes(clean)) problems.push(`link not from records: ${clean}`);
   }
   if (/\$\s?\d/.test(text)) problems.push("mentions a price");
+  if (isOtherBrand(f) && /stashbox/i.test(text) && !/stashbox/i.test(f.assetName || "")) problems.push(`mentions Stashbox on the ${f.brandSlug} brand`);
   for (const re of BANNED) if (re.test(text)) problems.push(`banned phrase: ${re.source}`);
   if ((f.destination === "youtube" || f.destination === "pinterest") && !copy.title) problems.push("missing title");
   if (f.destination !== "youtube" && !copy.caption) problems.push("missing caption");
@@ -277,10 +303,10 @@ export async function writeWeekCopy({ slots, assetsById, songFacts, links, brand
   const promo = promotionalSlotIds(slots, promotionalMaxShare);
   return mapLimit(slots, concurrency, async (slot) => {
     const asset = assetsById.get(slot.assetId);
-    const f = postFacts(asset, slot, songFacts, links, { promotional: promo.has(slot.slotId) });
+    const f = { ...postFacts(asset, slot, songFacts, links, { promotional: promo.has(slot.slotId) }), brandSlug };
     const fallback = () => {
       const t = templateCopy(f, slot.slotId);
-      return t ? { ...t, problems: validateCopy(t, f) } : { status: "blocked", source: "template", missing: ["primaryLink"], problems: [] };
+      return t ? { ...t, problems: validateCopy(t, f) } : { status: "blocked", source: "template", missing: [isOtherBrand(f) ? "assetName" : "primaryLink"], problems: [] };
     };
     if (!modelId || !invoke) return { slotId: slot.slotId, facts: f, copy: fallback() };
     try {

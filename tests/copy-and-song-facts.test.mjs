@@ -203,3 +203,29 @@ test("a merch post is titled by the product, not by a song or show tag on the as
     assert.equal(templateCopy(f, "seed").title, "Lincoln Arms Open Tee");
   }
 });
+
+test("a non-Stashbox brand never gets Stashbox wording, hashtags or links from the templates", () => {
+  const asset = { tags: ["radio", "live"], topic: "Panel Install Walkthrough" };
+  for (const brandSlug of ["solarmeister", "neckermann-strom", "elettro"]) {
+    for (const destination of ["youtube", "instagram", "pinterest", "threads"]) {
+      const f = { ...postFacts(asset, { sector: "radio", destination, placement: "video" }, {}, links), brandSlug };
+      const copy = templateCopy(f, "seed");
+      const text = JSON.stringify(copy);
+      assert.doesNotMatch(text, /stashbox/i, `${brandSlug}/${destination}`);
+      assert.deepEqual(copy.hashtags, []);
+      assert.equal(copy.primaryLink, null);
+      assert.equal(destination === "youtube" ? copy.title : copy.caption || copy.title, "Panel Install Walkthrough");
+    }
+  }
+});
+
+test("a non-Stashbox asset with no name gets no template copy, and the AI cannot claim Stashbox", () => {
+  const bare = { ...postFacts({ tags: [] }, { sector: "radio", destination: "youtube", placement: "video" }, {}, links), brandSlug: "solarmeister" };
+  assert.equal(templateCopy(bare, "seed"), null);
+  const named = { ...bare, assetName: "Roof Check" };
+  assert.ok(validateCopy({ title: "More from Stashbox", description: "x" }, named).some((p) => p.includes("mentions Stashbox on the solarmeister brand")));
+  assert.deepEqual(validateCopy({ title: "Roof Check", description: "x" }, named), []);
+  // Stashbox itself, and facts with no brand, keep the Stashbox templates.
+  const own = { ...bare, brandSlug: "stashbox" };
+  assert.match(templateCopy({ ...own, song: "Palm Trees" }, "seed").title, /Palm Trees/);
+});

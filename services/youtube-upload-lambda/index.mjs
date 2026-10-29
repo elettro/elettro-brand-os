@@ -11,7 +11,7 @@ import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
 const secrets = new SecretsManagerClient({});
 const lambda = new LambdaClient({});
 const API_FUNCTION = process.env.API_FUNCTION_NAME || "elettro-brand-os-dev-api";
-// Until Google's audit passes, YouTube forces API uploads to private anyway.
+// Scheduled uploads use this privacy (env YOUTUBE_PRIVACY); public since 261029 after verification.
 const SCHEDULED_PRIVACY = process.env.YOUTUBE_PRIVACY || "private";
 const POSTS_PER_TICK = 3;
 const GOOGLE_SECRET = process.env.GOOGLE_OAUTH_SECRET_NAME || "elettro-brand-os-dev/google-oauth";
