@@ -13,6 +13,7 @@ import { ConnectionDisconnect } from "@/components/connection-disconnect";
 import { PINTEREST_BOARDS, PINTEREST_BRANDS } from "@/lib/pinterest-connect";
 import { PinterestPost } from "@/components/pinterest-post";
 import { ReconnectCountdown } from "@/components/reconnect-countdown";
+import { MASTODON_BRANDS, MASTODON_POST_LIMIT } from "@/lib/mastodon-connect";
 import { redirect } from "next/navigation";
 
 const TEST_POST = "Testing Elettro OS on LinkedIn. Our in-house publishing system now posts here directly; this one went out through the LinkedIn API. More from Elettro and Stashbox soon.";
@@ -67,6 +68,10 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
   const tiktok = status.tiktok || {};
   const pinterestBrands = brandConfigs.filter((b) => PINTEREST_BRANDS.includes(b.id) && inView(b.id));
   const pinterest = status.pinterest || {};
+  const mastodonBrands = brandConfigs.filter((b) => MASTODON_BRANDS.includes(b.id) && inView(b.id));
+  const mastodon = status.mastodon || {};
+  // Mastodon tokens never expire, so the callback reports no expiry; same 60s cache applies.
+  if (brand && connected && network === "mastodon") mastodon[brand] = { handle: connected, expiresAt: null };
   // The feed caches for 60s; right after a connect, trust the expiry the callback just reported.
   if (brand && connected && expires && !Number.isNaN(Date.parse(expires))) {
     if (network === "linkedin") linkedin[brand] = { handle: connected, expiresAt: expires };
@@ -77,7 +82,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
   // Same cache after a disconnect: the brand is no longer linked even if the feed still says so.
   if (brand && disconnected) {
     const feeds: Record<string, Array<Record<string, Linked>>> = {
-      youtube: [youtube], gmb: [gmb], linkedin: [linkedin], threads: [threads], tiktok: [tiktok], pinterest: [pinterest], meta: [facebook, instagram]
+      youtube: [youtube], gmb: [gmb], linkedin: [linkedin], threads: [threads], tiktok: [tiktok], pinterest: [pinterest], meta: [facebook, instagram], mastodon: [mastodon]
     };
     for (const feed of feeds[network || ""] || []) delete feed[brand];
   }
@@ -87,7 +92,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
     <p className="muted">Connect each brand&apos;s accounts to Elettro OS. Google asks which YouTube channel to use; pick the one that belongs to the brand. LinkedIn logins last 60 days, so each one counts down to its reconnect date.</p>
     {connected && <p className="card" style={{ marginTop: 16 }}>Connected <b>{connected}</b>{brandName ? <> to {brandName}</> : null}.</p>}
     {disconnected && <p className="card" style={{ marginTop: 16 }}>Disconnected <b>{disconnected}</b>{brandName ? <> from {brandName}</> : null}. Elettro OS will not post to it, and posts already approved for it are back to planned. To also remove its permission, use the account&apos;s own security settings (for Google, myaccount.google.com/permissions).</p>}
-    {error && network !== "linkedin" && <p className="card" style={{ marginTop: 16 }}>Could not connect{brandName ? ` ${brandName}` : ""}: {error}</p>}
+    {error && network !== "linkedin" && network !== "mastodon" && <p className="card" style={{ marginTop: 16 }}>Could not connect{brandName ? ` ${brandName}` : ""}: {error}</p>}
     {brands.length > 0 && <>
     <div className="grid" id="youtube" style={{ marginTop: 20 }}>
       {brands.map((b) => {
@@ -260,6 +265,38 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
                 <label className="muted" htmlFor={`li-text-${b.id}`}>Test post (goes live on LinkedIn when you click)</label>
                 <textarea id={`li-text-${b.id}`} name="text" rows={4} maxLength={3000} required defaultValue={TEST_POST} />
                 <button type="submit" className="status-chip">Post to LinkedIn now</button>
+              </form>
+            )}
+          </article>
+        );
+      })}
+    </div>
+    </>}
+    {mastodonBrands.length > 0 && <>
+    <h2 id="mastodon" style={{ marginTop: 32 }}>Mastodon</h2>
+    <p className="muted">Each brand posts from its own profile on mastodon.social. Sign in with the brand&apos;s profile when Mastodon asks (not your own). Tokens do not expire, so there is no reconnect countdown. Mark the profile as an automated account in its Mastodon settings.</p>
+    {network === "mastodon" && posted && <p className="card" style={{ marginTop: 16 }}>Posted to Mastodon. <a href={posted} target="_blank" rel="noreferrer">See the post</a></p>}
+    {network === "mastodon" && error && <p className="card" style={{ marginTop: 16 }}>Mastodon: {error}</p>}
+    <div className="grid" style={{ marginTop: 20 }}>
+      {mastodonBrands.map((b) => {
+        const linked = mastodon[b.id];
+        return (
+          <article className="card" key={b.id}>
+            <div className="eyebrow">Mastodon · mastodon.social</div>
+            <h2>{b.name}</h2>
+            <p className="muted" style={{ margin: "0 0 12px" }}>
+              {linked ? <>● Connected · <b>{linked.handle}</b></> : "○ Not connected"}
+            </p>
+            <div className="connect-row">
+              <a className="status-chip" href={`/api/connections/mastodon/start?brand=${b.id}`}>{linked ? "Reconnect" : "Connect Mastodon"}</a>
+              {linked && <ConnectionDisconnect brand={b.id} network="mastodon" handle={linked.handle || "this account"} />}
+            </div>
+            {linked && (
+              <form method="post" action="/api/connections/mastodon/test-post" className="test-post">
+                <input type="hidden" name="brand" value={b.id} />
+                <label className="muted" htmlFor={`ma-text-${b.id}`}>Test post (goes live on Mastodon when you click)</label>
+                <textarea id={`ma-text-${b.id}`} name="text" rows={4} maxLength={MASTODON_POST_LIMIT} required />
+                <button type="submit" className="status-chip">Post to Mastodon now</button>
               </form>
             )}
           </article>

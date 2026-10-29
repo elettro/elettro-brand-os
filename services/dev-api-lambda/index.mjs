@@ -19,6 +19,7 @@ import { completeYoutubeConnect } from "./youtube-connect.mjs";
 import { completeGmbConnect } from "./gmb-connect.mjs";
 import { completeLinkedinConnect } from "./linkedin-connect.mjs";
 import { completeMetaConnect } from "./meta-connect.mjs";
+import { completeMastodonConnect } from "./mastodon-connect.mjs";
 import { handlePlannerWeb, handlePlannerOps } from "./planner-ops.mjs";
 import { setPostingWindow } from "./posting-window.mjs";
 import { completeThreadsConnect } from "./threads-connect.mjs";
@@ -1777,6 +1778,11 @@ export const handler = async (event = {}) => {
   // "Connect LinkedIn": same handshake; the token expires, so the row carries tokenExpiresAt.
   if (requestPath === "/connections/linkedin/complete" && event?.requestContext?.http?.method === "POST") {
     return completeLinkedinConnect(event, parseJsonBody(event), connectDatabase, json);
+  }
+
+  // "Connect Mastodon": same handshake; Mastodon tokens never expire, so the row has no tokenExpiresAt.
+  if (requestPath === "/connections/mastodon/complete" && event?.requestContext?.http?.method === "POST") {
+    return completeMastodonConnect(event, parseJsonBody(event), connectDatabase, json);
   }
 
   // "Connect Meta": same handshake; one Facebook Page per brand plus the Instagram account linked to it.

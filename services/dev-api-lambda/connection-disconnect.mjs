@@ -11,7 +11,7 @@ import { ensureTokenExpiryColumn } from "./connection-status.mjs";
 // The network name on the Connections page → the SocialAccount destinations it unlinks.
 export const DISCONNECT_NETWORKS = {
   youtube: ["youtube"], gmb: ["gmb"], linkedin: ["linkedin"], threads: ["threads"], tiktok: ["tiktok"],
-  pinterest: ["pinterest"], meta: ["facebook", "instagram"]
+  pinterest: ["pinterest"], meta: ["facebook", "instagram"], mastodon: ["mastodon"]
 };
 
 export async function disconnectNetwork(event, body, connectDatabase, json) {
