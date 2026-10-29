@@ -49,7 +49,24 @@ const segmenter = new Intl.Segmenter("en", { granularity: "grapheme" });
 export const graphemeLength = (text) => [...segmenter.segment(String(text))].length;
 function truncateGraphemes(text, max) {
   const parts = [...segmenter.segment(String(text))].map((s) => s.segment);
-  return parts.length <= max ? text : parts.slice(0, max - 1).join("").trimEnd() + "…";
+  if (parts.length <= max) return text;
+  let cut = parts.slice(0, max - 1).join("");
+  // A cut inside a link would leave a broken URL; back up to before it.
+  for (const m of String(text).matchAll(/https?:\/\/\S+/g)) {
+    if (m.index < cut.length && m.index + m[0].length > cut.length) { cut = cut.slice(0, m.index); break; }
+  }
+  return cut.trimEnd() + "…";
+}
+
+// Rules for scheduled (automated) posts, from Bluesky's Community and Developer Guidelines (docs/BLUESKY-RUNBOOK.md):
+// no automated notifications to other accounts, and one link per post.
+export const MAX_LINKS = 1;
+const MENTION = /(^|[\s(])@[a-z0-9][a-z0-9-]*(\.[a-z0-9][a-z0-9-]*)+/i;
+export function complianceProblems(text) {
+  const problems = [];
+  if ((String(text).match(/https?:\/\/\S+/g) || []).length > MAX_LINKS) problems.push(`a scheduled Bluesky post may carry ${MAX_LINKS} link`);
+  if (MENTION.test(String(text))) problems.push("a scheduled Bluesky post may not @mention another account (automated notifications count as spam)");
+  return problems;
 }
 
 /** Planner caption plus at most one hashtag, within 300 graphemes (the caption is cut, never the tag). */
@@ -113,6 +130,8 @@ export function postRequest(event) {
 
 export function requestFromPost(post) {
   const text = postText(post.caption, post.hashtags);
+  const broken = complianceProblems(text);
+  if (broken.length) throw new Error(broken.join("; "));
   const userId = String(post.channelId || "");
   const alt = String(post.altText || post.caption || post.title || "").trim().slice(0, 1000);
   if (post.placement === "carousel") {

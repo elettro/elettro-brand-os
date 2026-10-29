@@ -253,7 +253,7 @@ export async function runPlanWeek(event, connectDatabase, json, { modelId = proc
     const copies = await writeWeekCopy({
       slots: plan.slots.filter((s) => s.status === "planned"), assetsById: new Map(assets.map((a) => [a.id, a])),
       songFacts, links: settings.links || {}, brandSlug, modelId: copyModel, invoke: copyModel ? bedrockInvoke : null,
-      recentCaptionsByAccount, concurrency: settings.copy?.concurrency || 6, promotionalMaxShare: settings.promotionalMaxShare || {}
+      recentCaptionsByAccount, concurrency: settings.copy?.concurrency || 6, promotionalMaxShare: { bluesky: 0.25, ...(settings.promotionalMaxShare || {}) }
     });
     const copyBySlot = new Map(copies.map((c) => [c.slotId, c.copy]));
     for (const slot of plan.slots) slot.copy = copyBySlot.get(slot.slotId) || null;
