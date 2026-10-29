@@ -12,9 +12,15 @@ const NETWORK: Record<string, string> = {
 const STATUS: Record<PublishingFormat["status"], string> = {
   live: "Manually approved, set to auto-publish", planning: "planned only", review: "awaiting app review", integration: "awaiting integration"
 };
-// YouTube leads the posts-per-day list and Google Business follows; every other network keeps the API order (the sort is stable).
+// YouTube leads the posts-per-day list and Google Business follows, Bluesky comes last; every other network keeps the API order (the sort is stable).
 const FIRST = ["youtube", "gmb"];
-const rank = (destination: string) => { const i = FIRST.indexOf(destination); return i < 0 ? FIRST.length : i; };
+// Bluesky closes the list (Dean, 2026-10-29).
+const LAST = ["bluesky"];
+const rank = (destination: string) => {
+  const i = FIRST.indexOf(destination);
+  if (i >= 0) return i;
+  return LAST.includes(destination) ? FIRST.length + 1 : FIRST.length;
+};
 // The time box works in the brand's own time zone: "2026-10-28T09:00" in, a UTC instant out, and back.
 function localInput(iso: string, tz: string) {
   const p = Object.fromEntries(new Intl.DateTimeFormat("en-CA", { timeZone: tz, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).formatToParts(new Date(iso)).map((x) => [x.type, x.value]));

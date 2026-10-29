@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   graphemeLength, postText, facetsFor, postRequest, requestFromPost, postUrl, secretNameFor, account,
-  publish, prepareImage, publishingTick, moveCountdowns, handler, IMAGE_BYTE_LIMIT, secretSessionStore, oauthClient
+  publish, prepareImage, publishingTick, moveCountdowns, handler, IMAGE_BYTE_LIMIT, secretSessionStore, oauthClient, complianceProblems
 } from "../services/bluesky-lambda/index.mjs";
 
 const ROOT = "/1---elettro-brand-os/brands/stashbox/";
@@ -226,4 +226,24 @@ test("the real OAuth client builds from the signing-key secret and can restore",
   assert.equal(typeof client.restore, "function");
   assert.equal(client.clientMetadata.client_id, "https://os.elettro.com/api/connections/bluesky/client-metadata");
   await assert.rejects(oauthClient({ readSecret: async () => ({}), writeSecret: async () => {} }), /privateJwk/);
+});
+
+test("a cut never lands inside a link, so a long caption never ships a broken URL", () => {
+  const url = "https://stashbox.band/live/very-long-path-" + "x".repeat(60);
+  const text = postText("A".repeat(250) + " " + url + " wraps up the night", ["Reggae"]);
+  assert.ok(graphemeLength(text) <= 300);
+  assert.ok(!/https?:\/\/\S*$/.test(text.replace(/\n\n#Reggae$/, "")) || text.includes(url), "either the whole URL or none of it");
+  const short = postText("Shows this month " + "https://stashbox.band/live", []);
+  assert.ok(short.includes("https://stashbox.band/live"));
+});
+
+test("scheduled posts may carry one link and may not @mention anyone", () => {
+  assert.deepEqual(complianceProblems("Live Friday https://stashbox.band/live #Reggae"), []);
+  assert.deepEqual(complianceProblems("Write to booking@stashbox.band"), [], "an email address is not a mention");
+  assert.match(complianceProblems("a https://a.example/x and https://b.example/y")[0], /1 link/);
+  assert.match(complianceProblems("Thanks @someone.bsky.social for the love")[0], /@mention/);
+  const base = { placement: "post", dropboxPath: ROOT + "a.jpg", channelId: DID, hashtags: [] };
+  assert.throws(() => requestFromPost({ ...base, caption: "hey @friend.bsky.social" }), /@mention/);
+  assert.throws(() => requestFromPost({ ...base, caption: "https://a.example https://b.example" }), /1 link/);
+  assert.equal(requestFromPost({ ...base, caption: "Live Friday https://stashbox.band/live" }).kind, "images");
 });

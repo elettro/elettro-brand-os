@@ -87,6 +87,38 @@ pinned comment, description) and that location must exist for the account.
   enforced by config); originals and conversation carry the account.
 - **Replies:** EPE suggests replies; a human sends them.
 
+## [bluesky] Bluesky
+
+Rules below marked **(rule)** come from Bluesky's Community Guidelines and
+Developer Guidelines (checked 2026-10-29, see `docs/BLUESKY-RUNBOOK.md`); code
+enforces them. The rest is advice.
+
+- **Placements:** photo post (1 image), multi-photo post (2–4 images), video
+  (one clip, ≤ 3 min). No stories or reels.
+- **Viewer:** early-adopter, creator- and community-minded, quick to call out
+  hard selling and engagement bait. Rewards a human voice and a useful link.
+- **Copy:** **(rule)** at most 300 characters, and a link counts in full (it is
+  not shortened), so a long URL eats the budget. Practical target ≤ 240 with a
+  link, ≤ 280 without. One idea, plain words.
+- **Links:** clickable. At most **one** link per post **(rule in code)**, placed
+  where it reads naturally, ideally the last line. Use the shortest real URL
+  from the records; never invent or shorten with third-party shorteners.
+- **Hashtags:** 0–1, real topic tags only. Hashtag spam reads as spam.
+- **Alt text:** every image gets a plain description of what is actually in it.
+- **Promotion:** **(rule)** commercial content must be clearly identifiable as
+  such: a brand account promoting its own shop, show or release is fine when the
+  post plainly is the brand talking; anything sponsored, affiliate or paid must
+  say so. Keep promotional posts a minority (the brand's cap is enforced by
+  config; the default for Bluesky is 25%); the rest is originals: behind the
+  scenes, a clip with context, a question.
+- **Never:** **(rule)** repeat or near-duplicate a post, or post the same line
+  to the account on a loop; @mention, reply to, like, follow or repost other
+  accounts from automation (notifications from automated accounts count as
+  spam, EPE suggests replies and a human sends them); promise reach or ask
+  for likes/reposts/follows to "unlock" anything; link to adult, gambling,
+  tobacco, alcohol or regulated goods.
+- **Language:** the brand's own (SolarMeister posts in German).
+
 ## [linkedin] LinkedIn
 
 - **Placements:** text, image, video, document carousels, articles.
