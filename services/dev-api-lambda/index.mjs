@@ -39,6 +39,7 @@ const DROPBOX_BRAND_ROOTS = [
   ["neckermann-strom", "/1---elettro-brand-os/brands/neckermann-strom"],
   ["therasbox", "/1---elettro-brand-os/brands/therasbox"],
   ["pianomusicsoothing", "/1---elettro-brand-os/brands/pianomusicsoothing"],
+  ["deanpalermo", "/1---elettro-brand-os/brands/deanpalermo"],
   ["reggaeland", "/1---elettro-brand-os/brands/reggaeland"],
   ["google-review", "/1---elettro-brand-os/brands/google-review"],
   ["elettro", "/1---elettro-brand-os/brands/elettro"],

@@ -7,8 +7,8 @@ export const LINKEDIN_CLIENT_ID = process.env.LINKEDIN_OAUTH_CLIENT_ID || "773ak
 export const LINKEDIN_CALLBACK = DEV_ORIGIN + "/api/connections/linkedin/callback";
 export const LINKEDIN_SCOPES = ["openid", "profile", "email", "w_member_social"];
 export const LINKEDIN_STATE_COOKIE = "elettro_dev_li_state";
-// Dean's personal profile sits under Elettro; company pages join once Community Management is approved.
-export const LINKEDIN_BRANDS = ["elettro"];
+// Dean's personal profile is the Dean Palermo brand (Elettro stays here until its company page replaces it).
+export const LINKEDIN_BRANDS = ["elettro", "deanpalermo"];
 
 // A Google Calendar "add event" link 7 days before expiry, so the reminder also lives outside Elettro OS.
 export function calendarReminderUrl(expiresAt: string | Date) {
