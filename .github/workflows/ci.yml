@@ -63,7 +63,7 @@ jobs:
         run: node --experimental-strip-types --test tests/ar-api.test.mjs tests/ar-viewer.test.mjs tests/ar-console.test.mjs tests/ar-compile.test.mjs tests/ar-e2e.test.mjs
 
       - name: Test TikTok and Threads connect and token refresh
-        run: node --test tests/tiktok-connect.test.mjs tests/tiktok-refresh.test.mjs tests/pinterest-connect.test.mjs tests/pinterest-worker.test.mjs tests/threads-connect.test.mjs tests/threads-refresh.test.mjs tests/bluesky-connect.test.mjs tests/bluesky-worker.test.mjs tests/meta-worker.test.mjs tests/linkedin-worker.test.mjs tests/linkedin-pages.test.mjs tests/gmb-worker.test.mjs tests/posting-window.test.mjs tests/connection-disconnect.test.mjs
+        run: node --test tests/tiktok-connect.test.mjs tests/tiktok-refresh.test.mjs tests/pinterest-connect.test.mjs tests/pinterest-worker.test.mjs tests/threads-connect.test.mjs tests/threads-refresh.test.mjs tests/bluesky-connect.test.mjs tests/bluesky-worker.test.mjs tests/meta-worker.test.mjs tests/linkedin-worker.test.mjs tests/linkedin-pages.test.mjs tests/linkedin-document.test.mjs tests/gmb-worker.test.mjs tests/posting-window.test.mjs tests/connection-disconnect.test.mjs
 
       - name: Validate Step 9 Windows PowerShell setup script syntax
         shell: pwsh

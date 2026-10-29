@@ -12,6 +12,8 @@ import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
 // so a large video never has to fit in memory.
 // A carousel (placement "carousel", 2-20 images) is a multi-image post: each image goes up through the Images API
 // and the post lists them in order; the planner's claim-due-posts only hands carousels to a worker that asks.
+// A document (placement "document", 3-20 images) is the same picks stitched into one PDF (pdf-lib), uploaded through the
+// Documents API and posted as a swipeable document; LinkedIn uses the first page as the cover and requires a title.
 // Member tokens last 60 days with no refresh token: when one expires the tick leaves approved posts alone until Dean
 // reconnects (the Connections page counts the days down), instead of failing every post that comes due in the gap.
 // Company-page tokens come with a refresh token (about a year): the worker renews the access token itself when it is
@@ -38,11 +40,13 @@ const MAX_HASHTAGS = 3;
 const CAROUSEL_MIN = 2;
 const CAROUSEL_MAX = 20;
 // The planner placements this worker publishes.
-const PLACEMENTS = ["post", "carousel"];
+const PLACEMENTS = ["post", "carousel", "document"];
 // One post per tick keeps a backlog from bursting onto the feed.
 const POSTS_PER_TICK = 1;
 // Video processing: poll every 5 s for up to 8 minutes (Lambda timeout 15 min).
 const POLL_MS = 5000;
+// A PDF over this size is refused before upload (LinkedIn's limit is 100 MB).
+const PDF_MAX_BYTES = 90 * 1024 * 1024;
 const POLL_LIMIT_MS = 480_000;
 
 const result = (statusCode, payload) => ({ statusCode, ...payload });
@@ -75,17 +79,20 @@ export function publishRequest(post) {
     }
     return path;
   };
-  if (post.placement === "carousel") {
+  if (post.placement === "carousel" || post.placement === "document") {
     const slides = Array.isArray(post.slides) ? post.slides : [];
     if (slides.length < CAROUSEL_MIN || slides.length > CAROUSEL_MAX) {
-      throw new Error(`a LinkedIn multi-image post needs ${CAROUSEL_MIN}-${CAROUSEL_MAX} images; this one has ${slides.length}`);
+      throw new Error(`a LinkedIn ${post.placement === "document" ? "document" : "multi-image post"} needs ${CAROUSEL_MIN}-${CAROUSEL_MAX} images; this one has ${slides.length}`);
     }
     const slidePaths = slides.map((slide) => safePath(slide.dropboxPath));
     for (const path of slidePaths) if (!/\.(jpe?g|png)$/i.test(path)) throw new Error("every carousel slide must be a .jpg or .png image");
     const channelId = String(post.channelId || "");
     if (!OWNER_URN.test(channelId)) throw new Error("the post has no LinkedIn member id or page id");
     const title = String(post.title || post.assetTitle || "").trim().slice(0, 200);
-    return { kind: "carousel", dropboxPath: slidePaths[0], slidePaths, channelId, commentary: commentaryFor(post), title, altText: (title || String(post.assetTitle || "")).slice(0, 1000) };
+    return {
+      kind: post.placement === "document" ? "document" : "carousel", dropboxPath: slidePaths[0], slidePaths, channelId,
+      commentary: commentaryFor(post), title, altText: (title || String(post.assetTitle || "")).slice(0, 1000)
+    };
   }
   const dropboxPath = safePath(post.dropboxPath);
   const kind = /\.(mp4|mov)$/i.test(dropboxPath) ? "video" : /\.(jpe?g|png|gif)$/i.test(dropboxPath) ? "image" : null;
@@ -302,9 +309,67 @@ async function uploadVideo(token, request, deps) {
   }
 }
 
+// Stitches images (jpg/png bytes, in order) into one PDF, one page per image at its own proportions. pdf-lib is loaded on
+// demand so the tests and the other formats do not need it.
+export async function pdfFromImages(buffers) {
+  const { PDFDocument } = await import("pdf-lib");
+  const pdf = await PDFDocument.create();
+  for (const bytes of buffers) {
+    const isPng = bytes[0] === 0x89 && bytes[1] === 0x50;
+    const image = isPng ? await pdf.embedPng(bytes) : await pdf.embedJpg(bytes);
+    // Pages are 1080 points wide (LinkedIn shows documents at screen size); the image keeps full resolution inside.
+    const width = 1080, height = Math.round((image.height / image.width) * width);
+    pdf.addPage([width, height]).drawImage(image, { x: 0, y: 0, width, height });
+  }
+  pdf.setTitle("Elettro OS document");
+  return Buffer.from(await pdf.save());
+}
+
+// A document: build the PDF from the slide images, ask LinkedIn for an upload slot, send it, wait until it is AVAILABLE.
+async function uploadDocument(token, request, deps) {
+  const { call = (method, path, body, what) => linkedin(token.accessToken, method, path, body, what), link = dropboxLink, buildPdf = pdfFromImages,
+    fetchBytes = async (url) => { const r = await fetch(url, { signal: AbortSignal.timeout(120000) }); if (!r.ok) throw new Error(`Dropbox download failed (HTTP ${r.status})`); return Buffer.from(await r.arrayBuffer()); },
+    putFile = fetch, wait = (ms) => new Promise((r) => setTimeout(r, ms)), pollMs = POLL_MS, limitMs = POLL_LIMIT_MS } = deps;
+  const images = [];
+  for (const path of request.slidePaths) images.push(await fetchBytes(await link(path)));
+  const pdf = await buildPdf(images);
+  if (!pdf?.length) throw new Error("the PDF came out empty");
+  if (pdf.length > PDF_MAX_BYTES) throw new Error(`the PDF is ${Math.round(pdf.length / 1048576)} MB; LinkedIn allows 100 MB, so use fewer or smaller images`);
+  const slot = (await call("POST", "/documents?action=initializeUpload", { initializeUploadRequest: { owner: request.channelId } }, "document upload")).body.value;
+  if (!slot?.uploadUrl || !slot.document) throw new Error("LinkedIn returned no document upload slot");
+  const sent = await putFile(slot.uploadUrl, {
+    method: "PUT", headers: { authorization: `Bearer ${token.accessToken}`, "content-type": "application/octet-stream" },
+    body: pdf, signal: AbortSignal.timeout(120000)
+  });
+  if (!sent.ok) throw new Error(`LinkedIn document upload failed (HTTP ${sent.status})`);
+  for (let waited = 0; ; waited += pollMs) {
+    const state = (await call("GET", `/documents/${encodeURIComponent(slot.document)}`, null, "document status")).body;
+    // LinkedIn reports PROCESSING / AVAILABLE / PROCESSING_FAILED; a body without a status is treated as ready.
+    if (!state.status || state.status === "AVAILABLE") return slot.document;
+    if (state.status === "PROCESSING_FAILED") throw new Error("LinkedIn could not process the PDF");
+    if (waited >= limitMs) throw new Error(`LinkedIn was still processing the PDF after ${Math.round(limitMs / 1000)} s`);
+    await wait(pollMs);
+  }
+}
+
 export async function publish(record, post, deps = {}) {
   const { call = (method, path, body, what) => linkedin(record.accessToken, method, path, body, what), upload } = deps;
   const request = publishRequest(post);
+  if (request.kind === "document") {
+    const documentId = await (upload?.document || uploadDocument)(record, request, deps);
+    const made = await call("POST", "/posts", {
+      author: request.channelId,
+      commentary: request.commentary,
+      visibility: "PUBLIC",
+      distribution: { feedDistribution: "MAIN_FEED", targetEntities: [], thirdPartyDistributionChannels: [] },
+      content: { media: { title: request.title || "Document", id: documentId } },
+      lifecycleState: "PUBLISHED",
+      isReshareDisabledByAuthor: false
+    }, "document post");
+    const documentUrn = made.headers?.get?.("x-restli-id") || "";
+    if (!documentUrn) throw new Error("LinkedIn returned no post id");
+    return { postId: documentUrn, permalink: `https://www.linkedin.com/feed/update/${documentUrn}/` };
+  }
   if (request.kind === "carousel") {
     // One upload per image, in order; any failure stops before the post is created.
     const images = [];
