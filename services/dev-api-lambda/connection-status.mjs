@@ -107,7 +107,9 @@ async function loadBrandFacts(client, brand, root) {
       WHERE "brandId" = $1 OR "brandId" IS NULL`, [brand.id])).rows;
 
   return DESTINATIONS.map((destination) => {
-    const account = accounts.find((a) => a.destination === destination) || {};
+    // A brand can hold an unlinked seed row beside the real connected one; show the connected account (newest token first).
+    const account = accounts.filter((a) => a.destination === destination)
+      .sort((x, y) => Boolean(y.externalAccountId) - Boolean(x.externalAccountId) || new Date(y.tokenExpiresAt || 0) - new Date(x.tokenExpiresAt || 0))[0] || {};
     const mine = {};
     const notes = [];
     for (const row of milestones) {
