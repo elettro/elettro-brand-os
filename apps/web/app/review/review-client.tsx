@@ -230,7 +230,7 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
   };
 
   // Carousels get their own block at the top of the settings: one row per network, same boxes as every format.
-  const carouselSlots = slots.filter((s) => s.format.placement === "carousel");
+  const carouselSlots = slots.filter((s) => s.format.slides);
 
   return <div className="review">
     <section className="card review-settings">
@@ -259,7 +259,7 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
               {first.account ? <b>{first.account.accountName}</b> : <span className="muted">{first.format.status === "integration" ? first.format.note : "not connected"}</span>}
               {first.account && <span className={week > maxWeek ? "review-warn" : "muted"}> {totals(week)}{week > maxWeek ? ` · over ${maxWeek / 7} a day` : ""}</span>}
             </div>
-            {group.filter((s) => s.format.placement !== "carousel").map(renderRow)}
+            {group.filter((s) => !s.format.slides).map(renderRow)}
           </div>;
         })}
         <div className="review-network">
