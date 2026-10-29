@@ -63,10 +63,12 @@ EventBridge, every 15 min ──> platform worker Lambda ──> network API
   (Instagram + Facebook Reels, feed posts and Stories; Page tokens don't expire, so no renewal) and `linkedin`. Each is invoked only
   through IAM (no HTTP route), runs **outside the VPC** (they need to reach the network APIs), and publishes by calling the
   dev-api's `claim-due-posts` (a worker can pass `placements` to claim only some) then `finish-post`. `meta` was created in AWS and
-  published its first scheduled Reels on 2026-10-22. `linkedin` publishes approved photo/video posts to the connected member
-  profile (member tokens last 60 days with no refresh, so there is no renewal step; with an expired login the tick skips and
-  leaves posts approved). Its Lambda `elettro-brand-os-dev-linkedin` and tick rule exist (checked 2026-10-29); connect +
-  test-post code is in dev-api/web. Company-page posting (Community Management API, Development tier granted 2026-10-29) is not built yet.
+  published its first scheduled Reels on 2026-10-22. `linkedin` publishes approved photo/video posts to the brand's connected LinkedIn
+  account: a **company page** (app "Elettro OS", Community Management API, one page per brand, `urn:li:organization:<id>`; the worker
+  renews its token from a refresh token, so there is nothing to reconnect for about a year) or a **personal profile** (app "Elettro OS
+  Personal"; the Dean Palermo brand; tokens last 60 days with no refresh, so with an expired login the tick skips and leaves posts approved). Its Lambda `elettro-brand-os-dev-linkedin` and tick rule exist (checked 2026-10-29); connect +
+  test-post code is in dev-api/web. Company-page connect and posting are built (PR for 2026-10-29, steps in `docs/admin/connect-linkedin-page.md`);
+  not live until the AWS steps there are done and one page post has published. Development tier was granted 2026-10-29; its limits are unknown.
   `gmb` is **not created in AWS yet** (no Lambda, no tick rule).
 - **Elettro AR** (WebAR; plan in `docs/ar/ELETTRO-AR-PLAN.md`, setup in `docs/ar/AWS-SETUP.md`): `services/ar-lambda` is the admin API
   (Lambda Function URL, outside the VPC, **no Postgres**, DynamoDB + S3 + CloudFront only; same `x-elettro-connect-key`). It is fully separate from the Publishing Engine:
@@ -137,7 +139,7 @@ Amplify auto-builds the web app from `develop`. After a merge, do the PR's "AWS 
 - **review** (built, waiting on the network): TikTok videos and photo carousels. The Elettro OS TikTok app was submitted for review
   2026-10-21; the TikTok card's default-Allow settings were reverted (#234) until the Direct Post audit passes.
 - **planning** (built or test-posting, but nothing has published on schedule yet): Pinterest image and video pins, LinkedIn posts
-  (member profile only), and every carousel format (see below). A format moves to `live` only after one publishes on schedule.
+  (company pages and the Dean Palermo profile), and every carousel format (see below). A format moves to `live` only after one publishes on schedule.
 - **integration** (not live): X. Google Business Profile is allowlisted (261023) and connected per brand. `services/gmb-lambda` publishes approved Update and Offer posts (one photo, one button, a pillar tag; every rule in `GMB_ASSET_SPEC.md` is a hard gate, plus the 30-day business-majority mix). Posts are queued by hand and the planner does not plan them (the format stays `integration`) until the business-intelligence layer and per-brand content policies exist. Its Lambda `elettro-brand-os-dev-gmb` and schedule are meant to be created by `scripts/gmb-publisher-setup.sh` (see its PR); **not created as of 2026-10-29**.
 - Token expiry matters: Threads/Pinterest/Meta tokens expire and must be renewed or reconnected by hand if a window is
   missed. Threads renewal is automatic (tick). Connection status/expiry feeds `elettro.com/dash`.
