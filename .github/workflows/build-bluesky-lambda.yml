@@ -1,0 +1,42 @@
+name: Build Bluesky Lambda
+
+on:
+  push:
+    branches:
+      - develop
+    paths:
+      - "services/bluesky-lambda/**"
+      - ".github/workflows/build-bluesky-lambda.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/bluesky-lambda
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Check syntax
+        run: node --check index.mjs
+
+      # Installed on the Linux runner so `sharp` brings its Linux x64 build (same reason as the AR Lambda).
+      - name: Install production dependencies
+        run: npm install --omit=dev --workspaces=false
+
+      - name: Package Lambda
+        run: zip -qr elettro-brand-os-dev-bluesky.zip index.mjs package.json node_modules
+
+      - name: Upload Lambda package
+        uses: actions/upload-artifact@v4
+        with:
+          name: elettro-brand-os-dev-bluesky
+          path: services/bluesky-lambda/elettro-brand-os-dev-bluesky.zip
+          if-no-files-found: error

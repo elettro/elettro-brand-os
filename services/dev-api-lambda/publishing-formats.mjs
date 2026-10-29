@@ -34,12 +34,12 @@ export const PUBLISHING_FORMATS = [
   { destination: "threads", placement: "post", label: "Posts", status: "live" },
   { destination: "threads", placement: "carousel", label: "Carousels", status: "planning", note: "Scheduled publishing is built; goes live after the first scheduled carousel posts",
     slides: { min: 2, max: 20, recommended: [3, 6] }, rule: { kinds: ["image"], aspectRatios: [] } },
-  // Bluesky: a post takes one photo, one video or up to 4 photos (no mixing). Connect is built; the publisher is not.
-  { destination: "bluesky", placement: "post", label: "Photo posts", status: "planning", note: "Connect is built; the Bluesky publisher isn't yet",
+  // Bluesky: a post takes one photo, one video or up to 4 photos (no mixing). Connect and the publisher (services/bluesky-lambda) are built.
+  { destination: "bluesky", placement: "post", label: "Photo posts", status: "planning", note: "Publisher is built (services/bluesky-lambda); no post has published on schedule yet",
     rule: { kinds: ["image"], aspectRatios: [] } },
-  { destination: "bluesky", placement: "carousel", label: "Multi-photo posts", status: "planning", note: "Connect is built; the Bluesky publisher isn't yet",
+  { destination: "bluesky", placement: "carousel", label: "Multi-photo posts", status: "planning", note: "Publisher is built (services/bluesky-lambda); no post has published on schedule yet",
     slides: { min: 2, max: 4, recommended: [2, 4] }, rule: { kinds: ["image"], aspectRatios: [] } },
-  { destination: "bluesky", placement: "video", label: "Videos", status: "planning", note: "Connect is built; the Bluesky publisher isn't yet. Videos up to 3 minutes",
+  { destination: "bluesky", placement: "video", label: "Videos", status: "planning", note: "Publisher is built (services/bluesky-lambda); no video has published on schedule yet. Videos up to 3 minutes",
     rule: { kinds: ["video"], aspectRatios: [], maxDurationBucket: "1-3min" } },
   { destination: "youtube", placement: "short", label: "Shorts", status: "live" },
   { destination: "youtube", placement: "video", label: "Long-form videos", status: "live",
