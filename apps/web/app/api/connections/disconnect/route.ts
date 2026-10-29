@@ -8,7 +8,7 @@ const apiBaseUrl =
   process.env.NEXT_PUBLIC_BRAND_OS_API_BASE_URL ||
   "https://zkjngy7rdd.execute-api.us-east-1.amazonaws.com";
 
-const NETWORKS = ["youtube", "gmb", "linkedin", "threads", "bluesky", "tiktok", "pinterest", "meta"];
+const NETWORKS = ["youtube", "gmb", "linkedin", "threads", "bluesky", "tiktok", "pinterest", "meta", "mastodon"];
 const fail = (error: string, status = 400) => NextResponse.json({ ok: false, error }, { status });
 
 // Disconnect one network for one brand. The owner, or a user in that brand's Cognito group, may do it.

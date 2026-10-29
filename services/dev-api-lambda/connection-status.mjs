@@ -19,7 +19,9 @@ export const CHECKPOINTS = [
   { key: "live", label: "Auto-publishing + metrics live", w: 10 }
 ];
 
-export const DESTINATIONS = ["youtube", "instagram", "facebook", "tiktok", "x", "linkedin", "threads", "bluesky", "pinterest", "gmb", "reddit"];
+export const DESTINATIONS = ["youtube", "instagram", "facebook", "tiktok", "x", "linkedin", "threads", "bluesky", "pinterest", "gmb", "reddit", "mastodon"];
+// Listed in the feed only for brands that have an account there, so the public feed and elettro.com/dash stay as they were for everyone else.
+const OPT_IN_DESTINATIONS = ["mastodon"];
 
 // One developer app per platform family, shared by every brand (app review happens once).
 export const PLATFORM_APP = { instagram: "meta", facebook: "meta", threads: "meta", youtube: "google", gmb: "google" };
@@ -106,7 +108,7 @@ async function loadBrandFacts(client, brand, root) {
     `SELECT "brandId", "destination", "key", "value"::float AS "value", "note" FROM "PlatformMilestone"
       WHERE "brandId" = $1 OR "brandId" IS NULL`, [brand.id])).rows;
 
-  return DESTINATIONS.map((destination) => {
+  return DESTINATIONS.filter((d) => !OPT_IN_DESTINATIONS.includes(d) || accounts.some((a) => a.destination === d)).map((destination) => {
     const account = accounts.find((a) => a.destination === destination) || {};
     const mine = {};
     const notes = [];
