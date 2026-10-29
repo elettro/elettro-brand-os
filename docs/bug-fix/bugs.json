@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "updated_at": "2026-10-29",
+  "source_of_truth": "docs/bug-fix/",
+  "workflow": "docs/bug-fix/AGENT_WORKFLOW.md",
+  "bugs": [
+    {
+      "id": "EOS-BUG-0002",
+      "title": "No \"Disconnect successful\" confirmation next to the button",
+      "status": "Fixed",
+      "verification": "Pending",
+      "severity": "Low",
+      "area": "Connections",
+      "environment": "DEV",
+      "reported_at": "2026-10-29",
+      "fixed_at": "2026-10-29",
+      "verified_at": null,
+      "root_cause": "ConnectionDisconnect navigated straight to the page; only the LinkedIn section had an anchor id.",
+      "fix_summary": "Show a success notice for ~1.8 s, then reload onto the network's own section; added anchors for the other six networks.",
+      "files_changed": ["apps/web/components/connection-disconnect.tsx", "apps/web/app/connections/page.tsx", "tests/connection-disconnect.test.mjs"],
+      "commits": ["PR #243"],
+      "related": ["EOS-BUG-0001"],
+      "record": "docs/bug-fix/fixed/EOS-BUG-0002.md"
+    },
+    {
+      "id": "EOS-BUG-0001",
+      "title": "Disconnect button failed with HTTP 404 (then 500) on every network",
+      "status": "Fixed",
+      "verification": "Pending",
+      "severity": "High",
+      "area": "Connections",
+      "environment": "DEV",
+      "reported_at": "2026-10-29",
+      "fixed_at": "2026-10-29",
+      "verified_at": null,
+      "root_cause": "API Gateway had no POST /connections/disconnect route; once added, the dev-api Lambda resource policy had no per-route invoke permission for it.",
+      "fix_summary": "Created route aqvtww7 -> integration h25cb92, then Dean added Lambda permission statement disconnect-route. Keyless smoke test now returns 401.",
+      "files_changed": [],
+      "commits": ["AWS-only change; code from PR #222/#223"],
+      "related": ["EOS-BUG-0002"],
+      "record": "docs/bug-fix/fixed/EOS-BUG-0001.md"
+    }
+  ]
+}

@@ -188,6 +188,14 @@ something here that's wrong, fix it, or tell Dean if you can't verify the fix.
   `gh pr list -R elettro/elettro-brand-os --state merged --search "merged:>=<last audit date>"` lists what changed.
 - Procedures belong in `docs/admin/`, bug history in `docs/bug-fix/`; this file stays the map.
 
+## 8a. Bugs and admin runbooks (read before you guess)
+
+- **Any bug, regression or "it's broken"**: follow `docs/bug-fix/AGENT_WORKFLOW.md`. Search `docs/bug-fix/` and `bugs.json` first,
+  keep one `EOS-BUG-####` record per bug, and leave the root cause and repair procedure behind. One tracker for all of Elettro OS;
+  AR is an Area, not a separate tracker.
+- **Admin tasks** (adding a brand, adding an HTTP route, deploying the dev-api): use the runbooks in `docs/admin/` instead of
+  working it out again. If a runbook is missing or wrong, fix it in the same PR and say what was never verified.
+
 ## 8. Where to look next
 
 `docs/SYSTEM-SPEC-V1.md` and `docs/ARCHITECTURE.md` (original plan, partly stale), `docs/database-schema.md`,
