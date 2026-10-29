@@ -117,6 +117,7 @@ GitHub Actions (`.github/workflows/build-*-lambda.yml`) only **build a zip and u
 dev-api: the **"Build DEV API Lambda"** artifact works and is the simplest route (download with `gh run download`, then `update-function-code`; verified
 2026-10-29, steps in `docs/admin/deploy-dev-api-lambda.md`). The local alternative is `npm run build` in `services/dev-api-lambda`
 (bundles `intelligence/` and `node_modules`).
+**Gotcha:** a new dev-api module file must be added to the zip list in **both** `services/dev-api-lambda/package.json` and `.github/workflows/build-dev-api-lambda.yml` (the workflow's own list is what CI zips; its "Verify packaged handler loads" step fails the build if one is missing; this broke the develop build after #248 until fixed).
 Amplify auto-builds the web app from `develop`. After a merge, do the PR's "AWS changes after merge" list by hand.
 
 ### Credentials on Dean's machine
