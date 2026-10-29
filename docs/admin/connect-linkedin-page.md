@@ -1,7 +1,7 @@
 # Connect a LinkedIn company page to a brand
 
 Built 2026-10-29. One page per brand (`LINKEDIN_PAGE_BRANDS` in `apps/web/lib/linkedin-connect.ts`: elettro, stashbox, solarmeister,
-neckermann-strom, reggaeland). The Dean Palermo brand is a personal profile and uses the older member flow. **Status: code merged
+neckermann-strom, reggaeland, weightlossdavie). The Dean Palermo brand is a personal profile and uses the older member flow. **Status: code merged
 does not mean live; nothing below was run against the real LinkedIn app until the first connect.**
 
 ## How it works

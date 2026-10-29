@@ -9,7 +9,7 @@ export const LINKEDIN_SCOPES = ["openid", "profile", "email", "w_member_social"]
 export const LINKEDIN_STATE_COOKIE = "elettro_dev_li_state";
 // Dean's personal profile is the Dean Palermo brand. Every other brand posts to its company page (one page per brand).
 export const LINKEDIN_PROFILE_BRANDS = ["deanpalermo"];
-export const LINKEDIN_PAGE_BRANDS = ["elettro", "stashbox", "solarmeister", "neckermann-strom", "reggaeland"];
+export const LINKEDIN_PAGE_BRANDS = ["elettro", "stashbox", "solarmeister", "neckermann-strom", "reggaeland", "weightlossdavie"];
 export const LINKEDIN_BRANDS = [...LINKEDIN_PROFILE_BRANDS, ...LINKEDIN_PAGE_BRANDS];
 
 // Company pages: LinkedIn app "Elettro OS" (265010506, Community Management API, Development tier). Its secret lives only in
