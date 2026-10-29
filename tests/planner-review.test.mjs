@@ -185,7 +185,7 @@ test("list hands the page every publishing format, without planner rules, and ea
     externalAccountId: "UC1", publishingMode: "approval", placement: "short", postsPerWeek: 21, active: true }] }]]);
   const r = await handlePlannerReview(event, { brand: "stashbox", action: "list" }, async () => client, json);
   assert.equal(r.statusCode, 200);
-  assert.equal(r.body.formats.length, 25);
+  assert.equal(r.body.formats.length, 28);
   assert.ok(r.body.formats.every((f) => !("rule" in f)));
   assert.equal(r.body.formats.find((f) => f.destination === "gmb").status, "integration");
   assert.equal(r.body.maxPostsPerWeek, 70);

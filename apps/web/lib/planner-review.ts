@@ -15,11 +15,13 @@ export type TiktokCreator = {
   commentDisabled: boolean; duetDisabled: boolean; stitchDisabled: boolean; maxVideoPostDurationSec: number | null;
 };
 export type ReviewAsset = { id: string; filename: string; kind: string; sourcePath: string | null; title: string | null; durationMs: number | null };
+// A hand-written LinkedIn text, link or poll post (the details the writer saved; a poll or link has no media of its own).
+export type ReviewCustom = { kind: "text" | "link" | "poll"; question?: string; options?: string[]; duration?: string; url?: string; title?: string; description?: string };
 export type ReviewPost = {
   id: string; destination: string; accountName: string; placement: string; scheduledFor: string; status: string;
   title: string | null; caption: string | null; hashtags: string[]; reason: string | null; sector: string | null;
   copyStatus: string | null; captionStale: boolean; asset: ReviewAsset; candidates: ReviewAsset[];
-  tiktok: TiktokSettings | null; failureReason: string | null;
+  tiktok: TiktokSettings | null; failureReason: string | null; custom?: ReviewCustom | null;
 };
 export type ReviewAccount = { socialAccountId: string; destination: string; accountName: string; externalAccountId: string | null; publishingMode: string; placement: string | null; postsPerWeek: number | null; active: boolean | null };
 // live: approved posts auto-publish · planning: planned, publisher not built · review: waiting on the network's app review
