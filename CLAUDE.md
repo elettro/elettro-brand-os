@@ -120,6 +120,7 @@ Amplify auto-builds the web app from `develop`. After a merge, do the PR's "AWS 
 
 - **live**: Threads posts, YouTube Shorts, YouTube long-form, Instagram Reels, Facebook Reels (first scheduled
   publishes 2026-10-22). Merch posts with no caption fail on purpose instead of going out blank.
+  YouTube uploads publish **public** since 2026-10-29: Google approved OAuth verification (youtube.upload, youtube.readonly) 2026-10-28 and a public test upload was not locked. The upload Lambda's `YOUTUBE_PRIVACY` env var (default `private`) is set to `public`; the API compliance audit is only needed for more than 100 uploads a day. Brands other than Stashbox get asset-name-only template copy (no Stashbox wording).
 - **review** (built, waiting on the network): TikTok videos. Elettro OS TikTok app was submitted for review 2026-10-21.
 - **planning** (test posts work, scheduled auto-publish not built or not enabled): Instagram, Facebook, LinkedIn, Pinterest
   (Pinterest posting was merged in PR #144; re-check whether it is now live). Instagram/Facebook feed photos and wide
