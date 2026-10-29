@@ -4,7 +4,7 @@ DO $$ BEGIN
   CREATE TYPE "BrandRole" AS ENUM ('owner','admin','editor','approver','viewer');
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
-  CREATE TYPE "AssetKind" AS ENUM ('video','image','carousel','audio');
+  CREATE TYPE "AssetKind" AS ENUM ('video','image','carousel','audio','document');
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
   CREATE TYPE "AssetSourceType" AS ENUM ('dropbox','shopify','direct_upload');

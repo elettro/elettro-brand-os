@@ -86,6 +86,12 @@ EventBridge, every 15 min ──> platform worker Lambda ──> network API
   `PublicationLedger`, `BrandStorageRoot`, `StorageConnection`, `Campaign`, `Collection`, `MetadataPreset`, `IntakeBatch`, …
   Schema in `services/dev-api-lambda/init.sql` and `packages/database/prisma`.
 - **Dropbox layout**: the library root is `/1---elettro-brand-os/brands/<brand>/…` (migrated 2026-10-17 with a clean-slate reset).
+- **Asset kinds** (`Asset.kind`, Postgres enum `AssetKind`): `video`, `image`, `carousel`, `audio`, and `document` (PDF, added 2026-10-29). `.pdf` files in a
+  brand's Dropbox folder, direct uploads and the register/intake tools all become `document` assets (`mimeType` `application/pdf`; no thumbnail,
+  because Dropbox cannot render one, so the UI shows a glyph; no AI enrichment). The planner **never** picks a document unless a placement's pool rule lists
+  `"document"` in `kinds` (`poolRejection` in `planner-v2.mjs`). Nothing lists it yet: LinkedIn's `document` placement still stitches a carousel's images into a PDF.
+  The enum value is added in DEV by the IAM-only dev-api action `setup-document-asset-kind-20261029` (`document-asset-kind.mjs`, dry run unless `mode:"apply"`);
+  until it has run, the Dropbox sync and uploads fail on any `.pdf`.
 
 ## 3. Environments and AWS (account 656260749296, us-east-1)
 
