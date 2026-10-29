@@ -113,6 +113,7 @@ async function listPosts(client, brand, body) {
       title: p.generatedTitle, caption: p.generatedCaption, hashtags: p.generatedHashtags || [], reason: p.selectionReason,
       sector: p.scoreBreakdown?.sector || null, copyStatus: p.scoreBreakdown?.copy?.status || null,
       tiktok: p.scoreBreakdown?.tiktok || null,
+      failureReason: p.status === "failed" ? p.scoreBreakdown?.publish?.error || null : null,
       captionStale: Boolean(p.scoreBreakdown?.swappedFrom) && !p.scoreBreakdown?.captionEditedAfterSwap,
       asset: assetCard({ id: p.assetId, filename: p.filename, kind: p.kind, sourcePath: p.sourcePath, title: p.title, durationMs: p.durationMs }),
       candidates: (p.scoreBreakdown?.candidateIds || []).filter((id) => id !== p.assetId && byId.has(id)).slice(0, 6).map((id) => assetCard(byId.get(id)))
