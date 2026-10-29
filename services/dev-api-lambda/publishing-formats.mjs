@@ -34,6 +34,13 @@ export const PUBLISHING_FORMATS = [
   { destination: "threads", placement: "post", label: "Posts", status: "live" },
   { destination: "threads", placement: "carousel", label: "Carousels", status: "planning", note: "Scheduled publishing is built; goes live after the first scheduled carousel posts",
     slides: { min: 2, max: 20, recommended: [3, 6] }, rule: { kinds: ["image"], aspectRatios: [] } },
+  // Bluesky: a post takes one photo, one video or up to 4 photos (no mixing). Connect is built; the publisher is not.
+  { destination: "bluesky", placement: "post", label: "Photo posts", status: "planning", note: "Connect is built; the Bluesky publisher isn't yet",
+    rule: { kinds: ["image"], aspectRatios: [] } },
+  { destination: "bluesky", placement: "carousel", label: "Multi-photo posts", status: "planning", note: "Connect is built; the Bluesky publisher isn't yet",
+    slides: { min: 2, max: 4, recommended: [2, 4] }, rule: { kinds: ["image"], aspectRatios: [] } },
+  { destination: "bluesky", placement: "video", label: "Videos", status: "planning", note: "Connect is built; the Bluesky publisher isn't yet. Videos up to 3 minutes",
+    rule: { kinds: ["video"], aspectRatios: [], maxDurationBucket: "1-3min" } },
   { destination: "youtube", placement: "short", label: "Shorts", status: "live" },
   { destination: "youtube", placement: "video", label: "Long-form videos", status: "live",
     rule: { aspectRatios: ["16x9"], minDurationBucket: "3min-plus" } },

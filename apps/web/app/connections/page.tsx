@@ -7,6 +7,7 @@ import { GBP_BRANDS } from "@/lib/gbp-connect";
 import { META_BRANDS } from "@/lib/meta-connect";
 import { MetaTestPosts } from "@/components/meta-test-posts";
 import { THREADS_BRANDS } from "@/lib/threads-connect";
+import { BLUESKY_BRANDS } from "@/lib/bluesky-connect";
 import { TIKTOK_BRANDS } from "@/lib/tiktok-connect";
 import { TiktokPost } from "@/components/tiktok-post";
 import { ConnectionDisconnect } from "@/components/connection-disconnect";
@@ -63,6 +64,8 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
   const facebook = status.facebook || {};
   const instagram = status.instagram || {};
   const threads = status.threads || {};
+  const blueskyBrands = brandConfigs.filter((b) => BLUESKY_BRANDS.includes(b.id) && inView(b.id));
+  const bluesky = status.bluesky || {};
   const tiktokBrands = brandConfigs.filter((b) => TIKTOK_BRANDS.includes(b.id) && inView(b.id));
   const tiktok = status.tiktok || {};
   const pinterestBrands = brandConfigs.filter((b) => PINTEREST_BRANDS.includes(b.id) && inView(b.id));
@@ -71,13 +74,14 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
   if (brand && connected && expires && !Number.isNaN(Date.parse(expires))) {
     if (network === "linkedin") linkedin[brand] = { handle: connected, expiresAt: expires };
     if (network === "threads") threads[brand] = { handle: connected, expiresAt: expires };
+    if (network === "bluesky") bluesky[brand] = { handle: connected, expiresAt: expires };
     if (network === "tiktok") tiktok[brand] = { handle: connected, expiresAt: expires };
     if (network === "pinterest") pinterest[brand] = { handle: connected, expiresAt: expires };
   }
   // Same cache after a disconnect: the brand is no longer linked even if the feed still says so.
   if (brand && disconnected) {
     const feeds: Record<string, Array<Record<string, Linked>>> = {
-      youtube: [youtube], gmb: [gmb], linkedin: [linkedin], threads: [threads], tiktok: [tiktok], pinterest: [pinterest], meta: [facebook, instagram]
+      youtube: [youtube], gmb: [gmb], linkedin: [linkedin], threads: [threads], bluesky: [bluesky], tiktok: [tiktok], pinterest: [pinterest], meta: [facebook, instagram]
     };
     for (const feed of feeds[network || ""] || []) delete feed[brand];
   }
@@ -173,6 +177,33 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
               {linked?.expiresAt && <ReconnectCountdown expiresAt={linked.expiresAt} />}
               {linked && <ConnectionDisconnect brand={b.id} network="threads" handle={linked.handle || "this account"} />}
             </div>
+          </article>
+        );
+      })}
+    </div>
+    </>}
+    {blueskyBrands.length > 0 && <>
+    <h2 id="bluesky" style={{ marginTop: 32 }}>Bluesky</h2>
+    <p className="muted">Type the brand&apos;s Bluesky handle (like yourname.bsky.social), or leave it blank to pick the account on Bluesky&apos;s own sign-in page. Elettro OS never sees the password. The login renews itself while posts go out; the date shows when it would lapse if nothing used it.</p>
+    <div className="grid" style={{ marginTop: 20 }}>
+      {blueskyBrands.map((b) => {
+        const linked = bluesky[b.id];
+        return (
+          <article className="card" key={b.id}>
+            <div className="eyebrow">Bluesky</div>
+            <h2>{b.name}</h2>
+            <p className="muted" style={{ margin: "0 0 12px" }}>
+              {linked ? <>● Connected · <b>{linked.handle}</b></> : "○ Not connected"}
+            </p>
+            <form className="connect-row" action="/api/connections/bluesky/start" method="get">
+              <input type="hidden" name="brand" value={b.id} />
+              <input name="handle" placeholder="handle.bsky.social" aria-label={`${b.name} Bluesky handle`} autoComplete="off" spellCheck={false} style={{ minWidth: 0, flex: "1 1 160px" }} />
+              <button className="status-chip" type="submit">{linked ? "Reconnect" : "Connect Bluesky"}</button>
+            </form>
+            {linked && <div className="connect-row" style={{ marginTop: 8 }}>
+              {linked.expiresAt && <ReconnectCountdown expiresAt={linked.expiresAt} />}
+              <ConnectionDisconnect brand={b.id} network="bluesky" handle={linked.handle || "this account"} />
+            </div>}
           </article>
         );
       })}

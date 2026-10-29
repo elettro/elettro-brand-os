@@ -10,16 +10,18 @@
     "prebuild": "cd ../.. && npm run db:generate"
   },
   "dependencies": {
+    "@atproto/jwk-jose": "^0.2.4",
+    "@atproto/oauth-client-node": "^0.5.13",
+    "@aws-sdk/client-bedrock-runtime": "^3.910.0",
+    "@aws-sdk/client-lambda": "^3.910.0",
+    "@aws-sdk/client-secrets-manager": "^3.910.0",
+    "@aws-sdk/client-ssm": "^3.800.0",
     "@elettro/auth": "*",
     "@elettro/database": "*",
     "next": "^15.5.0",
     "qrcode-generator": "2.0.4",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0",
-    "@aws-sdk/client-ssm": "^3.800.0",
-    "@aws-sdk/client-secrets-manager": "^3.910.0",
-    "@aws-sdk/client-bedrock-runtime": "^3.910.0",
-    "@aws-sdk/client-lambda": "^3.910.0"
+    "react-dom": "^19.1.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
