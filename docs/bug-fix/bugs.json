@@ -5,6 +5,24 @@
   "workflow": "docs/bug-fix/AGENT_WORKFLOW.md",
   "bugs": [
     {
+      "id": "EOS-BUG-0003",
+      "title": "dev-api build fails: new module missing from the zip file list (Bluesky)",
+      "status": "Fixed",
+      "verification": "Pending",
+      "severity": "Medium",
+      "area": "API/Infra",
+      "environment": "DEV",
+      "reported_at": "2026-10-29",
+      "fixed_at": "2026-10-29",
+      "verified_at": null,
+      "root_cause": "index.mjs imports bluesky-connect.mjs (PR #248) but the build workflow zip and syntax-check lists omit it; the build's load check fails, so no deployable zip.",
+      "fix_summary": "Added the module to the workflow lists and a test that every module index.mjs reaches is in both zip lists (workflow and package.json).",
+      "files_changed": [".github/workflows/build-dev-api-lambda.yml", "tests/dev-api-zip-contents.test.mjs", ".github/workflows/ci.yml"],
+      "commits": ["PR (fix/dev-api-zip-bluesky)"],
+      "related": [],
+      "record": "docs/bug-fix/fixed/EOS-BUG-0003.md"
+    },
+    {
       "id": "EOS-BUG-0002",
       "title": "No \"Disconnect successful\" confirmation next to the button",
       "status": "Fixed",
