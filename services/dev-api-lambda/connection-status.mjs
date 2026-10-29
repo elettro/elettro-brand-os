@@ -227,3 +227,25 @@ export async function setTokenExpiry(event, connectDatabase, json) {
     try { await client.end(); } catch {}
   }
 }
+
+// IAM-only: fix an account's display name: { brand, destination, from, to }. Matches on the old name so it can't hit the wrong row.
+export async function renameSocialAccount(event, connectDatabase, json) {
+  const destination = String(event.destination || "").toLowerCase();
+  const brand = String(event.brand || "");
+  const from = String(event.from || "").trim(), to = String(event.to || "").trim();
+  if (!DESTINATIONS.includes(destination) || !brand || !from || !to) {
+    return json(400, { ok: false, error: "Need brand, destination, from and to" });
+  }
+  const client = await connectDatabase();
+  try {
+    const updated = await client.query(
+      `UPDATE "SocialAccount" sa SET "accountName"=$4, "updatedAt"=CURRENT_TIMESTAMP
+       FROM "Brand" b WHERE sa."brandId"=b."id" AND b."slug"=$1 AND sa."destination"=$2 AND sa."accountName"=$3 RETURNING sa."id"`,
+      [brand, destination, from, to]);
+    if (!updated.rows.length) return json(404, { ok: false, error: "No account with that brand, destination and name" });
+    cache = null;
+    return json(200, { ok: true, brand, destination, from, to, updated: updated.rows.length });
+  } finally {
+    try { await client.end(); } catch {}
+  }
+}
