@@ -682,6 +682,10 @@ button:disabled {
   cursor: pointer;
 }
 
+.post-result { margin: 4px 0 0; padding: 10px 12px; border-radius: 9px; border: 1px solid var(--line); font-size: 14px; }
+.post-result.ok { border-color: #2f9e6b; background: rgba(47, 158, 107, 0.12); }
+.post-result.bad { border-color: #d6455d; background: rgba(214, 69, 93, 0.12); }
+
 /* Review page: four weeks of Facebook + Instagram posts to approve, skip, edit or swap. */
 .review-brands { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
 .review-brands a { padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; color: var(--text); text-decoration: none; }
