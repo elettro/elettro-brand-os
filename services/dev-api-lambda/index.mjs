@@ -4,7 +4,7 @@ import {runBrandRootMigration} from "./brand-root-migration.mjs";
 import { configurePlannerBrand, runPlanWeek, runPlanWeeks, approvePlannerWeek } from "./planner-v2-db.mjs";
 import {runSharedAudioLibrarySetup,LIBRARY_SLUG,LIBRARY_AUDIO_ROOT} from "./shared-audio-library.mjs";
 import {runDocumentAssetKindSetup} from "./document-asset-kind.mjs";
-import { handleConnectionStatus, setPlatformMilestone, setTokenExpiry, feedResponse } from "./connection-status.mjs";
+import { handleConnectionStatus, setPlatformMilestone, setTokenExpiry, renameSocialAccount, feedResponse } from "./connection-status.mjs";
 import { handlePostRace } from "./post-race.mjs";
 import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
 import { S3Client, PutObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
@@ -1584,6 +1584,8 @@ export const handler = async (event = {}) => {
   if (iamOnly && event.action === "set-platform-milestone") return setPlatformMilestone(event, connectDatabase, json);
   // IAM-only: a token worker renewed an account's token (Threads every ~30 days); move its reconnect countdown.
   if (iamOnly && event.action === "set-token-expiry") return setTokenExpiry(event, connectDatabase, json);
+  // IAM-only: correct a social account's display name (matched on its old name).
+  if (iamOnly && event.action === "rename-social-account") return renameSocialAccount(event, connectDatabase, json);
   // IAM-only shared audio library setup (dry-run unless mode:"apply"); never exposed through HTTP or MCP.
   if(event.action === "setup-shared-audio-library-20261017" && !event.requestContext && !event.rawPath && !event.path) return runSharedAudioLibrarySetup(event,connectDatabase,json);
   // IAM-only: add the 'document' (PDF) asset kind (dry-run unless mode:"apply").

@@ -109,7 +109,9 @@ async function loadBrandFacts(client, brand, root) {
       WHERE "brandId" = $1 OR "brandId" IS NULL`, [brand.id])).rows;
 
   return DESTINATIONS.filter((d) => !OPT_IN_DESTINATIONS.includes(d) || accounts.some((a) => a.destination === d)).map((destination) => {
-    const account = accounts.find((a) => a.destination === destination) || {};
+    // A brand can hold an unlinked seed row beside the real connected one; show the connected account (newest token first).
+    const account = accounts.filter((a) => a.destination === destination)
+      .sort((x, y) => Boolean(y.externalAccountId) - Boolean(x.externalAccountId) || new Date(y.tokenExpiresAt || 0) - new Date(x.tokenExpiresAt || 0))[0] || {};
     const mine = {};
     const notes = [];
     for (const row of milestones) {
@@ -225,6 +227,28 @@ export async function setTokenExpiry(event, connectDatabase, json) {
     if (!updated.rows.length) return json(404, { ok: false, error: "No connected account with that id" });
     cache = null;
     return json(200, { ok: true, destination, externalAccountId, tokenExpiresAt: new Date(expires).toISOString() });
+  } finally {
+    try { await client.end(); } catch {}
+  }
+}
+
+// IAM-only: fix an account's display name: { brand, destination, from, to }. Matches on the old name so it can't hit the wrong row.
+export async function renameSocialAccount(event, connectDatabase, json) {
+  const destination = String(event.destination || "").toLowerCase();
+  const brand = String(event.brand || "");
+  const from = String(event.from || "").trim(), to = String(event.to || "").trim();
+  if (!DESTINATIONS.includes(destination) || !brand || !from || !to) {
+    return json(400, { ok: false, error: "Need brand, destination, from and to" });
+  }
+  const client = await connectDatabase();
+  try {
+    const updated = await client.query(
+      `UPDATE "SocialAccount" sa SET "accountName"=$4, "updatedAt"=CURRENT_TIMESTAMP
+       FROM "Brand" b WHERE sa."brandId"=b."id" AND b."slug"=$1 AND sa."destination"=$2 AND sa."accountName"=$3 RETURNING sa."id"`,
+      [brand, destination, from, to]);
+    if (!updated.rows.length) return json(404, { ok: false, error: "No account with that brand, destination and name" });
+    cache = null;
+    return json(200, { ok: true, brand, destination, from, to, updated: updated.rows.length });
   } finally {
     try { await client.end(); } catch {}
   }
