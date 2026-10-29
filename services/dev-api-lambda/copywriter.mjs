@@ -15,10 +15,12 @@ const LIMITS = {
   linkedin: { caption: 3000, hashtags: 3 },
   // Threads rejects posts over 500 characters and takes one topic tag per post.
   threads: { caption: 500, hashtags: 1 },
+  // Bluesky: 300 characters (graphemes); links and #tags become clickable facets.
+  bluesky: { caption: 300, hashtags: 1 },
   // Pinterest: searchable title + keyword description; hashtags do little there. The Pin itself links out.
   pinterest: { title: 100, caption: 800, hashtags: 0 }
 };
-const CLICKABLE = new Set(["youtube", "facebook", "x", "linkedin", "threads"]);
+const CLICKABLE = new Set(["youtube", "facebook", "x", "linkedin", "threads", "bluesky"]);
 const BANNED = [/\belevate\b/i, /\bunleash/i, /\bunlock/i, /\bdive into\b/i, /game[- ]changer/i, /experience the magic/i, /it'?s not just .+, it'?s/i];
 const SHOWS = { "stashbox-does-dylan": "Stashbox Does Dylan", "stashbox-does-sublime": "Stashbox Does Sublime & Reggae" };
 const ROLE_WORDS = { vocals: "vocals", guitar: "guitar", bass: "bass", drums: "drums", keyboards: "keys", keys: "keys" };

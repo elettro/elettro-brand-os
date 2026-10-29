@@ -12,7 +12,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // Assets registered by the intake page kept their Dropbox path only in "sourceUrl" until it also
 // filled "sourcePath", so the path falls back to it.
 const LIBRARY_COLUMNS = `"id","filename","kind",COALESCE("sourcePath","sourceUrl") AS "sourcePath","title","aspectRatioLabel","durationMs","mimeType","width","height"`;
-const PUBLISH_DESTINATIONS = ["instagram", "facebook", "youtube", "linkedin", "threads", "tiktok", "x", "pinterest", "gmb"];
+const PUBLISH_DESTINATIONS = ["instagram", "facebook", "youtube", "linkedin", "threads", "bluesky", "tiktok", "x", "pinterest", "gmb"];
 
 export async function searchLibrary(client, brand, body) {
   const kind = ["image", "video"].includes(body.kind) ? body.kind : null;

@@ -22,6 +22,7 @@ import { completeMetaConnect } from "./meta-connect.mjs";
 import { handlePlannerWeb, handlePlannerOps } from "./planner-ops.mjs";
 import { setPostingWindow } from "./posting-window.mjs";
 import { completeThreadsConnect } from "./threads-connect.mjs";
+import { completeBlueskyConnect } from "./bluesky-connect.mjs";
 import { completeTiktokConnect } from "./tiktok-connect.mjs";
 import { disconnectNetwork } from "./connection-disconnect.mjs";
 import { completePinterestConnect } from "./pinterest-connect.mjs";
@@ -1787,6 +1788,11 @@ export const handler = async (event = {}) => {
   // "Connect Threads": same handshake; one Threads profile per brand, 60-day token with an expiry date.
   if (requestPath === "/connections/threads/complete" && event?.requestContext?.http?.method === "POST") {
     return completeThreadsConnect(event, parseJsonBody(event), connectDatabase, json);
+  }
+
+  // "Connect Bluesky": same handshake; the web app runs the AT Protocol OAuth and sends the saved session.
+  if (requestPath === "/connections/bluesky/complete" && event?.requestContext?.http?.method === "POST") {
+    return completeBlueskyConnect(event, parseJsonBody(event), connectDatabase, json);
   }
 
   // "Connect TikTok": same handshake; one TikTok account per brand, refresh-token expiry as the reconnect date.

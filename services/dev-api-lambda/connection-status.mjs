@@ -19,7 +19,7 @@ export const CHECKPOINTS = [
   { key: "live", label: "Auto-publishing + metrics live", w: 10 }
 ];
 
-export const DESTINATIONS = ["youtube", "instagram", "facebook", "tiktok", "x", "linkedin", "threads", "pinterest", "gmb", "reddit"];
+export const DESTINATIONS = ["youtube", "instagram", "facebook", "tiktok", "x", "linkedin", "threads", "bluesky", "pinterest", "gmb", "reddit"];
 
 // One developer app per platform family, shared by every brand (app review happens once).
 export const PLATFORM_APP = { instagram: "meta", facebook: "meta", threads: "meta", youtube: "google", gmb: "google" };

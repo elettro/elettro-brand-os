@@ -10,7 +10,7 @@ import {
   type BulkAssetMetadata
 } from "@/lib/dev-api";
 
-const DESTINATIONS = ["instagram", "facebook", "tiktok", "youtube", "threads", "x", "linkedin", "pinterest", "gmb", "feed", "website", "rss"];
+const DESTINATIONS = ["instagram", "facebook", "tiktok", "youtube", "threads", "bluesky", "x", "linkedin", "pinterest", "gmb", "feed", "website", "rss"];
 
 function mmddToInput(value?: number | null) {
   if (!value) return "";

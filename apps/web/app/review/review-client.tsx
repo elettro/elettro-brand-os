@@ -6,7 +6,7 @@ import { AssetThumb as Thumb } from "@/components/asset-thumb";
 import { TiktokCard } from "./tiktok-card";
 
 const NETWORK: Record<string, string> = {
-  instagram: "Instagram", facebook: "Facebook", tiktok: "TikTok", threads: "Threads", youtube: "YouTube",
+  instagram: "Instagram", facebook: "Facebook", tiktok: "TikTok", threads: "Threads", bluesky: "Bluesky", youtube: "YouTube",
   pinterest: "Pinterest", linkedin: "LinkedIn", x: "X", gmb: "Google Business"
 };
 const STATUS: Record<PublishingFormat["status"], string> = {
