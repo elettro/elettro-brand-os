@@ -100,6 +100,8 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
   const maxWeek = list.maxPostsPerWeek || 70;
   // Weeks fold so one can be read on its own; the current week starts open.
   const [open, setOpen] = useState(() => new Set([list.weekStart]));
+  // Weeks whose published posts are shown; published posts are hidden by default so the posts still to act on lead.
+  const [showPublished, setShowPublished] = useState<Set<string>>(() => new Set());
   const toggle = (start: string) => setOpen((prev) => {
     const next = new Set(prev);
     if (next.has(start)) next.delete(start); else next.add(start);
@@ -273,6 +275,10 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
       const approved = w.posts.filter((p) => p.status === "approved").length;
       const skipped = w.posts.filter((p) => p.status === "skipped").length;
       const isOpen = open.has(w.start);
+      const publishedCount = w.posts.filter((p) => p.status === "published").length;
+      // Only weeks with posts still to act on get the toggle; a fully published week shows everything.
+      const canHidePublished = publishedCount > 0 && publishedCount < w.posts.length;
+      const hidePublished = canHidePublished && !showPublished.has(w.start);
       const weekApproved = (list.approvedWeeks || []).includes(w.start);
       const tiktokPlanned = w.posts.filter((p) => p.status === "planned" && p.destination === "tiktok");
       const tiktokToReview = tiktokPlanned.length;
@@ -320,7 +326,12 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
             onApprove={(settings) => run("tiktok-week", { action: "tiktok-approve", ids: tiktokApprovable.map((p) => p.id), ...settings },
               `Approved ${tiktokApprovable.length} TikTok post${tiktokApprovable.length === 1 ? "" : "s"} for the week of ${w.start} with these settings.`)} />
         </section>}
-        {isOpen && w.days.map(([day, posts]) => <div key={day} className="review-day">
+        {isOpen && canHidePublished && <label className="review-published-toggle">
+          <input type="checkbox" role="switch" checked={!hidePublished}
+            onChange={() => setShowPublished((s) => { const n = new Set(s); if (n.has(w.start)) n.delete(w.start); else n.add(w.start); return n; })} />
+          {hidePublished ? `Show ${publishedCount} published` : `Hide ${publishedCount} published`}
+        </label>}
+        {isOpen && w.days.map(([day, allPosts]) => ({ day, posts: hidePublished ? allPosts.filter((p) => p.status !== "published") : allPosts })).filter((d) => d.posts.length).map(({ day, posts }) => <div key={day} className="review-day">
           <h3>{fmtDay(posts[0].scheduledFor)}</h3>
           <div className="review-posts">
             {posts.map((p) => <article key={p.id} className={`review-post status-${p.status}`}>

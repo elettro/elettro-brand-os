@@ -705,6 +705,7 @@ button:disabled {
 .review-week-toggle { display: inline-flex; align-items: center; gap: 8px; background: none; border: 0; padding: 0; color: inherit; font: inherit; cursor: pointer; }
 .review-chevron { display: inline-block; transition: transform 120ms ease; color: var(--muted); }
 .review-week.open .review-chevron { transform: rotate(90deg); }
+.review-published-toggle { display: inline-flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 13px; color: var(--muted); cursor: pointer; }
 .review-day h3 { margin: 20px 0 8px; font-size: 15px; color: var(--muted); }
 .review-posts { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(760px, 1fr)); }
 .review-post { display: flex; gap: 12px; padding: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
