@@ -46,7 +46,7 @@ async function connectionStatus(): Promise<Record<string, Record<string, Linked>
 export default async function ConnectionsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   // Owner or a brand-scoped user: the page below only lists the brands this session may see.
   if (!(await session())) redirect("/api/auth/login");
-  const [{ brand, connected, disconnected, error, network, expires, posted }, status] = await Promise.all([searchParams, connectionStatus()]);
+  const [{ brand, connected, disconnected, error, network, expires, posted, at }, status] = await Promise.all([searchParams, connectionStatus()]);
   // The header dropdown drives ?brand=: one brand shows only its connections, "All brands" (no param) shows every brand this user may see.
   const accessible: string[] = visibleBrands(await session(), brandConfigs).map((b) => b.id);
   const picked = brand && accessible.includes(brand) ? brand : null;
@@ -230,14 +230,13 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
     {linkedinBrands.length > 0 && <>
     <h2 id="linkedin" style={{ marginTop: 32 }}>LinkedIn</h2>
     <p className="muted">Dean&apos;s personal profile, posting through the Elettro OS Personal app. LinkedIn gives no refresh token, so reconnect before the countdown runs out; company pages follow once LinkedIn approves Community Management.</p>
-    {/* The result sits next to the form: the redirect lands on #linkedin, far down the page. */}
-    {network === "linkedin" && posted && <p className="card" style={{ marginTop: 16 }}>Posted to LinkedIn. <a href={posted} target="_blank" rel="noreferrer">See the post</a></p>}
-    {network === "linkedin" && error && <p className="card" style={{ marginTop: 16 }}>LinkedIn post not sent: {error}</p>}
+    {/* A result for a brand shows under that brand's Post button; one with no brand (bad login, unknown brand) shows here. */}
+    {network === "linkedin" && !brand && error && <p className="card" style={{ marginTop: 16 }}>LinkedIn post not sent: {error}</p>}
     <div className="grid" style={{ marginTop: 20 }}>
       {linkedinBrands.map((b) => {
         const linked = linkedin[b.id];
         return (
-          <article className="card" key={b.id}>
+          <article className="card" key={b.id} id={`li-${b.id}`} style={{ scrollMarginTop: 16 }}>
             <div className="eyebrow">LinkedIn · personal profile</div>
             <h2>{b.name}</h2>
             <p className="muted" style={{ margin: "0 0 12px" }}>
@@ -260,6 +259,13 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
                 <label className="muted" htmlFor={`li-text-${b.id}`}>Test post (goes live on LinkedIn when you click)</label>
                 <textarea id={`li-text-${b.id}`} name="text" rows={4} maxLength={3000} required defaultValue={TEST_POST} />
                 <button type="submit" className="status-chip">Post to LinkedIn now</button>
+                {network === "linkedin" && brand === b.id && (posted || error) && (
+                  <p role="status" className={`post-result ${posted ? "ok" : "bad"}`}>
+                    {posted
+                      ? <><b>✓ Posted to LinkedIn</b>{at ? ` at ${new Date(at).toLocaleTimeString("en-US", { timeStyle: "short", timeZone: "America/New_York" })} ET` : ""}. <a href={posted} target="_blank" rel="noreferrer">View the post</a></>
+                      : <><b>✗ Not posted.</b> {error}</>}
+                  </p>
+                )}
               </form>
             )}
           </article>
