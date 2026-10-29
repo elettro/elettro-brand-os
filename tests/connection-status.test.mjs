@@ -80,7 +80,9 @@ test("feed: system milestone (meta) reaches IG + FB, brand milestone only its pr
     const t = Date.parse("2026-10-19T12:00:00Z");
     const feed = await connectionStatusFeed(fake, { root, now: t });
     const p = Object.fromEntries(feed.brands[0].profiles.map((x) => [x.destination, x]));
-    assert.equal(feed.brands[0].profiles.length, DESTINATIONS.length);
+    // Mastodon is listed only for brands that have an account there, so this brand's feed is unchanged.
+    assert.equal(feed.brands[0].profiles.length, DESTINATIONS.length - 1);
+    assert.equal(p.mastodon, undefined);
     assert.equal(p.instagram.done.api, 0.33);
     assert.equal(p.facebook.done.api, 0.33);
     assert.equal(p.tiktok.done.api, 0);
@@ -111,4 +113,25 @@ test("milestones lift any checkpoint but never lower derived ones", () => {
   const { done } = profileStatus({ ...base, connected: true, milestones: { test: 1, oauth: 0 } }, NOW);
   assert.equal(done.test, 1);
   assert.equal(done.oauth, 1);
+});
+
+test("feed: a brand with a Mastodon account gets a mastodon profile, connected, with no token expiry", async () => {
+  const root = mkdtempSync(join(tmpdir(), "intel-"));
+  mkdirSync(join(root, "brands", "solarmeister"), { recursive: true });
+  writeFileSync(join(root, "brands", "solarmeister", "platforms.md"), "## [instagram] IG\n");
+  const fake = async () => ({
+    end: async () => {},
+    query: async (sql) => {
+      if (sql.includes('FROM "Brand"')) return { rows: [{ id: "b2", slug: "solarmeister", name: "SolarMeister" }] };
+      if (sql.includes('FROM "SocialAccount"')) return { rows: [{ id: "a2", destination: "mastodon", accountName: "@solarmeister@mastodon.social",
+        externalAccountId: "1@mastodon.social", publishingMode: "handoff", postsPerWeek: 0, captionedPosts: 0, approvedPosts: 0,
+        apiPublishCount: 0, lastApiPublishAt: null, tokenExpiresAt: null }] };
+      return { rows: [] };
+    }
+  });
+  const feed = await connectionStatusFeed(fake, { root, now: Date.parse("2026-10-30T12:00:00Z") });
+  const p = Object.fromEntries(feed.brands[0].profiles.map((x) => [x.destination, x]));
+  assert.equal(feed.brands[0].profiles.length, DESTINATIONS.length);
+  assert.equal(p.mastodon.handle, "@solarmeister@mastodon.social");
+  assert.equal(p.mastodon.tokenExpiresAt, null);
 });
