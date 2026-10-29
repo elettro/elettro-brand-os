@@ -123,7 +123,7 @@ Amplify auto-builds the web app from `develop`. After a merge, do the PR's "AWS 
 - CLI profile **`stashbox-audit`** = IAM user `claude-audit-only` (the name is misleading: it appears to have been created for
   Stashbox Radio auditing on 2026-07-05, per `stashbox-radio/CONTEXT_VERIFIED.md`). It has `ReadOnlyAccess` plus write policies that let it deploy Elettro OS: `EbosDevBrandsCutover`,
   `ElettroDevConnectionsSetup` (inline) and **`ElettroDevPlatformWorkers`** (managed, added 2026-10-22, now v2: update the five
-  worker Lambdas, edit the tick rules; policy contents not re-read on 2026-10-29). Seen working on 2026-10-29: `update-function-code` on the
+  worker Lambdas, edit the tick rules; policy contents not re-read on 2026-10-29). **Denied on 2026-10-29: `UpdateFunctionCode` on `elettro-brand-os-dev-linkedin`** (the policy predates that Lambda; Dean must upload it or add it to `ElettroDevPlatformWorkers`). Seen working on 2026-10-29: `update-function-code` on the
   dev-api, creating an API Gateway route, reading CloudWatch logs. Dean ran `lambda add-permission` with `elettro`; whether this profile can is untested.
   It is meant to be unable to touch IAM roles, delete anything, or touch Stashbox Radio (not re-tested).
   Use this one. Past sessions also deployed as `root`; avoid that.
