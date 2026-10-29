@@ -62,11 +62,10 @@ of a brand's Bluesky posts by default (`planner-v2-db.mjs`; a brand's own `promo
 go out as plain clips with no link or ask. Driving traffic therefore means: a useful post with one real link, from the records
 (`allowedLinks`), in about one post in four, with the rest building the audience that clicks.
 
-### Decisions for Dean (not made by code)
+### Decisions for Dean
 1. **`bot` self-label.** Bluesky asks accounts that post automatically to add it as a best practice. It is not a rule, and it
    tells users (and lets them filter) that the account is automated. Not set. Say if you want it set on a brand's profile.
-2. **Disclosure wording.** We treat plain brand self-promotion as clearly commercial. If you want an explicit marker on every
-   promotional post (for example "Ad" or "Promo"), that is a one-line change, at the cost of a stiffer voice.
+2. **Disclosure wording: decided 2026-10-29, no "Ad"/"Promo" marker.** Each brand posts only to its own profile, so its promotion is plainly the brand speaking. Sponsored, affiliate or paid content (none exists today) would still have to say so.
 3. **Promo share** is 25% by default, matching Threads; change per brand through its `promotionalMaxShare`.
 
 ## Publisher (services/bluesky-lambda)
