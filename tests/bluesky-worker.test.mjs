@@ -112,7 +112,7 @@ test("a video goes through service auth, the video service and its job status, t
   let polls = 0;
   const fetchImpl = async (url, init) => {
     seen.push([String(url), init?.headers?.authorization]);
-    if (String(url).includes("uploadVideo")) return { ok: true, status: 200, json: async () => ({ jobId: "job1", state: "JOB_STATE_CREATED" }) };
+    if (String(url).includes("uploadVideo")) return { ok: true, status: 200, text: async () => JSON.stringify({ jobId: "job1", state: "JOB_STATE_CREATED" }) };
     polls += 1;
     return { ok: true, status: 200, json: async () => ({ jobStatus: polls < 2 ? { jobId: "job1", state: "JOB_STATE_PROCESSING" } : { jobId: "job1", state: "JOB_STATE_COMPLETED", blob: { $type: "blob", ref: { $link: "vid" }, mimeType: "video/mp4", size: 5 } } }) };
   };
@@ -128,9 +128,19 @@ test("a video goes through service auth, the video service and its job status, t
   assert.equal(embed.video.ref.$link, "vid");
 });
 
+test("a refused video upload reports the status and what Bluesky said", async () => {
+  const session = fakeSession({ "com.atproto.server.getServiceAuth": () => ({ token: "t" }) });
+  const refused = async () => ({ ok: false, status: 401, text: async () => JSON.stringify({ error: "InvalidToken", message: "bad audience" }) });
+  await assert.rejects(publish(session, record, { kind: "video", text: "", paths: [ROOT + "v.mp4"] }, { download: async () => Buffer.from("x"), fetchImpl: refused, wait: async () => {} }), /HTTP 401 InvalidToken bad audience/);
+  const plain = async () => ({ ok: false, status: 401, text: async () => "Unauthorized" });
+  await assert.rejects(publish(session, record, { kind: "video", text: "", paths: [ROOT + "v.mp4"] }, { download: async () => Buffer.from("x"), fetchImpl: plain, wait: async () => {} }), /HTTP 401 Unauthorized/);
+});
+
 test("a failed video job and an oversize video stop before any post is created", async () => {
   const session = fakeSession({ "com.atproto.server.getServiceAuth": () => ({ token: "t" }) });
-  const failing = async (url) => ({ ok: true, status: 200, json: async () => String(url).includes("uploadVideo") ? { jobId: "j" } : { jobStatus: { state: "JOB_STATE_FAILED", error: "bad codec" } } });
+  const failing = async (url) => String(url).includes("uploadVideo")
+    ? { ok: true, status: 200, text: async () => JSON.stringify({ jobId: "j" }) }
+    : { ok: true, status: 200, json: async () => ({ jobStatus: { state: "JOB_STATE_FAILED", error: "bad codec" } }) };
   await assert.rejects(publish(session, record, { kind: "video", text: "", paths: [ROOT + "v.mp4"] }, { download: async () => Buffer.from("x"), fetchImpl: failing, wait: async () => {} }), /bad codec/);
   assert.ok(!session.calls.some((c) => c.path.includes("createRecord")));
   await assert.rejects(publish(session, record, { kind: "video", text: "", paths: [ROOT + "v.mp4"] }, { download: async () => ({ length: 101 * 1024 * 1024 }) }), /100 MB/);

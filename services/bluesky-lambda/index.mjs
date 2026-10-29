@@ -306,10 +306,11 @@ async function uploadVideo(session, record, bytes, name, deps) {
   const upload = await fetchImpl(`${VIDEO_SERVICE}/xrpc/app.bsky.video.uploadVideo?${new URLSearchParams({ did: record.did, name })}`, {
     method: "POST", headers: { authorization: `Bearer ${auth.token}`, "content-type": "video/mp4" }, body: bytes, signal: AbortSignal.timeout(180000)
   });
-  const started = await upload.json().catch(() => ({}));
+  const startedText = await upload.text().catch(() => "");
+  const started = (() => { try { return JSON.parse(startedText); } catch { return {}; } })();
   // 409 already_exists still names the job to follow.
   const jobId = started.jobId || started.jobStatus?.jobId;
-  if (!jobId) throw new Error(`Bluesky video upload failed: ${started.message || started.error || upload.status}`);
+  if (!jobId) throw new Error([`Bluesky video upload failed: HTTP ${upload.status}`, started.error, started.message || startedText.slice(0, 200)].filter(Boolean).join(" "));
   for (let waited = 0; ; waited += pollMs) {
     const poll = await fetchImpl(`${VIDEO_SERVICE}/xrpc/app.bsky.video.getJobStatus?${new URLSearchParams({ jobId })}`, { signal: AbortSignal.timeout(30000) });
     const status = (await poll.json().catch(() => ({}))).jobStatus || {};
