@@ -2,7 +2,7 @@ import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-sec
 import { timingSafeEqual } from 'node:crypto';
 
 const secrets = new SecretsManagerClient({});
-const ROOTS = Object.fromEntries(['stashbox','solarmeister','weightlossdavie','neckermann-strom','therasbox','elettro','pianomusicsoothing','reggaeland','google-review'].map(k => [k, `/1---elettro-brand-os/brands/${k}`]));
+const ROOTS = Object.fromEntries(['stashbox','solarmeister','weightlossdavie','neckermann-strom','therasbox','elettro','pianomusicsoothing','deanpalermo','reggaeland','google-review'].map(k => [k, `/1---elettro-brand-os/brands/${k}`]));
 const MAX_CHUNK = 2 * 1024 * 1024;
 const MAX_SIZE = 10 * 1024 * 1024 * 1024;
 const response = (statusCode, payload) => ({ statusCode, headers: {'content-type':'application/json','cache-control':'no-store'}, body:JSON.stringify(payload) });

@@ -16,6 +16,7 @@ async function main() {
     ["Neckermann Strom", "neckermann-strom", "Europe/Berlin"],
     ["Therasbox", "therasbox", "America/New_York"],
     ["Piano Music Soothing", "pianomusicsoothing", "America/New_York"],
+    ["Dean Palermo", "deanpalermo", "America/New_York"],
     ["Reggae.Land", "reggaeland", "America/New_York"],
     ["Google Review", "google-review", "America/New_York"],
     ["Elettro", "elettro", "America/New_York"]

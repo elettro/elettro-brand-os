@@ -11,6 +11,7 @@ const brands=[
  {id:"neckermann-strom",name:"Neckermann Strom"},
  {id:"therasbox",name:"Therasbox"},
  {id:"pianomusicsoothing",name:"Piano Music Soothing"},
+ {id:"deanpalermo",name:"Dean Palermo"},
  {id:"reggaeland",name:"Reggae.Land"},
  {id:"google-review",name:"Google Review"}
 ];
