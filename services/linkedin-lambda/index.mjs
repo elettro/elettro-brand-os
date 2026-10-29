@@ -14,6 +14,8 @@ import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
 // and the post lists them in order; the planner's claim-due-posts only hands carousels to a worker that asks.
 // A document (placement "document", 3-20 images) is the same picks stitched into one PDF (pdf-lib), uploaded through the
 // Documents API and posted as a swipeable document; LinkedIn uses the first page as the cover and requires a title.
+// Text posts, link posts and polls (placements "text", "link", "poll") are written by hand on Review; their details arrive
+// as post.custom. A link post uploads its carrier image as the link card's thumbnail (LinkedIn does not scrape URLs).
 // Member tokens last 60 days with no refresh token: when one expires the tick leaves approved posts alone until Dean
 // reconnects (the Connections page counts the days down), instead of failing every post that comes due in the gap.
 // Company-page tokens come with a refresh token (about a year): the worker renews the access token itself when it is
@@ -40,13 +42,14 @@ const MAX_HASHTAGS = 3;
 const CAROUSEL_MIN = 2;
 const CAROUSEL_MAX = 20;
 // The planner placements this worker publishes.
-const PLACEMENTS = ["post", "carousel", "document"];
+const PLACEMENTS = ["post", "carousel", "document", "text", "link", "poll"];
 // One post per tick keeps a backlog from bursting onto the feed.
 const POSTS_PER_TICK = 1;
 // Video processing: poll every 5 s for up to 8 minutes (Lambda timeout 15 min).
 const POLL_MS = 5000;
 // A PDF over this size is refused before upload (LinkedIn's limit is 100 MB).
 const PDF_MAX_BYTES = 90 * 1024 * 1024;
+const POLL_DURATIONS = ["ONE_DAY", "THREE_DAYS", "SEVEN_DAYS", "FOURTEEN_DAYS"];
 const POLL_LIMIT_MS = 480_000;
 
 const result = (statusCode, payload) => ({ statusCode, ...payload });
@@ -92,6 +95,31 @@ export function publishRequest(post) {
     return {
       kind: post.placement === "document" ? "document" : "carousel", dropboxPath: slidePaths[0], slidePaths, channelId,
       commentary: commentaryFor(post), title, altText: (title || String(post.assetTitle || "")).slice(0, 1000)
+    };
+  }
+  if (["text", "link", "poll"].includes(post.placement)) {
+    const channelId = String(post.channelId || "");
+    if (!OWNER_URN.test(channelId)) throw new Error("the post has no LinkedIn member id or page id");
+    const custom = post.custom && typeof post.custom === "object" ? post.custom : null;
+    if (!custom || custom.kind !== post.placement) throw new Error("the post has no text, link or poll details");
+    const base = { kind: post.placement, channelId };
+    if (post.placement === "text") return { ...base, commentary: commentaryFor(post) };
+    if (post.placement === "poll") {
+      const question = String(custom.question || "").trim();
+      const options = Array.isArray(custom.options) ? custom.options.map((o) => String(o).trim()).filter(Boolean) : [];
+      if (!question || question.length > 140) throw new Error("a poll question needs 1-140 characters");
+      if (options.length < 2 || options.length > 4 || options.some((o) => o.length > 30)) throw new Error("a poll needs 2 to 4 options of up to 30 characters");
+      if (!POLL_DURATIONS.includes(custom.duration)) throw new Error("the poll has no valid duration");
+      return { ...base, question, options, duration: custom.duration, commentary: commentaryFor({ ...post, caption: post.caption || question }) };
+    }
+    let source;
+    try { source = new URL(String(custom.url || "")); } catch { throw new Error("the link post has no valid link"); }
+    if (!/^https?:$/.test(source.protocol)) throw new Error("the link post has no valid link");
+    const title = String(custom.title || "").trim().slice(0, 200);
+    if (!title) throw new Error("the link post has no title");
+    return {
+      ...base, dropboxPath: safePath(post.dropboxPath), source: source.toString(), title,
+      description: String(custom.description || "").trim().slice(0, 255), commentary: commentaryFor({ ...post, caption: post.caption || title })
     };
   }
   const dropboxPath = safePath(post.dropboxPath);
@@ -355,6 +383,28 @@ async function uploadDocument(token, request, deps) {
 export async function publish(record, post, deps = {}) {
   const { call = (method, path, body, what) => linkedin(record.accessToken, method, path, body, what), upload } = deps;
   const request = publishRequest(post);
+  if (["text", "link", "poll"].includes(request.kind)) {
+    let content = null;
+    if (request.kind === "poll") {
+      content = { poll: { question: request.question, options: request.options.map((text) => ({ text })), settings: { duration: request.duration } } };
+    } else if (request.kind === "link") {
+      // The carrier image becomes the link card's thumbnail.
+      const thumbnail = await (upload?.image || uploadImage)(record, { ...request, kind: "image" }, deps);
+      content = { article: { source: request.source, thumbnail, title: request.title, ...(request.description ? { description: request.description } : {}) } };
+    }
+    const made = await call("POST", "/posts", {
+      author: request.channelId,
+      commentary: request.commentary,
+      visibility: "PUBLIC",
+      distribution: { feedDistribution: "MAIN_FEED", targetEntities: [], thirdPartyDistributionChannels: [] },
+      ...(content ? { content } : {}),
+      lifecycleState: "PUBLISHED",
+      isReshareDisabledByAuthor: false
+    }, `${request.kind} post`);
+    const customUrn = made.headers?.get?.("x-restli-id") || "";
+    if (!customUrn) throw new Error("LinkedIn returned no post id");
+    return { postId: customUrn, permalink: `https://www.linkedin.com/feed/update/${customUrn}/` };
+  }
   if (request.kind === "document") {
     const documentId = await (upload?.document || uploadDocument)(record, request, deps);
     const made = await call("POST", "/posts", {

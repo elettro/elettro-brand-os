@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { PublishingFormat, ReviewAccount, ReviewList, ReviewPost, TiktokCreator } from "@/lib/planner-review";
 import { AssetThumb as Thumb } from "@/components/asset-thumb";
+import { LinkedInWriter } from "./linkedin-writer";
 import { TiktokCard } from "./tiktok-card";
 
 const NETWORK: Record<string, string> = {
@@ -276,6 +277,11 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
 
     {notice && <p className="card review-notice">{notice}</p>}
 
+    {list.accounts.some((a) => a.destination === "linkedin" && a.externalAccountId) && <LinkedInWriter
+      accountName={list.accounts.find((a) => a.destination === "linkedin" && a.externalAccountId)?.accountName || "LinkedIn"}
+      defaultLocal={localInput(new Date(Date.now() + 24 * 3600_000).toISOString(), tz).replace(/T\d\d:\d\d$/, "T10:00")} timeZone={tz} busy={!!busy}
+      onSave={(body) => run("custom", { ...body, scheduledFor: instantOf(String(body.scheduledFor), tz) }, "Saved as to review. Approve it on its card below to send it.")} />}
+
     {weeks.map((w) => {
       const planned = w.posts.filter((p) => p.status === "planned").length;
       const approved = w.posts.filter((p) => p.status === "approved").length;
@@ -341,7 +347,7 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
           <h3>{fmtDay(posts[0].scheduledFor)}</h3>
           <div className="review-posts">
             {posts.map((p) => <article key={p.id} className={`review-post status-${p.status}`}>
-              <Thumb asset={p.asset} />
+              {p.custom ? <div className="muted" style={{ width: 96, fontSize: 12 }}>{p.custom.kind === "poll" ? "Poll" : p.custom.kind === "link" ? "Link" : "Text"}</div> : <Thumb asset={p.asset} />}
               <div className="review-body">
                 <div className="review-meta">
                   <b>{NETWORK[p.destination] || p.destination}</b> · {p.placement} · {fmtTime(p.scheduledFor)}
@@ -376,7 +382,9 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
                   </div>
                 </div> : <p className="review-caption">{p.caption || <span className="muted">No caption yet</span>}
                   {p.hashtags.length > 0 && <span className="review-tags"> {p.hashtags.map(tag).join(" ")}</span>}</p>}
-                <p className="muted review-file">{p.asset.title || p.asset.filename}{p.sector ? ` · ${p.sector}` : ""}</p>
+                {p.custom?.kind === "poll" && <p className="review-caption"><b>{p.custom.question}</b> {(p.custom.options || []).join(" · ")} <span className="muted">({p.custom.duration})</span></p>}
+                {p.custom?.kind === "link" && <p className="review-caption"><b>{p.custom.title}</b> <a href={p.custom.url} target="_blank" rel="noreferrer">{p.custom.url}</a></p>}
+                {!p.custom && <p className="muted review-file">{p.asset.title || p.asset.filename}{p.sector ? ` · ${p.sector}` : ""}</p>}
                 {reviewable(p) && p.destination === "tiktok" && p.status !== "skipped" && tiktokOpen === p.id && <TiktokCard post={p} creator={creator} creatorError={creatorError} busy={!!busy}
                   onApprove={async (settings) => { await run(p.id, { action: "tiktok-approve", id: p.id, ...settings }, "Approved for TikTok with these settings."); setTiktokOpen(null); }} />}
                 {reviewable(p) && <div className="review-actions">

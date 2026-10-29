@@ -36,3 +36,12 @@ Then use the card's test post (it prefers the page token over an older profile l
 - The `organizationAcls` / `organizations` response shapes and the refresh-token fields were written from LinkedIn's documentation, not
   from a live response. If the first connect fails at "page lookup" or "renew", record it in `docs/bug-fix/` and fix the parser.
 - Whether LinkedIn returns a refresh token for this app in practice (the worker then falls back to reconnecting every 60 days).
+
+## Hand-written posts (text, link, poll)
+
+Review shows **Write a LinkedIn post** for a brand with a connected LinkedIn account. It saves a `planned` post at the chosen time; approve it on its card.
+- Limits (LinkedIn's): post text 3,000; poll question 140, 2-4 options of 30, open 1/3/7/14 days; link needs a title (200) and takes a description (255).
+- A link post has no URL scraping: the card image is uploaded with the post. It is the asset ID you give, else the brand's latest approved image.
+- Every ScheduledPost must point at an asset (database constraint), so text and poll posts carry a "carrier" image that is never published.
+- Deploy: dev-api zip (new `linkedin-custom.mjs`) and the LinkedIn worker zip (claims `text`, `link`, `poll`).
+- Not verified against LinkedIn live: the poll and article request shapes follow the Posts and Poll API docs (read 2026-10-29).

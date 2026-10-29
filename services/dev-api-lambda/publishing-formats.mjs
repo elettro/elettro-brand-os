@@ -56,6 +56,10 @@ export const PUBLISHING_FORMATS = [
     slides: { min: 2, max: 20, recommended: [3, 9] }, rule: { kinds: ["image"], aspectRatios: [] } },
   { destination: "linkedin", placement: "document", label: "PDF documents", status: "planning", note: "Built from a carousel's images into a swipeable PDF; goes live after the first scheduled document post",
     slides: { min: 3, max: 20, recommended: [5, 10] }, rule: { kinds: ["image"], aspectRatios: [] } },
+  // Written by hand on Review (linkedin-custom.mjs), never planned: they carry no media of their own.
+  { destination: "linkedin", placement: "text", label: "Text posts", status: "integration", note: "Written by hand on Review; not planned automatically" },
+  { destination: "linkedin", placement: "link", label: "Link posts", status: "integration", note: "Written by hand on Review; not planned automatically" },
+  { destination: "linkedin", placement: "poll", label: "Polls", status: "integration", note: "Written by hand on Review; not planned automatically" },
   { destination: "x", placement: "video", label: "Videos", status: "integration", note: "X isn't connected to Elettro OS yet" },
   { destination: "gmb", placement: "update", label: "Update posts", status: "integration", note: "Profiles connected; publisher built (services/gmb-lambda) for Update and Offer posts queued by hand. Not planned automatically: waits on the business-content rules" }
 ];

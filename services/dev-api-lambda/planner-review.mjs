@@ -18,6 +18,7 @@
  *
  * Planning runs async because curator + captions can outlast API Gateway's 30 s limit.
  */
+import { queueCustomPost } from "./linkedin-custom.mjs";
 import { timingSafeEqual } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
@@ -113,6 +114,7 @@ async function listPosts(client, brand, body) {
       title: p.generatedTitle, caption: p.generatedCaption, hashtags: p.generatedHashtags || [], reason: p.selectionReason,
       sector: p.scoreBreakdown?.sector || null, copyStatus: p.scoreBreakdown?.copy?.status || null,
       tiktok: p.scoreBreakdown?.tiktok || null,
+      custom: p.scoreBreakdown?.custom || null,
       failureReason: p.status === "failed" ? p.scoreBreakdown?.publish?.error || null : null,
       captionStale: Boolean(p.scoreBreakdown?.swappedFrom) && !p.scoreBreakdown?.captionEditedAfterSwap,
       asset: assetCard({ id: p.assetId, filename: p.filename, kind: p.kind, sourcePath: p.sourcePath, title: p.title, durationMs: p.durationMs }),
@@ -380,6 +382,8 @@ export async function handlePlannerReview(event, body, connectDatabase, json, de
     "tiktok-approve": (c, b) => tiktokApprove(c, b, body),
     swap: (c, b) => swapAsset(c, b, body),
     reschedule: (c, b) => reschedulePost(c, b, body),
+    // A hand-written LinkedIn text, link or poll post (linkedin-custom.mjs).
+    "queue-custom": (c, b) => queueCustomPost(c, b, body, deps.now),
     cadence: (c, b) => setCadence(c, b, body),
     slides: (c, b) => setSlides(c, b, body),
     plan: (c, b) => startPlanning(c, b, body, { invoke: deps.invoke || selfInvoke, readSeed: deps.readSeed || readRepoSeed, now: deps.now }),
