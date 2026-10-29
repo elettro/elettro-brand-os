@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { littleText, commentaryFor, publishRequest, account, hasValidLogin, linkedin, publish, publishingTick, handler } from "../services/linkedin-lambda/index.mjs";
+import { littleText, commentaryFor, publishRequest, account, hasValidLogin, linkedin, publish, publishingTick, handler, secretKeyFor, renewRecord } from "../services/linkedin-lambda/index.mjs";
 
 const ROOT = "/1---elettro-brand-os/brands/elettro/";
 const NOW = new Date("2026-10-25T00:00:00Z");

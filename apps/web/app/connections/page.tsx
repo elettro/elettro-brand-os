@@ -2,7 +2,7 @@ import { session } from "@/lib/cognito-auth";
 import { visibleBrands } from "@/lib/brand-access";
 import { brandConfigs } from "@/lib/brand-config";
 import { YOUTUBE_BRANDS } from "@/lib/youtube-connect";
-import { LINKEDIN_BRANDS, calendarReminderUrl } from "@/lib/linkedin-connect";
+import { LINKEDIN_BRANDS, LINKEDIN_PAGE_BRANDS, calendarReminderUrl } from "@/lib/linkedin-connect";
 import { GBP_BRANDS } from "@/lib/gbp-connect";
 import { META_BRANDS } from "@/lib/meta-connect";
 import { MetaTestPosts } from "@/components/meta-test-posts";
@@ -260,7 +260,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
     </>}
     {linkedinBrands.length > 0 && <>
     <h2 id="linkedin" style={{ marginTop: 32 }}>LinkedIn</h2>
-    <p className="muted">Dean&apos;s personal profile, posting through the Elettro OS Personal app. LinkedIn gives no refresh token, so reconnect before the countdown runs out; company pages follow once LinkedIn approves Community Management.</p>
+    <p className="muted">Each brand posts to its company page (one per brand); the Dean Palermo brand is Dean&apos;s personal profile. A personal-profile login lasts 60 days with no refresh, so reconnect before the countdown runs out. A company-page login renews itself; its countdown is the date LinkedIn&apos;s renewal runs out.</p>
     {/* A result for a brand shows under that brand's Post button; one with no brand (bad login, unknown brand) shows here. */}
     {network === "linkedin" && !brand && error && <p className="card" style={{ marginTop: 16 }}>LinkedIn post not sent: {error}</p>}
     <div className="grid" style={{ marginTop: 20 }}>
@@ -268,13 +268,13 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
         const linked = linkedin[b.id];
         return (
           <article className="card" key={b.id} id={`li-${b.id}`} style={{ scrollMarginTop: 16 }}>
-            <div className="eyebrow">LinkedIn · personal profile</div>
+            <div className="eyebrow">LinkedIn · {LINKEDIN_PAGE_BRANDS.includes(b.id) ? "company page" : "personal profile"}</div>
             <h2>{b.name}</h2>
             <p className="muted" style={{ margin: "0 0 12px" }}>
               {linked ? <>● Connected · <b>{linked.handle}</b></> : "○ Not connected"}
             </p>
             <div className="connect-row">
-              <a className="status-chip" href={`/api/connections/linkedin/start?brand=${b.id}`}>{linked ? "Reconnect" : "Connect LinkedIn"}</a>
+              <a className="status-chip" href={`/api/connections/linkedin/start?brand=${b.id}${LINKEDIN_PAGE_BRANDS.includes(b.id) ? "&kind=page" : ""}`}>{linked ? "Reconnect" : LINKEDIN_PAGE_BRANDS.includes(b.id) ? "Connect company page" : "Connect LinkedIn"}</a>
               {linked?.expiresAt && <ReconnectCountdown expiresAt={linked.expiresAt} />}
               {linked && <ConnectionDisconnect brand={b.id} network="linkedin" handle={linked.handle || "this account"} />}
             </div>

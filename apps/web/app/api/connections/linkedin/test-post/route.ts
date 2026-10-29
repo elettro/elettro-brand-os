@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 const secrets = new SecretsManagerClient({ region: "us-east-1" });
 const TOKEN_PREFIX = "elettro-brand-os-dev/linkedin/";
 
-type MemberToken = { accessToken: string; memberUrn: string; brand: string; expiresAt: string };
+type MemberToken = { accessToken: string; memberUrn: string; brand: string; expiresAt: string; connectedAt?: string };
 
 function done(params: Record<string, string>) {
   // 303 so the browser follows the form POST with a GET.
@@ -16,16 +16,20 @@ function done(params: Record<string, string>) {
   return NextResponse.redirect(DEV_ORIGIN + "/connections?" + query + (params.brand ? `#li-${params.brand}` : "#linkedin"), 303);
 }
 
-// Member tokens are stored per LinkedIn member id; pick the one connected for this brand.
+// Tokens are stored per account (member id, or org-<id> for a company page). A brand's company page wins over an older
+// personal-profile login that was once connected to it; otherwise the most recent connection.
 async function brandToken(brand: string): Promise<MemberToken | null> {
   const listed = await secrets.send(new ListSecretsCommand({ Filters: [{ Key: "name", Values: [TOKEN_PREFIX] }] }));
+  const matches: MemberToken[] = [];
   for (const entry of listed.SecretList || []) {
     if (!entry.Name?.startsWith(TOKEN_PREFIX)) continue;
     const value = await secrets.send(new GetSecretValueCommand({ SecretId: entry.Name }));
     const token = JSON.parse(value.SecretString || "{}") as MemberToken;
-    if (token.brand === brand && token.accessToken) return token;
+    if (token.brand === brand && token.accessToken) matches.push(token);
   }
-  return null;
+  const isPage = (t: MemberToken) => t.memberUrn?.startsWith("urn:li:organization:");
+  matches.sort((a, b) => Number(isPage(b)) - Number(isPage(a)) || Date.parse(b.connectedAt || "") - Date.parse(a.connectedAt || ""));
+  return matches[0] || null;
 }
 
 // "Post to LinkedIn now" from the Connections page: a text-only post Dean writes and sends himself.

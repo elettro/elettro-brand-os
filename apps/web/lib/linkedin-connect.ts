@@ -7,8 +7,17 @@ export const LINKEDIN_CLIENT_ID = process.env.LINKEDIN_OAUTH_CLIENT_ID || "773ak
 export const LINKEDIN_CALLBACK = DEV_ORIGIN + "/api/connections/linkedin/callback";
 export const LINKEDIN_SCOPES = ["openid", "profile", "email", "w_member_social"];
 export const LINKEDIN_STATE_COOKIE = "elettro_dev_li_state";
-// Dean's personal profile is the Dean Palermo brand (Elettro stays here until its company page replaces it).
-export const LINKEDIN_BRANDS = ["elettro", "deanpalermo"];
+// Dean's personal profile is the Dean Palermo brand. Every other brand posts to its company page (one page per brand).
+export const LINKEDIN_PROFILE_BRANDS = ["deanpalermo"];
+export const LINKEDIN_PAGE_BRANDS = ["elettro", "stashbox", "solarmeister", "neckermann-strom", "reggaeland"];
+export const LINKEDIN_BRANDS = [...LINKEDIN_PROFILE_BRANDS, ...LINKEDIN_PAGE_BRANDS];
+
+// Company pages: LinkedIn app "Elettro OS" (265010506, Community Management API, Development tier). Its secret lives only in
+// Secrets Manager (elettro-brand-os-dev/linkedin-pages-oauth); the redirect is the same callback as the personal app.
+export const LINKEDIN_PAGES_CLIENT_ID = process.env.LINKEDIN_PAGES_OAUTH_CLIENT_ID || "77ookctxp1cedr";
+export const LINKEDIN_PAGES_SECRET_ID = "elettro-brand-os-dev/linkedin-pages-oauth";
+export const LINKEDIN_PAGES_SCOPES = ["r_organization_social", "w_organization_social", "rw_organization_admin"];
+export const LINKEDIN_PICK_COOKIE = "elettro_dev_li_pick";
 
 // A Google Calendar "add event" link 7 days before expiry, so the reminder also lives outside Elettro OS.
 export function calendarReminderUrl(expiresAt: string | Date) {
