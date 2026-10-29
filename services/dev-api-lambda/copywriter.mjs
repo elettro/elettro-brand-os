@@ -15,10 +15,12 @@ const LIMITS = {
   linkedin: { caption: 3000, hashtags: 3 },
   // Threads rejects posts over 500 characters and takes one topic tag per post.
   threads: { caption: 500, hashtags: 1 },
+  // Bluesky: 300 characters (graphemes); links and #tags become clickable facets.
+  bluesky: { caption: 300, hashtags: 1, links: 1 },
   // Pinterest: searchable title + keyword description; hashtags do little there. The Pin itself links out.
   pinterest: { title: 100, caption: 800, hashtags: 0 }
 };
-const CLICKABLE = new Set(["youtube", "facebook", "x", "linkedin", "threads"]);
+const CLICKABLE = new Set(["youtube", "facebook", "x", "linkedin", "threads", "bluesky"]);
 const BANNED = [/\belevate\b/i, /\bunleash/i, /\bunlock/i, /\bdive into\b/i, /game[- ]changer/i, /experience the magic/i, /it'?s not just .+, it'?s/i];
 const SHOWS = { "stashbox-does-dylan": "Stashbox Does Dylan", "stashbox-does-sublime": "Stashbox Does Sublime & Reggae" };
 const ROLE_WORDS = { vocals: "vocals", guitar: "guitar", bass: "bass", drums: "drums", keyboards: "keys", keys: "keys" };
@@ -251,6 +253,10 @@ export function promotionalSlotIds(slots, maxShare = {}) {
   return promo;
 }
 
+const graphemes = (text) => [...new Intl.Segmenter("en", { granularity: "grapheme" }).segment(String(text))].length;
+// A handle-shaped @name would notify that account; scheduled Bluesky posts must not (automated notifications count as spam).
+const MENTION = /(^|[\s(])@[a-z0-9][a-z0-9-]*(\.[a-z0-9][a-z0-9-]*)+/i;
+
 /** Code-side checks on any copy (AI or template). Returns a list of problems. */
 export function validateCopy(copy, f) {
   const problems = [];
@@ -265,7 +271,13 @@ export function validateCopy(copy, f) {
   for (const re of BANNED) if (re.test(text)) problems.push(`banned phrase: ${re.source}`);
   if ((f.destination === "youtube" || f.destination === "pinterest") && !copy.title) problems.push("missing title");
   if (f.destination !== "youtube" && !copy.caption) problems.push("missing caption");
-  if (copy.caption && limits.caption && copy.caption.length > limits.caption) problems.push("caption too long");
+  // Bluesky counts graphemes, and a link counts in full (it is not shortened), so a long URL eats the 300.
+  const captionLength = f.destination === "bluesky" ? graphemes(copy.caption || "") : (copy.caption || "").length;
+  if (copy.caption && limits.caption && captionLength > limits.caption) problems.push("caption too long");
+  if (f.destination === "bluesky") {
+    if ((text.match(/https?:\/\/\S+/g) || []).length > (limits.links ?? 1)) problems.push("more than one link in a Bluesky post");
+    if (MENTION.test(text)) problems.push("@mention in a scheduled Bluesky post (notifications from automation count as spam)");
+  }
   if (copy.title && limits.title && copy.title.length > limits.title) problems.push("title too long");
   if (copy.description && limits.description && copy.description.length > limits.description) problems.push("description too long");
   if ((copy.hashtags || []).length > (limits.hashtags ?? 5)) problems.push("too many hashtags");

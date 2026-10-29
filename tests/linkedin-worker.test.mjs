@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { littleText, commentaryFor, publishRequest, account, hasValidLogin, linkedin, publish, publishingTick, handler } from "../services/linkedin-lambda/index.mjs";
+import { littleText, commentaryFor, publishRequest, account, hasValidLogin, linkedin, publish, publishingTick, handler, secretKeyFor, renewRecord } from "../services/linkedin-lambda/index.mjs";
 
 const ROOT = "/1---elettro-brand-os/brands/elettro/";
 const NOW = new Date("2026-10-25T00:00:00Z");
@@ -134,7 +134,7 @@ test("the tick claims one LinkedIn post, publishes it and records the outcome", 
   const calls = [];
   const callApi = async (payload) => { calls.push(payload); return payload.action === "claim-due-posts" ? { ok: true, missed: 0, stuck: 0, posts: [post()] } : { ok: true }; };
   const tick = await publishingTick({ callApi, loginOk: async () => true, publishOne: async () => ({ postId: "urn:li:share:1", permalink: "https://www.linkedin.com/feed/update/urn:li:share:1/" }) });
-  assert.deepEqual(calls[0], { action: "claim-due-posts", destination: "linkedin", placements: ["post", "carousel"], limit: 1 });
+  assert.deepEqual(calls[0], { action: "claim-due-posts", destination: "linkedin", placements: ["post", "carousel", "document", "text", "link", "poll"], limit: 1 });
   assert.deepEqual(calls[1], { action: "finish-post", id: "p1", externalPostId: "urn:li:share:1", externalUrl: "https://www.linkedin.com/feed/update/urn:li:share:1/" });
   assert.equal(tick.published.length, 1);
 });

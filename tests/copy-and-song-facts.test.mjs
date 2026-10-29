@@ -229,3 +229,15 @@ test("a non-Stashbox asset with no name gets no template copy, and the AI cannot
   const own = { ...bare, brandSlug: "stashbox" };
   assert.match(templateCopy({ ...own, song: "Palm Trees" }, "seed").title, /Palm Trees/);
 });
+
+test("Bluesky copy: 300 graphemes with the link counted in full, one link, no @mentions", () => {
+  const f = { destination: "bluesky", allowedLinks: ["https://stashbox.band/live", "https://stashbox.band/radio"], promotional: true, brandSlug: "stashbox" };
+  assert.deepEqual(validateCopy({ caption: "Live Friday at the pier https://stashbox.band/live", hashtags: ["#Reggae"] }, f), []);
+  assert.ok(validateCopy({ caption: "x".repeat(301), hashtags: [] }, f).includes("caption too long"));
+  // 300 emoji graphemes fit even though they are 600 UTF-16 units.
+  assert.deepEqual(validateCopy({ caption: "\u{1F3B8}".repeat(300), hashtags: [] }, f), []);
+  assert.ok(validateCopy({ caption: "a https://stashbox.band/live b https://stashbox.band/radio", hashtags: [] }, f).includes("more than one link in a Bluesky post"));
+  assert.ok(validateCopy({ caption: "thanks @friend.bsky.social!", hashtags: [] }, f).some((p) => p.startsWith("@mention in a scheduled Bluesky post")));
+  assert.ok(validateCopy({ caption: "ok", hashtags: ["#a", "#b"] }, f).includes("too many hashtags"));
+  assert.ok(validateCopy({ caption: "plain https://stashbox.band/live", hashtags: [] }, { ...f, promotional: false }).includes("link or ask in a plain post (promo cap)"));
+});

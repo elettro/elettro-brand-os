@@ -42,7 +42,7 @@ jobs:
         run: node --test tests/chatgpt-upload-and-lookup.test.cjs
 
       - name: Validate Dropbox brand-root migration
-        run: node --test tests/brand-root-routing.test.cjs tests/brand-root-migration.test.mjs tests/shared-audio-library.test.cjs
+        run: node --test tests/brand-root-routing.test.cjs tests/brand-root-migration.test.mjs tests/shared-audio-library.test.cjs tests/document-assets.test.mjs
 
       - name: Test Claude transfer and folder operations
         run: node --test tests/claude-transfer-and-folders.test.cjs tests/claude-folder-relay.test.mjs
@@ -54,7 +54,7 @@ jobs:
         run: node --test tests/planner-v2.test.mjs tests/carousels.test.mjs tests/copy-and-song-facts.test.mjs tests/plan-month.test.mjs
 
       - name: Test connection status feed and LinkedIn connect
-        run: node --test tests/connection-status.test.mjs tests/gmb-connect.test.mjs tests/linkedin-connect.test.mjs tests/mastodon-connect.test.mjs tests/api-gate.test.mjs tests/client-scope.test.cjs
+        run: node --test tests/connection-status.test.mjs tests/gmb-connect.test.mjs tests/linkedin-connect.test.mjs tests/mastodon-connect.test.mjs tests/api-gate.test.mjs tests/dev-api-zip-contents.test.mjs tests/client-scope.test.cjs
 
       - name: Test YouTube upload worker and publishing loop
         run: node --test tests/youtube-upload.test.mjs tests/planner-topup.test.mjs tests/planner-ops.test.mjs tests/dashboard-stats.test.mjs
@@ -63,7 +63,7 @@ jobs:
         run: node --experimental-strip-types --test tests/ar-api.test.mjs tests/ar-viewer.test.mjs tests/ar-console.test.mjs tests/ar-compile.test.mjs tests/ar-e2e.test.mjs
 
       - name: Test TikTok and Threads connect and token refresh
-        run: node --test tests/tiktok-connect.test.mjs tests/tiktok-refresh.test.mjs tests/pinterest-connect.test.mjs tests/pinterest-worker.test.mjs tests/threads-connect.test.mjs tests/threads-refresh.test.mjs tests/meta-worker.test.mjs tests/linkedin-worker.test.mjs tests/gmb-worker.test.mjs tests/posting-window.test.mjs tests/connection-disconnect.test.mjs
+        run: node --test tests/tiktok-connect.test.mjs tests/tiktok-refresh.test.mjs tests/pinterest-connect.test.mjs tests/pinterest-worker.test.mjs tests/threads-connect.test.mjs tests/threads-refresh.test.mjs tests/bluesky-connect.test.mjs tests/bluesky-worker.test.mjs tests/meta-worker.test.mjs tests/linkedin-worker.test.mjs tests/linkedin-pages.test.mjs tests/linkedin-document.test.mjs tests/linkedin-custom.test.mjs tests/gmb-worker.test.mjs tests/posting-window.test.mjs tests/connection-disconnect.test.mjs
 
       - name: Validate Step 9 Windows PowerShell setup script syntax
         shell: pwsh

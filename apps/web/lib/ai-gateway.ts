@@ -369,8 +369,8 @@ export async function executeAiGateway(input: unknown): Promise<Dict> {
   if (action === "inspect_brand_registration" || action === "register_existing_asset") {
     const config=brandConfig(command.brandSlug);
     const path=folderPath(command.path,config.dropboxRoot,false);
-    if(!/\.(png|jpe?g|webp|gif|mp4|mov|m4v|webm)$/i.test(path))
-      throw new GatewayError(400,"Only image or video files are supported");
+    if(!/\.(png|jpe?g|webp|gif|mp4|mov|m4v|webm|pdf)$/i.test(path))
+      throw new GatewayError(400,"Only image, video or PDF files are supported");
     if(action==="register_existing_asset"&&command.confirmed!==true)
       throw new GatewayError(400,"Explicit confirmation required to register an asset");
     const metadata=command.metadata===undefined?{}:metadataPatch(command.metadata);

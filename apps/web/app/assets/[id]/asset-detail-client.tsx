@@ -10,7 +10,7 @@ import {
   type BulkAssetMetadata
 } from "@/lib/dev-api";
 
-const DESTINATIONS = ["instagram", "facebook", "tiktok", "youtube", "threads", "x", "linkedin", "pinterest", "gmb", "feed", "website", "rss"];
+const DESTINATIONS = ["instagram", "facebook", "tiktok", "youtube", "threads", "bluesky", "x", "linkedin", "pinterest", "gmb", "feed", "website", "rss"];
 
 function mmddToInput(value?: number | null) {
   if (!value) return "";
@@ -391,7 +391,7 @@ export function AssetDetailClient({ asset }: { asset: ApiAsset }) {
                 boxShadow: "0 1px 2px rgba(0,0,0,.05)"
               }}
             >
-              <span style={{ fontSize: 16 }}>{asset.kind === "video" ? "▶" : asset.kind === "image" ? "▣" : asset.kind === "audio" ? "♪" : "▦"}</span>
+              <span style={{ fontSize: 16 }}>{asset.kind === "video" ? "▶" : asset.kind === "image" ? "▣" : asset.kind === "audio" ? "♪" : asset.kind === "document" ? "▤" : "▦"}</span>
               <span style={{ display: "grid", lineHeight: 1.05 }}>
                 <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: ".09em", textTransform: "uppercase", color: "var(--muted)" }}>
                   Media

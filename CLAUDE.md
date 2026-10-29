@@ -59,14 +59,16 @@ EventBridge, every 15 min ──> platform worker Lambda ──> network API
   (deny-by-default gate in `api-gate.mjs`, which also parses the `?brands=a,b` filter that `/brands`, `/dashboard`, `/assets`
   and `/content-pool` accept; `/assets` also takes `shared=1` to add the creative-assets library). Web server code sends the key via `connectKeyHeaders()` in `apps/web/lib/dev-api-key.ts`;
   never call the dev-api from browser code. The dropbox-sync Lambda's thumbnail route checks the same key.
-- **Worker Lambdas** `services/<platform>-lambda`: `threads`, `tiktok`, `pinterest`, `youtube-upload`, `meta`
+- **Worker Lambdas** `services/<platform>-lambda`: `threads`, `tiktok`, `pinterest`, `youtube-upload`, `bluesky` (created in AWS 2026-10-29), `meta`
   (Instagram + Facebook Reels, feed posts and Stories; Page tokens don't expire, so no renewal) and `linkedin`. Each is invoked only
   through IAM (no HTTP route), runs **outside the VPC** (they need to reach the network APIs), and publishes by calling the
   dev-api's `claim-due-posts` (a worker can pass `placements` to claim only some) then `finish-post`. `meta` was created in AWS and
-  published its first scheduled Reels on 2026-10-22. `linkedin` publishes approved photo/video posts to the connected member
-  profile (member tokens last 60 days with no refresh, so there is no renewal step; with an expired login the tick skips and
-  leaves posts approved). Its Lambda `elettro-brand-os-dev-linkedin` and tick rule exist (checked 2026-10-29); connect +
-  test-post code is in dev-api/web. Company-page posting (Community Management API, Development tier granted 2026-10-29) is not built yet.
+  published its first scheduled Reels on 2026-10-22. `linkedin` publishes approved photo/video posts to the brand's connected LinkedIn
+  account: a **company page** (app "Elettro OS", Community Management API, one page per brand, `urn:li:organization:<id>`; the worker
+  renews its token from a refresh token, so there is nothing to reconnect for about a year) or a **personal profile** (app "Elettro OS
+  Personal"; the Dean Palermo brand; tokens last 60 days with no refresh, so with an expired login the tick skips and leaves posts approved). Its Lambda `elettro-brand-os-dev-linkedin` and tick rule exist (checked 2026-10-29); connect +
+  test-post code is in dev-api/web. Company-page connect and posting are built (PR for 2026-10-29, steps in `docs/admin/connect-linkedin-page.md`);
+  not live until the AWS steps there are done and one page post has published. Development tier was granted 2026-10-29; its limits are unknown.
   `gmb` is **not created in AWS yet** (no Lambda, no tick rule).
 - **Elettro AR** (WebAR; plan in `docs/ar/ELETTRO-AR-PLAN.md`, setup in `docs/ar/AWS-SETUP.md`): `services/ar-lambda` is the admin API
   (Lambda Function URL, outside the VPC, **no Postgres**, DynamoDB + S3 + CloudFront only; same `x-elettro-connect-key`). It is fully separate from the Publishing Engine:
@@ -84,6 +86,12 @@ EventBridge, every 15 min ──> platform worker Lambda ──> network API
   `PublicationLedger`, `BrandStorageRoot`, `StorageConnection`, `Campaign`, `Collection`, `MetadataPreset`, `IntakeBatch`, …
   Schema in `services/dev-api-lambda/init.sql` and `packages/database/prisma`.
 - **Dropbox layout**: the library root is `/1---elettro-brand-os/brands/<brand>/…` (migrated 2026-10-17 with a clean-slate reset).
+- **Asset kinds** (`Asset.kind`, Postgres enum `AssetKind`): `video`, `image`, `carousel`, `audio`, and `document` (PDF, added 2026-10-29). `.pdf` files in a
+  brand's Dropbox folder, direct uploads and the register/intake tools all become `document` assets (`mimeType` `application/pdf`; no thumbnail,
+  because Dropbox cannot render one, so the UI shows a glyph; no AI enrichment). The planner **never** picks a document unless a placement's pool rule lists
+  `"document"` in `kinds` (`poolRejection` in `planner-v2.mjs`). Nothing lists it yet: LinkedIn's `document` placement still stitches a carousel's images into a PDF.
+  The enum value is added in DEV by the IAM-only dev-api action `setup-document-asset-kind-20261029` (`document-asset-kind.mjs`, dry run unless `mode:"apply"`);
+  until it has run, the Dropbox sync and uploads fail on any `.pdf`.
 
 ## 3. Environments and AWS (account 656260749296, us-east-1)
 
@@ -93,7 +101,7 @@ EventBridge, every 15 min ──> platform worker Lambda ──> network API
 | Piece | AWS name |
 |---|---|
 | API | `elettro-brand-os-dev-api` (+ HTTP API) |
-| Workers | `elettro-brand-os-dev-{threads,tiktok,pinterest,youtube-upload,meta,linkedin}` (all exist; `gmb` is built in code but not yet created) |
+| Workers | `elettro-brand-os-dev-{threads,tiktok,pinterest,youtube-upload,meta,linkedin}` (all exist; `bluesky` since 2026-10-29; `gmb` is built in code but not yet created) |
 | Dropbox | `elettro-brand-os-dev-{dropbox-sync,dropbox-upload}` |
 | Runtime | all Lambdas `nodejs24.x`; dev-api 256 MB / 60 s |
 | HTTP API | `zkjngy7rdd`, 18 routes made by hand; each needs a gateway route **and** a Lambda invoke permission (see `docs/admin/new-api-route.md`) |
@@ -102,7 +110,7 @@ EventBridge, every 15 min ──> platform worker Lambda ──> network API
 | Web | Amplify app `d2k28tehm1a8zw` |
 | Secrets | Secrets Manager prefix `elettro-brand-os-dev/` (app secrets `*-oauth`; per-account tokens under `<platform>/<id>`) |
 | AR (created 2026-10-26) | Lambda `elettro-ar-dev-api`, DynamoDB `elettro-ar-dev`, bucket `elettro-ar-dev-media`, CloudFront for `ar.elettro.com`, role `elettro-ar-dev-api-role` |
-| Schedules | EventBridge, all `rate(15 minutes)`, all ENABLED (checked 2026-10-29): `elettro-brand-os-dev-threads-refresh`, `…-tiktok-refresh`, `…-youtube-tick`, `…-meta-tick`, `…-linkedin-tick`, and **`elettro-pinterest-tick`** (different name pattern). No gmb tick exists. |
+| Schedules | EventBridge, all `rate(15 minutes)`, all ENABLED (checked 2026-10-29): `elettro-brand-os-dev-threads-refresh`, `…-tiktok-refresh`, `…-youtube-tick`, `…-meta-tick`, `…-linkedin-tick`, and **`elettro-pinterest-tick`** (different name pattern). `…-bluesky-tick` exists since 2026-10-29. No gmb tick exists yet. |
 
 
 (**verify** with `aws lambda list-functions` / `aws events list-rules`.)
@@ -115,13 +123,14 @@ GitHub Actions (`.github/workflows/build-*-lambda.yml`) only **build a zip and u
 dev-api: the **"Build DEV API Lambda"** artifact works and is the simplest route (download with `gh run download`, then `update-function-code`; verified
 2026-10-29, steps in `docs/admin/deploy-dev-api-lambda.md`). The local alternative is `npm run build` in `services/dev-api-lambda`
 (bundles `intelligence/` and `node_modules`).
+**Gotcha:** a new dev-api module file must be added to the zip list in **both** `services/dev-api-lambda/package.json` and `.github/workflows/build-dev-api-lambda.yml` (the workflow's own list is what CI zips; its "Verify packaged handler loads" step fails the build if one is missing; this broke the develop build after #248 until fixed).
 Amplify auto-builds the web app from `develop`. After a merge, do the PR's "AWS changes after merge" list by hand.
 
 ### Credentials on Dean's machine
 - CLI profile **`stashbox-audit`** = IAM user `claude-audit-only` (the name is misleading: it appears to have been created for
   Stashbox Radio auditing on 2026-07-05, per `stashbox-radio/CONTEXT_VERIFIED.md`). It has `ReadOnlyAccess` plus write policies that let it deploy Elettro OS: `EbosDevBrandsCutover`,
   `ElettroDevConnectionsSetup` (inline) and **`ElettroDevPlatformWorkers`** (managed, added 2026-10-22, now v2: update the five
-  worker Lambdas, edit the tick rules; policy contents not re-read on 2026-10-29). Seen working on 2026-10-29: `update-function-code` on the
+  worker Lambdas, edit the tick rules; policy contents not re-read on 2026-10-29). **Denied on 2026-10-29: `UpdateFunctionCode` on `elettro-brand-os-dev-linkedin`** (the policy predates that Lambda; Dean must upload it or add it to `ElettroDevPlatformWorkers`). Seen working on 2026-10-29: `update-function-code` on the
   dev-api, creating an API Gateway route, reading CloudWatch logs. Dean ran `lambda add-permission` with `elettro`; whether this profile can is untested.
   It is meant to be unable to touch IAM roles, delete anything, or touch Stashbox Radio (not re-tested).
   Use this one. Past sessions also deployed as `root`; avoid that.
@@ -137,14 +146,15 @@ Amplify auto-builds the web app from `develop`. After a merge, do the PR's "AWS 
 - **review** (built, waiting on the network): TikTok videos and photo carousels. The Elettro OS TikTok app was submitted for review
   2026-10-21; the TikTok card's default-Allow settings were reverted (#234) until the Direct Post audit passes.
 - **planning** (built or test-posting, but nothing has published on schedule yet): Pinterest image and video pins, LinkedIn posts
-  (member profile only), and every carousel format (see below). A format moves to `live` only after one publishes on schedule.
+  (company pages and the Dean Palermo profile), and every carousel format (see below). A format moves to `live` only after one publishes on schedule.
+- **Bluesky** (2026-10-29): connect, disconnect, the Review posts-per-day boxes and the publisher `services/bluesky-lambda` are built (text with link/#tag facets, 1-4 photos re-encoded under Bluesky's 1 MB blob limit with `sharp`, one video of up to 100 MB through the video service). Its three formats (`post`, `carousel` up to 4 photos, `video`) are `planning`. Its Lambda `elettro-brand-os-dev-bluesky` and tick rule `elettro-brand-os-dev-bluesky-tick` were created 2026-10-29 (`scripts/bluesky-publisher-setup.sh`, root profile); nothing has published yet. The zip must come from the **Build Bluesky Lambda** artifact (it bundles Linux `sharp`; 1024 MB / 300 s). Setup and AWS steps: `docs/BLUESKY-RUNBOOK.md`. Auth is AT Protocol OAuth (confidential client, DPoP): there is no app review; the "app" is the client-metadata JSON the web app serves plus an ES256 key in the `elettro-brand-os-dev/bluesky-oauth` secret. Each connected account's saved session is `elettro-brand-os-dev/bluesky/<did, : written as _>`. Refresh tokens rotate on use; the publisher writes every refreshed session back to the same secret and moves the reconnect countdown (`set-token-expiry`). Not yet tested against live Bluesky: the first connect attempt (2026-10-29) failed because the library returns the server address with a trailing slash (`aud` is a URL `href`), which the dev-api's check refused; the web callback now sends the bare origin and the API accepts either. Bluesky's published rules and how we enforce them (300-grapheme captions, one link, no automated @mentions, 25% promo cap, Review lists it last) are in `docs/BLUESKY-RUNBOOK.md`.
 - **integration** (not live): X. Google Business Profile is allowlisted (261023) and connected per brand. `services/gmb-lambda` publishes approved Update and Offer posts (one photo, one button, a pillar tag; every rule in `GMB_ASSET_SPEC.md` is a hard gate, plus the 30-day business-majority mix). Posts are queued by hand and the planner does not plan them (the format stays `integration`) until the business-intelligence layer and per-brand content policies exist. Its Lambda `elettro-brand-os-dev-gmb` and schedule are meant to be created by `scripts/gmb-publisher-setup.sh` (see its PR); **not created as of 2026-10-29**.
 - **Mastodon** (connect + Disconnect + hand-written test post only; no worker, no `publishing-formats.mjs` entry, nothing planned or published automatically): SolarMeister, Neckermann Strom and Stashbox, one profile each on mastodon.social. Tokens never expire (no renewal, no `tokenExpiresAt`). App credentials in secret `elettro-brand-os-dev/mastodon-oauth` (made by `scripts/mastodon-app-setup.sh`), account tokens under `elettro-brand-os-dev/mastodon/<id>@<instance>`. Needs a new dev-api route (`POST /connections/mastodon/complete`). Details and the post-merge AWS list: `docs/admin/mastodon-connect.md`. **Not yet run against the live service (not verified).**
 - Token expiry matters: Threads/Pinterest/Meta tokens expire and must be renewed or reconnected by hand if a window is
   missed. Threads renewal is automatic (tick). Connection status/expiry feeds `elettro.com/dash`.
 - Each network has a hard daily cap of 10 posts across formats (`MAX_POSTS_PER_DAY`); Review page "posts per day" controls it.
   Posting window 10:00-22:00 ET with a primary window 10:00-17:00 (`posting-window.mjs`, PR #166).
-- **Carousels** (`placement: "carousel"`: Instagram, Facebook multi-photo, Threads, TikTok photo, LinkedIn multi-image, Pinterest): all `planning`. Instagram carousels and Facebook multi-photo posts publish through `services/meta-lambda` (claimed with `placements` including `carousel`; `claim-due-posts` returns `slides` in order, or `[]` if any slide is gone, which fails the post instead of posting a shorter one); Threads carousels publish through `services/threads-lambda` (its tick now claims `post` and `carousel`); Pinterest carousel Pins publish through `services/pinterest-lambda` (claims `pin`, `video`, `carousel`); LinkedIn multi-image posts publish through `services/linkedin-lambda` (claims `post`, `carousel`); TikTok photo carousels are built in `services/tiktok-lambda` (claims `video`, `carousel`; status `review`) but need an image host on a TikTok-verified domain (`TIKTOK_PHOTO_BUCKET`, `TIKTOK_PHOTO_BASE_URL`, `scripts/tiktok-photo-host-setup.sh`) and the app review. A format moves to `live` only after one publishes on schedule. The planner builds each from one sector's images (count between the brand's min and max, set on Review, stored in `Brand.settings.carouselSlides`, clamped to the limits in `publishing-formats.mjs`) and stores the slide asset ids in `ScheduledPost.scoreBreakdown.slideIds` (`assetId` is the lead image). `claim-due-posts` never hands a carousel to a worker that does not name `carousel` in `placements`.
+- **Carousels** (`placement: "carousel"`: Instagram, Facebook multi-photo, Threads, TikTok photo, LinkedIn multi-image, Pinterest): all `planning`. Instagram carousels and Facebook multi-photo posts publish through `services/meta-lambda` (claimed with `placements` including `carousel`; `claim-due-posts` returns `slides` in order, or `[]` if any slide is gone, which fails the post instead of posting a shorter one); Threads carousels publish through `services/threads-lambda` (its tick now claims `post` and `carousel`); Pinterest carousel Pins publish through `services/pinterest-lambda` (claims `pin`, `video`, `carousel`); LinkedIn multi-image posts and **PDF documents** (`placement: "document"`, 3-20 images stitched into one PDF by `pdf-lib`, posted through LinkedIn's Documents API) publish through `services/linkedin-lambda` (claims `post`, `carousel`, `document`, `text`, `link`, `poll`; its zip carries `node_modules/pdf-lib`). **Hand-written LinkedIn posts** (`text`, `link`, `poll`; formats are `integration`, never planned) are queued from a form on Review (`queue-custom`, `linkedin-custom.mjs`): saved as `planned` with the details in `scoreBreakdown.custom` and a carrier image asset (every ScheduledPost needs an asset; the live schema cannot be changed from here), approved on their card like any post; TikTok photo carousels are built in `services/tiktok-lambda` (claims `video`, `carousel`; status `review`) but need an image host on a TikTok-verified domain (`TIKTOK_PHOTO_BUCKET`, `TIKTOK_PHOTO_BASE_URL`, `scripts/tiktok-photo-host-setup.sh`) and the app review. A format moves to `live` only after one publishes on schedule. The planner builds each from one sector's images (count between the brand's min and max, set on Review, stored in `Brand.settings.carouselSlides`, clamped to the limits in `publishing-formats.mjs`) and stores the slide asset ids in `ScheduledPost.scoreBreakdown.slideIds` (`assetId` is the lead image). `claim-due-posts` never hands a carousel to a worker that does not name `carousel` in `placements`.
 
 ## 5. Running and testing
 

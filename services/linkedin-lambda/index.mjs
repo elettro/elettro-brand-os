@@ -1,19 +1,25 @@
-import { SecretsManagerClient, GetSecretValueCommand, ListSecretsCommand } from "@aws-sdk/client-secrets-manager";
+import { SecretsManagerClient, GetSecretValueCommand, ListSecretsCommand, PutSecretValueCommand } from "@aws-sdk/client-secrets-manager";
 import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
 
 // LinkedIn publishing worker for Elettro OS. Runs outside the VPC (it needs api.linkedin.com) and is
 // only invoked directly through IAM: no HTTP route points at it. Way in:
 //   an EventBridge schedule (every 15 min)   the tick: claim the next due approved LinkedIn post
 //                                             (claim-due-posts) -> publish -> finish-post
-// Posts go to the member profile connected on /connections ("Elettro OS Personal": w_member_social),
-// author urn:li:person:<id>. A post is a photo or a video with its caption; images go up through the
+// Posts go to the account connected on /connections: a member profile ("Elettro OS Personal": w_member_social, author
+// urn:li:person:<id>) or a company page ("Elettro OS", Community Management API: w_organization_social, author
+// urn:li:organization:<id>). A post is a photo or a video with its caption; images go up through the
 // Images API, videos through the Videos API in 4 MB parts that are read from Dropbox one at a time,
-// so a large video never has to fit in memory. Company Pages join once Community Management is approved.
+// so a large video never has to fit in memory.
 // A carousel (placement "carousel", 2-20 images) is a multi-image post: each image goes up through the Images API
 // and the post lists them in order; the planner's claim-due-posts only hands carousels to a worker that asks.
-// Member tokens last 60 days and LinkedIn issues no refresh token, so there is no renewal step: when
-// the login expires the tick leaves approved posts alone until Dean reconnects (the Connections page
-// counts the days down), instead of failing every post that comes due in the gap.
+// A document (placement "document", 3-20 images) is the same picks stitched into one PDF (pdf-lib), uploaded through the
+// Documents API and posted as a swipeable document; LinkedIn uses the first page as the cover and requires a title.
+// Text posts, link posts and polls (placements "text", "link", "poll") are written by hand on Review; their details arrive
+// as post.custom. A link post uploads its carrier image as the link card's thumbnail (LinkedIn does not scrape URLs).
+// Member tokens last 60 days with no refresh token: when one expires the tick leaves approved posts alone until Dean
+// reconnects (the Connections page counts the days down), instead of failing every post that comes due in the gap.
+// Company-page tokens come with a refresh token (about a year): the worker renews the access token itself when it is
+// within 7 days of expiry, stores the new pair, and moves the reconnect date on the SocialAccount.
 
 const secrets = new SecretsManagerClient({});
 const lambda = new LambdaClient({});
@@ -21,6 +27,11 @@ const API_FUNCTION = process.env.API_FUNCTION_NAME || "elettro-brand-os-dev-api"
 // The trailing slash keeps the app secret (elettro-brand-os-dev/linkedin-oauth) out of the list.
 const TOKEN_PREFIX = process.env.LINKEDIN_TOKEN_SECRET_PREFIX || "elettro-brand-os-dev/linkedin/";
 const DROPBOX_SECRET = process.env.DROPBOX_SECRET_NAME || "elettro-brand-os-dev/dropbox";
+// App credentials of the "Elettro OS" LinkedIn app (company pages); needed only to renew a page token.
+const PAGES_OAUTH_SECRET = process.env.LINKEDIN_PAGES_OAUTH_SECRET || "elettro-brand-os-dev/linkedin-pages-oauth";
+const REFRESH_WITHIN_MS = 7 * 86_400_000;
+// A post's author: a member profile or a company page.
+const OWNER_URN = /^urn:li:(?:person:[A-Za-z0-9_-]{4,64}|organization:\d{1,20})$/;
 const API = "https://api.linkedin.com/rest";
 // Posts API version header (YYYYMM); keep in step with apps/web/lib/linkedin-connect.ts.
 const API_VERSION = process.env.LINKEDIN_API_VERSION || "202608";
@@ -31,11 +42,14 @@ const MAX_HASHTAGS = 3;
 const CAROUSEL_MIN = 2;
 const CAROUSEL_MAX = 20;
 // The planner placements this worker publishes.
-const PLACEMENTS = ["post", "carousel"];
+const PLACEMENTS = ["post", "carousel", "document", "text", "link", "poll"];
 // One post per tick keeps a backlog from bursting onto the feed.
 const POSTS_PER_TICK = 1;
 // Video processing: poll every 5 s for up to 8 minutes (Lambda timeout 15 min).
 const POLL_MS = 5000;
+// A PDF over this size is refused before upload (LinkedIn's limit is 100 MB).
+const PDF_MAX_BYTES = 90 * 1024 * 1024;
+const POLL_DURATIONS = ["ONE_DAY", "THREE_DAYS", "SEVEN_DAYS", "FOURTEEN_DAYS"];
 const POLL_LIMIT_MS = 480_000;
 
 const result = (statusCode, payload) => ({ statusCode, ...payload });
@@ -68,23 +82,51 @@ export function publishRequest(post) {
     }
     return path;
   };
-  if (post.placement === "carousel") {
+  if (post.placement === "carousel" || post.placement === "document") {
     const slides = Array.isArray(post.slides) ? post.slides : [];
     if (slides.length < CAROUSEL_MIN || slides.length > CAROUSEL_MAX) {
-      throw new Error(`a LinkedIn multi-image post needs ${CAROUSEL_MIN}-${CAROUSEL_MAX} images; this one has ${slides.length}`);
+      throw new Error(`a LinkedIn ${post.placement === "document" ? "document" : "multi-image post"} needs ${CAROUSEL_MIN}-${CAROUSEL_MAX} images; this one has ${slides.length}`);
     }
     const slidePaths = slides.map((slide) => safePath(slide.dropboxPath));
     for (const path of slidePaths) if (!/\.(jpe?g|png)$/i.test(path)) throw new Error("every carousel slide must be a .jpg or .png image");
     const channelId = String(post.channelId || "");
-    if (!/^urn:li:person:[A-Za-z0-9_-]{4,64}$/.test(channelId)) throw new Error("the post has no LinkedIn member id");
+    if (!OWNER_URN.test(channelId)) throw new Error("the post has no LinkedIn member id or page id");
     const title = String(post.title || post.assetTitle || "").trim().slice(0, 200);
-    return { kind: "carousel", dropboxPath: slidePaths[0], slidePaths, channelId, commentary: commentaryFor(post), title, altText: (title || String(post.assetTitle || "")).slice(0, 1000) };
+    return {
+      kind: post.placement === "document" ? "document" : "carousel", dropboxPath: slidePaths[0], slidePaths, channelId,
+      commentary: commentaryFor(post), title, altText: (title || String(post.assetTitle || "")).slice(0, 1000)
+    };
+  }
+  if (["text", "link", "poll"].includes(post.placement)) {
+    const channelId = String(post.channelId || "");
+    if (!OWNER_URN.test(channelId)) throw new Error("the post has no LinkedIn member id or page id");
+    const custom = post.custom && typeof post.custom === "object" ? post.custom : null;
+    if (!custom || custom.kind !== post.placement) throw new Error("the post has no text, link or poll details");
+    const base = { kind: post.placement, channelId };
+    if (post.placement === "text") return { ...base, commentary: commentaryFor(post) };
+    if (post.placement === "poll") {
+      const question = String(custom.question || "").trim();
+      const options = Array.isArray(custom.options) ? custom.options.map((o) => String(o).trim()).filter(Boolean) : [];
+      if (!question || question.length > 140) throw new Error("a poll question needs 1-140 characters");
+      if (options.length < 2 || options.length > 4 || options.some((o) => o.length > 30)) throw new Error("a poll needs 2 to 4 options of up to 30 characters");
+      if (!POLL_DURATIONS.includes(custom.duration)) throw new Error("the poll has no valid duration");
+      return { ...base, question, options, duration: custom.duration, commentary: commentaryFor({ ...post, caption: post.caption || question }) };
+    }
+    let source;
+    try { source = new URL(String(custom.url || "")); } catch { throw new Error("the link post has no valid link"); }
+    if (!/^https?:$/.test(source.protocol)) throw new Error("the link post has no valid link");
+    const title = String(custom.title || "").trim().slice(0, 200);
+    if (!title) throw new Error("the link post has no title");
+    return {
+      ...base, dropboxPath: safePath(post.dropboxPath), source: source.toString(), title,
+      description: String(custom.description || "").trim().slice(0, 255), commentary: commentaryFor({ ...post, caption: post.caption || title })
+    };
   }
   const dropboxPath = safePath(post.dropboxPath);
   const kind = /\.(mp4|mov)$/i.test(dropboxPath) ? "video" : /\.(jpe?g|png|gif)$/i.test(dropboxPath) ? "image" : null;
   if (!kind) throw new Error("the clip must be an .mp4 or .mov video or a .jpg, .png or .gif image");
   const channelId = String(post.channelId || "");
-  if (!/^urn:li:person:[A-Za-z0-9_-]{4,64}$/.test(channelId)) throw new Error("the post has no LinkedIn member id");
+  if (!OWNER_URN.test(channelId)) throw new Error("the post has no LinkedIn member id or page id");
   const title = String(post.title || post.assetTitle || "").trim().slice(0, 200);
   return { kind, dropboxPath, channelId, commentary: commentaryFor(post), title, altText: (title || String(post.assetTitle || "")).slice(0, 1000) };
 }
@@ -113,24 +155,80 @@ async function api(payload) {
 }
 
 const expired = (record, now) => !(Date.parse(record.expiresAt || "") > now.getTime());
+// A company-page login can be renewed while its refresh token lives.
+const refreshable = (record, now) => Boolean(record.refreshToken) && Date.parse(record.refreshExpiresAt || "") > now.getTime();
 
-// The token record for a claimed post's member urn (secrets are stored per member id).
-export async function account(memberUrn, deps = {}) {
-  const { read = secretJson, now = new Date() } = deps;
-  const id = String(memberUrn || "").replace(/^urn:li:person:/, "");
+// Secrets are stored per account: members by id, company pages as org-<id>.
+export function secretKeyFor(urn) {
+  const text = String(urn || "");
+  const org = /^urn:li:organization:(\d{1,20})$/.exec(text);
+  const id = org ? `org-${org[1]}` : text.replace(/^urn:li:person:/, "");
   if (!/^[A-Za-z0-9_-]{4,64}$/.test(id)) throw new Error("The post has no LinkedIn member id");
-  const record = await read(TOKEN_PREFIX + id);
-  if (!record.accessToken) throw new Error(`No LinkedIn token stored for ${memberUrn}`);
+  return id;
+}
+
+// Trades the refresh token for a new access token (LinkedIn may also rotate the refresh token). Returns the new record.
+export async function renewRecord(record, deps = {}) {
+  const { appCredentials = () => secretJson(PAGES_OAUTH_SECRET), call = fetch, now = new Date() } = deps;
+  const { clientId, clientSecret } = await appCredentials();
+  if (!clientId || !clientSecret) throw new Error("LinkedIn app credentials for company pages are missing");
+  const response = await call("https://www.linkedin.com/oauth/v2/accessToken", {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: record.refreshToken, client_id: clientId, client_secret: clientSecret }),
+    signal: AbortSignal.timeout(30000)
+  });
+  const out = await response.json().catch(() => ({}));
+  if (!response.ok || !out.access_token) throw new Error(`LinkedIn would not renew the page login: ${out.error_description || out.error || response.status}`);
+  const seconds = Number(out.expires_in) > 0 ? Number(out.expires_in) : 60 * 86_400;
+  const refreshSeconds = Number(out.refresh_token_expires_in) > 0 ? Number(out.refresh_token_expires_in) : null;
+  return {
+    ...record,
+    accessToken: out.access_token,
+    expiresAt: new Date(now.getTime() + seconds * 1000).toISOString(),
+    // A rotated refresh token starts a new clock; an unchanged one keeps the old expiry.
+    ...(out.refresh_token && out.refresh_token !== record.refreshToken
+      ? { refreshToken: out.refresh_token, refreshExpiresAt: new Date(now.getTime() + (refreshSeconds || 365 * 86_400) * 1000).toISOString() }
+      : {}),
+    renewedAt: now.toISOString()
+  };
+}
+
+// Renews a company-page login that is expired or within 7 days of expiring; stores it and moves the reconnect date.
+async function renewIfNeeded(record, secretId, urn, deps) {
+  const { now = new Date(), renew = renewRecord, save, callApi = api } = deps;
+  if (!refreshable(record, now) || !(Date.parse(record.expiresAt || "") - now.getTime() < REFRESH_WITHIN_MS)) return record;
+  try {
+    const next = await renew(record, deps);
+    await (save || ((id, value) => secrets.send(new PutSecretValueCommand({ SecretId: id, SecretString: JSON.stringify(value) }))))(secretId, next);
+    // The reconnect date of a page is when its refresh token dies; the access token is renewed here before that.
+    await callApi({ action: "set-token-expiry", destination: "linkedin", externalAccountId: urn, tokenExpiresAt: next.refreshExpiresAt || next.expiresAt })
+      .catch((error) => console.error("LinkedIn renewal stored, reconnect date not moved:", error?.message));
+    return next;
+  } catch (error) {
+    console.error("LinkedIn page login renewal failed:", error?.message);
+    if (expired(record, now)) throw error;
+    return record;
+  }
+}
+
+// The token record for a claimed post's author urn; a page login is renewed first when it is due.
+export async function account(ownerUrn, deps = {}) {
+  const { read = secretJson, now = new Date() } = deps;
+  const secretId = TOKEN_PREFIX + secretKeyFor(ownerUrn);
+  let record = await read(secretId);
+  if (!record.accessToken) throw new Error(`No LinkedIn token stored for ${ownerUrn}`);
+  record = await renewIfNeeded(record, secretId, ownerUrn, deps);
   if (expired(record, now)) throw new Error("The LinkedIn login has expired; reconnect it on /connections");
   return record;
 }
 
-// True when at least one stored LinkedIn login can still post.
+// True when at least one stored LinkedIn login can still post (or be renewed).
 export async function hasValidLogin(deps = {}) {
   const { names = tokenSecretNames, read = secretJson, now = new Date() } = deps;
   for (const SecretId of await names()) {
     const record = await read(SecretId);
-    if (record.accessToken && !expired(record, now)) return true;
+    if (record.accessToken && (!expired(record, now) || refreshable(record, now))) return true;
   }
   return false;
 }
@@ -239,9 +337,89 @@ async function uploadVideo(token, request, deps) {
   }
 }
 
+// Stitches images (jpg/png bytes, in order) into one PDF, one page per image at its own proportions. pdf-lib is loaded on
+// demand so the tests and the other formats do not need it.
+export async function pdfFromImages(buffers) {
+  const { PDFDocument } = await import("pdf-lib");
+  const pdf = await PDFDocument.create();
+  for (const bytes of buffers) {
+    const isPng = bytes[0] === 0x89 && bytes[1] === 0x50;
+    const image = isPng ? await pdf.embedPng(bytes) : await pdf.embedJpg(bytes);
+    // Pages are 1080 points wide (LinkedIn shows documents at screen size); the image keeps full resolution inside.
+    const width = 1080, height = Math.round((image.height / image.width) * width);
+    pdf.addPage([width, height]).drawImage(image, { x: 0, y: 0, width, height });
+  }
+  pdf.setTitle("Elettro OS document");
+  return Buffer.from(await pdf.save());
+}
+
+// A document: build the PDF from the slide images, ask LinkedIn for an upload slot, send it, wait until it is AVAILABLE.
+async function uploadDocument(token, request, deps) {
+  const { call = (method, path, body, what) => linkedin(token.accessToken, method, path, body, what), link = dropboxLink, buildPdf = pdfFromImages,
+    fetchBytes = async (url) => { const r = await fetch(url, { signal: AbortSignal.timeout(120000) }); if (!r.ok) throw new Error(`Dropbox download failed (HTTP ${r.status})`); return Buffer.from(await r.arrayBuffer()); },
+    putFile = fetch, wait = (ms) => new Promise((r) => setTimeout(r, ms)), pollMs = POLL_MS, limitMs = POLL_LIMIT_MS } = deps;
+  const images = [];
+  for (const path of request.slidePaths) images.push(await fetchBytes(await link(path)));
+  const pdf = await buildPdf(images);
+  if (!pdf?.length) throw new Error("the PDF came out empty");
+  if (pdf.length > PDF_MAX_BYTES) throw new Error(`the PDF is ${Math.round(pdf.length / 1048576)} MB; LinkedIn allows 100 MB, so use fewer or smaller images`);
+  const slot = (await call("POST", "/documents?action=initializeUpload", { initializeUploadRequest: { owner: request.channelId } }, "document upload")).body.value;
+  if (!slot?.uploadUrl || !slot.document) throw new Error("LinkedIn returned no document upload slot");
+  const sent = await putFile(slot.uploadUrl, {
+    method: "PUT", headers: { authorization: `Bearer ${token.accessToken}`, "content-type": "application/octet-stream" },
+    body: pdf, signal: AbortSignal.timeout(120000)
+  });
+  if (!sent.ok) throw new Error(`LinkedIn document upload failed (HTTP ${sent.status})`);
+  for (let waited = 0; ; waited += pollMs) {
+    const state = (await call("GET", `/documents/${encodeURIComponent(slot.document)}`, null, "document status")).body;
+    // LinkedIn reports PROCESSING / AVAILABLE / PROCESSING_FAILED; a body without a status is treated as ready.
+    if (!state.status || state.status === "AVAILABLE") return slot.document;
+    if (state.status === "PROCESSING_FAILED") throw new Error("LinkedIn could not process the PDF");
+    if (waited >= limitMs) throw new Error(`LinkedIn was still processing the PDF after ${Math.round(limitMs / 1000)} s`);
+    await wait(pollMs);
+  }
+}
+
 export async function publish(record, post, deps = {}) {
   const { call = (method, path, body, what) => linkedin(record.accessToken, method, path, body, what), upload } = deps;
   const request = publishRequest(post);
+  if (["text", "link", "poll"].includes(request.kind)) {
+    let content = null;
+    if (request.kind === "poll") {
+      content = { poll: { question: request.question, options: request.options.map((text) => ({ text })), settings: { duration: request.duration } } };
+    } else if (request.kind === "link") {
+      // The carrier image becomes the link card's thumbnail.
+      const thumbnail = await (upload?.image || uploadImage)(record, { ...request, kind: "image" }, deps);
+      content = { article: { source: request.source, thumbnail, title: request.title, ...(request.description ? { description: request.description } : {}) } };
+    }
+    const made = await call("POST", "/posts", {
+      author: request.channelId,
+      commentary: request.commentary,
+      visibility: "PUBLIC",
+      distribution: { feedDistribution: "MAIN_FEED", targetEntities: [], thirdPartyDistributionChannels: [] },
+      ...(content ? { content } : {}),
+      lifecycleState: "PUBLISHED",
+      isReshareDisabledByAuthor: false
+    }, `${request.kind} post`);
+    const customUrn = made.headers?.get?.("x-restli-id") || "";
+    if (!customUrn) throw new Error("LinkedIn returned no post id");
+    return { postId: customUrn, permalink: `https://www.linkedin.com/feed/update/${customUrn}/` };
+  }
+  if (request.kind === "document") {
+    const documentId = await (upload?.document || uploadDocument)(record, request, deps);
+    const made = await call("POST", "/posts", {
+      author: request.channelId,
+      commentary: request.commentary,
+      visibility: "PUBLIC",
+      distribution: { feedDistribution: "MAIN_FEED", targetEntities: [], thirdPartyDistributionChannels: [] },
+      content: { media: { title: request.title || "Document", id: documentId } },
+      lifecycleState: "PUBLISHED",
+      isReshareDisabledByAuthor: false
+    }, "document post");
+    const documentUrn = made.headers?.get?.("x-restli-id") || "";
+    if (!documentUrn) throw new Error("LinkedIn returned no post id");
+    return { postId: documentUrn, permalink: `https://www.linkedin.com/feed/update/${documentUrn}/` };
+  }
   if (request.kind === "carousel") {
     // One upload per image, in order; any failure stops before the post is created.
     const images = [];

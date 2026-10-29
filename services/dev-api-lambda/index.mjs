@@ -3,6 +3,7 @@ import {runBrandMediaReset} from "./brand-media-reset.mjs";
 import {runBrandRootMigration} from "./brand-root-migration.mjs";
 import { configurePlannerBrand, runPlanWeek, runPlanWeeks, approvePlannerWeek } from "./planner-v2-db.mjs";
 import {runSharedAudioLibrarySetup,LIBRARY_SLUG,LIBRARY_AUDIO_ROOT} from "./shared-audio-library.mjs";
+import {runDocumentAssetKindSetup} from "./document-asset-kind.mjs";
 import { handleConnectionStatus, setPlatformMilestone, setTokenExpiry, feedResponse } from "./connection-status.mjs";
 import { handlePostRace } from "./post-race.mjs";
 import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
@@ -23,6 +24,7 @@ import { completeMastodonConnect } from "./mastodon-connect.mjs";
 import { handlePlannerWeb, handlePlannerOps } from "./planner-ops.mjs";
 import { setPostingWindow } from "./posting-window.mjs";
 import { completeThreadsConnect } from "./threads-connect.mjs";
+import { completeBlueskyConnect } from "./bluesky-connect.mjs";
 import { completeTiktokConnect } from "./tiktok-connect.mjs";
 import { disconnectNetwork } from "./connection-disconnect.mjs";
 import { completePinterestConnect } from "./pinterest-connect.mjs";
@@ -61,6 +63,7 @@ function assetKindFromName(name = "") {
   if (/\.(mp4|mov|m4v|avi|webm|mkv)$/i.test(lower)) return "video";
   if (/\.(jpg|jpeg|png|webp|gif|tif|tiff|heic|avif)$/i.test(lower)) return "image";
   if (/\.(wav|mp3|m4a|aac|flac|aif|aiff|ogg)$/i.test(lower)) return "audio";
+  if (/\.pdf$/i.test(lower)) return "document";
   return null;
 }
 
@@ -1546,7 +1549,7 @@ async function completeDropboxUpload(event){
     VALUES ($1,'dropbox',$2,$3,$3,lower($3),$4::jsonb,$5,$6,$7,$8::"AssetKind",$9::"IngestStatus",$10::"EnrichmentStatus",$11::"ApprovalStatus",$12,$13,$14,$15,$16::"EligibilityType",$17::date,$18::date,$19,$20,$21,CASE WHEN $11='approved' AND $9='ready' THEN CURRENT_TIMESTAMP ELSE NULL END,CURRENT_TIMESTAMP)
     ON CONFLICT DO NOTHING RETURNING "id","filename","ingestStatus","approvalStatus"`,[
      brandId,verified.id,verified.path,JSON.stringify({dropboxFileId:verified.id,rev:verified.rev,contentHash:verified.contentHash,source:"direct_dropbox",path:verified.path}),filename,
-     kind==="image"?"image/"+filename.split(".").pop().toLowerCase():"video/"+filename.split(".").pop().toLowerCase(),String(verified.size),kind,
+     kind==="document"?"application/pdf":kind==="image"?"image/"+filename.split(".").pop().toLowerCase():"video/"+filename.split(".").pop().toLowerCase(),String(verified.size),kind,
      mode==="raw"?"raw":"ready",mode==="raw"?"pending":"reviewed",approvalStatus,
      String(metadata.topic||"").trim()||null,String(metadata.creativeFamily||"").trim()||null,String(metadata.creatorNote||"").trim()||null,String(metadata.priority||"normal"),eligibilityType,eligibleFrom,eligibleUntil,annualFromMmdd,annualUntilMmdd,uploadDestinationNames(metadata.allowedDestinations)
   ]);
@@ -1583,6 +1586,8 @@ export const handler = async (event = {}) => {
   if (iamOnly && event.action === "set-token-expiry") return setTokenExpiry(event, connectDatabase, json);
   // IAM-only shared audio library setup (dry-run unless mode:"apply"); never exposed through HTTP or MCP.
   if(event.action === "setup-shared-audio-library-20261017" && !event.requestContext && !event.rawPath && !event.path) return runSharedAudioLibrarySetup(event,connectDatabase,json);
+  // IAM-only: add the 'document' (PDF) asset kind (dry-run unless mode:"apply").
+  if(event.action === "setup-document-asset-kind-20261029" && !event.requestContext && !event.rawPath && !event.path) return runDocumentAssetKindSetup(event,connectDatabase,json);
   const requestPath =
     event?.rawPath ||
     event?.requestContext?.http?.path ||
@@ -1793,6 +1798,11 @@ export const handler = async (event = {}) => {
   // "Connect Threads": same handshake; one Threads profile per brand, 60-day token with an expiry date.
   if (requestPath === "/connections/threads/complete" && event?.requestContext?.http?.method === "POST") {
     return completeThreadsConnect(event, parseJsonBody(event), connectDatabase, json);
+  }
+
+  // "Connect Bluesky": same handshake; the web app runs the AT Protocol OAuth and sends the saved session.
+  if (requestPath === "/connections/bluesky/complete" && event?.requestContext?.http?.method === "POST") {
+    return completeBlueskyConnect(event, parseJsonBody(event), connectDatabase, json);
   }
 
   // "Connect TikTok": same handshake; one TikTok account per brand, refresh-token expiry as the reconnect date.

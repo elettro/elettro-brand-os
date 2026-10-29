@@ -192,7 +192,7 @@ function formatBytes(value: ApiAsset["fileSizeBytes"]) {
 }
 
 function kindGlyph(kind: string) {
-  return kind === "video" ? "▶" : kind === "audio" ? "♪" : "▧";
+  return kind === "video" ? "▶" : kind === "audio" ? "♪" : kind === "document" ? "▤" : "▧";
 }
 
 export function AssetLibraryClient({ assets }: { assets: ApiAsset[] }) {
@@ -263,6 +263,7 @@ export function AssetLibraryClient({ assets }: { assets: ApiAsset[] }) {
           <option value="image">Images</option>
           <option value="video">Videos</option>
           <option value="audio">Audio</option>
+          <option value="document">PDF documents</option>
         </select>
         <select value={status} onChange={(event) => setStatus(event.target.value)} aria-label="Filter by status">
           <option value="all">All statuses</option>
@@ -332,7 +333,7 @@ export function AssetLibraryClient({ assets }: { assets: ApiAsset[] }) {
         {(viewMode === "folders" ? folderView.files : filtered).map((asset) => (
           <Link href={`/assets/${asset.id}`} className="asset-tile" key={asset.id}>
             <div className={`asset-preview asset-preview-${asset.kind}`}>
-              {asset.sourceType === "dropbox" && asset.sourcePath && asset.kind !== "audio" ? (
+              {asset.sourceType === "dropbox" && asset.sourcePath && asset.kind !== "audio" && asset.kind !== "document" ? (
                 <AssetThumbnail
                   sourcePath={asset.sourcePath}
                   kind={asset.kind}

@@ -23,7 +23,7 @@ function fakeClient(brandSettings = {}) {
 
 test("every carousel network has hard limits and a recommended range inside them", () => {
   const carousels = PUBLISHING_FORMATS.filter((f) => f.placement === "carousel");
-  assert.deepEqual(carousels.map((f) => f.destination).sort(), ["facebook", "instagram", "linkedin", "pinterest", "threads", "tiktok"]);
+  assert.deepEqual(carousels.map((f) => f.destination).sort(), ["bluesky", "facebook", "instagram", "linkedin", "pinterest", "threads", "tiktok"]);
   for (const f of carousels) {
     const [lo, hi] = f.slides.recommended;
     assert.ok(f.slides.min >= 2 && f.slides.min <= lo && lo <= hi && hi <= f.slides.max, `${f.destination} recommended range`);

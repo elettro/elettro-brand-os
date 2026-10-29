@@ -40,12 +40,12 @@ const MEDIA_EXTENSIONS:Record<string,string>={
  ".webp":"image/webp",".gif":"image/gif",".heic":"image/heic",
  ".mp4":"video/mp4",".mov":"video/quicktime",".m4v":"video/x-m4v",
  ".webm":"video/webm",".mp3":"audio/mpeg",".wav":"audio/wav",
- ".m4a":"audio/mp4",".flac":"audio/flac"
+ ".m4a":"audio/mp4",".flac":"audio/flac",".pdf":"application/pdf"
 };
 export function mediaType(name:string){
  const ext=/\.[a-z0-9]+$/i.exec(name)?.[0].toLowerCase()||"";
  const value=MEDIA_EXTENSIONS[ext];
- if(!value)throw new GatewayError(400,"Unsupported media type: preview accepts common images, video, and audio");
+ if(!value)throw new GatewayError(400,"Unsupported media type: preview accepts common images, video, audio, and PDF");
  return value;
 }
 export function normalizedMetadata(value:unknown,name:string):IntakeMetadata{

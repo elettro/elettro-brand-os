@@ -28,7 +28,11 @@ jobs:
         run: node --check index.mjs
 
       - name: Package Lambda
-        run: zip -r elettro-brand-os-dev-linkedin.zip index.mjs package.json
+        run: |
+          # pdf-lib (PDF documents) is the only dependency the zip carries; the AWS SDK comes with the Lambda runtime.
+          rm -rf pkg && mkdir pkg && cp index.mjs pkg/ && echo '{"type":"module"}' > pkg/package.json
+          (cd pkg && npm install --omit=dev --no-audit --no-fund pdf-lib@1.17.1)
+          (cd pkg && zip -r ../elettro-brand-os-dev-linkedin.zip index.mjs package.json node_modules)
 
       - name: Upload Lambda package
         uses: actions/upload-artifact@v4

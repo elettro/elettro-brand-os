@@ -3,18 +3,25 @@
 import { useEffect, useMemo, useState } from "react";
 import type { PublishingFormat, ReviewAccount, ReviewList, ReviewPost, TiktokCreator } from "@/lib/planner-review";
 import { AssetThumb as Thumb } from "@/components/asset-thumb";
+import { LinkedInWriter } from "./linkedin-writer";
 import { TiktokCard } from "./tiktok-card";
 
 const NETWORK: Record<string, string> = {
-  instagram: "Instagram", facebook: "Facebook", tiktok: "TikTok", threads: "Threads", youtube: "YouTube",
+  instagram: "Instagram", facebook: "Facebook", tiktok: "TikTok", threads: "Threads", bluesky: "Bluesky", youtube: "YouTube",
   pinterest: "Pinterest", linkedin: "LinkedIn", x: "X", gmb: "Google Business"
 };
 const STATUS: Record<PublishingFormat["status"], string> = {
   live: "Manually approved, set to auto-publish", planning: "planned only", review: "awaiting app review", integration: "awaiting integration"
 };
-// YouTube leads the posts-per-day list and Google Business follows; every other network keeps the API order (the sort is stable).
+// YouTube leads the posts-per-day list and Google Business follows, Bluesky comes last; every other network keeps the API order (the sort is stable).
 const FIRST = ["youtube", "gmb"];
-const rank = (destination: string) => { const i = FIRST.indexOf(destination); return i < 0 ? FIRST.length : i; };
+// Bluesky closes the list (Dean, 2026-10-29).
+const LAST = ["bluesky"];
+const rank = (destination: string) => {
+  const i = FIRST.indexOf(destination);
+  if (i >= 0) return i;
+  return LAST.includes(destination) ? FIRST.length + 1 : FIRST.length;
+};
 // The time box works in the brand's own time zone: "2026-10-28T09:00" in, a UTC instant out, and back.
 function localInput(iso: string, tz: string) {
   const p = Object.fromEntries(new Intl.DateTimeFormat("en-CA", { timeZone: tz, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }).formatToParts(new Date(iso)).map((x) => [x.type, x.value]));
@@ -224,7 +231,7 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
   };
 
   // Carousels get their own block at the top of the settings: one row per network, same boxes as every format.
-  const carouselSlots = slots.filter((s) => s.format.placement === "carousel");
+  const carouselSlots = slots.filter((s) => s.format.slides);
 
   return <div className="review">
     <section className="card review-settings">
@@ -253,7 +260,7 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
               {first.account ? <b>{first.account.accountName}</b> : <span className="muted">{first.format.status === "integration" ? first.format.note : "not connected"}</span>}
               {first.account && <span className={week > maxWeek ? "review-warn" : "muted"}> {totals(week)}{week > maxWeek ? ` · over ${maxWeek / 7} a day` : ""}</span>}
             </div>
-            {group.filter((s) => s.format.placement !== "carousel").map(renderRow)}
+            {group.filter((s) => !s.format.slides).map(renderRow)}
           </div>;
         })}
         <div className="review-network">
@@ -269,6 +276,11 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
     </section>
 
     {notice && <p className="card review-notice">{notice}</p>}
+
+    {list.accounts.some((a) => a.destination === "linkedin" && a.externalAccountId) && <LinkedInWriter
+      accountName={list.accounts.find((a) => a.destination === "linkedin" && a.externalAccountId)?.accountName || "LinkedIn"}
+      defaultLocal={localInput(new Date(Date.now() + 24 * 3600_000).toISOString(), tz).replace(/T\d\d:\d\d$/, "T10:00")} timeZone={tz} busy={!!busy}
+      onSave={(body) => run("custom", { ...body, scheduledFor: instantOf(String(body.scheduledFor), tz) }, "Saved as to review. Approve it on its card below to send it.")} />}
 
     {weeks.map((w) => {
       const planned = w.posts.filter((p) => p.status === "planned").length;
@@ -335,7 +347,7 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
           <h3>{fmtDay(posts[0].scheduledFor)}</h3>
           <div className="review-posts">
             {posts.map((p) => <article key={p.id} className={`review-post status-${p.status}`}>
-              <Thumb asset={p.asset} />
+              {p.custom ? <div className="muted" style={{ width: 96, fontSize: 12 }}>{p.custom.kind === "poll" ? "Poll" : p.custom.kind === "link" ? "Link" : "Text"}</div> : <Thumb asset={p.asset} />}
               <div className="review-body">
                 <div className="review-meta">
                   <b>{NETWORK[p.destination] || p.destination}</b> · {p.placement} · {fmtTime(p.scheduledFor)}
@@ -370,7 +382,9 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
                   </div>
                 </div> : <p className="review-caption">{p.caption || <span className="muted">No caption yet</span>}
                   {p.hashtags.length > 0 && <span className="review-tags"> {p.hashtags.map(tag).join(" ")}</span>}</p>}
-                <p className="muted review-file">{p.asset.title || p.asset.filename}{p.sector ? ` · ${p.sector}` : ""}</p>
+                {p.custom?.kind === "poll" && <p className="review-caption"><b>{p.custom.question}</b> {(p.custom.options || []).join(" · ")} <span className="muted">({p.custom.duration})</span></p>}
+                {p.custom?.kind === "link" && <p className="review-caption"><b>{p.custom.title}</b> <a href={p.custom.url} target="_blank" rel="noreferrer">{p.custom.url}</a></p>}
+                {!p.custom && <p className="muted review-file">{p.asset.title || p.asset.filename}{p.sector ? ` · ${p.sector}` : ""}</p>}
                 {reviewable(p) && p.destination === "tiktok" && p.status !== "skipped" && tiktokOpen === p.id && <TiktokCard post={p} creator={creator} creatorError={creatorError} busy={!!busy}
                   onApprove={async (settings) => { await run(p.id, { action: "tiktok-approve", id: p.id, ...settings }, "Approved for TikTok with these settings."); setTiktokOpen(null); }} />}
                 {reviewable(p) && <div className="review-actions">

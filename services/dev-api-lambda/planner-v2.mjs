@@ -200,6 +200,8 @@ export function poolRejection(asset, account, settings) {
   const kinds = rule.kinds || pool.kinds;
   const aspectRatios = rule.aspectRatios || pool.aspectRatios;
   if (kinds.length && !kinds.includes(asset.kind)) return "kind";
+  // A PDF is never a video or photo: only a placement that lists "document" can plan one.
+  if (asset.kind === "document" && !kinds.includes("document")) return "kind";
   if (aspectRatios.length && !aspectRatios.includes(asset.aspectRatioLabel)) return "aspect";
   if (hasAny(tags, pool.excludeTagsAny)) return "excluded-tag";
   const allowed = Array.isArray(asset.allowedDestinations) ? asset.allowedDestinations : [];

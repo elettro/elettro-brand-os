@@ -34,6 +34,13 @@ export const PUBLISHING_FORMATS = [
   { destination: "threads", placement: "post", label: "Posts", status: "live" },
   { destination: "threads", placement: "carousel", label: "Carousels", status: "planning", note: "Scheduled publishing is built; goes live after the first scheduled carousel posts",
     slides: { min: 2, max: 20, recommended: [3, 6] }, rule: { kinds: ["image"], aspectRatios: [] } },
+  // Bluesky: a post takes one photo, one video or up to 4 photos (no mixing). Connect and the publisher (services/bluesky-lambda) are built.
+  { destination: "bluesky", placement: "post", label: "Photo posts", status: "planning", note: "Publisher is built (services/bluesky-lambda); no post has published on schedule yet",
+    rule: { kinds: ["image"], aspectRatios: [] } },
+  { destination: "bluesky", placement: "carousel", label: "Multi-photo posts", status: "planning", note: "Publisher is built (services/bluesky-lambda); no post has published on schedule yet",
+    slides: { min: 2, max: 4, recommended: [2, 4] }, rule: { kinds: ["image"], aspectRatios: [] } },
+  { destination: "bluesky", placement: "video", label: "Videos", status: "planning", note: "Publisher is built (services/bluesky-lambda); no video has published on schedule yet. Videos up to 3 minutes",
+    rule: { kinds: ["video"], aspectRatios: [], maxDurationBucket: "1-3min" } },
   { destination: "youtube", placement: "short", label: "Shorts", status: "live" },
   { destination: "youtube", placement: "video", label: "Long-form videos", status: "live",
     rule: { aspectRatios: ["16x9"], minDurationBucket: "3min-plus" } },
@@ -47,6 +54,12 @@ export const PUBLISHING_FORMATS = [
     rule: { kinds: ["image", "video"], aspectRatios: [] } },
   { destination: "linkedin", placement: "carousel", label: "Multi-image posts", status: "planning", note: "Scheduled publishing is built; goes live after the first scheduled multi-image post",
     slides: { min: 2, max: 20, recommended: [3, 9] }, rule: { kinds: ["image"], aspectRatios: [] } },
+  { destination: "linkedin", placement: "document", label: "PDF documents", status: "planning", note: "Built from a carousel's images into a swipeable PDF; goes live after the first scheduled document post",
+    slides: { min: 3, max: 20, recommended: [5, 10] }, rule: { kinds: ["image"], aspectRatios: [] } },
+  // Written by hand on Review (linkedin-custom.mjs), never planned: they carry no media of their own.
+  { destination: "linkedin", placement: "text", label: "Text posts", status: "integration", note: "Written by hand on Review; not planned automatically" },
+  { destination: "linkedin", placement: "link", label: "Link posts", status: "integration", note: "Written by hand on Review; not planned automatically" },
+  { destination: "linkedin", placement: "poll", label: "Polls", status: "integration", note: "Written by hand on Review; not planned automatically" },
   { destination: "x", placement: "video", label: "Videos", status: "integration", note: "X isn't connected to Elettro OS yet" },
   { destination: "gmb", placement: "update", label: "Update posts", status: "integration", note: "Profiles connected; publisher built (services/gmb-lambda) for Update and Offer posts queued by hand. Not planned automatically: waits on the business-content rules" }
 ];

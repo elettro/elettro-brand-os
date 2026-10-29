@@ -2,11 +2,12 @@ import { session } from "@/lib/cognito-auth";
 import { visibleBrands } from "@/lib/brand-access";
 import { brandConfigs } from "@/lib/brand-config";
 import { YOUTUBE_BRANDS } from "@/lib/youtube-connect";
-import { LINKEDIN_BRANDS, calendarReminderUrl } from "@/lib/linkedin-connect";
+import { LINKEDIN_BRANDS, LINKEDIN_PAGE_BRANDS, calendarReminderUrl } from "@/lib/linkedin-connect";
 import { GBP_BRANDS } from "@/lib/gbp-connect";
 import { META_BRANDS } from "@/lib/meta-connect";
 import { MetaTestPosts } from "@/components/meta-test-posts";
 import { THREADS_BRANDS } from "@/lib/threads-connect";
+import { BLUESKY_BRANDS } from "@/lib/bluesky-connect";
 import { TIKTOK_BRANDS } from "@/lib/tiktok-connect";
 import { TiktokPost } from "@/components/tiktok-post";
 import { ConnectionDisconnect } from "@/components/connection-disconnect";
@@ -47,7 +48,7 @@ async function connectionStatus(): Promise<Record<string, Record<string, Linked>
 export default async function ConnectionsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   // Owner or a brand-scoped user: the page below only lists the brands this session may see.
   if (!(await session())) redirect("/api/auth/login");
-  const [{ brand, connected, disconnected, error, network, expires, posted }, status] = await Promise.all([searchParams, connectionStatus()]);
+  const [{ brand, connected, disconnected, error, network, expires, posted, at }, status] = await Promise.all([searchParams, connectionStatus()]);
   // The header dropdown drives ?brand=: one brand shows only its connections, "All brands" (no param) shows every brand this user may see.
   const accessible: string[] = visibleBrands(await session(), brandConfigs).map((b) => b.id);
   const picked = brand && accessible.includes(brand) ? brand : null;
@@ -64,6 +65,8 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
   const facebook = status.facebook || {};
   const instagram = status.instagram || {};
   const threads = status.threads || {};
+  const blueskyBrands = brandConfigs.filter((b) => BLUESKY_BRANDS.includes(b.id) && inView(b.id));
+  const bluesky = status.bluesky || {};
   const tiktokBrands = brandConfigs.filter((b) => TIKTOK_BRANDS.includes(b.id) && inView(b.id));
   const tiktok = status.tiktok || {};
   const pinterestBrands = brandConfigs.filter((b) => PINTEREST_BRANDS.includes(b.id) && inView(b.id));
@@ -76,13 +79,14 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
   if (brand && connected && expires && !Number.isNaN(Date.parse(expires))) {
     if (network === "linkedin") linkedin[brand] = { handle: connected, expiresAt: expires };
     if (network === "threads") threads[brand] = { handle: connected, expiresAt: expires };
+    if (network === "bluesky") bluesky[brand] = { handle: connected, expiresAt: expires };
     if (network === "tiktok") tiktok[brand] = { handle: connected, expiresAt: expires };
     if (network === "pinterest") pinterest[brand] = { handle: connected, expiresAt: expires };
   }
   // Same cache after a disconnect: the brand is no longer linked even if the feed still says so.
   if (brand && disconnected) {
     const feeds: Record<string, Array<Record<string, Linked>>> = {
-      youtube: [youtube], gmb: [gmb], linkedin: [linkedin], threads: [threads], tiktok: [tiktok], pinterest: [pinterest], meta: [facebook, instagram], mastodon: [mastodon]
+      youtube: [youtube], gmb: [gmb], linkedin: [linkedin], threads: [threads], bluesky: [bluesky], tiktok: [tiktok], pinterest: [pinterest], meta: [facebook, instagram], mastodon: [mastodon]
     };
     for (const feed of feeds[network || ""] || []) delete feed[brand];
   }
@@ -183,6 +187,33 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
       })}
     </div>
     </>}
+    {blueskyBrands.length > 0 && <>
+    <h2 id="bluesky" style={{ marginTop: 32 }}>Bluesky</h2>
+    <p className="muted">Type the brand&apos;s Bluesky handle (like yourname.bsky.social), or leave it blank to pick the account on Bluesky&apos;s own sign-in page. Elettro OS never sees the password. The login renews itself while posts go out; the date shows when it would lapse if nothing used it.</p>
+    <div className="grid" style={{ marginTop: 20 }}>
+      {blueskyBrands.map((b) => {
+        const linked = bluesky[b.id];
+        return (
+          <article className="card" key={b.id}>
+            <div className="eyebrow">Bluesky</div>
+            <h2>{b.name}</h2>
+            <p className="muted" style={{ margin: "0 0 12px" }}>
+              {linked ? <>● Connected · <b>{linked.handle}</b></> : "○ Not connected"}
+            </p>
+            <form className="connect-row" action="/api/connections/bluesky/start" method="get">
+              <input type="hidden" name="brand" value={b.id} />
+              <input name="handle" placeholder="handle.bsky.social" aria-label={`${b.name} Bluesky handle`} autoComplete="off" spellCheck={false} style={{ minWidth: 0, flex: "1 1 160px" }} />
+              <button className="status-chip" type="submit">{linked ? "Reconnect" : "Connect Bluesky"}</button>
+            </form>
+            {linked && <div className="connect-row" style={{ marginTop: 8 }}>
+              {linked.expiresAt && <ReconnectCountdown expiresAt={linked.expiresAt} />}
+              <ConnectionDisconnect brand={b.id} network="bluesky" handle={linked.handle || "this account"} />
+            </div>}
+          </article>
+        );
+      })}
+    </div>
+    </>}
     {tiktokBrands.length > 0 && <>
     <h2 id="tiktok" style={{ marginTop: 32 }}>TikTok</h2>
     <p className="muted">Sign in to the brand&apos;s TikTok account when asked. Until TikTok approves the Elettro OS app, only sandbox target users can connect and posts go out private. A login lasts a year, so each one counts down to its reconnect date.</p>
@@ -234,22 +265,21 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
     </>}
     {linkedinBrands.length > 0 && <>
     <h2 id="linkedin" style={{ marginTop: 32 }}>LinkedIn</h2>
-    <p className="muted">Dean&apos;s personal profile, posting through the Elettro OS Personal app. LinkedIn gives no refresh token, so reconnect before the countdown runs out; company pages follow once LinkedIn approves Community Management.</p>
-    {/* The result sits next to the form: the redirect lands on #linkedin, far down the page. */}
-    {network === "linkedin" && posted && <p className="card" style={{ marginTop: 16 }}>Posted to LinkedIn. <a href={posted} target="_blank" rel="noreferrer">See the post</a></p>}
-    {network === "linkedin" && error && <p className="card" style={{ marginTop: 16 }}>LinkedIn post not sent: {error}</p>}
+    <p className="muted">Each brand posts to its company page (one per brand); the Dean Palermo brand is Dean&apos;s personal profile. A personal-profile login lasts 60 days with no refresh, so reconnect before the countdown runs out. A company-page login renews itself; its countdown is the date LinkedIn&apos;s renewal runs out.</p>
+    {/* A result for a brand shows under that brand's Post button; one with no brand (bad login, unknown brand) shows here. */}
+    {network === "linkedin" && !brand && error && <p className="card" style={{ marginTop: 16 }}>LinkedIn post not sent: {error}</p>}
     <div className="grid" style={{ marginTop: 20 }}>
       {linkedinBrands.map((b) => {
         const linked = linkedin[b.id];
         return (
-          <article className="card" key={b.id}>
-            <div className="eyebrow">LinkedIn · personal profile</div>
+          <article className="card" key={b.id} id={`li-${b.id}`} style={{ scrollMarginTop: 16 }}>
+            <div className="eyebrow">LinkedIn · {LINKEDIN_PAGE_BRANDS.includes(b.id) ? "company page" : "personal profile"}</div>
             <h2>{b.name}</h2>
             <p className="muted" style={{ margin: "0 0 12px" }}>
               {linked ? <>● Connected · <b>{linked.handle}</b></> : "○ Not connected"}
             </p>
             <div className="connect-row">
-              <a className="status-chip" href={`/api/connections/linkedin/start?brand=${b.id}`}>{linked ? "Reconnect" : "Connect LinkedIn"}</a>
+              <a className="status-chip" href={`/api/connections/linkedin/start?brand=${b.id}${LINKEDIN_PAGE_BRANDS.includes(b.id) ? "&kind=page" : ""}`}>{linked ? "Reconnect" : LINKEDIN_PAGE_BRANDS.includes(b.id) ? "Connect company page" : "Connect LinkedIn"}</a>
               {linked?.expiresAt && <ReconnectCountdown expiresAt={linked.expiresAt} />}
               {linked && <ConnectionDisconnect brand={b.id} network="linkedin" handle={linked.handle || "this account"} />}
             </div>
@@ -265,6 +295,13 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
                 <label className="muted" htmlFor={`li-text-${b.id}`}>Test post (goes live on LinkedIn when you click)</label>
                 <textarea id={`li-text-${b.id}`} name="text" rows={4} maxLength={3000} required defaultValue={TEST_POST} />
                 <button type="submit" className="status-chip">Post to LinkedIn now</button>
+                {network === "linkedin" && brand === b.id && (posted || error) && (
+                  <p role="status" className={`post-result ${posted ? "ok" : "bad"}`}>
+                    {posted
+                      ? <><b>✓ Posted to LinkedIn</b>{at ? ` at ${new Date(at).toLocaleTimeString("en-US", { timeStyle: "short", timeZone: "America/New_York" })} ET` : ""}. <a href={posted} target="_blank" rel="noreferrer">View the post</a></>
+                      : <><b>✗ Not posted.</b> {error}</>}
+                  </p>
+                )}
               </form>
             )}
           </article>
