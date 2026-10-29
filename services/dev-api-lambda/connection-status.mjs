@@ -253,3 +253,22 @@ export async function renameSocialAccount(event, connectDatabase, json) {
     try { await client.end(); } catch {}
   }
 }
+
+// IAM-only, read-only: list linked accounts as { brand, destination, accountName, externalAccountId, status, tokenExpiresAt }.
+// Optional { destination }. Lets us see which brand holds an external id when a connect says "already connected to another brand".
+export async function listSocialAccounts(event, connectDatabase, json) {
+  const destination = event.destination ? String(event.destination).toLowerCase() : null;
+  if (destination && !DESTINATIONS.includes(destination)) return json(400, { ok: false, error: "Unknown destination" });
+  const client = await connectDatabase();
+  try {
+    await ensureTokenExpiryColumn(client);
+    const result = await client.query(
+      `SELECT b."slug" AS "brand", sa."destination", sa."accountName", sa."externalAccountId", sa."status", sa."tokenExpiresAt"
+       FROM "SocialAccount" sa JOIN "Brand" b ON b."id"=sa."brandId"
+       WHERE ($1::text IS NULL OR sa."destination"=$1) AND sa."externalAccountId" IS NOT NULL
+       ORDER BY sa."destination", b."slug"`, [destination]);
+    return json(200, { ok: true, accounts: result.rows });
+  } finally {
+    try { await client.end(); } catch {}
+  }
+}
