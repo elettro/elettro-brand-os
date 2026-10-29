@@ -8,6 +8,7 @@ export function ConnectionDisconnect({ brand, network, handle }: { brand: string
   const [asking, setAsking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
 
   async function disconnect() {
     setBusy(true); setError(null);
@@ -17,13 +18,16 @@ export function ConnectionDisconnect({ brand, network, handle }: { brand: string
       });
       const data = await response.json().catch(() => ({})) as { ok?: boolean; error?: string };
       if (!response.ok || !data.ok) throw Error(data.error || `HTTP ${response.status}`);
-      window.location.assign(`/connections?brand=${brand}&disconnected=${encodeURIComponent(handle)}&network=${network}`);
+      // Say so next to the button, then reload so the card flips to Connect.
+      setDone(true);
+      setTimeout(() => window.location.assign(`/connections?brand=${brand}&disconnected=${encodeURIComponent(handle)}&network=${network}#${network}`), 1800);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Disconnect failed");
       setBusy(false);
     }
   }
 
+  if (done) return <span className="connect-row" role="status"><span className="status-chip">✓ Disconnect successful</span></span>;
   if (!asking) return <button type="button" className="status-chip" onClick={() => setAsking(true)}>Disconnect</button>;
   return <span className="connect-row">
     <span className="muted">Remove {handle} from this brand? Posts already approved for it go back to planned.</span>

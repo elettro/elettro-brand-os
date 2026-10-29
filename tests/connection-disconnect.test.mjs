@@ -56,3 +56,11 @@ test("a database failure reports an error and closes the connection", async () =
   assert.equal(r.statusCode, 500);
   assert.ok(closed);
 });
+
+test("every network's Disconnect button maps to a destination and lands back on its own section", async () => {
+  const { readFileSync } = await import("node:fs");
+  const page = readFileSync(new URL("../apps/web/app/connections/page.tsx", import.meta.url), "utf8");
+  const used = [...page.matchAll(/<ConnectionDisconnect[^>]*network="([a-z]+)"/g)].map((m) => m[1]);
+  assert.deepEqual([...new Set(used)].sort(), Object.keys(DISCONNECT_NETWORKS).sort());
+  for (const network of used) assert.ok(page.includes(`id="${network}"`), `no #${network} anchor on the Connections page`);
+});
