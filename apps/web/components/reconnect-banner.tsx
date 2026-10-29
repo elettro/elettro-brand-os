@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { daysLeft, expiryLevel } from "@/lib/token-expiry";
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_BRAND_OS_API_BASE_URL || "https://zkjngy7rdd.execute-api.us-east-1.amazonaws.com";
-const NETWORK: Record<string, string> = { linkedin: "LinkedIn", instagram: "Instagram", facebook: "Facebook", threads: "Threads" };
+const NETWORK: Record<string, string> = { linkedin: "LinkedIn", instagram: "Instagram", facebook: "Facebook", threads: "Threads", bluesky: "Bluesky" };
 
 type Due = { network: string; brand: string; expiresAt: string };
 type Feed = { brands?: Array<{ name: string; profiles: Array<{ destination: string; tokenExpiresAt?: string | null }> }> };

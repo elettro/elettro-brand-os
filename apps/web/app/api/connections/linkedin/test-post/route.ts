@@ -11,7 +11,9 @@ type MemberToken = { accessToken: string; memberUrn: string; brand: string; expi
 
 function done(params: Record<string, string>) {
   // 303 so the browser follows the form POST with a GET.
-  return NextResponse.redirect(DEV_ORIGIN + "/connections?" + new URLSearchParams({ network: "linkedin", ...params }) + "#linkedin", 303);
+  // `at` lets the page say when the attempt happened; the anchor lands on the brand's own card, next to the Post button.
+  const query = new URLSearchParams({ network: "linkedin", ...params, at: new Date().toISOString() });
+  return NextResponse.redirect(DEV_ORIGIN + "/connections?" + query + (params.brand ? `#li-${params.brand}` : "#linkedin"), 303);
 }
 
 // Tokens are stored per account (member id, or org-<id> for a company page). A brand's company page wins over an older
