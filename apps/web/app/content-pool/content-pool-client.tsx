@@ -23,7 +23,7 @@ function ratioForAsset(asset: ApiAsset) {
 }
 
 export function ContentPoolClient({ assets }: { assets: ApiAsset[] }) {
-  const [media, setMedia] = useState<"all" | "image" | "video">("all");
+  const [media, setMedia] = useState<"all" | "image" | "video" | "document">("all");
   const [ratio, setRatio] = useState("all");
   const [sort, setSort] = useState<SortMode>("newest");
   const [view, setView] = useState<"cards" | "list">("cards");
@@ -71,6 +71,7 @@ export function ContentPoolClient({ assets }: { assets: ApiAsset[] }) {
                 <option value="all">Videos & Images</option>
                 <option value="video">Videos</option>
                 <option value="image">Images</option>
+                <option value="document">PDF documents</option>
               </select>
             </label>
 

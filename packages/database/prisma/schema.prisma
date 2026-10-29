@@ -20,6 +20,7 @@ enum AssetKind {
   image
   carousel
   audio
+  document
 }
 
 enum AssetSourceType {

@@ -27,6 +27,7 @@ function assetKindFromName(name = "") {
   const lower = name.toLowerCase();
   if (/\.(mp4|mov|m4v|avi|webm|mkv)$/i.test(lower)) return "video";
   if (/\.(jpg|jpeg|png|webp|gif|tif|tiff|heic|avif)$/i.test(lower)) return "image";
+  if (/\.pdf$/i.test(lower)) return "document";
   return null;
 }
 
