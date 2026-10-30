@@ -64,8 +64,8 @@ export const PUBLISHING_FORMATS = [
   { destination: "gmb", placement: "update", label: "Update posts", status: "integration", note: "Profiles connected; publisher built (services/gmb-lambda) for Update and Offer posts queued by hand. Not planned automatically: waits on the business-content rules" }
 ];
 
-// A network takes at most 10 posts a day across all its formats.
-export const MAX_POSTS_PER_DAY = 10;
+// A network takes at most 12 posts a day across all its formats.
+export const MAX_POSTS_PER_DAY = 12;
 export const MAX_POSTS_PER_WEEK = MAX_POSTS_PER_DAY * 7;
 
 export const isPlannable = (f) => f && f.status !== "integration";

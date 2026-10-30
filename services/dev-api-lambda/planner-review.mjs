@@ -296,7 +296,7 @@ async function setCadence(client, brand, body) {
     `SELECT COALESCE(SUM("postsPerWeek"),0)::int AS n FROM "CadenceRule" cr WHERE cr."socialAccountId"=$1 AND cr."placement"<>$2 AND cr."active"=TRUE`,
     [account.id, placement])).rows[0]?.n || 0;
   if (others + postsPerWeek > MAX_POSTS_PER_WEEK) {
-    return { code: 400, body: { ok: false, error: `${destination} would get ${others + postsPerWeek} posts a week; the most is ${MAX_POSTS_PER_WEEK} (10 a day) across its formats` } };
+    return { code: 400, body: { ok: false, error: `${destination} would get ${others + postsPerWeek} posts a week; the most is ${MAX_POSTS_PER_WEEK} (12 a day) across its formats` } };
   }
   const rule = (await client.query('SELECT "id" FROM "CadenceRule" WHERE "socialAccountId"=$1 AND "placement"=$2 LIMIT 1', [account.id, placement])).rows[0];
   if (rule) {

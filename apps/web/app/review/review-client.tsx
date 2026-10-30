@@ -111,7 +111,7 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
     const rule = s.account && list.accounts.find((a) => a.socialAccountId === s.account!.socialAccountId && a.placement === s.format.placement && a.active);
     return rule?.postsPerWeek || 0;
   };
-  const maxWeek = list.maxPostsPerWeek || 70;
+  const maxWeek = list.maxPostsPerWeek || 84;
   // Weeks fold so one can be read on its own; the current week starts open.
   const [open, setOpen] = useState(() => new Set([list.weekStart]));
   // Weeks whose published posts are shown; published posts are hidden by default so the posts still to act on lead.
@@ -171,7 +171,7 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
     }
   }
 
-  // Saves only the boxes that changed, lowering ones first so a network never passes 10 a day mid-save.
+  // Saves only the boxes that changed, lowering ones first so a network never passes 12 a day mid-save.
   async function saveCadence() {
     const slidesToSave = [...new Map(slots.filter(slidesChanged).map((s) => [slideKey(s), s])).values()];
     const changed = slots.filter((s) => s.account && s.format.status !== "integration" && weeklyOf(s) !== savedWeekly(s))
@@ -237,37 +237,30 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
               </label>;
   };
 
-  // Carousels get their own block at the top of the settings: one row per network, same boxes as every format.
-  const carouselSlots = slots.filter((s) => s.format.slides);
 
   return <div className="review">
     <section className="card review-settings">
       <div>
-        {carouselSlots.length > 0 && <>
-          <div className="eyebrow">Carousels</div>
-          <p className="muted" style={{ margin: "0 0 8px" }}>
-            Each carousel is built from one pillar's images. Set how many a day, and the fewest and most images each one holds;
-            the network's own limits are shown and can't be passed.
-          </p>
-          {carouselSlots.map((s) => <div key={s.key} className="review-network">
-            <div>
-              <b>{NETWORK[s.format.destination] || s.format.destination}</b>{" "}
-              {s.account ? <b>{s.account.accountName}</b> : <span className="muted">not connected</span>}
-            </div>
-            {renderRow(s)}
-          </div>)}
-        </>}
         <div className="eyebrow">Posts per day</div>
         {networkGroups.map((group) => {
           const first = group[0];
           const week = groupWeekly(group);
+          // Carousels use several images each: sum the images a day they need (fewest to most).
+          const car = group.filter((s) => s.account && s.format.slides);
+          const carPerDay = car.reduce((n, s) => n + weeklyOf(s) / 7, 0);
+          const imgMin = car.reduce((n, s) => n + (weeklyOf(s) / 7) * slidesOf(s).min, 0);
+          const imgMax = car.reduce((n, s) => n + (weeklyOf(s) / 7) * slidesOf(s).max, 0);
+          const r1 = (n: number) => Math.round(n * 10) / 10;
           return <div key={first.key} className="review-network">
             <div>
               <b>{NETWORK[first.format.destination] || first.format.destination}</b>{" "}
               {first.account ? <b>{first.account.accountName}</b> : <span className="muted">{first.format.status === "integration" ? first.format.note : "not connected"}</span>}
-              {first.account && <span className={week > maxWeek ? "review-warn" : "muted"}> {totals(week)}{week > maxWeek ? ` · over ${maxWeek / 7} a day` : ""}</span>}
             </div>
-            {group.filter((s) => !s.format.slides).map(renderRow)}
+            {group.map(renderRow)}
+            {first.account && <div className={week > maxWeek ? "review-warn" : "muted"}>
+              Total: {r1(week / 7)} posts/day · {totals(week)}{week > maxWeek ? ` · over ${maxWeek / 7} a day` : ""}
+              {car.length > 0 && ` · assets: ${r1(carPerDay)} carousels/day use ${r1(imgMin)}-${r1(imgMax)} images/day`}
+            </div>}
           </div>;
         })}
         <div className="review-network">
