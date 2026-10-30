@@ -93,8 +93,15 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
   }), [list]);
 
   // list.accounts has one row per account and cadence rule; one entry per connected account here.
-  const connectedAccounts = useMemo(() => [...new Map(list.accounts.filter((a) => a.externalAccountId)
-    .map((a) => [a.socialAccountId, a])).values()], [list.accounts]);
+  // The same login can sit on two account rows (a seed row plus the connected one); show it once, keeping the row that has an active rule.
+  const connectedAccounts = useMemo(() => {
+    const byLogin = new Map<string, (typeof list.accounts)[number]>();
+    for (const a of [...list.accounts.filter((x) => x.externalAccountId)].sort((x, y) => Number(Boolean(y.active)) - Number(Boolean(x.active)))) {
+      const key = `${a.destination}:${a.externalAccountId}`;
+      if (!byLogin.has(key)) byLogin.set(key, a);
+    }
+    return [...new Map([...byLogin.values()].map((a) => [a.socialAccountId, a])).values()];
+  }, [list.accounts]);
   const slots = useMemo(() => [...(list.formats ?? [])].sort((a, b) => rank(a.destination) - rank(b.destination)).flatMap((format): Slot[] => {
     const accounts = format.status === "integration" ? [] : connectedAccounts.filter((a) => a.destination === format.destination);
     if (!accounts.length) return [{ key: `${format.destination}:${format.placement}`, format, account: null }];
