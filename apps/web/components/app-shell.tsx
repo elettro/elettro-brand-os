@@ -19,18 +19,22 @@ const NAV: Array<{ label: string; items: Array<{ label: string; href?: string }>
     { label: "Upload", href: "/epe-upload" }
   ] },
   { label: "Publishing", items: [
-    { label: "Planner", href: "/planner" },
+    // Planner hidden 261031: Review does everything it does; a brand dashboard is planned. Page still exists at /planner.
+    // { label: "Planner", href: "/planner" },
     { label: "Review", href: "/review" },
     { label: "Calendar" },
     { label: "Connections", href: "/connections" }
   ] },
   { label: "Intelligence", items: [
-    { label: "AI Gateway", href: "/ai-gateway" },
     { label: "Analytics" }
   ] },
   { label: "Settings", items: [
     { label: "Brands" },
     { label: "Presets", href: "/presets" }
+  ] },
+  // Super admin only (owner): hidden from every client in CLIENT_NAV, and the page and its API are owner-only on the server.
+  { label: "Admin", items: [
+    { label: "AI Gateway", href: "/ai-gateway" }
   ] }
 ];
 
@@ -99,7 +103,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </header>
       <div className="shell">
         <nav className="sidebar" aria-label="Main">
-          {(showAr ? [...NAV.slice(0, 3), AR_SECTION, ...NAV.slice(3)] : NAV).map((section) => (
+          {(showAr ? [...NAV.slice(0, 3), AR_SECTION, ...NAV.slice(3)] : NAV).filter((section) => section.items.some((item) => itemState(item) !== "hidden")).map((section) => (
             <div className="nav-section" key={section.label}>
               <div className="nav-label">{section.label}</div>
               {section.items.filter((item) => itemState(item) !== "hidden").map((item) =>
