@@ -65,7 +65,7 @@ export const PUBLISHING_FORMATS = [
 ];
 
 // A network takes at most 12 posts a day across all its formats.
-export const MAX_POSTS_PER_DAY = 12;
+export const MAX_POSTS_PER_DAY = 14;
 export const MAX_POSTS_PER_WEEK = MAX_POSTS_PER_DAY * 7;
 
 export const isPlannable = (f) => f && f.status !== "integration";

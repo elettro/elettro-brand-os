@@ -48,12 +48,12 @@ Bluesky has no paid ads, so promotion here means ordinary posts and links. Re-ch
 | Bluesky rule | What it means for us | Where it is enforced |
 |---|---|---|
 | Post text is at most 300 graphemes; a link counts in full | Long URLs eat the budget. Emoji count as one each. | `copywriter.mjs` (`validateCopy`, counts graphemes for Bluesky), publisher (`postText` never cuts inside a link) |
-| Community Guidelines 3.1.1: no spam, no repeated or duplicate posts | Planner already avoids repeating captions; the daily cap is 10 posts per network | planner (`recentCaptions`), `MAX_POSTS_PER_DAY` |
+| Community Guidelines 3.1.1: no spam, no repeated or duplicate posts | Planner already avoids repeating captions; the daily cap is 14 posts per network | planner (`recentCaptions`), `MAX_POSTS_PER_DAY` |
 | 3.1.3: no manipulating social signals | No engagement bait, no "like to unlock", no follow-for-follow asks | AI guidance (`intelligence/shared/platforms.md#bluesky`) |
 | 3.1.4: commercial content must be clearly identified | Our own brand promoting its own shop, show or release from the brand's account is plainly commercial. Anything sponsored, affiliate or paid must say so. | AI guidance; **Dean to confirm the reading** (see decisions) |
 | Developer Guidelines 1.1: no automated or bulk interactions that notify a user (messages, follows, likes, replies) | Scheduled posts never @mention, reply to, like, follow or repost. EPE may suggest replies; a human sends them. | `validateCopy` and the publisher both refuse a scheduled post with an @mention |
 | Bots page: scheduled posting to your own account is welcome; use the `bot` self-label as a best practice; interact only when tagged | See decisions | not automated |
-| Rate limits: 5,000 points/hour and 35,000/day per account, a post is 3 points; password logins 30 per 5 minutes and 300 per day | Our worst case is 10 posts a day, far inside the limits. OAuth refreshes do not use password logins. | `MAX_POSTS_PER_DAY`, one post per tick |
+| Rate limits: 5,000 points/hour and 35,000/day per account, a post is 3 points; password logins 30 per 5 minutes and 300 per day | Our worst case is 14 posts a day, far inside the limits. OAuth refreshes do not use password logins. | `MAX_POSTS_PER_DAY`, one post per tick |
 | 4.1: no advertising of unlawfully sold or regulated goods; 1.3.4: no marketing of gambling, alcohol, tobacco or similar to minors | Not relevant to current brands; the AI guidance lists them as never | AI guidance |
 | 3.2: no impersonation, no shared or sold accounts | One real Bluesky account per brand; the connect step refuses an account already linked to another brand | `bluesky-connect.mjs` |
 

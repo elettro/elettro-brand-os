@@ -24,7 +24,7 @@ import { readFileSync } from "node:fs";
 import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
 import { nextWeekStart, ymdInTimeZone, addDaysToYmd, localDateTimeToUtc } from "./planner-v2.mjs";
 import { searchLibrary, libraryAsset, recordPublication, recentPublications } from "./library-publications.mjs";
-import { PUBLISHING_FORMATS, FORMAT_DESTINATIONS, PLANNABLE_DESTINATIONS, MAX_POSTS_PER_WEEK, formatOf, isPlannable, slideRange } from "./publishing-formats.mjs";
+import { PUBLISHING_FORMATS, FORMAT_DESTINATIONS, PLANNABLE_DESTINATIONS, MAX_POSTS_PER_WEEK, MAX_POSTS_PER_DAY, formatOf, isPlannable, slideRange } from "./publishing-formats.mjs";
 
 const lambda = new LambdaClient({});
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
@@ -296,7 +296,7 @@ async function setCadence(client, brand, body) {
     `SELECT COALESCE(SUM("postsPerWeek"),0)::int AS n FROM "CadenceRule" cr WHERE cr."socialAccountId"=$1 AND cr."placement"<>$2 AND cr."active"=TRUE`,
     [account.id, placement])).rows[0]?.n || 0;
   if (others + postsPerWeek > MAX_POSTS_PER_WEEK) {
-    return { code: 400, body: { ok: false, error: `${destination} would get ${others + postsPerWeek} posts a week; the most is ${MAX_POSTS_PER_WEEK} (12 a day) across its formats` } };
+    return { code: 400, body: { ok: false, error: `${destination} would get ${others + postsPerWeek} posts a week; the most is ${MAX_POSTS_PER_WEEK} (${MAX_POSTS_PER_DAY} a day) across its formats` } };
   }
   const rule = (await client.query('SELECT "id" FROM "CadenceRule" WHERE "socialAccountId"=$1 AND "placement"=$2 LIMIT 1', [account.id, placement])).rows[0];
   if (rule) {
