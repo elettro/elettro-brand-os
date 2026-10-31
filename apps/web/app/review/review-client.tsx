@@ -142,6 +142,11 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
   const brandWeekly = networkGroups.reduce((n, g) => n + groupWeekly(g), 0);
   const overCap = networkGroups.filter((g) => groupWeekly(g) > maxWeek);
   const totals = (week: number) => `${week}/wk · ${week * WEEKS_PER_MONTH}/mo`;
+  // Brand totals as big dashboard pills; shown under the Posts per day title and again above Save (the section is very tall).
+  const brandPills = <div className={`review-pills${overCap.length ? " over" : ""}`} aria-label="Brand total posts">
+    {([["Posts / day", Math.round((brandWeekly / 7) * 10) / 10], ["Posts / week", brandWeekly], ["Posts / month", brandWeekly * WEEKS_PER_MONTH]] as const).map(([label, n]) =>
+      <div key={label} className="review-pill"><b>{n}</b><span>{label}</span></div>)}
+  </div>;
   // TikTok's card needs the account's current settings from TikTok, fetched once per page load.
   const hasTiktok = list.posts.some((p) => p.destination === "tiktok" && reviewable(p));
   const [creator, setCreator] = useState<TiktokCreator | null>(null);
@@ -241,6 +246,7 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
     <section className="card review-settings">
       <div>
         <h2 className="review-settings-title">Posts per day</h2>
+        {brandPills}
         {networkGroups.map((group) => {
           const first = group[0];
           const week = groupWeekly(group);
@@ -263,7 +269,8 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
           </div>;
         })}
         <div className="review-network">
-          <div><b>Brand total</b> <span className="muted">{totals(brandWeekly)}</span></div>
+          <div className="review-total-label">Brand total</div>
+          {brandPills}
           {overCap.length > 0 && <p className="review-warn" style={{ margin: 0 }}>A network takes at most {maxWeek / 7} posts a day across its formats.</p>}
           <button className="status-chip" disabled={!!busy || overCap.length > 0} onClick={saveCadence}>Save</button>
         </div>
