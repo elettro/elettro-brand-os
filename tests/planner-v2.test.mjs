@@ -56,11 +56,15 @@ test("week starts on the next Monday", () => {
   assert.equal(nextWeekStart("2026-10-19"), "2026-10-26");
 });
 
-test("slots spread posts per week evenly across days and the time window", () => {
+test("slots spread posts per week evenly across days and the network's time window", () => {
   const slots = buildSlots(account("tiktok", "video", 14, "10:00", "20:00"), WEEK, TZ);
   assert.equal(slots.length, 14);
-  assert.deepEqual(slots.filter((s) => s.ymd === WEEK).map((s) => s.localTime), ["10:00", "20:00"]);
-  assert.equal(slots[0].scheduledFor, "2026-10-19T14:00:00.000Z");
+  const monday = slots.filter((s) => s.ymd === WEEK).map((s) => Number(s.localTime.slice(0, 2)) * 60 + Number(s.localTime.slice(3)));
+  assert.equal(monday.length, 2);
+  // TikTok runs 09:00-21:00 whatever the stored rule window says; two posts sit far apart, on odd minutes.
+  assert.ok(monday.every((m) => m > 9 * 60 && m < 21 * 60 && m % 5 !== 0));
+  assert.ok(monday[1] - monday[0] >= 4 * 60);
+  assert.equal(slots[0].scheduledFor, new Date(slots[0].scheduledFor).toISOString());
 });
 
 test("sector sequence tracks shares and exploration tracks the rate", () => {
