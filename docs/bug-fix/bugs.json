@@ -5,6 +5,24 @@
   "workflow": "docs/bug-fix/AGENT_WORKFLOW.md",
   "bugs": [
     {
+      "id": "EOS-BUG-0005",
+      "title": "dev-api build fails again: gmb-planner.mjs missing from the zip list, and the guard test could not see it",
+      "status": "Fixed",
+      "verification": "Pending",
+      "severity": "Medium",
+      "area": "API/Infra",
+      "environment": "DEV",
+      "reported_at": "2026-10-31",
+      "fixed_at": "2026-10-31",
+      "verified_at": null,
+      "root_cause": "The workflow's node --check list and zip -r list share one line; the zip-contents test counted every word on it, so a module named only in the syntax-check part passed.",
+      "fix_summary": "Added gmb-planner.mjs to the workflow zip list; the test now reads only the words after zip -r.",
+      "files_changed": [".github/workflows/build-dev-api-lambda.yml", "tests/dev-api-zip-contents.test.mjs"],
+      "commits": ["PR (fix/dev-api-zip-gmb-planner)"],
+      "related": ["EOS-BUG-0003"],
+      "record": "docs/bug-fix/fixed/EOS-BUG-0005.md"
+    },
+    {
       "id": "EOS-BUG-0004",
       "title": "Holidays page keeps showing every brand after picking one in the header dropdown",
       "status": "Fixed",
