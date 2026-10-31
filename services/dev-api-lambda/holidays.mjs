@@ -30,32 +30,32 @@ export const HALLOWEEN_COPY = {
     ["Trick or treat yourself to some live music. Happy Halloween from all of us at Stashbox! 🎃🎸", ["Halloween", "LiveMusic", "Stashbox"]],
     ["Turn it up, it's spooky season. Happy Halloween! 🎃", ["Halloween", "SpookySeason", "Stashbox"]],
     ["Something wicked this way comes... and it's loud. Happy Halloween from Stashbox! 👻", ["Halloween", "LiveMusic", "Stashbox"]]
-  ]
+  ],
   elettro: [
     ["Happy Halloween from Elettro. No tricks, just treats. 🎃", ["Halloween", "Elettro"]],
     ["Lights on, pumpkins glowing. Happy Halloween from all of us at Elettro. 🎃", ["Halloween", "HappyHalloween", "Elettro"]],
     ["Stay spooky. Happy Halloween! 👻", ["Halloween", "Elettro"]]
-  ]
+  ],
   solarmeister: [
     ["Frohes Halloween! Ihr SolarMeister wünscht gruselig schöne Grüße. 🎃", ["Halloween", "FrohesHalloween", "SolarMeister"]],
     ["Ein sonniges Halloween wünscht Ihr SolarMeister! ☀️🎃", ["Halloween", "SolarMeister"]],
     ["Schaurig schöne Grüße zu Halloween von Ihrem SolarMeister. 👻", ["Halloween", "Gruselig", "SolarMeister"]]
-  ]
+  ],
   "neckermann-strom": [
     ["Frohes Halloween! Schaurig schöne Grüße von Neckermann Strom. 🎃", ["Halloween", "FrohesHalloween", "NeckermannStrom"]],
     ["Gruselige Grüße zu Halloween von Neckermann Strom! 👻", ["Halloween", "NeckermannStrom"]],
     ["Wir wünschen Ihnen ein spannendes Halloween! 🎃", ["Halloween", "NeckermannStrom"]]
-  ]
+  ],
   weightlossdavie: [
     ["Happy Halloween! Enjoy the treats. We reset tomorrow. 🎃", ["Halloween", "WeightLossDavie"]],
     ["Happy Halloween. Be good (ish). 🎃", ["Halloween", "WeightLossDavie"]],
     ["Trick or treat. Then trick or train. 👻", ["Halloween", "WeightLossDavie"]]
-  ]
+  ],
   therasbox: [
     ["A little spooky, a lot of fun. Happy Halloween from Therasbox! 🎃", ["Halloween", "Therasbox"]],
     ["Wishing you a cozy, spooky night. Happy Halloween! 🎃", ["Halloween", "HappyHalloween", "Therasbox"]],
     ["Boo! Take a deep breath. Happy Halloween. 👻", ["Halloween", "Therasbox"]]
-  ]
+  ],
   pianomusicsoothing: [
     ["A quiet, candlelit night of piano. Happy Halloween. 🕯️🎃", ["Halloween", "PianoMusic", "Relaxing"]],
     ["Soft keys for a spooky evening. Happy Halloween. 🎹", ["Halloween", "PianoMusic", "Relaxing"]],
