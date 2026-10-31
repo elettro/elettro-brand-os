@@ -111,3 +111,13 @@ test("approved posts count toward their day's posts-per-day, so a replan never s
   assert.deepEqual(slots.filter((s) => s.ymd === "2026-10-27").map((s) => s.status), ["covered"]);
   assert.equal(slots.filter((s) => s.status === "planned").length, 6);
 });
+
+test("the planner only plans connected accounts, the same ones Review shows (an unconnected seed row stays out)", async () => {
+  const sqls = [];
+  const db = fakeDb([]);
+  const spy = async () => { const c = await db(); return { ...c, query: (sql, params) => { sqls.push(sql); return c.query(sql, params); } }; };
+  await runPlanWeeks({ brandSlug: "stashbox", weekStart: "2026-10-19", weeks: 1, copyAi: false }, spy, json, { modelId: null, now: new Date("2026-10-01T12:00:00Z") });
+  const q = sqls.find((s) => s.includes('FROM "CadenceRule"'));
+  assert.ok(q, "the cadence query ran");
+  assert.match(q, /sa\."externalAccountId" IS NOT NULL/);
+});

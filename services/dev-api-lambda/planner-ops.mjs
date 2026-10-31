@@ -199,14 +199,14 @@ async function plannerTick(connectDatabase, json) {
       `SELECT DISTINCT b."slug" FROM "Brand" b
        JOIN "SocialAccount" sa ON sa."brandId" = b."id" AND sa."status" = 'active'
        JOIN "CadenceRule" cr ON cr."socialAccountId" = sa."id" AND cr."active" = TRUE AND cr."postsPerWeek" > 0
-       WHERE b."status" = 'active' AND b."settings" ? 'planner' ORDER BY b."slug"`)).rows;
+       WHERE sa."externalAccountId" IS NOT NULL AND b."status" = 'active' AND b."settings" ? 'planner' ORDER BY b."slug"`)).rows;
     for (const { slug } of brands) {
       const brand = await loadBrand(client, slug);
       const window = weekWindow(brand, null, WEEKS_AHEAD);
       const active = (await client.query(
         `SELECT DISTINCT sa."destination" FROM "SocialAccount" sa
          JOIN "CadenceRule" cr ON cr."socialAccountId" = sa."id" AND cr."active" = TRUE AND cr."postsPerWeek" > 0
-         WHERE sa."brandId" = $1 AND sa."status" = 'active'`, [brand.id])).rows.map((r) => r.destination).filter((d) => PLANNABLE_DESTINATIONS.includes(d));
+         WHERE sa."brandId" = $1 AND sa."status" = 'active' AND sa."externalAccountId" IS NOT NULL`, [brand.id])).rows.map((r) => r.destination).filter((d) => PLANNABLE_DESTINATIONS.includes(d));
       const plannedByDestination = Object.fromEntries(active.map((d) => [d, []]));
       const planned = (await client.query(
         `SELECT DISTINCT sa."destination", to_char((sp."scheduledFor" AT TIME ZONE 'UTC' AT TIME ZONE $2)::date
