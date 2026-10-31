@@ -19,8 +19,6 @@ const NAV: Array<{ label: string; items: Array<{ label: string; href?: string }>
     { label: "Upload", href: "/epe-upload" }
   ] },
   { label: "Publishing", items: [
-    // Planner hidden 261031: Review does everything it does; a brand dashboard is planned. Page still exists at /planner.
-    // { label: "Planner", href: "/planner" },
     { label: "Review", href: "/review" },
     { label: "Calendar" },
     { label: "Connections", href: "/connections" }
@@ -34,7 +32,8 @@ const NAV: Array<{ label: string; items: Array<{ label: string; href?: string }>
   ] },
   // Super admin only (owner): hidden from every client in CLIENT_NAV, and the page and its API are owner-only on the server.
   { label: "Admin", items: [
-    { label: "AI Gateway", href: "/ai-gateway" }
+    { label: "AI Gateway", href: "/ai-gateway" },
+    { label: "Planner", href: "/planner" }
   ] }
 ];
 
@@ -56,7 +55,7 @@ const BRANDS = [{ id: "all", name: "All brands", timezone: "" }, ...brandConfigs
 // each follow-up that opens a page for clients flips it to "active" here.
 const CLIENT_NAV: Record<string, "active" | "soon" | "hidden"> = {
   "/": "active", "/ar": "active", "/ar/qr": "active", "/ar/sets": "active", "/review": "active", "/assets": "active", "/content-pool": "active", "/connections": "active",
-  "/collections": "hidden", "/ai-gateway": "hidden"
+  "/collections": "hidden", "/ai-gateway": "hidden", "/planner": "hidden"
 };
 
 // Who is signed in: owner sees everything; a client sees only the listed brands.
