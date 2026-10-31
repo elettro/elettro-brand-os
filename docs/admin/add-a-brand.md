@@ -24,17 +24,18 @@ Seen in the code: `YOUTUBE_BRANDS` (`apps/web/lib/youtube-connect.ts`), `META_BR
 `threads-connect.ts` and `gbp-connect.ts`. Check each `*-connect.ts` for a list when connecting a new network.
 A brand with no company page connects LinkedIn as a personal profile (the existing member flow).
 
-## 3. Database row (NOT verified how it was done before)
+## 3. Database row
 
 Merging the code does not create the brand in the database; `init.sql` is not applied automatically. Until the row exists,
-connecting a network fails with "Unknown brand". The statement `init.sql` uses (idempotent):
+connecting a network fails with "Unknown brand". Use the IAM-only dev-api action (added with the Rompe brand, 2026-10-31;
+dry run unless `mode` is `apply`; idempotent; never run from HTTP). Invoke it with an AWS profile that may invoke the dev-api:
 
-```sql
-WITH org AS (SELECT "id" FROM "Organization" WHERE "slug"='elettro')
-INSERT INTO "Brand" ("organizationId","name","slug","timezone","updatedAt")
-SELECT org."id", '<Display Name>', '<slug>', 'America/New_York', CURRENT_TIMESTAMP FROM org
-ON CONFLICT ("organizationId","slug") DO NOTHING;
 ```
+{"action":"create-brand-20261031","slug":"<slug>","name":"<Display Name>","timezone":"America/New_York"}            (dry run)
+{"action":"create-brand-20261031","slug":"<slug>","name":"<Display Name>","timezone":"America/New_York","mode":"apply"}
+```
+
+It deploys with the dev-api (step 4.2), so run it after that deploy. The plain SQL `init.sql` uses is the same insert.
 
 ## 4. After merge
 
@@ -47,8 +48,7 @@ ON CONFLICT ("organizationId","slug") DO NOTHING;
 
 ## Unknown / ask Dean
 
-- How the database row has been inserted for earlier brands (no code path inserts brands; no database access was available
-  from the `stashbox-audit` profile that was checked).
+- How the database row was inserted for earlier brands (unknown; the `create-brand-20261031` action above is the documented way from now on).
 - Whether a brand needs a Cognito group or other access setup for non-owner users.
 - Whether the `elettro_create_brand_folder` MCP tool is the intended way to create a brand's root Dropbox folder.
 - Whether Dropbox-side or CadenceRule setup is needed before the planner includes the brand.

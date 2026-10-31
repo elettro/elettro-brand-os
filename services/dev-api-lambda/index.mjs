@@ -4,6 +4,7 @@ import {runBrandRootMigration} from "./brand-root-migration.mjs";
 import { configurePlannerBrand, runPlanWeek, runPlanWeeks, approvePlannerWeek } from "./planner-v2-db.mjs";
 import {runSharedAudioLibrarySetup,LIBRARY_SLUG,LIBRARY_AUDIO_ROOT} from "./shared-audio-library.mjs";
 import {runDocumentAssetKindSetup} from "./document-asset-kind.mjs";
+import {createBrand} from "./brand-create.mjs";
 import { handleConnectionStatus, setPlatformMilestone, setTokenExpiry, renameSocialAccount, listSocialAccounts, feedResponse } from "./connection-status.mjs";
 import { handlePostRace } from "./post-race.mjs";
 import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
@@ -43,6 +44,7 @@ const DROPBOX_BRAND_ROOTS = [
   ["therasbox", "/1---elettro-brand-os/brands/therasbox"],
   ["pianomusicsoothing", "/1---elettro-brand-os/brands/pianomusicsoothing"],
   ["deanpalermo", "/1---elettro-brand-os/brands/deanpalermo"],
+  ["rompe", "/1---elettro-brand-os/brands/rompe"],
   ["reggaeland", "/1---elettro-brand-os/brands/reggaeland"],
   ["google-review", "/1---elettro-brand-os/brands/google-review"],
   ["elettro", "/1---elettro-brand-os/brands/elettro"],
@@ -1594,6 +1596,8 @@ export const handler = async (event = {}) => {
   if(event.action === "setup-document-asset-kind-20261029" && !event.requestContext && !event.rawPath && !event.path) return runDocumentAssetKindSetup(event,connectDatabase,json);
   // IAM-only: fold duplicate connected rows of one login into one (dry-run unless mode:"apply").
   if(event.action === "merge-duplicate-accounts-20261031" && !event.requestContext && !event.rawPath && !event.path) return mergeDuplicateAccounts(event,connectDatabase,json);
+  // IAM-only: create a brand row (dry-run unless mode:"apply").
+  if(event.action === "create-brand-20261031" && !event.requestContext && !event.rawPath && !event.path) return createBrand(event,connectDatabase,json);
   const requestPath =
     event?.rawPath ||
     event?.requestContext?.http?.path ||

@@ -1,6 +1,6 @@
 import {LambdaClient,InvokeCommand} from "@aws-sdk/client-lambda";
 const relay=new LambdaClient({region:"us-east-1",maxAttempts:1});
-const BRANDS=new Set(["stashbox","elettro","solarmeister","weightlossdavie","neckermann-strom","therasbox","pianomusicsoothing","deanpalermo","reggaeland","google-review"]);
+const BRANDS=new Set(["stashbox","elettro","solarmeister","weightlossdavie","neckermann-strom","therasbox","pianomusicsoothing","deanpalermo","rompe","reggaeland","google-review"]);
 function pathInBrand(value,root,allowRoot=false){
  if(typeof value!=="string"||value.length>2048||/[\\\x00-\x1f]/.test(value))throw new Error("Invalid folder path");
  const path=value.replace(/\/+$/,"");

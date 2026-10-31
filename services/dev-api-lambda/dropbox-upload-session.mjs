@@ -14,6 +14,7 @@ const ROOTS = {
   therasbox: "/1---elettro-brand-os/brands/therasbox",
   pianomusicsoothing: "/1---elettro-brand-os/brands/pianomusicsoothing",
   deanpalermo: "/1---elettro-brand-os/brands/deanpalermo",
+  rompe: "/1---elettro-brand-os/brands/rompe",
   reggaeland: "/1---elettro-brand-os/brands/reggaeland",
   "google-review": "/1---elettro-brand-os/brands/google-review",
   elettro: "/1---elettro-brand-os/brands/elettro"

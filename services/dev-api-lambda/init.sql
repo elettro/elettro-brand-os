@@ -271,6 +271,7 @@ CROSS JOIN (VALUES
   ('Elettro','elettro','America/New_York'),
   ('Piano Music Soothing','pianomusicsoothing','America/New_York'),
   ('Dean Palermo','deanpalermo','America/New_York'),
+  ('Rompe','rompe','America/New_York'),
   ('Reggae.Land','reggaeland','America/New_York'),
   ('Google Review','google-review','America/New_York')
 ) AS v(name,slug,timezone)
