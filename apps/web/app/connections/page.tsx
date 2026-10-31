@@ -10,6 +10,7 @@ import { THREADS_BRANDS } from "@/lib/threads-connect";
 import { BLUESKY_BRANDS } from "@/lib/bluesky-connect";
 import { TIKTOK_BRANDS } from "@/lib/tiktok-connect";
 import { TiktokPost } from "@/components/tiktok-post";
+import { LinkedInWriter } from "@/components/linkedin-writer";
 import { ConnectionDisconnect } from "@/components/connection-disconnect";
 import { PINTEREST_BOARDS, PINTEREST_BRANDS } from "@/lib/pinterest-connect";
 import { PinterestPost } from "@/components/pinterest-post";
@@ -304,6 +305,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
                 )}
               </form>
             )}
+            {linked && <LinkedInWriter brand={b.id} accountName={linked.handle || b.name} />}
           </article>
         );
       })}
