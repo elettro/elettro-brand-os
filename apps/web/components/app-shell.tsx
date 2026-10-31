@@ -19,7 +19,8 @@ const NAV: Array<{ label: string; items: Array<{ label: string; href?: string }>
     { label: "Upload", href: "/epe-upload" }
   ] },
   { label: "Publishing", items: [
-    { label: "Planner", href: "/planner" },
+    // Planner hidden 261031: Review does everything it does; a brand dashboard is planned. Page still exists at /planner.
+    // { label: "Planner", href: "/planner" },
     { label: "Review", href: "/review" },
     { label: "Calendar" },
     { label: "Connections", href: "/connections" }
