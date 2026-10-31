@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { PublishingFormat, ReviewAccount, ReviewList, ReviewPost, TiktokCreator } from "@/lib/planner-review";
 import { AssetThumb as Thumb } from "@/components/asset-thumb";
 import { TiktokCard } from "./tiktok-card";
+import { NetworkLogo } from "@/components/network-logo";
 
 const NETWORK: Record<string, string> = {
   instagram: "Instagram", facebook: "Facebook", tiktok: "TikTok", threads: "Threads", bluesky: "Bluesky", youtube: "YouTube",
@@ -258,7 +259,7 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
           const r1 = (n: number) => Math.round(n * 10) / 10;
           return <div key={first.key} className="review-network">
             <div className="review-network-head">
-              <h3>{NETWORK[first.format.destination] || first.format.destination}</h3>
+              <h3><NetworkLogo network={first.format.destination} /> {NETWORK[first.format.destination] || first.format.destination}</h3>
               {first.account ? <span className="review-network-account">{first.account.accountName}</span> : <span className="muted">{first.format.status === "integration" ? first.format.note : "not connected"}</span>}
             </div>
             {group.map(renderRow)}
