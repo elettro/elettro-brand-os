@@ -80,7 +80,7 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
   const fmtTime = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: tz });
   const ymdOf = (iso: string) => new Date(iso).toLocaleDateString("en-CA", { timeZone: tz });
   const today = ymdOf(new Date().toISOString());
-  const reviewable = (p: ReviewPost) => ["planned", "approved", "skipped"].includes(p.status);
+  const reviewable = (p: ReviewPost) => ["planned", "approved", "skipped", "paused", "removed"].includes(p.status);
 
   const weeks = useMemo(() => Array.from({ length: list.weeks }, (_, i) => {
     const start = addDays(list.weekStart, 7 * i);
