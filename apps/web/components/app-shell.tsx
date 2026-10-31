@@ -103,7 +103,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </header>
       <div className="shell">
         <nav className="sidebar" aria-label="Main">
-          {(showAr ? [...NAV.slice(0, 3), AR_SECTION, ...NAV.slice(3)] : NAV).filter((section) => section.items.some((item) => itemState(item) !== "hidden")).map((section) => (
+          {(showAr ? [...NAV.slice(0, 2), AR_SECTION, ...NAV.slice(2)] : NAV).filter((section) => section.items.some((item) => itemState(item) !== "hidden")).map((section) => (
             <div className="nav-section" key={section.label}>
               <div className="nav-label">{section.label}</div>
               {section.items.filter((item) => itemState(item) !== "hidden").map((item) =>
