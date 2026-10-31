@@ -10,7 +10,9 @@ import { brandConfigs } from "@/lib/brand-config";
 
 // One frame for every logged-in page: header on top, grouped rail on the left.
 // Items without an href are planned pages, shown greyed as "soon".
-const NAV: Array<{ label: string; items: Array<{ label: string; href?: string }> }> = [
+type NavItem = { label: string; href?: string; children?: Array<{ label: string; href: string }> };
+type NavSection = { label: string; items: NavItem[] };
+const NAV: NavSection[] = [
   { label: "Workspace", items: [
     { label: "Dashboard", href: "/" },
     { label: "Assets", href: "/assets" },
@@ -20,6 +22,7 @@ const NAV: Array<{ label: string; items: Array<{ label: string; href?: string }>
   ] },
   { label: "Publishing", items: [
     { label: "Review", href: "/review" },
+    { label: "Holidays", href: "/holidays" },
     { label: "Calendar", href: "/calendar" },
     { label: "Connections", href: "/connections" }
   ] },
@@ -38,7 +41,7 @@ const NAV: Array<{ label: string; items: Array<{ label: string; href?: string }>
 ];
 
 // The AR section: shown to the owner always, and to a client only when one of their brands has AR on.
-const AR_SECTION = { label: "AR", items: [
+const AR_SECTION: NavSection = { label: "AR", items: [
   { label: "Experiences", href: "/ar" },
   { label: "Actions" },
   { label: "Scan sets", href: "/ar/sets" },
@@ -55,7 +58,7 @@ const BRANDS = [{ id: "all", name: "All brands", timezone: "" }, ...brandConfigs
 // each follow-up that opens a page for clients flips it to "active" here.
 const CLIENT_NAV: Record<string, "active" | "soon" | "hidden"> = {
   "/": "active", "/ar": "active", "/ar/qr": "active", "/ar/sets": "active", "/review": "active", "/calendar": "active", "/assets": "active", "/content-pool": "active", "/connections": "active",
-  "/collections": "hidden", "/ai-gateway": "hidden", "/planner": "hidden"
+  "/collections": "hidden", "/holidays": "hidden", "/ai-gateway": "hidden", "/planner": "hidden"
 };
 
 // Who is signed in: owner sees everything; a client sees only the listed brands.
@@ -83,7 +86,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [bare, scope]);
   if (bare) return <>{children}</>;
   const client = !!scope && !scope.owner;
-  const itemState = (item: { href?: string }) => (!client ? "active" : item.href ? CLIENT_NAV[item.href] ?? "soon" : "soon");
+  const itemState = (item: NavItem) => (item.children ? (client ? "hidden" : "active") : !client ? "active" : item.href ? CLIENT_NAV[item.href] ?? "soon" : "soon");
   const brands = scope?.brands ? BRANDS.filter((b) => scope.brands!.includes(b.id)) : BRANDS;
   const isActive = (href: string) => (href === "/" || href === "/ar" ? pathname === href : pathname.startsWith(href));
 
@@ -106,6 +109,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <div className="nav-section" key={section.label}>
               <div className="nav-label">{section.label}</div>
               {section.items.filter((item) => itemState(item) !== "hidden").map((item) =>
+                item.children ? (
+                  <details className="nav-drop" key={item.label} open={item.children.some((c) => isActive(c.href))}>
+                    <summary className="nav-item">{item.label}</summary>
+                    {item.children.map((c) => (
+                      <Suspense key={c.label} fallback={<Link href={c.href} className={`nav-item nav-sub${isActive(c.href) ? " active" : ""}`}>{c.label}</Link>}>
+                        <NavLink href={c.href} className={`nav-item nav-sub${isActive(c.href) ? " active" : ""}`}>{c.label}</NavLink>
+                      </Suspense>
+                    ))}
+                  </details>
+                ) :
                 item.href && itemState(item) === "active" ? (
                   <Suspense key={item.label} fallback={<Link href={item.href} className={`nav-item${isActive(item.href) ? " active" : ""}`}>{item.label}</Link>}>
                     <NavLink href={item.href} className={`nav-item${isActive(item.href) ? " active" : ""}`}>
