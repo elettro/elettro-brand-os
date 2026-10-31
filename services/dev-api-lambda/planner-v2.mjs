@@ -217,36 +217,105 @@ export function poolRejection(asset, account, settings) {
 
 // ---------- slots ----------
 
-/** Spread postsPerWeek over the allowed days, then evenly across each day's time window. */
-export function buildSlots(account, weekStart, timeZone) {
+// Posting-time strategy (Dean, 2026-10-31). Every network has a daily window; a format's posts for a day sit at EQUAL
+// distances inside it (so adding or removing a post re-spaces all of them), each nudged to an odd minute (never :00, :05,
+// :10 ...). Windows are local to the account. Bluesky and Mastodon run 8 AM to 8 PM with most posts (70%) from 9 to 5.
+// A brand can override a network with Brand.settings.planner.postingTimes.<destination> = { start, end, days, peak }.
+export const TIME_PROFILES = {
+  linkedin: { start: "08:00", end: "12:00", days: ["mon", "tue", "wed", "thu", "fri"] },
+  bluesky: { start: "08:00", end: "20:00", peak: { start: "09:00", end: "17:00", share: 0.7 } },
+  mastodon: { start: "08:00", end: "20:00", peak: { start: "09:00", end: "17:00", share: 0.7 } },
+  default: { start: "09:00", end: "21:00" }
+};
+export const timeProfileOf = (destination, override) => ({ ...(TIME_PROFILES[String(destination).toLowerCase()] || TIME_PROFILES.default), ...(override || {}) });
+const SAME_NETWORK_GAP = 7; // minutes between two formats of one network
+const ANY_GAP = 2; // minutes between any two of a brand's posts
+
+function hashInt(...parts) {
+  return parseInt(createHash("sha256").update(parts.join("|")).digest("hex").slice(0, 8), 16);
+}
+
+// The window as segments with the share of the day's posts each takes.
+function segmentsOf(profile, from = 0) {
+  const s = minutesOf(profile.start, 9 * 60), e = Math.max(s, minutesOf(profile.end, 21 * 60));
+  let segs;
+  if (profile.peak) {
+    const ps = Math.max(s, minutesOf(profile.peak.start, s)), pe = Math.min(e, Math.max(ps, minutesOf(profile.peak.end, e)));
+    const share = profile.peak.share ?? 0.7;
+    const rest = 1 - share, before = ps - s, after = e - pe, tot = before + after;
+    segs = [{ start: ps, end: pe, share }];
+    if (before > 0) segs.push({ start: s, end: ps, share: tot ? rest * (before / tot) : 0 });
+    if (after > 0) segs.push({ start: pe, end: e, share: tot ? rest * (after / tot) : 0 });
+    segs.sort((a, b) => a.start - b.start);
+  } else segs = [{ start: s, end: e, share: 1 }];
+  // Only what is still ahead (a replan late in the day); a sliver too short to hold a post is dropped.
+  segs = segs.map((g) => ({ ...g, start: Math.max(g.start, from) })).filter((g) => g.end - g.start >= 10);
+  const total = segs.reduce((n, g) => n + g.share, 0) || 1;
+  return segs.map((g) => ({ ...g, share: g.share / total }));
+}
+
+// Whole posts per segment (largest remainder), never more than one post per 8 minutes of a segment.
+function allocate(n, segs) {
+  const cap = segs.map((g) => Math.max(1, Math.floor((g.end - g.start) / 8)));
+  const raw = segs.map((g) => g.share * n);
+  const counts = raw.map((r, i) => Math.min(cap[i], Math.floor(r)));
+  let left = n - counts.reduce((a, b) => a + b, 0);
+  const order = raw.map((r, i) => [r - Math.floor(r), i]).sort((a, b) => b[0] - a[0]).map((x) => x[1]);
+  for (let pass = 0; left > 0 && pass < 50; pass += 1) {
+    for (const i of order) if (left > 0 && counts[i] < cap[i]) { counts[i] += 1; left -= 1; }
+  }
+  return counts;
+}
+
+// n posts at equal distances; each segment's posts sit in the middle of equal parts of it, nudged by a few minutes.
+export function spreadMinutes(n, profile, seed, from = 0) {
+  const segs = segmentsOf(profile, from);
+  if (!segs.length || !n) return [];
+  const counts = allocate(n, segs);
+  const out = [];
+  segs.forEach((g, gi) => {
+    const c = counts[gi], gap = (g.end - g.start) / (c || 1);
+    for (let k = 0; k < c; k += 1) {
+      const h = hashInt(seed, gi, k);
+      const room = Math.min(6, Math.floor(gap / 4));
+      let t = Math.round(g.start + (k + 0.5) * gap) + (room ? (h % (2 * room + 1)) - room : 0);
+      if (t % 5 === 0) t += h % 2 ? 2 : 3; // an odd minute, not a multiple of 5
+      out.push(Math.min(g.end - 1, Math.max(g.start + 1, t)));
+    }
+  });
+  return out.sort((a, b) => a - b);
+}
+
+function makeSlot(account, ymd, local, timeZone) {
+  return {
+    slotId: `${account.socialAccountId}:${ymd}:${local}`,
+    socialAccountId: account.socialAccountId,
+    destination: String(account.destination).toLowerCase(),
+    placement: account.placement,
+    accountName: account.accountName,
+    publishingMode: account.publishingMode,
+    ymd,
+    localTime: local,
+    scheduledFor: localDateTimeToUtc(ymd, local, account.timezone || timeZone).toISOString()
+  };
+}
+
+/** Spread postsPerWeek over the allowed days, then equally across each day's window. */
+export function buildSlots(account, weekStart, timeZone, profile = timeProfileOf(account.destination)) {
   const days = [];
-  const preferred = (account.preferredDays || []).map((d) => String(d).slice(0, 3).toLowerCase());
+  const own = (account.preferredDays || []).map((d) => String(d).slice(0, 3).toLowerCase());
+  const preferred = own.length ? own : (profile.days || []).map((d) => String(d).slice(0, 3).toLowerCase());
   for (let i = 0; i < 7; i += 1) {
     const ymd = addDaysToYmd(weekStart, i);
     if (!preferred.length || preferred.includes(weekdayOfYmd(ymd).toLowerCase())) days.push(ymd);
   }
   const total = Math.max(0, Math.round(Number(account.postsPerWeek) || 0));
   if (!days.length || !total) return [];
-  const start = minutesOf(account.preferredStartTime, 12 * 60);
-  const end = Math.max(start, minutesOf(account.preferredEndTime, start));
   const slots = [];
   days.forEach((ymd, dayIndex) => {
     const count = Math.floor((total * (dayIndex + 1)) / days.length) - Math.floor((total * dayIndex) / days.length);
-    for (let k = 0; k < count; k += 1) {
-      // Even spacing, rounded to the quarter hour so post times read like a schedule.
-      const minute = count === 1 ? start : Math.round((start + (k * (end - start)) / (count - 1)) / 15) * 15;
-      const local = hhmmOf(minute);
-      slots.push({
-        slotId: `${account.socialAccountId}:${ymd}:${local}`,
-        socialAccountId: account.socialAccountId,
-        destination: String(account.destination).toLowerCase(),
-        placement: account.placement,
-        accountName: account.accountName,
-        publishingMode: account.publishingMode,
-        ymd,
-        localTime: local,
-        scheduledFor: localDateTimeToUtc(ymd, local, account.timezone || timeZone).toISOString()
-      });
+    for (const minute of spreadMinutes(count, profile, `${account.socialAccountId}:${account.placement}:${ymd}`)) {
+      slots.push(makeSlot(account, ymd, hhmmOf(minute), timeZone));
     }
   });
   return slots;
@@ -255,11 +324,11 @@ export function buildSlots(account, weekStart, timeZone) {
 /**
  * The slots to plan for one account: the week's grid minus the past, except that today is topped up to its
  * daily count. `doneToday` is how many posts of this format already went out today (ledger); today keeps
- * (day's count - done) slots, spread across what is left of the posting window. A replan late in the day
+ * (day's count - done) slots, spread equally across what is left of the window. A replan late in the day
  * therefore neither repeats the posts that went out nor drops the rest of the day's quota.
  */
-export function slotsToPlan(account, weekStart, timeZone, now, doneToday = 0) {
-  const all = buildSlots(account, weekStart, timeZone);
+export function slotsToPlan(account, weekStart, timeZone, now, doneToday = 0, profile = timeProfileOf(account.destination)) {
+  const all = buildSlots(account, weekStart, timeZone, profile);
   const future = all.filter((s) => new Date(s.scheduledFor) > now);
   const tz = account.timezone || timeZone;
   const today = ymdInTimeZone(now, tz);
@@ -269,20 +338,48 @@ export function slotsToPlan(account, weekStart, timeZone, now, doneToday = 0) {
   const parts = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: tz, hour12: false, hour: "2-digit", minute: "2-digit" })
     .formatToParts(now).map((p) => [p.type, p.value]));
   const nowMin = (Number(parts.hour === "24" ? "0" : parts.hour) * 60) + Number(parts.minute);
-  const windowStart = minutesOf(account.preferredStartTime, 12 * 60);
-  const windowEnd = Math.max(windowStart, minutesOf(account.preferredEndTime, windowStart));
-  const first = Math.max(windowStart, (Math.floor(nowMin / 15) + 1) * 15);
-  const room = windowEnd >= first ? Math.floor((windowEnd - first) / 15) + 1 : 0;
-  const count = Math.min(need, room);
   const rest = future.filter((s) => s.ymd !== today);
-  const topped = [];
-  for (let k = 0; k < count; k += 1) {
-    const minute = count === 1 ? first : Math.round((first + (k * (windowEnd - first)) / (count - 1)) / 15) * 15;
-    const local = hhmmOf(minute);
-    topped.push({ ...todays[0], slotId: `${account.socialAccountId}:${today}:${local}`, localTime: local,
-      scheduledFor: localDateTimeToUtc(today, local, tz).toISOString() });
-  }
+  // 20 minutes of lead, so a slot is never already due when it is saved.
+  const minutes = spreadMinutes(need, profile, `${account.socialAccountId}:${account.placement}:${today}:top`, nowMin + 20);
+  const topped = minutes.map((m) => makeSlot(account, today, hhmmOf(m), timeZone));
   return [...topped, ...rest];
+}
+
+/**
+ * Pull apart slots that landed too close: two formats of one network need SAME_NETWORK_GAP minutes between them, and
+ * no two posts of the brand may sit within ANY_GAP minutes. The later slot moves a minute at a time (later first, then
+ * earlier) to the nearest free odd minute inside its window; equal spacing within a format is otherwise untouched.
+ * `slotLists` are the per-account slot arrays; slots are changed in place.
+ */
+export function separateSlots(slotLists, tzOf, profileOf = (d) => timeProfileOf(d)) {
+  const byDay = new Map();
+  for (const s of slotLists.flat()) byDay.set(s.ymd, [...(byDay.get(s.ymd) || []), s]);
+  const minuteOf = (s) => minutesOf(s.localTime, 0);
+  for (const day of byDay.values()) {
+    day.sort((a, b) => minuteOf(a) - minuteOf(b) || a.slotId.localeCompare(b.slotId));
+    const placed = [];
+    for (const s of day) {
+      const profile = profileOf(s.destination);
+      const lo = minutesOf(profile.start, 0) + 1, hi = minutesOf(profile.end, 24 * 60) - 1;
+      const clash = (m) => placed.some((p) => {
+        const d = Math.abs(minuteOf(p) - m);
+        return d < ANY_GAP || (p.socialAccountId === s.socialAccountId && p.placement !== s.placement && d < SAME_NETWORK_GAP);
+      });
+      const base = minuteOf(s);
+      if (clash(base)) {
+        for (let step = 1; step <= 25; step += 1) {
+          const pick = [base + step, base - step].find((m) => m >= lo && m <= hi && m % 5 !== 0 && !clash(m));
+          if (pick !== undefined) {
+            s.localTime = hhmmOf(pick);
+            s.slotId = `${s.socialAccountId}:${s.ymd}:${s.localTime}`;
+            s.scheduledFor = localDateTimeToUtc(s.ymd, s.localTime, tzOf(s.socialAccountId)).toISOString();
+            break;
+          }
+        }
+      }
+      placed.push(s);
+    }
+  }
 }
 
 /** Deterministic smooth weighted round-robin: sector order that tracks the shares. */
@@ -334,13 +431,17 @@ export function planWeek({ assets, accounts, settings, weekStart, timeZone, uses
   const brandUsedAssets = new Set(uses.map((u) => u.assetId));
 
   // Per-account pool and the sectors that have enough content to take part this week.
-  const perAccount = accounts.map((account) => {
+  const profileOf = (destination) => timeProfileOf(destination, settings.postingTimes?.[String(destination).toLowerCase()]);
+  const slotLists = accounts.map((account) => slotsToPlan(account, weekStart, timeZone, now, doneToday[`${account.socialAccountId}:${account.placement}`] || 0, profileOf(account.destination)));
+  const tzByAccount = new Map(accounts.map((a) => [a.socialAccountId, a.timezone || timeZone]));
+  separateSlots(slotLists, (id) => tzByAccount.get(id) || timeZone, profileOf);
+  const perAccount = accounts.map((account, accountIndex) => {
     const pool = assets.filter((a) => !poolRejection(a, account, settings));
     const bySector = Object.fromEntries(settings.sectors.map((s) => [s.slug,
       pool.filter((a) => sectorsOf(a, settings).includes(s.slug) && meetsSectorRequirements(a, s, songFacts, settings))]));
     const active = settings.sectors.filter((s) => bySector[s.slug].length >= (settings.minPoolForSector || 1));
     settings.sectors.filter((s) => !active.includes(s)).forEach((s) => sectorsWaiting.add(s.slug));
-    const slots = slotsToPlan(account, weekStart, timeZone, now, doneToday[`${account.socialAccountId}:${account.placement}`] || 0);
+    const slots = slotLists[accountIndex];
     const sequence = sectorSequence(slots.length, active.map((s) => ({ slug: s.slug, share: s.share })));
     const rate = settings.exploration[String(account.destination).toLowerCase()] ?? settings.exploration.default ?? 0;
     const explore = explorationFlags(slots.length, rate);
