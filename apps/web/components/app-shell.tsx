@@ -10,7 +10,8 @@ import { brandConfigs } from "@/lib/brand-config";
 
 // One frame for every logged-in page: header on top, grouped rail on the left.
 // Items without an href are planned pages, shown greyed as "soon".
-type NavSection = { label: string; collapsible?: boolean; items: Array<{ label: string; href?: string }> };
+type NavItem = { label: string; href?: string; children?: Array<{ label: string; href: string }> };
+type NavSection = { label: string; items: NavItem[] };
 const NAV: NavSection[] = [
   { label: "Workspace", items: [
     { label: "Dashboard", href: "/" },
@@ -21,12 +22,10 @@ const NAV: NavSection[] = [
   ] },
   { label: "Publishing", items: [
     { label: "Review", href: "/review" },
+    // A clickable dropdown, so the rail does not always list every holiday (owner only for now).
+    { label: "Holidays", children: [{ label: "Halloween · Oct 31", href: "/holidays/halloween" }] },
     { label: "Calendar", href: "/calendar" },
     { label: "Connections", href: "/connections" }
-  ] },
-  // A clickable dropdown, so the rail does not always list every holiday (owner only for now).
-  { label: "Holidays", collapsible: true, items: [
-    { label: "Halloween · Oct 31", href: "/holidays/halloween" }
   ] },
   { label: "Intelligence", items: [
     { label: "Analytics" }
@@ -60,7 +59,7 @@ const BRANDS = [{ id: "all", name: "All brands", timezone: "" }, ...brandConfigs
 // each follow-up that opens a page for clients flips it to "active" here.
 const CLIENT_NAV: Record<string, "active" | "soon" | "hidden"> = {
   "/": "active", "/ar": "active", "/ar/qr": "active", "/ar/sets": "active", "/review": "active", "/calendar": "active", "/assets": "active", "/content-pool": "active", "/connections": "active",
-  "/collections": "hidden", "/holidays/halloween": "hidden", "/ai-gateway": "hidden", "/planner": "hidden"
+  "/collections": "hidden", "/ai-gateway": "hidden", "/planner": "hidden"
 };
 
 // Who is signed in: owner sees everything; a client sees only the listed brands.
@@ -88,7 +87,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [bare, scope]);
   if (bare) return <>{children}</>;
   const client = !!scope && !scope.owner;
-  const itemState = (item: { href?: string }) => (!client ? "active" : item.href ? CLIENT_NAV[item.href] ?? "soon" : "soon");
+  const itemState = (item: NavItem) => (item.children ? (client ? "hidden" : "active") : !client ? "active" : item.href ? CLIENT_NAV[item.href] ?? "soon" : "soon");
   const brands = scope?.brands ? BRANDS.filter((b) => scope.brands!.includes(b.id)) : BRANDS;
   const isActive = (href: string) => (href === "/" || href === "/ar" ? pathname === href : pathname.startsWith(href));
 
@@ -109,13 +108,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <nav className="sidebar" aria-label="Main">
           {(showAr ? [...NAV.slice(0, 2), AR_SECTION, ...NAV.slice(2)] : NAV).filter((section) => section.items.some((item) => itemState(item) !== "hidden")).map((section) => (
             <div className="nav-section" key={section.label}>
-              {section.collapsible ? null : <div className="nav-label">{section.label}</div>}
-              {section.collapsible ? <details className="nav-drop" open={section.items.some((item) => item.href && isActive(item.href))}><summary className="nav-label">{section.label}</summary>{section.items.filter((item) => itemState(item) !== "hidden").map((item) => item.href ? (
-                <Suspense key={item.label} fallback={<Link href={item.href} className={`nav-item${isActive(item.href) ? " active" : ""}`}>{item.label}</Link>}>
-                  <NavLink href={item.href} className={`nav-item${isActive(item.href) ? " active" : ""}`}>{item.label}</NavLink>
-                </Suspense>
-              ) : null)}</details> : null}
-              {!section.collapsible && section.items.filter((item) => itemState(item) !== "hidden").map((item) =>
+              <div className="nav-label">{section.label}</div>
+              {section.items.filter((item) => itemState(item) !== "hidden").map((item) =>
+                item.children ? (
+                  <details className="nav-drop" key={item.label} open={item.children.some((c) => isActive(c.href))}>
+                    <summary className="nav-item">{item.label}</summary>
+                    {item.children.map((c) => (
+                      <Suspense key={c.label} fallback={<Link href={c.href} className={`nav-item nav-sub${isActive(c.href) ? " active" : ""}`}>{c.label}</Link>}>
+                        <NavLink href={c.href} className={`nav-item nav-sub${isActive(c.href) ? " active" : ""}`}>{c.label}</NavLink>
+                      </Suspense>
+                    ))}
+                  </details>
+                ) :
                 item.href && itemState(item) === "active" ? (
                   <Suspense key={item.label} fallback={<Link href={item.href} className={`nav-item${isActive(item.href) ? " active" : ""}`}>{item.label}</Link>}>
                     <NavLink href={item.href} className={`nav-item${isActive(item.href) ? " active" : ""}`}>

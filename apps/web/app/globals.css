@@ -1203,6 +1203,7 @@ code {
 
 /* Holidays: left-nav dropdown + draft cards */
 .nav-drop > summary { cursor: pointer; list-style: none; user-select: none; }
+.nav-sub { padding-left: 24px; }
 .nav-drop > summary::-webkit-details-marker { display: none; }
 .nav-drop > summary::after { content: " BE"; }
 .nav-drop:not([open]) > summary::after { content: " B8"; }
