@@ -80,7 +80,7 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
   const fmtTime = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: tz });
   const ymdOf = (iso: string) => new Date(iso).toLocaleDateString("en-CA", { timeZone: tz });
   const today = ymdOf(new Date().toISOString());
-  const reviewable = (p: ReviewPost) => ["planned", "approved", "skipped"].includes(p.status);
+  const reviewable = (p: ReviewPost) => ["planned", "approved", "skipped", "paused", "removed"].includes(p.status);
 
   const weeks = useMemo(() => Array.from({ length: list.weeks }, (_, i) => {
     const start = addDays(list.weekStart, 7 * i);
@@ -240,7 +240,7 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
   return <div className="review">
     <section className="card review-settings">
       <div>
-        <div className="eyebrow">Posts per day</div>
+        <h2 className="review-settings-title">Posts per day</h2>
         {networkGroups.map((group) => {
           const first = group[0];
           const week = groupWeekly(group);
@@ -251,9 +251,9 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
           const imgMax = car.reduce((n, s) => n + (weeklyOf(s) / 7) * slidesOf(s).max, 0);
           const r1 = (n: number) => Math.round(n * 10) / 10;
           return <div key={first.key} className="review-network">
-            <div>
-              <b>{NETWORK[first.format.destination] || first.format.destination}</b>{" "}
-              {first.account ? <b>{first.account.accountName}</b> : <span className="muted">{first.format.status === "integration" ? first.format.note : "not connected"}</span>}
+            <div className="review-network-head">
+              <h3>{NETWORK[first.format.destination] || first.format.destination}</h3>
+              {first.account ? <span className="review-network-account">{first.account.accountName}</span> : <span className="muted">{first.format.status === "integration" ? first.format.note : "not connected"}</span>}
             </div>
             {group.map(renderRow)}
             {first.account && <div className={week > maxWeek ? "review-warn" : "muted"}>

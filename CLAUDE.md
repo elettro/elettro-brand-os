@@ -44,11 +44,12 @@ EventBridge, every 15 min ──> platform worker Lambda ──> network API
 - **Web app** `apps/web`: Next.js, hosted on Amplify (`WEB_COMPUTE`, app `d2k28tehm1a8zw`, branch `develop` → `os.elettro.com`).
   Signed-out visitors see the public site at `/welcome` (platforms, features, one-sheets in `public/sheets`, data/privacy, contact CTA); `/` redirects there.
   Pages: `/connections` (connect, test and Disconnect each network), `/planner`, `/review` (approve weeks, posts-per-day, reset,
-  reschedule, edit title, carousel settings), `/assets…`, `/collections`, `/presets`, `/content-pool`, `/decision-brain`, `/ai-gateway`,
+  reschedule, edit title, carousel settings), `/calendar` (one brand, one month: published posts from `PublicationLedger` plus approved and
+  paused posts; Pause/Resume, Edit, Swap = a brand-new post for that slot via `replan-slot`, Remove; backend `calendar.mjs`), `/assets…`, `/collections`, `/presets`, `/content-pool`, `/decision-brain`, `/ai-gateway`,
   `/ar/**` (AR console), `/epe-upload`, plus dashboard stats.
   **Who sees what:** Cognito owns the accounts. A user in the `owner` group (or the owner email) sees every brand; anyone else sees only
   brands whose `brand-<id>` Cognito group they belong to (`apps/web/lib/brand-access.ts`, PR #181). Client accounts get Assets (view),
-  Content Pool, Connections and Review for their own brands only. It reaches the API through `apps/web/lib/dev-api.ts`
+  Content Pool, Connections, Review and Calendar for their own brands only. It reaches the API through `apps/web/lib/dev-api.ts`
   (`BRAND_OS_API_BASE_URL`). Amplify build config lives in the Amplify console, not the repo.
 - **dev-api Lambda** `services/dev-api-lambda` (a ~1.9k-line `index.mjs` plus about 30 modules): `planner-v2*.mjs` (plan a week),
   `planner-ops.mjs` (claim-due-posts / finish-post / planner-tick), `planner-review.mjs`, `publishing-formats.mjs`
@@ -82,6 +83,9 @@ EventBridge, every 15 min ──> platform worker Lambda ──> network API
   The live backend is the Lambdas above; check before assuming a package is wired in.
 - **`intelligence/`**: the AI's judgment Markdown, loaded at runtime. Rule: *code enforces, intelligence advises, data
   informs.* Posting limits live in config/DB (`CadenceRule`), never only in Markdown. See `intelligence/README.md`.
+- **`ScheduledPost.status`** is plain text (no enum): `planned` → `approved` → `publishing` → `published` / `failed` / `missed`, plus
+  reviewer states `skipped`, `paused` (Calendar Pause: stays on the calendar, the publisher only claims `approved`, so it is passed over) and
+  `removed` (Calendar Remove: hidden, never sent). The planner treats `paused` and `removed` slots as taken, so it never refills them.
 - **Data model** (Postgres, quoted camel-case tables): `Brand`, `Asset`, `SocialAccount`, `CadenceRule`, `ScheduledPost`,
   `PublicationLedger`, `BrandStorageRoot`, `StorageConnection`, `Campaign`, `Collection`, `MetadataPreset`, `IntakeBatch`, …
   Schema in `services/dev-api-lambda/init.sql` and `packages/database/prisma`.
@@ -160,8 +164,8 @@ Amplify auto-builds the web app from `develop`. After a merge, do the PR's "AWS 
 ## 5. Running and testing
 
 - Tests are plain Node: `node --test tests/<file>` (CI runs an explicit list in `.github/workflows/ci.yml`; add yours there).
-  As of 2026-10-29 six test files are **not** in that list, so CI never runs them: `ai-mcp-dropbox-identity`, `ai-mcp-file-hosts`,
-  `library-publications`, `meta-connect`, `planner-review`, `post-race`. Run them by hand until they are wired in.
+  As of 2026-10-31 five test files are **not** in that list, so CI never runs them: `ai-mcp-dropbox-identity`, `ai-mcp-file-hosts`,
+  `library-publications`, `meta-connect`, `post-race` (`planner-review` and `calendar` were added with the Calendar PR). Run them by hand until they are wired in.
   The Python patch-safety test: `python3 -m unittest discover -s tests -p "test_lambda_patch.py"`.
 - Local web dev: `npm install` then `npm run dev` (workspace `@elettro/web`). It talks to the live DEV API by default.
 - There is no local DB or local Lambda harness. Planner changes can be exercised with

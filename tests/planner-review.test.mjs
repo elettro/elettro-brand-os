@@ -38,7 +38,7 @@ test("every action needs the shared key, a brand and a known action", async () =
   assert.equal((await handlePlannerReview(event, { brand: "stashbox", action: "publish-now" }, noDatabase, json)).statusCode, 400);
 });
 
-test("set-status only moves posts between planned, approved and skipped", async () => {
+test("set-status only moves posts between the review statuses (planned, approved, skipped, paused, removed)", async () => {
   process.env.CONNECTIONS_API_SHARED_SECRET = KEY;
   const client = fakeClient([['UPDATE "ScheduledPost"', { rows: [{ id: "x" }], rowCount: 1 }]]);
   const bad = await handlePlannerReview(event, { brand: "stashbox", action: "set-status", ids: ["0f8c2c62-6c5e-4a8e-9a0f-0b7f5a1d2e3f"], status: "queued" }, async () => client, json);
@@ -46,7 +46,7 @@ test("set-status only moves posts between planned, approved and skipped", async 
   const ok = await handlePlannerReview(event, { brand: "stashbox", action: "set-status", ids: ["0f8c2c62-6c5e-4a8e-9a0f-0b7f5a1d2e3f"], status: "approved" }, async () => client, json);
   assert.equal(ok.statusCode, 200);
   const update = client.seen.find((q) => q.sql.includes('UPDATE "ScheduledPost"'));
-  assert.deepEqual(update.params.at(-1), ["planned", "approved", "skipped"]);
+  assert.deepEqual(update.params.at(-1), ["planned", "approved", "skipped", "paused", "removed"]);
 });
 
 test("plan seeds missing planner settings and starts plan-week only for the asked networks that are connected", async () => {
@@ -237,7 +237,7 @@ test("reset-week deletes only the week's unsent posts and un-approves a whole we
   assert.equal(r.statusCode, 200);
   assert.equal(r.body.deleted, 2);
   const del = client.seen.find((q) => q.sql.includes('DELETE FROM "ScheduledPost"'));
-  assert.deepEqual(del.params[1], ["planned", "approved", "skipped", "failed"]);
+  assert.deepEqual(del.params[1], ["planned", "approved", "skipped", "failed", "paused", "removed"]);
   assert.ok(!del.params[1].includes("published") && !del.params[1].includes("queued"));
   const settings = client.seen.find((q) => q.sql.includes("approvedWeeks"));
   assert.deepEqual(JSON.parse(settings.params[1]), ["2026-11-09"]);
@@ -287,7 +287,7 @@ test("reschedule moves one unsent post, and only to a sensible time", async () =
   const ok = await handlePlannerReview(event, { brand: "stashbox", action: "reschedule", id, scheduledFor: soon }, async () => client, json);
   assert.equal(ok.statusCode, 200);
   const q = client.seen.find((x) => x.sql.includes('SET "scheduledFor"=$3'));
-  assert.deepEqual(q.params[3], ["planned", "approved", "skipped"]);
+  assert.deepEqual(q.params[3], ["planned", "approved", "skipped", "paused", "removed"]);
   for (const scheduledFor of ["not a date", new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(), new Date(Date.now() + 500 * 24 * 60 * 60 * 1000).toISOString()]) {
     const bad = await handlePlannerReview(event, { brand: "stashbox", action: "reschedule", id, scheduledFor }, async () => client, json);
     assert.equal(bad.statusCode, 400);

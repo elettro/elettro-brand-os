@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { authenticated } from "@/lib/cognito-auth";
+import { authenticated, session } from "@/lib/cognito-auth";
 import { brandConfigs } from "@/lib/brand-config";
 import { plannerCall, type PlannedPost } from "@/lib/planner";
 import { approveWeek, requestReplan, saveCadence } from "./actions";
@@ -33,7 +33,11 @@ function byDay(posts: PlannedPost[], timeZone: string) {
 }
 
 export default async function PlannerPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
-  if (!(await authenticated())) redirect("/api/auth/login");
+  if (!(await authenticated())) {
+    // Signed in but not the owner (a client): nothing here for them, send them home.
+    if (await session()) redirect("/");
+    redirect("/api/auth/login");
+  }
   const params = await searchParams;
   const brandSlug = params.brand || "stashbox";
   const week = await plannerCall({ action: "view", brandSlug, weekStart: params.week });
