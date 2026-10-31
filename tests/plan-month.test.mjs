@@ -121,3 +121,15 @@ test("the planner only plans connected accounts, the same ones Review shows (an 
   assert.ok(q, "the cadence query ran");
   assert.match(q, /sa\."externalAccountId" IS NOT NULL/);
 });
+
+test("a replan also clears unapproved posts of a network now at 0, but never hand-written ones", async () => {
+  const sqls = [];
+  const db = fakeDb([]);
+  const spy = async () => { const c = await db(); return { ...c, query: (sql, params) => { sqls.push({ sql, params }); return c.query(sql, params); } }; };
+  await runPlanWeeks({ brandSlug: "stashbox", weekStart: "2026-10-26", weeks: 1, mode: "apply", replacePlanned: true, copyAi: false }, spy, json, { modelId: null, now: new Date("2026-10-27T16:00:00Z") });
+  const del = sqls.find((q) => q.sql.trim().startsWith('DELETE FROM "ScheduledPost"'));
+  assert.ok(del, "the replan deletes the unapproved posts");
+  assert.doesNotMatch(del.sql, /ANY\(\$4::uuid\[\]\)/, "no longer limited to accounts that still have an active rule");
+  assert.ok(del.params[4].includes("tiktok") && !del.params[4].includes("gmb"), "every plannable network, not gmb/x");
+  assert.ok(del.params[5].includes("linkedin:text") && del.params[5].includes("gmb:update"), "hand-written formats are protected");
+});

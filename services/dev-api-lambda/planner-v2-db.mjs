@@ -7,7 +7,7 @@ import { planWeek, resolvePlannerSettings, songKeyOf, nextWeekStart, ymdInTimeZo
 import { curateWeek, bedrockInvoke } from "./curator.mjs";
 import { buildSongFacts, fetchRadioCatalog } from "./song-facts.mjs";
 import { writeWeekCopy } from "./copywriter.mjs";
-import { PLANNABLE_DESTINATIONS } from "./publishing-formats.mjs";
+import { PLANNABLE_DESTINATIONS, PUBLISHING_FORMATS, isPlannable } from "./publishing-formats.mjs";
 
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
 const HHMM = /^\d{2}:\d{2}$/;
@@ -277,10 +277,16 @@ export async function runPlanWeek(event, connectDatabase, json, { modelId = proc
     try {
       let removed = 0;
       if (replacePlanned) {
+        // A replan replaces every unapproved planned post of the networks in scope, including a network that now has
+        // no active cadence rule (set to 0 on Review): its leftover planned posts go too. Hand-written formats
+        // (LinkedIn text/link/poll, Google Business updates, X) are never planned, so they are never removed here.
+        const handWritten = PUBLISHING_FORMATS.filter((f) => !isPlannable(f)).map((f) => `${f.destination}:${f.placement}`);
         removed = (await client.query(
-          `DELETE FROM "ScheduledPost" WHERE "brandId" = $1 AND "status" = 'planned' AND "scheduledFor" >= $2 AND "scheduledFor" < $3
-             AND "socialAccountId" = ANY($4::uuid[])`,
-          [brand.id, notBefore, to, [...new Set(accounts.map((a) => a.socialAccountId))]])).rowCount;
+          `DELETE FROM "ScheduledPost" sp USING "SocialAccount" sa
+           WHERE sa."id" = sp."socialAccountId" AND sp."brandId" = $1 AND sp."status" = 'planned' AND sp."scheduledFor" >= $2 AND sp."scheduledFor" < $3
+             AND ($4::text[] IS NULL OR sa."destination" = ANY($4::text[])) AND sa."destination" = ANY($5::text[])
+             AND (sa."destination" || ':' || sp."placement") <> ALL($6::text[])`,
+          [brand.id, notBefore, to, destinations, PLANNABLE_DESTINATIONS, handWritten])).rowCount;
       }
       let inserted = 0;
       // A week the owner already approved (Review → Approve week) takes new posts as approved, except
