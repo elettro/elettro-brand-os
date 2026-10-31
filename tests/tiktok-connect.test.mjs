@@ -60,3 +60,27 @@ test("no rows are written when the tokens cannot be stored", async () => {
     async () => client, json, NOW, async () => { throw new Error("AccessDenied"); });
   assert.equal(r.statusCode, 500);
 });
+
+test("a reconnect with a new open_id for the same handle reuses that row instead of adding a second one", async () => {
+  process.env.CONNECTIONS_API_SHARED_SECRET = KEY;
+  const seen = [];
+  const client = {
+    async query(sql, params) {
+      seen.push({ sql, params });
+      if (sql.includes('FROM "Brand"')) return { rows: [{ id: "brand-1" }] };
+      if (sql.includes('"brandId"<>')) return { rows: [] };
+      if (sql.startsWith("ALTER TABLE")) return { rows: [] };
+      if (sql.startsWith("\n    SELECT")) return { rows: [{ id: "sa-existing" }] };
+      if (sql.startsWith("UPDATE")) return { rows: [] };
+      throw new Error("unexpected query " + sql);
+    },
+    async end() {}
+  };
+  const r = await completeTiktokConnect(event, { brand: "stashbox", user, ...tokens }, async () => client, json, NOW, async () => {});
+  assert.equal(r.statusCode, 200);
+  const pick = seen.find((q) => q.sql.startsWith("\n    SELECT"));
+  assert.match(pick.sql, /lower\("accountName"\)=lower\(\$3\)/);
+  assert.equal(pick.params[2], "@stashboxmusic");
+  assert.ok(!seen.some((q) => q.sql.includes("INSERT INTO")), "no second row");
+  assert.deepEqual(seen.find((q) => q.sql.startsWith("UPDATE")).params.slice(0, 3), ["sa-existing", "-000AbCdEf_123456", "@stashboxmusic"]);
+});

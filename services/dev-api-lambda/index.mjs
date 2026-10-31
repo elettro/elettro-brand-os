@@ -26,7 +26,7 @@ import { setPostingWindow } from "./posting-window.mjs";
 import { completeThreadsConnect } from "./threads-connect.mjs";
 import { completeBlueskyConnect } from "./bluesky-connect.mjs";
 import { completeTiktokConnect } from "./tiktok-connect.mjs";
-import { disconnectNetwork } from "./connection-disconnect.mjs";
+import { disconnectNetwork, mergeDuplicateAccounts } from "./connection-disconnect.mjs";
 import { completePinterestConnect } from "./pinterest-connect.mjs";
 import { handlePlannerReview } from "./planner-review.mjs";
 
@@ -1592,6 +1592,8 @@ export const handler = async (event = {}) => {
   if(event.action === "setup-shared-audio-library-20261017" && !event.requestContext && !event.rawPath && !event.path) return runSharedAudioLibrarySetup(event,connectDatabase,json);
   // IAM-only: add the 'document' (PDF) asset kind (dry-run unless mode:"apply").
   if(event.action === "setup-document-asset-kind-20261029" && !event.requestContext && !event.rawPath && !event.path) return runDocumentAssetKindSetup(event,connectDatabase,json);
+  // IAM-only: fold duplicate connected rows of one login into one (dry-run unless mode:"apply").
+  if(event.action === "merge-duplicate-accounts-20261031" && !event.requestContext && !event.rawPath && !event.path) return mergeDuplicateAccounts(event,connectDatabase,json);
   const requestPath =
     event?.rawPath ||
     event?.requestContext?.http?.path ||
