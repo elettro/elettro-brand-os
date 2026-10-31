@@ -8,7 +8,7 @@ import { NetworkLogo } from "@/components/network-logo";
 
 const NETWORK: Record<string, string> = {
   instagram: "Instagram", facebook: "Facebook", tiktok: "TikTok", threads: "Threads", bluesky: "Bluesky", youtube: "YouTube",
-  pinterest: "Pinterest", linkedin: "LinkedIn", x: "X", gmb: "Google Business"
+  pinterest: "Pinterest", mastodon: "Mastodon", linkedin: "LinkedIn", x: "X", gmb: "Google Business"
 };
 const STATUS: Record<PublishingFormat["status"], string> = {
   live: "Manually approved, set to auto-publish", planning: "planned only", review: "awaiting app review", integration: "awaiting integration"

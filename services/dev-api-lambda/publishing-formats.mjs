@@ -50,6 +50,13 @@ export const PUBLISHING_FORMATS = [
     slides: { min: 2, max: 5, recommended: [3, 5] }, rule: { kinds: ["image"], aspectRatios: [] } },
   { destination: "pinterest", placement: "video", label: "Video pins", status: "planning", note: "Publisher is deployed; no video pin has published on schedule yet",
     rule: { kinds: ["video"], aspectRatios: [] } },
+  // Mastodon (mastodon.social, text up to 500 characters): a post takes up to 4 photos or one video. Publisher: services/mastodon-lambda.
+  { destination: "mastodon", placement: "post", label: "Photo posts", status: "planning", note: "Publisher is built (services/mastodon-lambda); no post has published on schedule yet",
+    rule: { kinds: ["image"], aspectRatios: [] } },
+  { destination: "mastodon", placement: "carousel", label: "Multi-photo posts", status: "planning", note: "Publisher is built (services/mastodon-lambda); no post has published on schedule yet",
+    slides: { min: 2, max: 4, recommended: [2, 4] }, rule: { kinds: ["image"], aspectRatios: [] } },
+  { destination: "mastodon", placement: "video", label: "Videos", status: "planning", note: "Publisher is built (services/mastodon-lambda); no video has published on schedule yet. Videos up to 99 MB",
+    rule: { kinds: ["video"], aspectRatios: [], maxDurationBucket: "1-3min" } },
   { destination: "linkedin", placement: "post", label: "Posts", status: "planning", note: "Publisher is built (services/linkedin-lambda); no post has published on schedule yet",
     rule: { kinds: ["image", "video"], aspectRatios: [] } },
   { destination: "linkedin", placement: "carousel", label: "Multi-image posts", status: "planning", note: "Scheduled publishing is built; goes live after the first scheduled multi-image post",
