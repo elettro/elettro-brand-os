@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { PublishingFormat, ReviewAccount, ReviewList, ReviewPost, TiktokCreator } from "@/lib/planner-review";
 import { AssetThumb as Thumb } from "@/components/asset-thumb";
-import { LinkedInWriter } from "./linkedin-writer";
 import { TiktokCard } from "./tiktok-card";
 
 const NETWORK: Record<string, string> = {
@@ -276,11 +275,6 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
     </section>
 
     {notice && <p className="card review-notice">{notice}</p>}
-
-    {list.accounts.some((a) => a.destination === "linkedin" && a.externalAccountId) && <LinkedInWriter
-      accountName={list.accounts.find((a) => a.destination === "linkedin" && a.externalAccountId)?.accountName || "LinkedIn"}
-      defaultLocal={localInput(new Date(Date.now() + 24 * 3600_000).toISOString(), tz).replace(/T\d\d:\d\d$/, "T10:00")} timeZone={tz} busy={!!busy}
-      onSave={(body) => run("custom", { ...body, scheduledFor: instantOf(String(body.scheduledFor), tz) }, "Saved as to review. Approve it on its card below to send it.")} />}
 
     {weeks.map((w) => {
       const planned = w.posts.filter((p) => p.status === "planned").length;
