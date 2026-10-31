@@ -1224,3 +1224,7 @@ code {
 .hol-swap button { background: none; border: 1px solid var(--line); border-radius: 8px; padding: 4px; cursor: pointer; }
 .hol-approved { margin-top: 28px; }
 .hol-approved li { margin: 6px 0; }
+.hol-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; margin-top: 20px; }
+.hol-tile { display: block; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 22px; color: var(--text); text-decoration: none; }
+.hol-tile:hover { border-color: var(--accent); }
+.hol-tile h2 { margin: 6px 0 4px; }

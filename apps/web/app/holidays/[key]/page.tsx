@@ -27,7 +27,7 @@ export default async function HolidayPage({ params, searchParams }: { params: Pr
   const lists = results.filter((l): l is HolidayList => !!l);
   const names = Object.fromEntries(brandConfigs.map((b) => [b.id, b.name]));
   return <main className="main">
-    <div className="eyebrow">Holidays · {holiday.label}</div>
+    <div className="eyebrow"><a href="/holidays">Holidays</a> · {holiday.label}</div>
     <h1>{holiday.name}</h1>
     <p className="muted">Three ready-to-go {holiday.name} posts for each brand. Pick a brand in the header to see only that brand&apos;s, or leave it on All brands to approve them together. Approving puts a post into {holiday.label}&apos;s plan as an active post on each of the brand&apos;s connected networks. Edit the words, swap the picture or skip any you do not want.</p>
     {lists.length === 0 ? <p className="card" style={{ marginTop: 16 }}>No {holiday.name} drafts could be loaded.</p>

@@ -22,8 +22,7 @@ const NAV: NavSection[] = [
   ] },
   { label: "Publishing", items: [
     { label: "Review", href: "/review" },
-    // A clickable dropdown, so the rail does not always list every holiday (owner only for now).
-    { label: "Holidays", children: [{ label: "Halloween · Oct 31", href: "/holidays/halloween" }] },
+    { label: "Holidays", href: "/holidays" },
     { label: "Calendar", href: "/calendar" },
     { label: "Connections", href: "/connections" }
   ] },
@@ -59,7 +58,7 @@ const BRANDS = [{ id: "all", name: "All brands", timezone: "" }, ...brandConfigs
 // each follow-up that opens a page for clients flips it to "active" here.
 const CLIENT_NAV: Record<string, "active" | "soon" | "hidden"> = {
   "/": "active", "/ar": "active", "/ar/qr": "active", "/ar/sets": "active", "/review": "active", "/calendar": "active", "/assets": "active", "/content-pool": "active", "/connections": "active",
-  "/collections": "hidden", "/ai-gateway": "hidden", "/planner": "hidden"
+  "/collections": "hidden", "/holidays": "hidden", "/ai-gateway": "hidden", "/planner": "hidden"
 };
 
 // Who is signed in: owner sees everything; a client sees only the listed brands.
