@@ -9,8 +9,8 @@ const apiBaseUrl =
 import { META_BRANDS } from "@/lib/meta-connect";
 export const REVIEW_BRANDS = [...META_BRANDS, "neckermann-strom", "google-review"];
 
-// Holidays tab: every real brand (Google Review is dormant). A brand with no database row simply shows nothing.
-export const HOLIDAY_BRANDS = ["stashbox", "elettro", "solarmeister", "neckermann-strom", "weightlossdavie", "therasbox", "pianomusicsoothing", "deanpalermo", "rompe", "reggaeland"];
+// Holidays tab: the seven brands with pictures (Google Review is dormant; Dean Palermo, Rompe and Reggae.Land skipped on request). A brand with no database row simply shows nothing.
+export const HOLIDAY_BRANDS = ["stashbox", "elettro", "solarmeister", "neckermann-strom", "weightlossdavie", "therasbox", "pianomusicsoothing"];
 export const HOLIDAYS = [{ key: "halloween", name: "Halloween", label: "Oct 31" }];
 export type HolidayDraft = {
   id: string; status: "draft" | "skipped" | "approved"; caption: string; hashtags: string[]; imageName: string; imageReady: boolean; asset: ReviewAsset | null;
