@@ -704,7 +704,8 @@ button:disabled {
 .review-total-label { font-size: 16px; font-weight: 700; }
 .review-network { display: grid; gap: 10px; flex: 1 1 100%; padding: 8px 0 28px; border-bottom: 2px solid var(--line); }
 .review-network-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; padding-bottom: 6px; }
-.review-network-head h3 { margin: 0; font-size: 22px; font-weight: 700; }
+.review-network-head h3 { margin: 0; font-size: 22px; font-weight: 700; display: inline-flex; align-items: center; gap: 10px; }
+.network-logo { flex: none; }
 .review-network-account { font-size: 16px; font-weight: 600; color: var(--muted); }
 .review-network:last-child { border-bottom: 0; padding-bottom: 0; }
 .review-network .review-cadence { flex-wrap: wrap; }
