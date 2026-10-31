@@ -111,7 +111,7 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
     const rule = s.account && list.accounts.find((a) => a.socialAccountId === s.account!.socialAccountId && a.placement === s.format.placement && a.active);
     return rule?.postsPerWeek || 0;
   };
-  const maxWeek = list.maxPostsPerWeek || 84;
+  const maxWeek = list.maxPostsPerWeek || 98;
   // Weeks fold so one can be read on its own; the current week starts open.
   const [open, setOpen] = useState(() => new Set([list.weekStart]));
   // Weeks whose published posts are shown; published posts are hidden by default so the posts still to act on lead.
@@ -171,7 +171,7 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
     }
   }
 
-  // Saves only the boxes that changed, lowering ones first so a network never passes 12 a day mid-save.
+  // Saves only the boxes that changed, lowering ones first so a network never passes 14 a day mid-save.
   async function saveCadence() {
     const slidesToSave = [...new Map(slots.filter(slidesChanged).map((s) => [slideKey(s), s])).values()];
     const changed = slots.filter((s) => s.account && s.format.status !== "integration" && weeklyOf(s) !== savedWeekly(s))

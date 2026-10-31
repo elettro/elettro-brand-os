@@ -188,7 +188,7 @@ test("list hands the page every publishing format, without planner rules, and ea
   assert.equal(r.body.formats.length, 28);
   assert.ok(r.body.formats.every((f) => !("rule" in f)));
   assert.equal(r.body.formats.find((f) => f.destination === "gmb").status, "integration");
-  assert.equal(r.body.maxPostsPerWeek, 70);
+  assert.equal(r.body.maxPostsPerWeek, 98);
   assert.equal(r.body.accounts[0].socialAccountId, "sa-yt");
   assert.ok(r.body.destinations.includes("youtube") && r.body.destinations.includes("pinterest"));
 });
@@ -203,16 +203,16 @@ test("cadence refuses unknown formats and formats still waiting on an integratio
   assert.equal(gmb.statusCode, 409);
 });
 
-test("a network takes at most 10 posts a day across its formats", async () => {
+test("a network takes at most 14 posts a day across its formats", async () => {
   process.env.CONNECTIONS_API_SHARED_SECRET = KEY;
   const client = fakeClient([
     ['FROM "SocialAccount" WHERE', { rows: [{ id: "sa-ig" }] }],
     ["AS n FROM", { rows: [{ n: 42 }] }]
   ]);
-  const over = await handlePlannerReview(event, { brand: "stashbox", action: "cadence", destination: "instagram", placement: "reel", postsPerWeek: 35 }, async () => client, json);
+  const over = await handlePlannerReview(event, { brand: "stashbox", action: "cadence", destination: "instagram", placement: "reel", postsPerWeek: 60 }, async () => client, json);
   assert.equal(over.statusCode, 400);
   assert.ok(!client.seen.some((q) => q.sql.includes('UPDATE "CadenceRule"') || q.sql.includes('INSERT INTO "CadenceRule"')));
-  const fits = await handlePlannerReview(event, { brand: "stashbox", action: "cadence", destination: "instagram", placement: "reel", postsPerWeek: 28 }, async () => client, json);
+  const fits = await handlePlannerReview(event, { brand: "stashbox", action: "cadence", destination: "instagram", placement: "reel", postsPerWeek: 56 }, async () => client, json);
   assert.equal(fits.statusCode, 200);
 });
 
