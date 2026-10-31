@@ -218,8 +218,7 @@ export function poolRejection(asset, account, settings) {
 // ---------- slots ----------
 
 // Posting-time strategy (Dean, 2026-10-31). Every network has a daily window; a format's posts for a day sit at EQUAL
-// distances inside it (so adding or removing a post re-spaces all of them), each nudged to an odd minute (never :00, :05,
-// :10 ...). Windows are local to the account. Bluesky and Mastodon run 8 AM to 8 PM with most posts (70%) from 9 to 5.
+// distances inside it (so adding or removing a post re-spaces all of them), each on any minute of the hour but :00 :15 :30 :45. Windows are local to the account. Bluesky and Mastodon run 8 AM to 8 PM with most posts (70%) from 9 to 5.
 // A brand can override a network with Brand.settings.planner.postingTimes.<destination> = { start, end, days, peak }.
 export const TIME_PROFILES = {
   linkedin: { start: "08:00", end: "12:00", days: ["mon", "tue", "wed", "thu", "fri"] },
@@ -228,6 +227,16 @@ export const TIME_PROFILES = {
   default: { start: "09:00", end: "21:00" }
 };
 export const timeProfileOf = (destination, override) => ({ ...(TIME_PROFILES[String(destination).toLowerCase()] || TIME_PROFILES.default), ...(override || {}) });
+// Every minute of the hour is a fair time to post (the analytics will say which work best) except the four exact quarter
+// marks, :00 :15 :30 :45. The seeded phase and nudge below spread the minutes around the hour; it need not be exact.
+export const goodMinute = (m) => ![0, 15, 30, 45].includes(((m % 60) + 60) % 60);
+function nearestGoodMinute(t, lo, hi, h) {
+  for (let d = 0; d <= 15; d += 1) {
+    const order = h % 2 ? [d, -d] : [-d, d];
+    for (const step of order) if (t + step >= lo && t + step <= hi && goodMinute(t + step)) return t + step;
+  }
+  return t;
+}
 const SAME_NETWORK_GAP = 7; // minutes between two formats of one network
 const ANY_GAP = 2; // minutes between any two of a brand's posts
 
@@ -275,12 +284,17 @@ export function spreadMinutes(n, profile, seed, from = 0) {
   const out = [];
   segs.forEach((g, gi) => {
     const c = counts[gi], gap = (g.end - g.start) / (c || 1);
+    // The whole row of equal gaps slides by a seeded amount (the gaps stay equal), so rows do not all start on the hour.
+    const phase = ((hashInt(seed, gi, "phase") % 1000) / 1000 - 0.5) * 0.8 * gap;
     for (let k = 0; k < c; k += 1) {
       const h = hashInt(seed, gi, k);
-      const room = Math.min(6, Math.floor(gap / 4));
-      let t = Math.round(g.start + (k + 0.5) * gap) + (room ? (h % (2 * room + 1)) - room : 0);
-      if (t % 5 === 0) t += h % 2 ? 2 : 3; // an odd minute, not a multiple of 5
-      out.push(Math.min(g.end - 1, Math.max(g.start + 1, t)));
+      // The spot at equal distances, then any allowed minute within a few minutes of it (picked by the seed, so it is
+      // repeatable but not a pattern); the gaps stay close to equal.
+      const base = Math.round(g.start + (k + 0.5) * gap + phase);
+      const radius = Math.max(5, Math.min(9, Math.floor(gap / 6)));
+      const choices = [];
+      for (let t = base - radius; t <= base + radius; t += 1) if (t > g.start && t < g.end && goodMinute(t)) choices.push(t);
+      out.push(choices.length ? choices[h % choices.length] : nearestGoodMinute(Math.min(g.end - 1, Math.max(g.start + 1, base)), g.start + 1, g.end - 1, h));
     }
   });
   return out.sort((a, b) => a - b);
@@ -368,7 +382,7 @@ export function separateSlots(slotLists, tzOf, profileOf = (d) => timeProfileOf(
       const base = minuteOf(s);
       if (clash(base)) {
         for (let step = 1; step <= 25; step += 1) {
-          const pick = [base + step, base - step].find((m) => m >= lo && m <= hi && m % 5 !== 0 && !clash(m));
+          const pick = [base + step, base - step].find((m) => m >= lo && m <= hi && goodMinute(m) && !clash(m));
           if (pick !== undefined) {
             s.localTime = hhmmOf(pick);
             s.slotId = `${s.socialAccountId}:${s.ymd}:${s.localTime}`;

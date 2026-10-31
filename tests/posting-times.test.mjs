@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildSlots, slotsToPlan, spreadMinutes, separateSlots, timeProfileOf } from "../services/dev-api-lambda/planner-v2.mjs";
+import { buildSlots, slotsToPlan, spreadMinutes, separateSlots, timeProfileOf, goodMinute } from "../services/dev-api-lambda/planner-v2.mjs";
 
 const TZ = "America/New_York";
 const WEEK = "2026-11-02"; // a Monday
@@ -10,10 +10,10 @@ const mk = (id, destination, placement, postsPerWeek, extra = {}) => ({
 const mins = (slots) => slots.map((s) => Number(s.localTime.slice(0, 2)) * 60 + Number(s.localTime.slice(3))).sort((a, b) => a - b);
 const gaps = (m) => m.slice(1).map((x, i) => x - m[i]);
 
-test("posts sit at odd minutes: never on :00, :05, :10 ... (so never on the quarter hour either)", () => {
+test("posts never sit on the quarter hour (:00 :15 :30 :45)", () => {
   const slots = [mk("a", "tiktok", "video", 70), mk("b", "instagram", "story", 98), mk("c", "bluesky", "post", 35)].flatMap((a) => buildSlots(a, WEEK, TZ));
   assert.ok(slots.length > 150);
-  assert.ok(slots.every((s) => Number(s.localTime.slice(3)) % 5 !== 0), "no multiple of 5 minutes");
+  assert.ok(slots.every((s) => goodMinute(Number(s.localTime.slice(3)))), "no quarter-hour minute");
 });
 
 test("a format's posts for a day are equally spaced across the network's window", () => {
@@ -69,7 +69,7 @@ test("two formats of one network are pulled at least 7 minutes apart, and no two
     const ig = day.filter((s) => s.socialAccountId === "ig");
     assert.ok(Math.abs(m(ig[0]) - m(ig[1])) >= 7, "reel and story of one network are 7+ minutes apart");
     assert.equal(new Set(day.map(m)).size, day.length, "every post has its own minute");
-    assert.ok(day.every((s) => m(s) % 5 !== 0));
+    assert.ok(day.every((s) => goodMinute(Number(s.localTime.slice(3)))));
     assert.ok(day.every((s) => s.scheduledFor === new Date(s.scheduledFor).toISOString()));
   }
 });
@@ -80,4 +80,25 @@ test("a replan late in the day tops up only the rest of today inside the window"
   const today = slots.filter((s) => s.ymd === "2026-11-03");
   assert.equal(today.length, 3);
   assert.ok(mins(today)[0] >= 13 * 60 + 20 && mins(today)[2] < 21 * 60);
+});
+
+test("minutes spread around the whole hour: none on :00 :15 :30 :45, and not piled near the top of the hour", () => {
+  const accounts = [mk("a", "tiktok", "video", 98), mk("b", "instagram", "story", 98), mk("c", "bluesky", "post", 98), mk("d", "mastodon", "video", 70), mk("e", "linkedin", "post", 5), mk("f", "pinterest", "pin", 35),
+    mk("g", "facebook", "reel", 70), mk("h", "threads", "post", 70), mk("i", "youtube", "short", 21)];
+  const lists = accounts.map((a) => buildSlots(a, WEEK, TZ));
+  separateSlots(lists, () => TZ);
+  const slots = lists.flat();
+  assert.ok(slots.length > 500);
+  const counts = Array(60).fill(0);
+  for (const s of slots) counts[Number(s.localTime.slice(3))] += 1;
+  for (const q of [0, 15, 30, 45]) assert.equal(counts[q], 0, `nobody posts at :${q}`);
+  assert.ok(counts.filter((c, m) => c > 0 && ![0, 15, 30, 45].includes(m)).length >= 50, "almost every other minute gets used");
+  const blocks = [0, 10, 20, 30, 40, 50].map((b) => counts.slice(b, b + 10).reduce((x, y) => x + y, 0));
+  assert.ok(Math.max(...blocks) <= 1.5 * Math.min(...blocks), `ten-minute blocks are even enough: ${blocks.join(" ")}`);
+  for (const s of slots) assert.ok(goodMinute(Number(s.localTime.slice(3))), `${s.localTime}`);
+});
+
+test("moving a time off a round number keeps the spacing close to equal", () => {
+  const m = spreadMinutes(6, timeProfileOf("tiktok"), "seed");
+  for (const g of m.slice(1).map((x, i) => x - m[i])) assert.ok(Math.abs(g - 120) <= 22, `gap ${g}`);
 });

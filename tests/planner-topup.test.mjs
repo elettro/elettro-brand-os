@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { slotsToPlan } from "../services/dev-api-lambda/planner-v2.mjs";
+import { slotsToPlan, goodMinute } from "../services/dev-api-lambda/planner-v2.mjs";
 
 // 5 a day (35 a week) on Pinterest, whose window is 09:00-21:00 Eastern. Tuesday 2026-10-27 at 15:10 EDT = 19:10Z.
 const account = { socialAccountId: "a1", destination: "pinterest", placement: "pin", postsPerWeek: 35, preferredDays: [] };
@@ -12,7 +12,7 @@ test("with nothing out yet today, a replan tops today up to its full daily count
   const t = today(slotsToPlan(account, "2026-10-26", "America/New_York", tuesday3pm, 0));
   assert.equal(t.length, 5); // all 5 fit between 15:30 (20 minutes of lead) and 21:00
   assert.ok(t.every((x) => new Date(x.scheduledFor) > new Date(tuesday3pm.getTime() + 20 * 60000)));
-  assert.ok(minutes(t).every((m) => m < 21 * 60 && m % 5 !== 0), "inside the window, never on a multiple of 5 minutes");
+  assert.ok(minutes(t).every((m) => m < 21 * 60 && goodMinute(m)), "inside the window, never on :00 :15 :30 :45");
 });
 
 test("posts that already went out today are subtracted, and the rest spread equally over what's left of the window", () => {
