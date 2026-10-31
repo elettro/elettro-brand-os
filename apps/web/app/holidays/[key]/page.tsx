@@ -31,6 +31,8 @@ export default async function HolidayPage({ params, searchParams }: { params: Pr
     <h1>{holiday.name}</h1>
     <p className="muted">Three ready-to-go {holiday.name} posts for each brand. Pick a brand in the header to see only that brand&apos;s, or leave it on All brands to approve them together. Approving puts a post into {holiday.label}&apos;s plan as an active post on each of the brand&apos;s connected networks. Edit the words, swap the picture or skip any you do not want.</p>
     {lists.length === 0 ? <p className="card" style={{ marginTop: 16 }}>No {holiday.name} drafts could be loaded.</p>
-      : <HolidayClient holiday={holiday.key} holidayName={holiday.name} single={!!single} initial={lists} names={names} />}
+      // The key makes React start a fresh client when the brand dropdown changes. Without it the client kept the list it first
+      // loaded in state, so choosing Stashbox after All brands still showed every brand (EOS-BUG below).
+      : <HolidayClient key={single || "all"} holiday={holiday.key} holidayName={holiday.name} single={!!single} initial={lists} names={names} />}
   </main>;
 }
