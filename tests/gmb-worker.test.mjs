@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { hasUrl, brandTimeZone, localMinutes, hasPhoneNumber, mixAllows, postRequest, accessToken, checkMix, publish, publishingTick, handler } from "../services/gmb-lambda/index.mjs";
+import { imageInfo, measuredPost, hasUrl, brandTimeZone, localMinutes, hasPhoneNumber, mixAllows, postRequest, accessToken, checkMix, publish, publishingTick, handler } from "../services/gmb-lambda/index.mjs";
 
 const LOCATION = "accounts/1234567890/locations/9876543210";
 const ROOT = "/1---elettro-brand-os/brands/stashbox/";
@@ -210,4 +210,34 @@ test("the tick claims gmb posts, finishes each one, and a blocked post fails wit
 test("the handler answers only direct tick invokes", async () => {
   assert.equal((await handler({ rawPath: "/x" })).statusCode, 403);
   assert.equal((await handler({ action: "nope" })).statusCode, 400);
+});
+
+test("the publisher reads a photo's real size from its own header, JPEG and PNG", async () => {
+  const header = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  const png = Buffer.alloc(33); header.copy(png); png.writeUInt32BE(1600, 16); png.writeUInt32BE(1200, 20);
+  assert.deepEqual(imageInfo(png), { mime: "image/png", width: 1600, height: 1200 });
+  // JPEG: SOI, an APP0 segment to skip, then a baseline start-of-frame 1920x1080
+  const app0 = Buffer.concat([Buffer.from([0xff, 0xe0, 0x00, 0x10]), Buffer.alloc(14)]);
+  const sof = Buffer.alloc(19); sof[0] = 0xff; sof[1] = 0xc0; sof.writeUInt16BE(17, 2); sof[4] = 8; sof.writeUInt16BE(1080, 5); sof.writeUInt16BE(1920, 7);
+  const jpg = Buffer.concat([Buffer.from([0xff, 0xd8]), app0, sof, Buffer.alloc(40)]);
+  assert.deepEqual(imageInfo(jpg), { mime: "image/jpeg", width: 1920, height: 1080 });
+  assert.equal(imageInfo(Buffer.from("GIF89a....................")), null);
+
+  const bare = post({ assetMime: null, assetWidth: null, assetHeight: null });
+  const calls = [];
+  const measured = await measuredPost(bare, { link: async (p) => { calls.push(p); return "https://dl.example/x"; }, call: async () => ({ ok: true, arrayBuffer: async () => jpg }) });
+  assert.equal(measured.assetWidth, 1920); assert.equal(measured.assetHeight, 1080); assert.equal(measured.assetMime, "image/jpeg");
+  assert.ok(postRequest(measured, NOW), "a measured 16:9 photo passes");
+  assert.deepEqual(calls, [ROOT + "gig.jpg"]);
+  // a measured square photo is then blocked by the normal rule
+  const square = Buffer.alloc(33); header.copy(square); square.writeUInt32BE(1600, 16); square.writeUInt32BE(1600, 20);
+  const sq = await measuredPost(bare, { link: async () => "https://x", call: async () => ({ ok: true, arrayBuffer: async () => square }) });
+  blocked(sq, /4:3, 3:2, 16:9.*1600x1600/);
+  // already measured: no download
+  const again = await measuredPost(post(), { link: async () => { throw new Error("should not download"); }, call: async () => { throw new Error("no"); } });
+  assert.equal(again.assetWidth, 1200);
+  // outside the brand folder: left for postRequest to block, nothing downloaded
+  const outside = post({ assetMime: null, assetWidth: null, assetHeight: null, dropboxPath: "/other/x.jpg" });
+  assert.equal((await measuredPost(outside, { link: async () => { throw new Error("no"); } })).assetWidth, null);
+  await assert.rejects(measuredPost(bare, { link: async () => "https://x", call: async () => ({ ok: false, status: 404 }) }), /HTTP 404/);
 });

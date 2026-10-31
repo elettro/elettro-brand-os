@@ -164,14 +164,14 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
     }).catch(() => setCreatorError("Elettro OS could not reach TikTok"));
   }, [hasTiktok, brand, creator, creatorError]);
 
-  async function run(label: string, body: Record<string, unknown>, done?: string) {
+  async function run(label: string, body: Record<string, unknown>, done?: string | ((result: { gmb?: { message?: string } }) => string)) {
     setBusy(label);
     setNotice(null);
     try {
       const result = await act({ brand, ...body });
       const fresh = await act({ brand, action: "list", weekStart: list.weekStart, weeks: list.weeks });
       setList(fresh as ReviewList);
-      if (done) setNotice(done);
+      if (done) setNotice(typeof done === "function" ? done(result as { gmb?: { message?: string } }) : done);
       return result;
     } catch (error) {
       setNotice(`Not saved: ${error instanceof Error ? error.message : "unknown error"}`);
@@ -325,7 +325,7 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
               onClick={() => { if (window.confirm(`Reset the week of ${w.start}? Its unsent posts are deleted and the week is un-approved. Published posts stay.`)) run("week", { action: "reset-week", from: w.start, to: w.end }, `Week of ${w.start} reset. Plan it again when ready.`); }}>Reset week</button>}
             {w.end >= today && <button className="status-chip" disabled={!!busy || !list.accounts.some((a) => a.active && a.postsPerWeek)}
               title={list.accounts.some((a) => a.active && a.postsPerWeek) ? "" : "Set posts per day first"}
-              onClick={() => run("plan", { action: "plan", weekStart: w.start }, `Planning ${underway ? "the rest of " : ""}the week of ${w.start}. Refresh in a minute or two.`)}>
+              onClick={() => run("plan", { action: "plan", weekStart: w.start }, (r) => `Planning ${underway ? "the rest of " : ""}the week of ${w.start}.${r?.gmb?.message ? ` ${r.gmb.message}.` : ""} Refresh in a minute or two.`)}>
               {underway ? (w.posts.length ? "Replan rest of week" : "Plan rest of week") : (w.posts.length ? "Replan unapproved" : "Plan this week")}
             </button>}
           </div>

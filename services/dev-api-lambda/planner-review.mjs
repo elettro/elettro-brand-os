@@ -29,6 +29,7 @@ import { timingSafeEqual } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
 import { nextWeekStart, ymdInTimeZone, addDaysToYmd, localDateTimeToUtc } from "./planner-v2.mjs";
+import { planGmbWeek } from "./gmb-planner.mjs";
 import { searchLibrary, libraryAsset, recordPublication, recentPublications } from "./library-publications.mjs";
 import { PUBLISHING_FORMATS, FORMAT_DESTINATIONS, PLANNABLE_DESTINATIONS, MAX_POSTS_PER_WEEK, MAX_POSTS_PER_DAY, formatOf, isPlannable, canSaveCadence, slideRange } from "./publishing-formats.mjs";
 
@@ -368,11 +369,19 @@ async function startPlanning(client, brand, body, { invoke, readSeed, now = new 
     `SELECT DISTINCT "destination" FROM "SocialAccount" WHERE "brandId"=$1 AND "status"='active' AND "externalAccountId" IS NOT NULL`,
     [brand.id])).rows.map((r) => r.destination);
   // No networks named means every network (Review plans and approves whole brand-weeks).
-  const destinations = (destinationsOf(body) || PLANNABLE_DESTINATIONS).filter((d) => PLANNABLE_DESTINATIONS.includes(d) && connected.includes(d));
-  if (!destinations.length) return { code: 409, body: { ok: false, error: "Connect a social account for this brand first" } };
+  const named = destinationsOf(body);
+  const destinations = (named || PLANNABLE_DESTINATIONS).filter((d) => PLANNABLE_DESTINATIONS.includes(d) && connected.includes(d));
+  // Google Business is planned by gmb-planner.mjs (photos, pillars, one post a day), not by planner-v2.
+  const wantsGmb = (!named || named.includes("gmb")) && connected.includes("gmb");
+  if (!destinations.length && !wantsGmb) return { code: 409, body: { ok: false, error: "Connect a social account for this brand first" } };
   if (heldWeeksOf(brand.settings).includes(weekStart)) await saveHeldWeeks(client, brand.id, heldWeeksOf(brand.settings).filter((w) => w !== weekStart));
-  await invoke({ action: "plan-week", brandSlug: brand.slug, weekStart, mode: "apply", replacePlanned: true, destinations });
-  return { code: 202, body: { ok: true, planning: true, weekStart } };
+  let gmb = null;
+  if (wantsGmb) {
+    try { gmb = await planGmbWeek(client, brand, { weekStart, now }); }
+    catch (error) { console.error("[planner-review] gmb planning failed", error?.message); gmb = { ok: false, planned: 0, message: "Google Business planning failed" }; }
+  }
+  if (destinations.length) await invoke({ action: "plan-week", brandSlug: brand.slug, weekStart, mode: "apply", replacePlanned: true, destinations });
+  return { code: destinations.length ? 202 : 200, body: { ok: true, planning: destinations.length > 0, weekStart, ...(gmb ? { gmb } : {}) } };
 }
 
 const selfInvoke = (payload) => lambda.send(new InvokeCommand({
