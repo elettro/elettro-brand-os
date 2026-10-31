@@ -139,6 +139,7 @@ export async function runPlanWeek(event, connectDatabase, json, { modelId = proc
               cr."id" AS "cadenceRuleId", cr."placement", cr."postsPerWeek", cr."preferredDays", cr."preferredStartTime", cr."preferredEndTime"
        FROM "CadenceRule" cr JOIN "SocialAccount" sa ON sa."id" = cr."socialAccountId"
        WHERE sa."brandId" = $1 AND sa."status" = 'active' AND cr."active" = TRUE AND cr."postsPerWeek" > 0
+         AND sa."externalAccountId" IS NOT NULL
          AND ($2::text[] IS NULL OR sa."destination" = ANY($2::text[]))
        ORDER BY sa."destination", cr."placement"`, [brand.id, destinations])).rows
       // A network with no plannable format yet (X, Google Business, Reddit) keeps its settings but gets no posts.
