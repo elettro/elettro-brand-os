@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { handlePlannerReview, reviewWindow } from "../services/dev-api-lambda/planner-review.mjs";
+import { isPlannable, formatOf, PLANNABLE_DESTINATIONS } from "../services/dev-api-lambda/publishing-formats.mjs";
 
 const json = (statusCode, body) => ({ statusCode, body });
 const KEY = "k".repeat(40);
@@ -199,8 +200,25 @@ test("cadence refuses unknown formats and formats still waiting on an integratio
   assert.equal(unknown.statusCode, 400);
   const x = await handlePlannerReview(event, { brand: "stashbox", action: "cadence", destination: "x", placement: "video", postsPerWeek: 7 }, async () => fakeClient(), json);
   assert.equal(x.statusCode, 409);
-  const gmb = await handlePlannerReview(event, { brand: "stashbox", action: "cadence", destination: "gmb", placement: "update", postsPerWeek: 7 }, async () => fakeClient(), json);
-  assert.equal(gmb.statusCode, 409);
+  const linkedinText = await handlePlannerReview(event, { brand: "stashbox", action: "cadence", destination: "linkedin", placement: "text", postsPerWeek: 7 }, async () => fakeClient(), json);
+  assert.equal(linkedinText.statusCode, 409);
+});
+
+test("GMB stores a posts-per-day number, one a day at most, and is still never planned", async () => {
+  process.env.CONNECTIONS_API_SHARED_SECRET = KEY;
+  const client = () => fakeClient([['FROM "SocialAccount" WHERE', { rows: [{ id: "sa-gmb" }] }], ["AS n FROM", { rows: [{ n: 0 }] }]]);
+  const ok = client();
+  const saved = await handlePlannerReview(event, { brand: "stashbox", action: "cadence", destination: "gmb", placement: "update", postsPerWeek: 5 }, async () => ok, json);
+  assert.equal(saved.statusCode, 200);
+  assert.equal(saved.body.postsPerWeek, 5);
+  assert.ok(ok.seen.some((q) => q.sql.includes('INSERT INTO "CadenceRule"') && q.params.includes(5)));
+  const seven = await handlePlannerReview(event, { brand: "stashbox", action: "cadence", destination: "gmb", placement: "update", postsPerWeek: 7 }, async () => client(), json);
+  assert.equal(seven.statusCode, 200);
+  const eight = await handlePlannerReview(event, { brand: "stashbox", action: "cadence", destination: "gmb", placement: "update", postsPerWeek: 8 }, async () => client(), json);
+  assert.equal(eight.statusCode, 400);
+  assert.match(eight.body.error, /at most 7 a week \(1 a day\)/);
+  assert.equal(isPlannable(formatOf("gmb", "update")), false);
+  assert.ok(!PLANNABLE_DESTINATIONS.includes("gmb"));
 });
 
 test("a network takes at most 14 posts a day across its formats", async () => {

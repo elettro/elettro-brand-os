@@ -37,7 +37,9 @@ export type ReviewAccount = { socialAccountId: string; destination: string; acco
 // · integration: not connected to Elettro OS yet (never editable). The list comes from the API (publishing-formats.mjs).
 export type PublishingFormat = { destination: string; placement: string; label: string; status: "live" | "planning" | "review" | "integration"; note?: string;
   // Carousel formats: the network's hard limits and the advisory best range of images.
-  slides?: { min: number; max: number; recommended: [number, number] } };
+  slides?: { min: number; max: number; recommended: [number, number] };
+  // GMB: Review stores a posts-per-week target (at most maxPostsPerWeek) although the format is not planned yet.
+  savesCadence?: boolean; maxPostsPerWeek?: number };
 export type ReviewList = {
   ok: boolean; error?: string; brand: string; timeZone: string; weekStart: string; weeks: number; destinations: string[]; approvedWeeks?: string[];
   hasPlannerSettings: boolean; accounts: ReviewAccount[]; posts: ReviewPost[]; formats: PublishingFormat[]; maxPostsPerWeek: number;

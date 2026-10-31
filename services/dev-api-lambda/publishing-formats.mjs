@@ -68,7 +68,9 @@ export const PUBLISHING_FORMATS = [
   { destination: "linkedin", placement: "link", label: "Link posts", status: "integration", note: "Written by hand on Review; not planned automatically" },
   { destination: "linkedin", placement: "poll", label: "Polls", status: "integration", note: "Written by hand on Review; not planned automatically" },
   { destination: "x", placement: "video", label: "Videos", status: "integration", note: "X isn't connected to Elettro OS yet" },
-  { destination: "gmb", placement: "update", label: "Update posts", status: "integration", note: "Profiles connected; publisher built (services/gmb-lambda) for Update posts queued by hand (Offers parked, Events wait for a real show). Not planned automatically: waits on the business-content rules" }
+  // savesCadence: the Review box stores a target (1 a day at most, Dean 2026-10-31) but the planner still skips GMB:
+  // planning is by destination (PLANNABLE_DESTINATIONS), which excludes it until the GMB planner exists.
+  { destination: "gmb", placement: "update", label: "Update posts", status: "integration", savesCadence: true, maxPostsPerWeek: 7, note: "Posts per day is saved (1 a day at most). Profiles connected; publisher built (services/gmb-lambda) for Update posts (Offers parked, Events wait for a real show). Not planned automatically yet: the GMB planner is not built" }
 ];
 
 // A network takes at most 12 posts a day across all its formats.
@@ -76,6 +78,8 @@ export const MAX_POSTS_PER_DAY = 14;
 export const MAX_POSTS_PER_WEEK = MAX_POSTS_PER_DAY * 7;
 
 export const isPlannable = (f) => f && f.status !== "integration";
+/** Whether Review may store a posts-per-week number for the format (planned formats, and GMB's saved target). */
+export const canSaveCadence = (f) => Boolean(f) && (isPlannable(f) || f.savesCadence === true);
 export const formatOf = (destination, placement) =>
   PUBLISHING_FORMATS.find((f) => f.destination === destination && f.placement === placement) || null;
 export const FORMAT_DESTINATIONS = [...new Set(PUBLISHING_FORMATS.map((f) => f.destination))];
