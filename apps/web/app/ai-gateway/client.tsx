@@ -12,6 +12,7 @@ const brands=[
  {id:"therasbox",name:"Therasbox"},
  {id:"pianomusicsoothing",name:"Piano Music Soothing"},
  {id:"deanpalermo",name:"Dean Palermo"},
+ {id:"rompe",name:"Rompe"},
  {id:"reggaeland",name:"Reggae.Land"},
  {id:"google-review",name:"Google Review"}
 ];

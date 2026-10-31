@@ -57,7 +57,7 @@ jobs:
         run: node --test tests/connection-status.test.mjs tests/gmb-connect.test.mjs tests/linkedin-connect.test.mjs tests/mastodon-connect.test.mjs tests/api-gate.test.mjs tests/dev-api-zip-contents.test.mjs tests/client-scope.test.cjs
 
       - name: Test YouTube upload worker and publishing loop
-        run: node --test tests/youtube-upload.test.mjs tests/planner-topup.test.mjs tests/planner-ops.test.mjs tests/merge-duplicate-accounts.test.mjs tests/dashboard-stats.test.mjs tests/planner-review.test.mjs tests/calendar.test.mjs
+        run: node --test tests/youtube-upload.test.mjs tests/planner-topup.test.mjs tests/planner-ops.test.mjs tests/merge-duplicate-accounts.test.mjs tests/brand-create.test.mjs tests/dashboard-stats.test.mjs tests/planner-review.test.mjs tests/calendar.test.mjs
 
       - name: Test Elettro AR admin API
         run: node --experimental-strip-types --test tests/ar-api.test.mjs tests/ar-viewer.test.mjs tests/ar-console.test.mjs tests/ar-compile.test.mjs tests/ar-e2e.test.mjs
