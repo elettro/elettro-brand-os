@@ -45,11 +45,14 @@ async function linkSocialAccount(client, brandId, user, expiresAt) {
     [user.id, brandId]);
   if (elsewhere.rows.length) throw new ConnectError(409, "That TikTok account is already connected to another brand");
   await ensureTokenExpiryColumn(client);
-  // Prefer the row already linked to this account, then the brand's unlinked TikTok row from the planner seed.
+  // Prefer the row already linked to this account, then the row with the same handle (TikTok can hand the same login a
+  // different open_id, e.g. after the app changes; a second row would show twice on Review and plan twice), then the
+  // brand's unlinked TikTok row from the planner seed.
   const existing = (await client.query(`
     SELECT "id" FROM "SocialAccount"
-    WHERE "brandId"=$1 AND "destination"='tiktok' AND ("externalAccountId"=$2 OR "externalAccountId" IS NULL)
-    ORDER BY ("externalAccountId"=$2) DESC NULLS LAST, "createdAt" LIMIT 1`, [brandId, user.id])).rows[0];
+    WHERE "brandId"=$1 AND "destination"='tiktok'
+      AND ("externalAccountId"=$2 OR "externalAccountId" IS NULL OR lower("accountName")=lower($3))
+    ORDER BY ("externalAccountId"=$2) DESC NULLS LAST, (lower("accountName")=lower($3)) DESC, "createdAt" LIMIT 1`, [brandId, user.id, user.handle])).rows[0];
   if (existing) {
     await client.query(
       'UPDATE "SocialAccount" SET "externalAccountId"=$2, "accountName"=$3, "tokenExpiresAt"=$4, "status"=\'active\', "updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$1',
