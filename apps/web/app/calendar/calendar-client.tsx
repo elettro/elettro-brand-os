@@ -62,7 +62,7 @@ function stateOf(p: CalendarPost): { key: string; label: string } {
 
 type Toast = { text: string; undo?: () => Promise<void> };
 
-export function CalendarClient({ initial }: { initial: CalendarMonth }) {
+export function CalendarClient({ initial, brandName }: { initial: CalendarMonth; brandName?: string }) {
   const [data, setData] = useState(initial);
   const [hidden, setHidden] = useState<string[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
@@ -93,6 +93,9 @@ export function CalendarClient({ initial }: { initial: CalendarMonth }) {
   }, [visible, ymdOf]);
   const days = Array.from({ length: 42 }, (_, i) => addDays(data.start, i));
   const post = selected ? data.posts.find((p) => p.id === selected) || null : null;
+  // Nothing approved to come (any month): an encouraging note with a big way to Review instead of a bare grid.
+  const nothingApproved = data.upcomingApproved !== undefined ? data.upcomingApproved === 0
+    : !data.posts.some((p) => p.status === "approved" && new Date(p.at).getTime() >= Date.now());
 
   const load = useCallback(async (month: string) => {
     setBusy("load");
@@ -183,6 +186,13 @@ export function CalendarClient({ initial }: { initial: CalendarMonth }) {
     <p className="muted cal-tz">Times are {tz.replace("_", " ")}. Past days show what published; coming days show approved and paused posts.</p>
     {error && !post && <p className="cal-error" role="alert">{error}</p>}
 
+    {nothingApproved && <section className="cal-empty" aria-label="Nothing approved yet">
+      <div className="cal-empty-art" aria-hidden="true">🗓️✨</div>
+      <h2>Your calendar is wide open. Let&apos;s fill it.</h2>
+      <p>{brandName || "This brand"} has no approved posts coming up yet. Pop over to Review, give the posts you like a thumbs-up, and they&apos;ll land right here, lined up to go out on time.</p>
+      <a className="cal-empty-cta" href={`/review?brand=${encodeURIComponent(brand)}`}>Approve posts on Review <span aria-hidden="true">→</span></a>
+    </section>}
+
     <div className="cal-grid" role="grid" aria-label={monthLabel}>
       {WEEKDAYS.map((d) => <div key={d} className="cal-weekday" role="columnheader">{d}</div>)}
       {days.map((d) => {
@@ -202,7 +212,7 @@ export function CalendarClient({ initial }: { initial: CalendarMonth }) {
         <h3>{fmtDay(d)}</h3>
         {byDay.get(d)!.map(chip)}
       </section>)}
-      {!visible.some((p) => ymdOf(p.at).slice(0, 7) === data.month) && <p className="muted">Nothing published or approved this month.</p>}
+      {!nothingApproved && !visible.some((p) => ymdOf(p.at).slice(0, 7) === data.month) && <p className="muted">Nothing published or approved this month.</p>}
     </div>
 
     {dayOpen && !post && <div className="cal-scrim" onClick={() => setDayOpen(null)}>

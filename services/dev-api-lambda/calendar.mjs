@@ -95,7 +95,11 @@ export async function calendarMonth(client, brand, body, now = new Date()) {
     }))
   ].sort((a, b) => a.at.localeCompare(b.at) || a.destination.localeCompare(b.destination));
 
-  return { code: 200, body: { ok: true, brand: brand.slug, timeZone, month, start: grid.start, end: grid.end, today: ymdInTimeZone(now, timeZone), posts } };
+  // Approved posts still to come, in any month: zero means the page shows the "go approve some posts" note instead of an empty grid.
+  const upcomingApproved = (await client.query(
+    `SELECT COUNT(*)::int AS n FROM "ScheduledPost" WHERE "brandId" = $1 AND "status" = 'approved' AND "scheduledFor" >= $2`,
+    [brand.id, now])).rows[0]?.n ?? 0;
+  return { code: 200, body: { ok: true, brand: brand.slug, timeZone, month, start: grid.start, end: grid.end, today: ymdInTimeZone(now, timeZone), upcomingApproved, posts } };
 }
 
 /**

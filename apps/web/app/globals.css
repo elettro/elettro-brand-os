@@ -1176,6 +1176,17 @@ code {
 .cal-toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 60; display: flex; align-items: center; gap: 12px;
   background: var(--panel); border: 1px solid var(--accent); border-radius: 12px; padding: 10px 14px; box-shadow: 0 8px 30px rgba(0, 0, 0, .4); max-width: calc(100vw - 32px); }
 
+.cal-empty { margin: 4px 0 20px; padding: clamp(24px, 4vw, 40px); border-radius: 18px; text-align: center;
+  background: radial-gradient(120% 140% at 50% 0%, rgba(129, 236, 255, .16), transparent 60%), var(--panel); border: 1px solid var(--accent); }
+.cal-empty-art { font-size: 44px; line-height: 1; margin-bottom: 10px; }
+.cal-empty h2 { margin: 0 0 8px; font-size: clamp(22px, 3vw, 30px); font-weight: 800; }
+.cal-empty p { margin: 0 auto 22px; max-width: 560px; color: var(--muted); font-size: 16px; line-height: 1.55; }
+.cal-empty-cta { display: inline-flex; align-items: center; gap: 10px; min-height: 60px; padding: 0 34px; border-radius: 999px;
+  background: var(--accent); color: var(--bg); font-size: 19px; font-weight: 800; text-decoration: none; box-shadow: 0 10px 34px rgba(129, 236, 255, .3); }
+.cal-empty-cta:hover { filter: brightness(1.08); }
+.cal-empty-cta:focus-visible { outline: 3px solid var(--text); outline-offset: 3px; }
+@media (max-width: 720px) { .cal-empty-cta { width: 100%; justify-content: center; } }
+
 @media (max-width: 720px) {
   .cal-grid { display: none; }
   .cal-agenda { display: block; }
