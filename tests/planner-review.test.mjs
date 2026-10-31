@@ -171,7 +171,7 @@ test("setting Reels per day leaves the Stories rule alone", async () => {
     ['FROM "SocialAccount" WHERE', { rows: [{ id: "sa-ig" }] }],
     ['FROM "CadenceRule" WHERE', { rows: [{ id: "rule-reel" }] }]
   ]);
-  const r = await handlePlannerReview(event, { brand: "stashbox", action: "cadence", destination: "instagram", placement: "reel", postsPerWeek: 60 },
+  const r = await handlePlannerReview(event, { brand: "stashbox", action: "cadence", destination: "instagram", placement: "reel", postsPerWeek: 35 },
     async () => client, json);
   assert.equal(r.statusCode, 200);
   const updates = client.seen.filter((q) => q.sql.includes('UPDATE "CadenceRule"'));
