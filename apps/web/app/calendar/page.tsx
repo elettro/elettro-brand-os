@@ -28,6 +28,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       error = "Elettro OS could not reach the planner";
     }
   }
+  const brandName = brandConfigs.find((b) => b.id === brand)?.name;
   const brands = visibleBrands(who, brandConfigs.filter((b) => REVIEW_BRANDS.includes(b.id))).map((b) => ({ id: b.id, name: b.name }));
   return <main className="main">
     <div className="eyebrow">Publishing · Calendar</div>
@@ -37,6 +38,6 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       {brands.map((b) => <a key={b.id} href={`/calendar?brand=${b.id}`} className={b.id === brand ? "active" : undefined}>{b.name}</a>)}
     </nav>
     {error && <p className="card" style={{ marginTop: 16 }}>Could not load the calendar: {error}</p>}
-    {data && <CalendarClient key={brand} initial={data} />}
+    {data && <CalendarClient key={brand} initial={data} brandName={brandName} />}
   </main>;
 }

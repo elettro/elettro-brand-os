@@ -46,7 +46,9 @@ export type CalendarPost = {
   // Per-post stats arrive with the stats phase; null until then.
   stats: Record<string, number> | null;
 };
-export type CalendarMonth = { ok: boolean; error?: string; brand: string; timeZone: string; month: string; start: string; end: string; today: string; posts: CalendarPost[] };
+export type CalendarMonth = { ok: boolean; error?: string; brand: string; timeZone: string; month: string; start: string; end: string; today: string;
+  // Approved posts still to come in any month (older API builds leave it out).
+  upcomingApproved?: number; posts: CalendarPost[] };
 
 // Server-side only: forwards one review action to the dev API with the shared connect key.
 export async function reviewCall<T = { ok: boolean; error?: string }>(body: Record<string, unknown>): Promise<{ status: number; data: T }> {

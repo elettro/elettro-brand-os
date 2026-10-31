@@ -49,12 +49,14 @@ test("calendar shows published posts plus approved/paused ones, and marks what c
       { id: "p2", status: "paused", scheduledFor: "2026-11-09T17:00:00Z", destination: "facebook", accountName: "S", placement: "reel", scoreBreakdown: {}, ...asset },
       { id: "p3", status: "approved", scheduledFor: "2026-11-10T15:05:00Z", destination: "threads", accountName: "s", placement: "post", scoreBreakdown: { slideIds: [A, B] }, ...asset }
     ] }],
+    ["COUNT(*)::int AS n", { rows: [{ n: 4 }] }],
     ['FROM "PublicationLedger" pl', { rows: [
       { id: "l1", scheduledPostId: "p0", destination: "youtube", placement: "short", publishedAt: "2026-11-03T16:00:00Z", externalUrl: "https://youtu.be/x", accountName: "S", generatedCaption: "hi", generatedHashtags: ["#a"], scoreBreakdown: {}, ...asset }
     ] }]
   ]);
   const r = await call({ action: "calendar", month: "2026-11" }, client, { now });
   assert.equal(r.statusCode, 200);
+  assert.equal(r.body.upcomingApproved, 4, "approved posts still to come, any month");
   const statuses = client.seen.find((q) => q.sql.includes('FROM "ScheduledPost" sp')).params.at(-1);
   assert.deepEqual(statuses, ["approved", "paused", "queued", "publishing", "processing"]);
   const byId = Object.fromEntries(r.body.posts.map((p) => [p.id, p]));
