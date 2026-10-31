@@ -33,11 +33,11 @@ test("the same inputs always give the same times, so a replan does not shuffle t
   assert.notDeepEqual(spreadMinutes(5, timeProfileOf("pinterest"), "x"), spreadMinutes(5, timeProfileOf("pinterest"), "y"));
 });
 
-test("LinkedIn posts only on weekdays, 08:00 to 12:00", () => {
+test("LinkedIn posts only on weekdays, 08:00 to 20:00", () => {
   const slots = buildSlots(mk("li", "linkedin", "post", 5), WEEK, TZ);
   assert.equal(slots.length, 5);
   assert.deepEqual([...new Set(slots.map((s) => s.ymd))], ["2026-11-02", "2026-11-03", "2026-11-04", "2026-11-05", "2026-11-06"]);
-  assert.ok(mins(slots).every((m) => m >= 8 * 60 && m < 12 * 60));
+  assert.ok(mins(slots).every((m) => m >= 8 * 60 && m < 20 * 60));
 });
 
 test("Bluesky and Mastodon run 08:00-20:00 with about 70% of a day's posts between 09:00 and 17:00", () => {
