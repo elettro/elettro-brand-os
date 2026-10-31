@@ -691,10 +691,14 @@ button:disabled {
 .review-brands a { padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; color: var(--text); text-decoration: none; }
 .review-brands a.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
 .review-settings { display: grid; gap: 12px; margin-top: 20px; }
-.review-settings > div { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
+.review-settings > div { display: flex; flex-wrap: wrap; gap: 24px; align-items: center; }
 .review-cadence { display: flex; gap: 8px; align-items: center; }
 .review-cadence input { width: 64px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 8px; }
-.review-network { display: grid; gap: 6px; flex: 1 1 100%; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.review-settings-title { margin: 0 0 4px; flex: 1 1 100%; font-size: clamp(26px, 3.5vw, 36px); font-weight: 800; letter-spacing: -.01em; }
+.review-network { display: grid; gap: 10px; flex: 1 1 100%; padding: 8px 0 28px; border-bottom: 2px solid var(--line); }
+.review-network-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; padding-bottom: 6px; }
+.review-network-head h3 { margin: 0; font-size: 22px; font-weight: 700; }
+.review-network-account { font-size: 16px; font-weight: 600; color: var(--muted); }
 .review-network:last-child { border-bottom: 0; padding-bottom: 0; }
 .review-network .review-cadence { flex-wrap: wrap; }
 .review-format { font-size: 0.75rem; padding: 1px 6px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
