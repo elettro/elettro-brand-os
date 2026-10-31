@@ -115,7 +115,8 @@ export function holidayTimes(ymd, timeZone, now, draftIndex, destinations) {
 
 const assetCard = (a) => a && ({ id: a.id, filename: a.filename, kind: a.kind, sourcePath: a.sourcePath, title: a.title, durationMs: a.durationMs });
 const ASSET_COLS = `"id","filename","kind",COALESCE("sourcePath","sourceUrl") AS "sourcePath","title","durationMs"`;
-const READY = `"approvalStatus"='approved' AND "ingestStatus"='ready' AND "retiredAt" IS NULL`;
+// Pictures registered through the Claude/ChatGPT file-transfer tools stay "raw" (they do not advance the workflow); the publishers never look at ingestStatus, so an approved raw picture is fine here.
+const READY = `"approvalStatus"='approved' AND "ingestStatus" IN ('raw','needs_metadata','ready') AND "retiredAt" IS NULL`;
 
 async function readHolidays(client, brand, key) {
   const row = (await client.query('SELECT "settings"->\'holidays\'->$2 AS h FROM "Brand" WHERE "id"=$1', [brand.id, key])).rows[0];
