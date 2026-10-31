@@ -16,6 +16,8 @@ const STATUS: Record<PublishingFormat["status"], string> = {
 const FIRST = ["youtube", "gmb"];
 // Bluesky closes the list (Dean, 2026-10-29).
 const LAST = ["bluesky"];
+// Networks not offered on Review for now (X: not being pursued, so it is not listed in posts per day).
+const HIDDEN_NETWORKS = ["x"];
 const rank = (destination: string) => {
   const i = FIRST.indexOf(destination);
   if (i >= 0) return i;
@@ -101,7 +103,7 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
     }
     return [...new Map([...byLogin.values()].map((a) => [a.socialAccountId, a])).values()];
   }, [list.accounts]);
-  const slots = useMemo(() => [...(list.formats ?? [])].sort((a, b) => rank(a.destination) - rank(b.destination)).flatMap((format): Slot[] => {
+  const slots = useMemo(() => [...(list.formats ?? [])].filter((f) => !HIDDEN_NETWORKS.includes(f.destination)).sort((a, b) => rank(a.destination) - rank(b.destination)).flatMap((format): Slot[] => {
     const accounts = format.status === "integration" ? [] : connectedAccounts.filter((a) => a.destination === format.destination);
     if (!accounts.length) return [{ key: `${format.destination}:${format.placement}`, format, account: null }];
     return accounts.map((account) => ({ key: `${account.socialAccountId}:${format.placement}`, format, account }));
