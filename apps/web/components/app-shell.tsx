@@ -10,7 +10,8 @@ import { brandConfigs } from "@/lib/brand-config";
 
 // One frame for every logged-in page: header on top, grouped rail on the left.
 // Items without an href are planned pages, shown greyed as "soon".
-const NAV: Array<{ label: string; items: Array<{ label: string; href?: string }> }> = [
+type NavSection = { label: string; collapsible?: boolean; items: Array<{ label: string; href?: string }> };
+const NAV: NavSection[] = [
   { label: "Workspace", items: [
     { label: "Dashboard", href: "/" },
     { label: "Assets", href: "/assets" },
@@ -22,6 +23,10 @@ const NAV: Array<{ label: string; items: Array<{ label: string; href?: string }>
     { label: "Review", href: "/review" },
     { label: "Calendar", href: "/calendar" },
     { label: "Connections", href: "/connections" }
+  ] },
+  // A clickable dropdown, so the rail does not always list every holiday (owner only for now).
+  { label: "Holidays", collapsible: true, items: [
+    { label: "Halloween · Oct 31", href: "/holidays/halloween" }
   ] },
   { label: "Intelligence", items: [
     { label: "Analytics" }
@@ -38,7 +43,7 @@ const NAV: Array<{ label: string; items: Array<{ label: string; href?: string }>
 ];
 
 // The AR section: shown to the owner always, and to a client only when one of their brands has AR on.
-const AR_SECTION = { label: "AR", items: [
+const AR_SECTION: NavSection = { label: "AR", items: [
   { label: "Experiences", href: "/ar" },
   { label: "Actions" },
   { label: "Scan sets", href: "/ar/sets" },
@@ -55,7 +60,7 @@ const BRANDS = [{ id: "all", name: "All brands", timezone: "" }, ...brandConfigs
 // each follow-up that opens a page for clients flips it to "active" here.
 const CLIENT_NAV: Record<string, "active" | "soon" | "hidden"> = {
   "/": "active", "/ar": "active", "/ar/qr": "active", "/ar/sets": "active", "/review": "active", "/calendar": "active", "/assets": "active", "/content-pool": "active", "/connections": "active",
-  "/collections": "hidden", "/ai-gateway": "hidden", "/planner": "hidden"
+  "/collections": "hidden", "/holidays/halloween": "hidden", "/ai-gateway": "hidden", "/planner": "hidden"
 };
 
 // Who is signed in: owner sees everything; a client sees only the listed brands.
@@ -104,8 +109,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <nav className="sidebar" aria-label="Main">
           {(showAr ? [...NAV.slice(0, 2), AR_SECTION, ...NAV.slice(2)] : NAV).filter((section) => section.items.some((item) => itemState(item) !== "hidden")).map((section) => (
             <div className="nav-section" key={section.label}>
-              <div className="nav-label">{section.label}</div>
-              {section.items.filter((item) => itemState(item) !== "hidden").map((item) =>
+              {section.collapsible ? null : <div className="nav-label">{section.label}</div>}
+              {section.collapsible ? <details className="nav-drop" open={section.items.some((item) => item.href && isActive(item.href))}><summary className="nav-label">{section.label}</summary>{section.items.filter((item) => itemState(item) !== "hidden").map((item) => item.href ? (
+                <Suspense key={item.label} fallback={<Link href={item.href} className={`nav-item${isActive(item.href) ? " active" : ""}`}>{item.label}</Link>}>
+                  <NavLink href={item.href} className={`nav-item${isActive(item.href) ? " active" : ""}`}>{item.label}</NavLink>
+                </Suspense>
+              ) : null)}</details> : null}
+              {!section.collapsible && section.items.filter((item) => itemState(item) !== "hidden").map((item) =>
                 item.href && itemState(item) === "active" ? (
                   <Suspense key={item.label} fallback={<Link href={item.href} className={`nav-item${isActive(item.href) ? " active" : ""}`}>{item.label}</Link>}>
                     <NavLink href={item.href} className={`nav-item${isActive(item.href) ? " active" : ""}`}>

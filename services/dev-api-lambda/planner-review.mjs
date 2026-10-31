@@ -14,6 +14,7 @@
  *   calendar    one month of the brand's calendar: published posts (PublicationLedger) plus
  *              approved, paused and sending posts (calendar.mjs)
  *   replan-slot Calendar "Swap": a new clip and freshly written copy for one approved/paused post (calendar.mjs)
+ *   holiday-list, holiday-edit, holiday-skip, holiday-swap, holiday-approve  Holidays tab drafts (holidays.mjs)
  *   cadence     posts per week for one format (destination+placement) of a connected account
  *   slides      min/max images per carousel for one carousel format (within the network's limits)
  *   plan        start the week planner in the background (async self-invoke of plan-week)
@@ -23,6 +24,7 @@
  */
 import { queueCustomPost } from "./linkedin-custom.mjs";
 import { calendarMonth, replanSlot } from "./calendar.mjs";
+import { holidayList, holidayEdit, holidaySkip, holidaySwap, holidayApprove } from "./holidays.mjs";
 import { timingSafeEqual } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
@@ -391,6 +393,12 @@ export async function handlePlannerReview(event, body, connectDatabase, json, de
     // The Calendar page (calendar.mjs): one month, and Swap = a whole new post for one slot.
     calendar: (c, b) => calendarMonth(c, b, body, deps.now),
     "replan-slot": (c, b) => replanSlot(c, b, body, deps),
+    // Holidays (holidays.mjs): Halloween drafts per brand; approving puts them in the date's plan.
+    "holiday-list": (c, b) => holidayList(c, b, body, deps.now),
+    "holiday-edit": (c, b) => holidayEdit(c, b, body),
+    "holiday-skip": (c, b) => holidaySkip(c, b, body),
+    "holiday-swap": (c, b) => holidaySwap(c, b, body),
+    "holiday-approve": (c, b) => holidayApprove(c, b, body, deps.now),
     // A hand-written LinkedIn text, link or poll post (linkedin-custom.mjs).
     "queue-custom": (c, b) => queueCustomPost(c, b, body, deps.now),
     cadence: (c, b) => setCadence(c, b, body),
