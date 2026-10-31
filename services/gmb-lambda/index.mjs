@@ -9,8 +9,11 @@ import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
 // its one photo, and scoreBreakdown.gmb holds { pillar, topicType, cta, ... } (see postRequest below).
 // Every rule in GMB_ASSET_SPEC.md (Dropbox/Claude Skills MD) is a hard gate: a post that breaks one is
 // failed with the rule and the measured value, never pushed with a warning and never quietly fixed.
-// Supported: Update (STANDARD) and Offer. Event is deliberately not built (Dean 261026: shows for hire are
-// a service, not a dated event), and video posts, product posts and ALERT cannot be created through the API.
+// Supported: Update (STANDARD) only (Dean 261031). Offers are parked (the Offer code below is kept for when they
+// reopen) and Event waits for a real dated show; video posts, product posts and ALERT cannot be created through the API.
+// Rules Dean set 261031: captions carry no URL or domain; exactly one button per post; a Shopify item uses SHOP with the
+// product link, anything else LEARN_MORE with the brand site; the post is scheduled 9 AM-6 PM in the brand's time zone
+// (a late send is fine); photos may be 4:3, 3:2 or 16:9.
 // The refresh token for each profile was stored by /connections (elettro-brand-os-dev/gmb/<location number>).
 
 const secrets = new SecretsManagerClient({});
@@ -24,22 +27,30 @@ const BRANDS_ROOT = "/1---elettro-brand-os/brands/";
 // One post per tick keeps a backlog from bursting onto the profile.
 const POSTS_PER_TICK = 1;
 
-// GMB_ASSET_SPEC.md section 3 and 9 limits.
-export const SUMMARY_MAX = 1500;
+// GMB_ASSET_SPEC.md section 3 and 9 limits. Google allows 1,500; Dean capped captions at 1,350 (261026).
+export const SUMMARY_MAX = 1350;
+// Only Updates for now (Dean 261031). postRequest takes { topicTypes } so the Offer path stays testable.
+export const ALLOWED_TOPIC_TYPES = ["STANDARD"];
 export const TITLE_MAX = 58;
 export const PHOTO_MIN_BYTES = 10 * 1024;
 export const PHOTO_MAX_BYTES = 5 * 1024 * 1024;
-// Google's floor is 400x300; the spec's strict mode makes the recommended 1200x900 (4:3) the gate.
+// Google's floor is 400x300 and it crops to about 4:3. Strict mode: 4:3, 3:2 or 16:9, at least 1200x800 (Dean 261031).
 export const PHOTO_MIN_WIDTH = 1200;
-export const PHOTO_MIN_HEIGHT = 900;
+export const PHOTO_MIN_HEIGHT = 800;
 export const PHOTO_RATIO_TOLERANCE = 0.02;
+export const PHOTO_RATIOS = [[4, 3, "4:3"], [3, 2, "3:2"], [16, 9, "16:9"]];
+// Posting window (Dean 261031): 9:00 AM to 6:00 PM on the brand's own clock, every day of the week.
+export const WINDOW_START_MINUTE = 9 * 60;
+export const WINDOW_END_MINUTE = 18 * 60;
+const GERMAN_BRANDS = ["solarmeister", "neckermann-strom"];
+export const brandTimeZone = (slug) => (GERMAN_BRANDS.includes(String(slug || "").toLowerCase()) ? "Europe/Berlin" : "America/New_York");
 export const MAX_EMOJIS = 2;
 export const LOCATION_ID = /^accounts\/\d{5,30}\/locations\/(\d{5,30})$/;
 export const PILLARS = {
   A: { business: true, cta: ["BOOK"] },
   B: { business: true, cta: ["LEARN_MORE", "SIGN_UP"] },
   C: { business: true, cta: ["LEARN_MORE"] },
-  F: { business: false, cta: ["LEARN_MORE"] }
+  F: { business: false, cta: ["LEARN_MORE", "SHOP"] }
 };
 const CTA_TYPES = ["BOOK", "ORDER", "SHOP", "LEARN_MORE", "SIGN_UP", "CALL"];
 const SHORTENERS = ["bit.ly", "t.co", "tinyurl.com", "goo.gl", "ow.ly", "buff.ly", "is.gd", "rebrand.ly", "lnkd.in", "youtu.be", "cutt.ly", "t.ly", "shorturl.at"];
@@ -53,6 +64,22 @@ class Blocked extends Error {
 
 // A phone number in the text gets the post rejected: 10+ digits in one run, or a 555-1234 style local number.
 export const hasPhoneNumber = (text) => /(?:\+?\d[\s().-]?){10,}/.test(text) || /\b\d{3}[-.\s]\d{4}\b/.test(text);
+
+// Captions carry no link or domain (Dean 261031): the button holds the link. The brand name "Reggae.Land" is the one
+// written-out exception, since it is the brand's name.
+const SCHEME_URL = /https?:\/\/\S+|\bwww\.\S+/i;
+const BARE_DOMAIN = /\b[a-z0-9-]{2,}(?:\.[a-z0-9-]+)*\.(?:com|net|org|ai|io|de|co|us|tv|fm|app|shop|radio|info|biz|me|ly|gg|xyz|online|site|store|link|page|dev|eu)\b/i;
+export const findUrl = (text) => {
+  const plain = String(text).replace(/Reggae\.Land/g, "Reggae Land");
+  return (plain.match(SCHEME_URL) || plain.match(BARE_DOMAIN) || [null])[0];
+};
+export const hasUrl = (text) => findUrl(text) !== null;
+
+// The post's scheduled time in the brand's time zone, as minutes since midnight.
+export function localMinutes(date, timeZone) {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone, hourCycle: "h23", hour: "2-digit", minute: "2-digit" }).formatToParts(date).map((x) => [x.type, x.value]));
+  return Number(parts.hour) * 60 + Number(parts.minute);
+}
 
 function checkLink(url, what) {
   let parsed;
@@ -79,19 +106,21 @@ export function mixAllows(pillar, counts) {
 }
 
 // Validates a claimed post against the spec, or throws with the rule and the measured value.
-export function postRequest(post, now = new Date()) {
+export function postRequest(post, now = new Date(), { topicTypes = ALLOWED_TOPIC_TYPES } = {}) {
   const locationId = String(post.channelId || "");
   if (!LOCATION_ID.test(locationId)) throw new Blocked("the post has no Google Business Profile location id", locationId || "empty");
   const gmb = post.gmb;
   if (!gmb || typeof gmb !== "object") throw new Blocked("the post has no GBP details (pillar, post type, button)");
   const topicType = String(gmb.topicType || "STANDARD");
-  if (!["STANDARD", "OFFER"].includes(topicType)) throw new Blocked("only Update (STANDARD) and Offer posts are supported", topicType);
+  if (!topicTypes.includes(topicType)) throw new Blocked("only Update (STANDARD) posts are supported for now", topicType);
   const pillar = String(gmb.pillar || "");
   if (!PILLARS[pillar]) throw new Blocked("every post needs exactly one pillar tag (A, B, C or F)", pillar || "none");
 
   const summary = String(post.caption || "").trim();
   if (!summary) throw new Blocked("the post has no text");
   if (summary.length > SUMMARY_MAX) throw new Blocked(`summary is over ${SUMMARY_MAX} characters`, summary.length);
+  const found = findUrl(summary);
+  if (found) throw new Blocked("no URLs or domains in the text; the button holds the link", found);
   if (hasPhoneNumber(summary)) throw new Blocked("no phone numbers in the text; use the CALL button");
   const shouting = summary.match(/\b[A-Z]{4,}\b/);
   if (shouting) throw new Blocked("no ALL CAPS words", shouting[0]);
@@ -100,10 +129,20 @@ export function postRequest(post, now = new Date()) {
   const gimmick = summary.match(/([!?*~#$%^&=+<>|])\1{1,}|[★☆✦✧❤♥→←]{2,}/u);
   if (gimmick) throw new Blocked("no gimmicky characters", gimmick[0]);
 
+  if (Array.isArray(gmb.cta) || gmb.ctas || gmb.buttons) throw new Blocked("a post takes exactly one button");
   const actionType = String(gmb.cta?.actionType || "");
   if (!CTA_TYPES.includes(actionType)) throw new Blocked("the post needs a button (BOOK, ORDER, SHOP, LEARN_MORE, SIGN_UP or CALL)", actionType || "none");
   if (!PILLARS[pillar].cta.includes(actionType)) throw new Blocked(`pillar ${pillar} must use ${PILLARS[pillar].cta.join(" or ")}`, actionType);
   const callToAction = actionType === "CALL" ? { actionType } : { actionType, url: checkLink(gmb.cta?.url, "the button link") };
+  // A Shopify item uses SHOP with the product's own link; anything else uses LEARN_MORE and the brand site (Dean 261031).
+  const isProductLink = actionType !== "CALL" && /^\/products\//.test(new URL(callToAction.url).pathname);
+  if (actionType === "SHOP" && !isProductLink) throw new Blocked("SHOP must link to a Shopify product (/products/...)", callToAction.url);
+  if (isProductLink && actionType !== "SHOP") throw new Blocked("a Shopify product link must use the SHOP button", actionType);
+
+  if (!post.scheduledFor || Number.isNaN(new Date(post.scheduledFor).getTime())) throw new Blocked("the post has no scheduled time");
+  const zone = brandTimeZone(post.brand);
+  const minute = localMinutes(new Date(post.scheduledFor), zone);
+  if (minute < WINDOW_START_MINUTE || minute > WINDOW_END_MINUTE) throw new Blocked(`the post must be scheduled between 9:00 AM and 6:00 PM ${zone}`, `${String(Math.floor(minute / 60)).padStart(2, "0")}:${String(minute % 60).padStart(2, "0")}`);
 
   const dropboxPath = String(post.dropboxPath || "").replace(/\\/g, "/");
   if (!dropboxPath.toLowerCase().startsWith(BRANDS_ROOT) || dropboxPath.split("/").some((p) => p === ".." || p === ".")) {
@@ -115,7 +154,9 @@ export function postRequest(post, now = new Date()) {
   if (!(bytes >= PHOTO_MIN_BYTES && bytes <= PHOTO_MAX_BYTES)) throw new Blocked("the photo must be 10 KB to 5 MB", Number.isFinite(bytes) ? `${bytes} bytes` : "unknown size");
   const width = Number(post.assetWidth), height = Number(post.assetHeight);
   if (!(width >= PHOTO_MIN_WIDTH && height >= PHOTO_MIN_HEIGHT)) throw new Blocked(`the photo must be at least ${PHOTO_MIN_WIDTH}x${PHOTO_MIN_HEIGHT}`, `${width || "?"}x${height || "?"}`);
-  if (Math.abs(width / height - 4 / 3) > (4 / 3) * PHOTO_RATIO_TOLERANCE) throw new Blocked("the photo must be 4:3", `${width}x${height}`);
+  if (!PHOTO_RATIOS.some(([w, h]) => Math.abs(width / height - w / h) <= (w / h) * PHOTO_RATIO_TOLERANCE)) {
+    throw new Blocked(`the photo must be ${PHOTO_RATIOS.map((r) => r[2]).join(", ")}`, `${width}x${height}`);
+  }
 
   const body = { languageCode: /^[a-z]{2}(-[A-Z]{2})?$/.test(String(gmb.languageCode || "")) ? gmb.languageCode : "en-US", topicType, summary, callToAction };
   if (topicType === "OFFER") {

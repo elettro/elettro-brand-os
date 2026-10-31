@@ -1,16 +1,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { hasPhoneNumber, mixAllows, postRequest, accessToken, checkMix, publish, publishingTick, handler } from "../services/gmb-lambda/index.mjs";
+import { hasUrl, brandTimeZone, localMinutes, hasPhoneNumber, mixAllows, postRequest, accessToken, checkMix, publish, publishingTick, handler } from "../services/gmb-lambda/index.mjs";
 
 const LOCATION = "accounts/1234567890/locations/9876543210";
 const ROOT = "/1---elettro-brand-os/brands/stashbox/";
 const NOW = new Date("2026-10-26T12:00:00Z");
 const post = (over = {}, gmb = {}) => ({
-  id: "p1", placement: "update", caption: "Book Stashbox for your next corporate event, resort night or private party.",
+  id: "p1", placement: "update", brand: "stashbox", scheduledFor: "2026-10-26T15:00:00Z", caption: "Book Stashbox for your next corporate event, resort night or private party.",
   channelId: LOCATION, dropboxPath: ROOT + "gig.jpg", assetMime: "image/jpeg", assetBytes: "800000", assetWidth: 1200, assetHeight: 900,
   gmb: { pillar: "A", topicType: "STANDARD", cta: { actionType: "BOOK", url: "https://elettro.com/book" }, ...gmb }, ...over
 });
-const blocked = (p, pattern) => assert.throws(() => postRequest(p, NOW), pattern);
+const blocked = (p, pattern, options) => assert.throws(() => postRequest(p, NOW, options), pattern);
+const OFFERS = { topicTypes: ["STANDARD", "OFFER"] };
 
 test("a good Update post becomes the localPosts body the spec shows", () => {
   const r = postRequest(post(), NOW);
@@ -23,20 +24,21 @@ test("a good Update post becomes the localPosts body the spec shows", () => {
   });
 });
 
-test("an Offer needs a title, dates and a link that is not shortened", () => {
+test("Offers are parked, but the Offer path still validates a title, dates and a link that is not shortened", () => {
+  blocked(post({}, { topicType: "OFFER" }), /only Update.*OFFER/);
   const offer = { topicType: "OFFER", title: "Spring dates", start: "2026-11-01", end: "2026-12-15", offer: { couponCode: "SPRING", redeemOnlineUrl: "https://elettro.com/offer", termsConditions: "New bookings only." } };
-  const r = postRequest(post({}, offer), NOW);
+  const r = postRequest(post({}, offer), NOW, OFFERS);
   assert.equal(r.body.event.title, "Spring dates");
   assert.deepEqual(r.body.event.schedule.startDate, { year: 2026, month: 11, day: 1 });
   assert.deepEqual(r.body.event.schedule.endTime, { hours: 23, minutes: 59 });
   assert.deepEqual(r.body.offer, { couponCode: "SPRING", redeemOnlineUrl: "https://elettro.com/offer", termsConditions: "New bookings only." });
-  blocked(post({}, { ...offer, title: "" }), /needs a title/);
-  blocked(post({}, { ...offer, title: "x".repeat(59) }), /over 58.*59/);
-  blocked(post({}, { ...offer, start: "11/01/2026" }), /YYYY-MM-DD/);
-  blocked(post({}, { ...offer, start: "2026-02-30" }), /YYYY-MM-DD/);
-  blocked(post({}, { ...offer, end: "2026-10-31" }), /on or after/);
-  blocked(post({}, { ...offer, start: "2026-09-01", end: "2026-10-01" }), /already ended/);
-  blocked(post({}, { ...offer, offer: { redeemOnlineUrl: "https://bit.ly/x" } }), /shortened.*bit\.ly/);
+  blocked(post({}, { ...offer, title: "" }), /needs a title/, OFFERS);
+  blocked(post({}, { ...offer, title: "x".repeat(59) }), /over 58.*59/, OFFERS);
+  blocked(post({}, { ...offer, start: "11/01/2026" }), /YYYY-MM-DD/, OFFERS);
+  blocked(post({}, { ...offer, start: "2026-02-30" }), /YYYY-MM-DD/, OFFERS);
+  blocked(post({}, { ...offer, end: "2026-10-31" }), /on or after/, OFFERS);
+  blocked(post({}, { ...offer, start: "2026-09-01", end: "2026-10-01" }), /already ended/, OFFERS);
+  blocked(post({}, { ...offer, offer: { redeemOnlineUrl: "https://bit.ly/x" } }), /shortened.*bit\.ly/, OFFERS);
 });
 
 test("Event, video and unknown post types are not built", () => {
@@ -51,6 +53,7 @@ test("every post needs one pillar and that pillar's button", () => {
   blocked(post({}, { cta: { actionType: "LEARN_MORE", url: "https://elettro.com" } }), /pillar A must use BOOK/);
   assert.ok(postRequest(post({}, { pillar: "B", cta: { actionType: "SIGN_UP", url: "https://elettro.com/demo" } }), NOW));
   blocked(post({}, { pillar: "C", cta: { actionType: "BOOK", url: "https://elettro.com" } }), /pillar C must use LEARN_MORE/);
+  assert.ok(postRequest(post({}, { pillar: "F", cta: { actionType: "SHOP", url: "https://stashbox.ai/products/tee" } }), NOW));
   blocked(post({}, { pillar: "A", cta: { actionType: "WATCH", url: "https://elettro.com" } }), /needs a button/);
 });
 
@@ -62,10 +65,10 @@ test("the button link must be https, a real URL and not shortened", () => {
   blocked(post({}, { cta: { actionType: "BOOK", url: "https://www.bit.ly/abc" } }), /shortened/);
 });
 
-test("the text: 1,500 characters, no phone numbers, no shouting, few emojis, no gimmicks", () => {
+test("the text: 1,350 characters, no phone numbers, no shouting, few emojis, no gimmicks", () => {
   blocked(post({ caption: "  " }), /no text/);
-  blocked(post({ caption: "x ".repeat(751) }), /over 1500.*1501/);
-  assert.ok(postRequest(post({ caption: "y".repeat(1500) }), NOW));
+  blocked(post({ caption: "y".repeat(1351) }), /over 1350.*1351/);
+  assert.ok(postRequest(post({ caption: "y".repeat(1350) }), NOW));
   blocked(post({ caption: "Call us at (954) 555-1234 today" }), /phone/);
   blocked(post({ caption: "Call 954.555.1234" }), /phone/);
   blocked(post({ caption: "Ring 555-1234" }), /phone/);
@@ -77,19 +80,60 @@ test("the text: 1,500 characters, no phone numbers, no shouting, few emojis, no 
   blocked(post({ caption: "Book now!!! Amazing" }), /gimmicky.*!!!/);
 });
 
-test("the photo: JPG or PNG, 10 KB to 5 MB, at least 1200x900 and 4:3, inside the brand folder", () => {
+test("the photo: JPG or PNG, 10 KB to 5 MB, at least 1200x800 and 4:3, 3:2 or 16:9, inside the brand folder", () => {
   assert.ok(postRequest(post({ assetMime: "image/png", assetWidth: 1600, assetHeight: 1200 }), NOW));
   blocked(post({ assetMime: "image/gif" }), /JPG or PNG.*image\/gif/);
   blocked(post({ assetMime: null }), /JPG or PNG.*unknown/);
   blocked(post({ assetBytes: "9000" }), /10 KB to 5 MB.*9000/);
   blocked(post({ assetBytes: String(6 * 1024 * 1024) }), /10 KB to 5 MB/);
   blocked(post({ assetBytes: null }), /10 KB to 5 MB/);
-  blocked(post({ assetWidth: 800, assetHeight: 600 }), /at least 1200x900.*800x600/);
-  blocked(post({ assetWidth: 1920, assetHeight: 1080 }), /4:3.*1920x1080/);
-  blocked(post({ assetWidth: null, assetHeight: null }), /at least 1200x900/);
+  blocked(post({ assetWidth: 800, assetHeight: 600 }), /at least 1200x800.*800x600/);
+  assert.ok(postRequest(post({ assetWidth: 1920, assetHeight: 1080 }), NOW));
+  assert.ok(postRequest(post({ assetWidth: 1800, assetHeight: 1200 }), NOW));
+  blocked(post({ assetWidth: 1600, assetHeight: 1600 }), /4:3, 3:2, 16:9.*1600x1600/);
+  blocked(post({ assetWidth: 1200, assetHeight: 2000 }), /4:3, 3:2, 16:9/);
+  blocked(post({ assetWidth: null, assetHeight: null }), /at least 1200x800/);
   blocked(post({ dropboxPath: "/other/gig.jpg" }), /inside/);
   blocked(post({ dropboxPath: ROOT + "../x.jpg" }), /inside/);
   blocked(post({ channelId: "12345" }), /location id/);
+});
+
+test("no URLs or domains in the text; Reggae.Land is the one name that may be written out", () => {
+  for (const text of ["Shop at stashbox.ai today", "Visit https://stashbox.com/radio", "See www.elettro.com", "Hear it on stashbox.com/radio"]) {
+    assert.equal(hasUrl(text), true, text);
+    blocked(post({ caption: text }), /no URLs or domains/);
+  }
+  for (const text of ["Stashbox Shop is open", "Stashbox Radio plays all day", "Reggae.Land plays live for resorts", "A DJ, e.g. for a gala. Next week"]) assert.equal(hasUrl(text), false, text);
+  assert.ok(postRequest(post({ caption: "Reggae.Land plays live reggae for your resort" }), NOW));
+});
+
+test("a post takes exactly one button; SHOP goes with a Shopify product link and nothing else does", () => {
+  blocked(post({}, { cta: [{ actionType: "BOOK", url: "https://stashbox.com/booking" }] }), /exactly one button/);
+  blocked(post({}, { buttons: [] }), /exactly one button/);
+  blocked(post({}, { cta: undefined }), /needs a button/);
+  assert.ok(postRequest(post({}, { pillar: "F", cta: { actionType: "SHOP", url: "https://stashbox.ai/products/tee" } }), NOW));
+  blocked(post({}, { pillar: "F", cta: { actionType: "SHOP", url: "https://stashbox.ai/" } }), /SHOP must link to a Shopify product/);
+  blocked(post({}, { pillar: "F", cta: { actionType: "LEARN_MORE", url: "https://stashbox.ai/products/tee" } }), /must use the SHOP button/);
+  assert.ok(postRequest(post({}, { pillar: "F", cta: { actionType: "LEARN_MORE", url: "https://stashbox.com/radio/?song=house-on-the-hill-stashbox" } }), NOW));
+});
+
+test("posts are scheduled 9 AM to 6 PM on the brand's clock, any day; a late send is not checked", () => {
+  assert.equal(brandTimeZone("stashbox"), "America/New_York");
+  assert.equal(brandTimeZone("reggaeland"), "America/New_York");
+  assert.equal(brandTimeZone("solarmeister"), "Europe/Berlin");
+  assert.equal(brandTimeZone("neckermann-strom"), "Europe/Berlin");
+  assert.equal(localMinutes(new Date("2026-10-26T13:00:00Z"), "America/New_York"), 9 * 60); // EDT
+  assert.equal(localMinutes(new Date("2026-12-14T14:00:00Z"), "America/New_York"), 9 * 60); // EST
+  assert.equal(localMinutes(new Date("2026-10-26T08:00:00Z"), "Europe/Berlin"), 9 * 60); // CET after the clocks change
+  assert.ok(postRequest(post({ scheduledFor: "2026-10-26T13:00:00Z" }), NOW));
+  assert.ok(postRequest(post({ scheduledFor: "2026-10-26T22:00:00Z" }), NOW));
+  assert.ok(postRequest(post({ scheduledFor: "2026-10-31T16:00:00Z" }), NOW)); // a Saturday
+  assert.ok(postRequest(post({ scheduledFor: "2026-12-13T15:00:00Z" }), NOW)); // a Sunday
+  blocked(post({ scheduledFor: "2026-10-26T12:59:00Z" }), /9:00 AM and 6:00 PM America\/New_York.*08:59/);
+  blocked(post({ scheduledFor: "2026-10-26T22:01:00Z" }), /6:00 PM.*18:01/);
+  blocked(post({ scheduledFor: null }), /no scheduled time/);
+  assert.ok(postRequest(post({ brand: "solarmeister", scheduledFor: "2026-10-26T08:00:00Z" }), NOW)); // 09:00 CET
+  blocked(post({ brand: "solarmeister", scheduledFor: "2026-10-26T06:00:00Z" }), /Europe\/Berlin.*07:00/);
 });
 
 test("phone detection ignores years and prices", () => {
