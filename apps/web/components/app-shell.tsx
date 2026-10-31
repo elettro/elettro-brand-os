@@ -20,7 +20,7 @@ const NAV: Array<{ label: string; items: Array<{ label: string; href?: string }>
   ] },
   { label: "Publishing", items: [
     { label: "Review", href: "/review" },
-    { label: "Calendar" },
+    { label: "Calendar", href: "/calendar" },
     { label: "Connections", href: "/connections" }
   ] },
   { label: "Intelligence", items: [
@@ -54,7 +54,7 @@ const BRANDS = [{ id: "all", name: "All brands", timezone: "" }, ...brandConfigs
 // What a user who is not the owner (a client) sees in the rail. Pages not listed show greyed as "soon";
 // each follow-up that opens a page for clients flips it to "active" here.
 const CLIENT_NAV: Record<string, "active" | "soon" | "hidden"> = {
-  "/": "active", "/ar": "active", "/ar/qr": "active", "/ar/sets": "active", "/review": "active", "/assets": "active", "/content-pool": "active", "/connections": "active",
+  "/": "active", "/ar": "active", "/ar/qr": "active", "/ar/sets": "active", "/review": "active", "/calendar": "active", "/assets": "active", "/content-pool": "active", "/connections": "active",
   "/collections": "hidden", "/ai-gateway": "hidden", "/planner": "hidden"
 };
 

@@ -35,6 +35,19 @@ export type ReviewList = {
   slideRanges?: Record<string, { min: number; max: number } | null>;
 };
 
+// The Calendar page (one brand, one month): published posts from the ledger plus approved, paused and sending posts.
+export type CalendarPost = {
+  id: string; postId: string | null; kind: "scheduled" | "published";
+  status: "approved" | "paused" | "queued" | "publishing" | "processing" | "published";
+  destination: string; accountName: string; placement: string; at: string;
+  title: string | null; caption: string | null; hashtags: string[]; asset: ReviewAsset; externalUrl: string | null;
+  carousel: boolean; custom: ReviewCustom | null; tiktok: TiktokSettings | null;
+  passedOver: boolean; editable: boolean;
+  // Per-post stats arrive with the stats phase; null until then.
+  stats: Record<string, number> | null;
+};
+export type CalendarMonth = { ok: boolean; error?: string; brand: string; timeZone: string; month: string; start: string; end: string; today: string; posts: CalendarPost[] };
+
 // Server-side only: forwards one review action to the dev API with the shared connect key.
 export async function reviewCall<T = { ok: boolean; error?: string }>(body: Record<string, unknown>): Promise<{ status: number; data: T }> {
   const key = await serverSetting("CONNECTIONS_API_SHARED_SECRET");

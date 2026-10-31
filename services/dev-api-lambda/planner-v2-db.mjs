@@ -164,7 +164,7 @@ export async function runPlanWeek(event, connectDatabase, json, { modelId = proc
        UNION ALL
        SELECT sp."socialAccountId", sp."assetId", sp."scheduledFor" AS "at", a."tags", a."contentGroup", a."shopifyProductId", a."filename"
        FROM "ScheduledPost" sp JOIN "Asset" a ON a."id" = sp."assetId"
-       WHERE sp."brandId" = $1 AND sp."status" IN ('planned','approved','queued','publishing','processing')
+       WHERE sp."brandId" = $1 AND sp."status" IN ('planned','approved','paused','queued','publishing','processing')
          AND sp."scheduledFor" >= $2::timestamp - INTERVAL '90 days' AND sp."scheduledFor" < $3::timestamp + INTERVAL '90 days'
          AND NOT ($4::boolean AND sp."status" = 'planned' AND sp."scheduledFor" >= $5 AND sp."scheduledFor" < $3)`,
       [brand.id, from, to, replacePlanned, notBefore])).rows;
@@ -212,7 +212,8 @@ export async function runPlanWeek(event, connectDatabase, json, { modelId = proc
     const existing = (await client.query(
       `SELECT "socialAccountId","placement","scheduledFor" FROM "ScheduledPost"
        WHERE "brandId" = $1 AND "scheduledFor" >= $2 AND "scheduledFor" < $3
-         AND "status" IN ('planned','approved','queued','publishing','processing','published')
+         -- paused and removed (Calendar) keep their slot: the planner must not put a new post there.
+         AND "status" IN ('planned','approved','paused','removed','queued','publishing','processing','published')
          AND NOT ($4::boolean AND "status" = 'planned' AND "scheduledFor" >= $5)`, [brand.id, from, to, replacePlanned, notBefore])).rows;
     const occupied = (slot) => existing.some((e) => e.socialAccountId === slot.socialAccountId &&
       Math.abs(new Date(e.scheduledFor).getTime() - new Date(slot.scheduledFor).getTime()) < 30 * 60000);

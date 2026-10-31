@@ -11,6 +11,9 @@
  *              (who can view, comments/duet/stitch, content disclosure); TikTok posts can't be
  *              approved any other way
  *   swap        replace a post's clip with another approved clip of the brand
+ *   calendar    one month of the brand's calendar: published posts (PublicationLedger) plus
+ *              approved, paused and sending posts (calendar.mjs)
+ *   replan-slot Calendar "Swap": a new clip and freshly written copy for one approved/paused post (calendar.mjs)
  *   cadence     posts per week for one format (destination+placement) of a connected account
  *   slides      min/max images per carousel for one carousel format (within the network's limits)
  *   plan        start the week planner in the background (async self-invoke of plan-week)
@@ -19,6 +22,7 @@
  * Planning runs async because curator + captions can outlast API Gateway's 30 s limit.
  */
 import { queueCustomPost } from "./linkedin-custom.mjs";
+import { calendarMonth, replanSlot } from "./calendar.mjs";
 import { timingSafeEqual } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
@@ -32,7 +36,9 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // Every network with a publishing format (publishing-formats.mjs); unconnected ones simply have no posts.
 export const REVIEW_DESTINATIONS = FORMAT_DESTINATIONS;
 // Statuses a reviewer may move between; queued and later belong to the publisher.
-const REVIEWABLE = ["planned", "approved", "skipped"];
+// paused (Calendar "Pause"): stays on the calendar but is passed over when its time comes; the publisher only takes approved.
+// removed (Calendar "Remove"): hidden from the calendar and never sent; its slot stays taken so the planner doesn't refill it.
+export const REVIEWABLE = ["planned", "approved", "skipped", "paused", "removed"];
 // TikTok's Content Posting API privacy levels; the creator picks one per post, there is no default.
 export const TIKTOK_PRIVACY = ["PUBLIC_TO_EVERYONE", "MUTUAL_FOLLOW_FRIENDS", "FOLLOWER_OF_CREATOR", "SELF_ONLY"];
 // A TikTok post may only be approved once its TikTok settings are stored (tiktok-approve).
@@ -126,7 +132,7 @@ async function listPosts(client, brand, body) {
 async function setStatus(client, brand, body) {
   const ids = (Array.isArray(body.ids) ? body.ids : []).filter((id) => UUID.test(String(id)));
   const status = String(body.status || "");
-  if (!ids.length || !REVIEWABLE.includes(status)) return { code: 400, body: { ok: false, error: "ids and status (planned, approved or skipped) are required" } };
+  if (!ids.length || !REVIEWABLE.includes(status)) return { code: 400, body: { ok: false, error: `ids and status (${REVIEWABLE.join(", ")}) are required` } };
   const r = await client.query(
     `UPDATE "ScheduledPost" sp SET "status"=$3, "updatedAt"=CURRENT_TIMESTAMP
      WHERE sp."brandId"=$1 AND sp."id" = ANY($2::uuid[]) AND sp."status" = ANY($4)
@@ -166,7 +172,7 @@ async function approveRange(client, brand, body) {
 // Back to "Plan this week": deletes the week's posts that haven't gone out yet (including ones whose slot already
 // passed earlier in the week, approved or not) and forgets the week's approval,
 // so a fresh plan arrives unapproved. Published, queued and in-flight posts are never touched.
-const RESETTABLE = ["planned", "approved", "skipped", "failed"];
+const RESETTABLE = ["planned", "approved", "skipped", "failed", "paused", "removed"];
 async function resetWeek(client, brand, body, now = new Date()) {
   if (!YMD.test(String(body.from || "")) || !YMD.test(String(body.to || ""))) return { code: 400, body: { ok: false, error: "from and to (YYYY-MM-DD) are required" } };
   const tz = brand.timezone || "America/New_York";
@@ -382,6 +388,9 @@ export async function handlePlannerReview(event, body, connectDatabase, json, de
     "tiktok-approve": (c, b) => tiktokApprove(c, b, body),
     swap: (c, b) => swapAsset(c, b, body),
     reschedule: (c, b) => reschedulePost(c, b, body),
+    // The Calendar page (calendar.mjs): one month, and Swap = a whole new post for one slot.
+    calendar: (c, b) => calendarMonth(c, b, body, deps.now),
+    "replan-slot": (c, b) => replanSlot(c, b, body, deps),
     // A hand-written LinkedIn text, link or poll post (linkedin-custom.mjs).
     "queue-custom": (c, b) => queueCustomPost(c, b, body, deps.now),
     cadence: (c, b) => setCadence(c, b, body),
