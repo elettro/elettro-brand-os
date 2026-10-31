@@ -1,0 +1,41 @@
+name: Build Mastodon Lambda
+
+on:
+  push:
+    branches:
+      - develop
+    paths:
+      - "services/mastodon-lambda/**"
+      - ".github/workflows/build-mastodon-lambda.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/mastodon-lambda
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Check syntax
+        run: node --check index.mjs
+
+      - name: Install production dependencies
+        run: npm install --omit=dev --workspaces=false
+
+      - name: Package Lambda
+        run: zip -qr elettro-brand-os-dev-mastodon.zip index.mjs package.json node_modules
+
+      - name: Upload Lambda package
+        uses: actions/upload-artifact@v4
+        with:
+          name: elettro-brand-os-dev-mastodon
+          path: services/mastodon-lambda/elettro-brand-os-dev-mastodon.zip
+          if-no-files-found: error

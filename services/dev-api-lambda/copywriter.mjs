@@ -17,10 +17,12 @@ const LIMITS = {
   threads: { caption: 500, hashtags: 1 },
   // Bluesky: 300 characters (graphemes); links and #tags become clickable facets.
   bluesky: { caption: 300, hashtags: 1, links: 1 },
+  // Mastodon: 500 characters (every link counts as 23); #tags and links are clickable. Scheduled posts never @mention accounts.
+  mastodon: { caption: 500, hashtags: 3 },
   // Pinterest: searchable title + keyword description; hashtags do little there. The Pin itself links out.
   pinterest: { title: 100, caption: 800, hashtags: 0 }
 };
-const CLICKABLE = new Set(["youtube", "facebook", "x", "linkedin", "threads", "bluesky"]);
+const CLICKABLE = new Set(["youtube", "facebook", "x", "linkedin", "threads", "bluesky", "mastodon"]);
 const BANNED = [/\belevate\b/i, /\bunleash/i, /\bunlock/i, /\bdive into\b/i, /game[- ]changer/i, /experience the magic/i, /it'?s not just .+, it'?s/i];
 const SHOWS = { "stashbox-does-dylan": "Stashbox Does Dylan", "stashbox-does-sublime": "Stashbox Does Sublime & Reggae" };
 const ROLE_WORDS = { vocals: "vocals", guitar: "guitar", bass: "bass", drums: "drums", keyboards: "keys", keys: "keys" };
@@ -257,6 +259,9 @@ const graphemes = (text) => [...new Intl.Segmenter("en", { granularity: "graphem
 // A handle-shaped @name would notify that account; scheduled Bluesky posts must not (automated notifications count as spam).
 const MENTION = /(^|[\s(])@[a-z0-9][a-z0-9-]*(\.[a-z0-9][a-z0-9-]*)+/i;
 
+// Mastodon mentions are @name or @name@instance.
+const MASTODON_MENTION = /(^|[s(])@[a-z0-9_]+(@[a-z0-9.-]+.[a-z]{2,})?/i;
+
 /** Code-side checks on any copy (AI or template). Returns a list of problems. */
 export function validateCopy(copy, f) {
   const problems = [];
@@ -278,6 +283,7 @@ export function validateCopy(copy, f) {
     if ((text.match(/https?:\/\/\S+/g) || []).length > (limits.links ?? 1)) problems.push("more than one link in a Bluesky post");
     if (MENTION.test(text)) problems.push("@mention in a scheduled Bluesky post (notifications from automation count as spam)");
   }
+  if (f.destination === "mastodon" && MASTODON_MENTION.test(text)) problems.push("@mention in a scheduled Mastodon post (notifications from automation count as spam)");
   if (copy.title && limits.title && copy.title.length > limits.title) problems.push("title too long");
   if (copy.description && limits.description && copy.description.length > limits.description) problems.push("description too long");
   if ((copy.hashtags || []).length > (limits.hashtags ?? 5)) problems.push("too many hashtags");
