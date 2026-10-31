@@ -105,7 +105,7 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
     return [...new Map([...byLogin.values()].map((a) => [a.socialAccountId, a])).values()];
   }, [list.accounts]);
   const slots = useMemo(() => [...(list.formats ?? [])].filter((f) => !HIDDEN_NETWORKS.includes(f.destination)).sort((a, b) => rank(a.destination) - rank(b.destination)).flatMap((format): Slot[] => {
-    const accounts = format.status === "integration" ? [] : connectedAccounts.filter((a) => a.destination === format.destination);
+    const accounts = format.status === "integration" && !format.savesCadence ? [] : connectedAccounts.filter((a) => a.destination === format.destination);
     if (!accounts.length) return [{ key: `${format.destination}:${format.placement}`, format, account: null }];
     return accounts.map((account) => ({ key: `${account.socialAccountId}:${format.placement}`, format, account }));
   }), [list.formats, connectedAccounts]);
@@ -114,6 +114,8 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
     return rule?.postsPerWeek || 0;
   };
   const maxWeek = list.maxPostsPerWeek || 98;
+  // Planned formats, plus GMB, whose number is stored even though the planner does not build GMB posts yet.
+  const canEdit = (f: { status: string; savesCadence?: boolean }) => f.status !== "integration" || f.savesCadence === true;
   // Weeks fold so one can be read on its own; the current week starts open.
   const [open, setOpen] = useState(() => new Set([list.weekStart]));
   // Weeks whose published posts are shown; published posts are hidden by default so the posts still to act on lead.
@@ -181,7 +183,7 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
   // Saves only the boxes that changed, lowering ones first so a network never passes 14 a day mid-save.
   async function saveCadence() {
     const slidesToSave = [...new Map(slots.filter(slidesChanged).map((s) => [slideKey(s), s])).values()];
-    const changed = slots.filter((s) => s.account && s.format.status !== "integration" && weeklyOf(s) !== savedWeekly(s))
+    const changed = slots.filter((s) => s.account && canEdit(s.format) && weeklyOf(s) !== savedWeekly(s))
       .sort((a, b) => (weeklyOf(a) - savedWeekly(a)) - (weeklyOf(b) - savedWeekly(b)));
     if (!changed.length && !slidesToSave.length) { setNotice("Nothing changed."); return; }
     setBusy("cadence");
@@ -209,16 +211,17 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
 
   // One format's posts-per-day row (and, for carousels, its images-per-carousel min/max).
   const renderRow = (s: Slot) => {
-              const editable = Boolean(s.account) && s.format.status !== "integration";
+              const editable = Boolean(s.account) && canEdit(s.format);
+              const cap = s.format.maxPostsPerWeek || maxWeek;
               const wk = Boolean(perWeek[s.key]);
               const value = weeklyOf(s);
               return <label key={s.key} className="review-cadence" title={s.format.note || ""}>
                 {s.format.label} <span className={`review-format ${s.format.status}`}>{STATUS[s.format.status]}</span>
-                <input type="number" min={0} max={wk ? maxWeek : maxWeek / 7}
+                <input type="number" min={0} max={wk ? cap : cap / 7}
                   value={wk ? value : Math.round((value / 7) * 10) / 10} disabled={!editable}
                   onChange={(e) => {
                     const n = Math.max(0, Math.floor(Number(e.target.value) || 0));
-                    setWeekly({ ...weekly, [s.key]: Math.min(maxWeek, wk ? n : n * 7) });
+                    setWeekly({ ...weekly, [s.key]: Math.min(cap, wk ? n : n * 7) });
                   }} />
                 <button type="button" className="status-chip review-unit" disabled={!editable}
                   title={wk ? "Switch to posts per day" : "Switch to posts per week"}

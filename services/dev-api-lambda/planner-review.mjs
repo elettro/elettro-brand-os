@@ -30,7 +30,7 @@ import { readFileSync } from "node:fs";
 import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
 import { nextWeekStart, ymdInTimeZone, addDaysToYmd, localDateTimeToUtc } from "./planner-v2.mjs";
 import { searchLibrary, libraryAsset, recordPublication, recentPublications } from "./library-publications.mjs";
-import { PUBLISHING_FORMATS, FORMAT_DESTINATIONS, PLANNABLE_DESTINATIONS, MAX_POSTS_PER_WEEK, MAX_POSTS_PER_DAY, formatOf, isPlannable, slideRange } from "./publishing-formats.mjs";
+import { PUBLISHING_FORMATS, FORMAT_DESTINATIONS, PLANNABLE_DESTINATIONS, MAX_POSTS_PER_WEEK, MAX_POSTS_PER_DAY, formatOf, isPlannable, canSaveCadence, slideRange } from "./publishing-formats.mjs";
 
 const lambda = new LambdaClient({});
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
@@ -293,7 +293,10 @@ async function setCadence(client, brand, body) {
   if (!format || !(postsPerWeek >= 0 && postsPerWeek <= MAX_POSTS_PER_WEEK)) {
     return { code: 400, body: { ok: false, error: `destination, placement (a known format) and postsPerWeek (0-${MAX_POSTS_PER_WEEK}) are required` } };
   }
-  if (!isPlannable(format)) return { code: 409, body: { ok: false, error: `${format.label} on ${destination}: ${format.note}` } };
+  if (!canSaveCadence(format)) return { code: 409, body: { ok: false, error: `${format.label} on ${destination}: ${format.note}` } };
+  if (format.maxPostsPerWeek && postsPerWeek > format.maxPostsPerWeek) {
+    return { code: 400, body: { ok: false, error: `${format.label} on ${destination} takes at most ${format.maxPostsPerWeek} a week (${Math.floor(format.maxPostsPerWeek / 7)} a day)` } };
+  }
   const byId = body.socialAccountId && UUID.test(String(body.socialAccountId));
   const account = (await client.query(`
     SELECT "id" FROM "SocialAccount" WHERE "brandId"=$1 AND "destination"=$2 AND "status"='active' AND "externalAccountId" IS NOT NULL
