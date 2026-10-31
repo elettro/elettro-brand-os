@@ -221,7 +221,7 @@ export function poolRejection(asset, account, settings) {
 // distances inside it (so adding or removing a post re-spaces all of them), each on any minute of the hour but :00 :15 :30 :45. Windows are local to the account. Bluesky and Mastodon run 8 AM to 8 PM with most posts (70%) from 9 to 5.
 // A brand can override a network with Brand.settings.planner.postingTimes.<destination> = { start, end, days, peak }.
 export const TIME_PROFILES = {
-  linkedin: { start: "08:00", end: "12:00", days: ["mon", "tue", "wed", "thu", "fri"] },
+  linkedin: { start: "08:00", end: "20:00", days: ["mon", "tue", "wed", "thu", "fri"] },
   bluesky: { start: "08:00", end: "20:00", peak: { start: "09:00", end: "17:00", share: 0.7 } },
   mastodon: { start: "08:00", end: "20:00", peak: { start: "09:00", end: "17:00", share: 0.7 } },
   default: { start: "09:00", end: "21:00" }
