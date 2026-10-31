@@ -269,8 +269,45 @@ export async function publish(request, deps = {}) {
   return { postId: out.name, permalink: out.searchUrl || null };
 }
 
+// The library does not store pixel sizes for synced images, so the publisher measures the photo itself: the type and size
+// are read from the file's own header (JPEG start-of-frame or the PNG header). Anything it cannot read stays unmeasured and
+// postRequest then blocks the post, as before.
+export function imageInfo(buf) {
+  if (buf.length >= 24 && buf[0] === 0x89 && buf.toString("latin1", 1, 4) === "PNG") {
+    return { mime: "image/png", width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
+  }
+  if (buf.length > 4 && buf[0] === 0xff && buf[1] === 0xd8) {
+    let i = 2;
+    while (i + 9 < buf.length) {
+      if (buf[i] !== 0xff) { i += 1; continue; }
+      const marker = buf[i + 1];
+      if (marker === 0xff) { i += 1; continue; }
+      if (marker >= 0xc0 && marker <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(marker)) {
+        return { mime: "image/jpeg", height: buf.readUInt16BE(i + 5), width: buf.readUInt16BE(i + 7) };
+      }
+      if (marker === 0xd8 || marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) { i += 2; continue; }
+      i += 2 + buf.readUInt16BE(i + 2);
+    }
+  }
+  return null;
+}
+
+export async function measuredPost(post, deps = {}) {
+  const { link = dropboxLink, call = fetch } = deps;
+  if (Number(post.assetWidth) > 0 && Number(post.assetHeight) > 0 && post.assetMime) return post;
+  const path = String(post.dropboxPath || "").replace(/\\/g, "/");
+  if (!path.toLowerCase().startsWith(BRANDS_ROOT) || path.split("/").some((p) => p === ".." || p === ".")) return post;   // postRequest blocks it
+  if (Number(post.assetBytes) > PHOTO_MAX_BYTES) return post;
+  const response = await call(await link(path), { signal: AbortSignal.timeout(30000) });
+  if (!response.ok) throw new Error(`Could not read the photo to measure it (HTTP ${response.status})`);
+  const buf = Buffer.from(await response.arrayBuffer());
+  const info = imageInfo(buf);
+  if (!info) return post;
+  return { ...post, assetMime: info.mime, assetWidth: info.width, assetHeight: info.height, assetBytes: post.assetBytes || buf.length };
+}
+
 export async function publishingTick(deps = {}) {
-  const { callApi = api, publishOne = async (post) => publish(postRequest(post)) } = deps;
+  const { callApi = api, publishOne = async (post) => publish(postRequest(await measuredPost(post))) } = deps;
   const claimed = await callApi({ action: "claim-due-posts", destination: "gmb", limit: POSTS_PER_TICK });
   if (!claimed.ok) throw new Error(`claim-due-posts failed: ${claimed.error}`);
   const published = [];
