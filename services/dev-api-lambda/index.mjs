@@ -6,6 +6,7 @@ import {runSharedAudioLibrarySetup,LIBRARY_SLUG,LIBRARY_AUDIO_ROOT} from "./shar
 import {runSharedStockGraphicsSetup,runSharedStockGraphicsTagging,LIBRARY_GRAPHICS_ROOT} from "./shared-stock-graphics.mjs";
 import {runDocumentAssetKindSetup} from "./document-asset-kind.mjs";
 import {createBrand} from "./brand-create.mjs";
+import {runMultiCamSetup, handleMultiCam} from "./multicam.mjs";
 import { handleConnectionStatus, setPlatformMilestone, setTokenExpiry, renameSocialAccount, listSocialAccounts, feedResponse } from "./connection-status.mjs";
 import { handlePostRace } from "./post-race.mjs";
 import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
@@ -1611,6 +1612,8 @@ export const handler = async (event = {}) => {
   if(event.action === "merge-duplicate-accounts-20261031" && !event.requestContext && !event.rawPath && !event.path) return mergeDuplicateAccounts(event,connectDatabase,json);
   // IAM-only: create a brand row (dry-run unless mode:"apply").
   if(event.action === "create-brand-20261031" && !event.requestContext && !event.rawPath && !event.path) return createBrand(event,connectDatabase,json);
+  // IAM-only: create the Elettro MultiCam tables (dry-run unless mode:"apply").
+  if(event.action === "setup-multicam-tables-20261101" && !event.requestContext && !event.rawPath && !event.path) return runMultiCamSetup(event,connectDatabase,json);
   const requestPath =
     event?.rawPath ||
     event?.requestContext?.http?.path ||
@@ -1841,6 +1844,11 @@ export const handler = async (event = {}) => {
   // "Connect Pinterest": same handshake as TikTok; one Pinterest account per brand, refresh-token expiry as the reconnect date.
   if (requestPath === "/connections/pinterest/complete" && event?.requestContext?.http?.method === "POST") {
     return completePinterestConnect(event, parseJsonBody(event), connectDatabase, json);
+  }
+
+  // Elettro MultiCam (web /multicam host page and /mc/<code> band page, via server-side proxies); same shared key.
+  if (requestPath === "/multicam" && event?.requestContext?.http?.method === "POST") {
+    return handleMultiCam(parseJsonBody(event), connectDatabase, json);
   }
 
   // Review page (web /review): list, approve, skip, edit, swap and plan posts; same shared key as the connect routes.

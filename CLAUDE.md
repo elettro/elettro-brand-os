@@ -91,6 +91,7 @@ EventBridge, every 15 min ──> platform worker Lambda ──> network API
   Schema in `services/dev-api-lambda/init.sql` and `packages/database/prisma`.
 - **Dropbox layout**: the library root is `/1---elettro-brand-os/brands/<brand>/…` (migrated 2026-10-17 with a clean-slate reset).
 - **Shared stock graphics** (2026-11-01): `creative-assets/stock-graphics` is indexed under the `creative-assets` library owner beside `audio` (a second `BrandStorageRoot`; stock videos stay unindexed). IAM-only dev-api actions `setup-shared-stock-graphics-20261101` (register the root) and `tag-shared-stock-graphics-20261101` (title/topic/tags by Dropbox path), both dry run unless `mode:"apply"` (`shared-stock-graphics.mjs`). Not applied in AWS yet (not verified).
+- **Elettro MultiCam** (2026-11-01, Phase 1 intake; spec `docs/multicam/ELETTRO-MULTICAM-SPEC.md`, AWS steps `docs/admin/multicam-setup.md`): the owner opens a session on `/multicam` (left rail, Workspace) and shows its QR; phones open the public, frameless `/mc/<code>` (no login; the session code is the only credential, 18 h default) and upload clips straight to S3 (presigned multipart, prefix `multicam/<brand>/…` in `MULTICAM_BUCKET` or else `ASSET_UPLOAD_BUCKET`). Proxies `/api/multicam/host` (owner) and `/api/multicam/band` (public, band ops only) call the dev-api route `POST /multicam` (`multicam.mjs`). Tables `MultiCamSession`, `MultiCamSong`, `MultiCamClip` come from IAM-only `setup-multicam-tables-20261101` (dry run unless `mode:"apply"`). "Make it" only records the request; the auto-edit worker is Phase 3. **Not set up in AWS yet** (route, tables, bucket CORS for os.elettro.com, lifecycle). Found 2026-11-01: the assets bucket's CORS does not list `https://os.elettro.com`.
 - **Asset kinds** (`Asset.kind`, Postgres enum `AssetKind`): `video`, `image`, `carousel`, `audio`, and `document` (PDF, added 2026-10-29). `.pdf` files in a
   brand's Dropbox folder, direct uploads and the register/intake tools all become `document` assets (`mimeType` `application/pdf`; no thumbnail,
   because Dropbox cannot render one, so the UI shows a glyph; no AI enrichment). The planner **never** picks a document unless a placement's pool rule lists
@@ -109,7 +110,7 @@ EventBridge, every 15 min ──> platform worker Lambda ──> network API
 | Workers | `elettro-brand-os-dev-{threads,tiktok,pinterest,youtube-upload,meta,linkedin}` (all exist; `bluesky` since 2026-10-29; `gmb` is built in code but not yet created) |
 | Dropbox | `elettro-brand-os-dev-{dropbox-sync,dropbox-upload}` |
 | Runtime | all Lambdas `nodejs24.x`; dev-api 256 MB / 60 s |
-| HTTP API | `zkjngy7rdd`, 18 routes made by hand; each needs a gateway route **and** a Lambda invoke permission (see `docs/admin/new-api-route.md`) |
+| HTTP API | `zkjngy7rdd`, 18 routes made by hand (plus `POST /multicam` once created); each needs a gateway route **and** a Lambda invoke permission (see `docs/admin/new-api-route.md`) |
 | DB | RDS `elettro-brand-os-dev` |
 | Buckets | `elettro-brand-os-dev-assets`, `elettro-brand-os-dev-thumbnails` |
 | Web | Amplify app `d2k28tehm1a8zw` |
