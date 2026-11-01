@@ -91,6 +91,11 @@ export function CalendarClient({ initial, brandName }: { initial: CalendarMonth;
     }
     return map;
   }, [visible, ymdOf]);
+  // Per-day tallies for the grid: published posts vs. posts still lined up to go out (paused/removed don't count).
+  const tally = (list: CalendarPost[]) => ({
+    posted: list.filter((p) => p.kind === "published").length,
+    scheduled: list.filter((p) => p.kind === "scheduled" && p.status !== "paused").length
+  });
   const days = Array.from({ length: 42 }, (_, i) => addDays(data.start, i));
   const post = selected ? data.posts.find((p) => p.id === selected) || null : null;
   // Nothing approved to come (any month): an encouraging note with a big way to Review instead of a bare grid.
@@ -113,6 +118,17 @@ export function CalendarClient({ initial, brandName }: { initial: CalendarMonth;
       setBusy(null);
     }
   }, [brand]);
+
+  // Keep today's Posted / Scheduled live: quietly re-read the month every minute (only while the tab is visible and idle).
+  useEffect(() => {
+    if (data.month !== data.today.slice(0, 7)) return;
+    const month = data.month;
+    const t = setInterval(async () => {
+      if (document.visibilityState !== "visible" || busy || selected || editing) return;
+      try { setData(await act<CalendarMonth>({ brand, action: "calendar", month })); } catch { /* try again next minute */ }
+    }, 60_000);
+    return () => clearInterval(t);
+  }, [brand, data.month, data.today, busy, selected, editing]);
 
   useEffect(() => {
     if (!toast) return;
@@ -199,7 +215,15 @@ export function CalendarClient({ initial, brandName }: { initial: CalendarMonth;
         const list = byDay.get(d) || [];
         const outside = d.slice(0, 7) !== data.month;
         return <div key={d} role="gridcell" className={`cal-day${outside ? " outside" : ""}${d === data.today ? " today" : ""}${d < data.today ? " past" : ""}`}>
-          <div className="cal-date">{Number(d.slice(8))}</div>
+          <div className="cal-date-row">
+            <span className="cal-date">{Number(d.slice(8))}</span>
+            {(() => {
+              const t = tally(list);
+              const posted = d <= data.today ? <span key="p">Posted: {t.posted}</span> : null;
+              const sched = d >= data.today && t.scheduled > 0 ? <span key="s">Scheduled: {t.scheduled}</span> : null;
+              return posted || sched ? <span className="cal-stat">{posted}{sched}</span> : null;
+            })()}
+          </div>
           {list.slice(0, CHIPS_PER_DAY).map(chip)}
           {list.length > CHIPS_PER_DAY && <button type="button" className="cal-more" onClick={() => setDayOpen(d)}>+{list.length - CHIPS_PER_DAY} more</button>}
         </div>;
