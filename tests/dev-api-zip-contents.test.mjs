@@ -19,7 +19,13 @@ function reachableModules() {
   return [...seen];
 }
 
-const zipLine = (text) => text.split("\n").find((line) => line.includes("zip -r elettro-brand-os-dev-api.zip")) || "";
+// Only the words after "zip -r <zip>" count: the workflow's syntax-check list sits on the same line, and a module named only
+// there used to satisfy this test while missing from the zip (gmb-planner.mjs, 2026-10-31).
+const zipLine = (text) => {
+  const line = text.split("\n").find((l) => l.includes("zip -r elettro-brand-os-dev-api.zip")) || "";
+  const at = line.indexOf("zip -r elettro-brand-os-dev-api.zip");
+  return at < 0 ? "" : line.slice(at);
+};
 const workflow = readFileSync(new URL("../.github/workflows/build-dev-api-lambda.yml", import.meta.url), "utf8");
 const packageJson = readFileSync(new URL("package.json", dir), "utf8");
 
