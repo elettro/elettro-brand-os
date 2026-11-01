@@ -7,7 +7,7 @@ Dean Palermo, Rompe (added 2026-10-31), plus `google-review`, an isolated demo b
     Dropbox library → ingest + metadata → approval → Content Pool → planner → platform treatment
       → scheduled publish → PublicationLedger → analytics
 
-State as of 2026-10-29: fully audited that day against the code, AWS (read-only) and the merged PRs. Everything below
+State as of 2026-11-01: code re-audited that day against the merged PRs; AWS facts last checked 2026-10-29 (read-only) and 2026-10-31. Everything below
 that can drift (status, Lambda list, schedules) is marked **verify**: re-check it against the code or AWS before relying on it.
 See section 7 for how this file is kept current.
 
@@ -51,7 +51,7 @@ EventBridge, every 15 min ──> platform worker Lambda ──> network API
   brands whose `brand-<id>` Cognito group they belong to (`apps/web/lib/brand-access.ts`, PR #181). Client accounts get Assets (view),
   Content Pool, Connections, Review and Calendar for their own brands only. It reaches the API through `apps/web/lib/dev-api.ts`
   (`BRAND_OS_API_BASE_URL`). Amplify build config lives in the Amplify console, not the repo.
-- **dev-api Lambda** `services/dev-api-lambda` (a ~1.9k-line `index.mjs` plus about 30 modules): `planner-v2*.mjs` (plan a week),
+- **dev-api Lambda** `services/dev-api-lambda` (a ~1.9k-line `index.mjs` plus about 38 modules): `planner-v2*.mjs` (plan a week),
   `planner-ops.mjs` (claim-due-posts / finish-post / planner-tick), `planner-review.mjs`, `publishing-formats.mjs`
   (**source of truth** for which network/placement is live), `*-connect.mjs` (OAuth connect per network),
   `copywriter.mjs` / `curator.mjs` / `intelligence.mjs` (AI picks and copy), `connection-status.mjs` (feeds the
@@ -161,14 +161,14 @@ Amplify auto-builds the web app from `develop`. After a merge, do the PR's "AWS 
   missed. Threads renewal is automatic (tick). Connection status/expiry feeds `elettro.com/dash`.
 - **Post times** (2026-10-31, `TIME_PROFILES` in `planner-v2.mjs`): the planner ignores a rule's stored window and uses the network's own: LinkedIn weekdays 08:00-20:00, Bluesky and Mastodon 08:00-20:00 with 70% of posts 09:00-17:00, everything else 09:00-21:00 (local time). Each format's posts for a day sit at equal distances in that window (so more or fewer posts re-space them), on any minute of the hour except :00 :15 :30 :45 (each day's row of gaps slides by a seeded phase, then each post moves a few minutes, so the minutes spread around the hour without being exactly balanced), and two formats of one network are pulled at least 7 minutes apart (`separateSlots`). Override per brand with `Brand.settings.planner.postingTimes.<destination>`. Not built yet: post-type timing (booking by day, streaming evenings, merch late night) and a window past 22:00. Workers still tick every 15 minutes, so a post goes out at the next tick after its time. Full write-up: `docs/admin/post-times.md`.
 - Each network has a hard daily cap of 14 posts across formats (`MAX_POSTS_PER_DAY`); Review page "posts per day" controls it.
-  Posting window 10:00-22:00 ET with a primary window 10:00-17:00 (`posting-window.mjs`, PR #166).
+  Posting window 10:00-22:00 ET with a primary window 10:00-17:00 (`posting-window.mjs`, PR #166; that is the default of its one-off IAM-only clamp action. Planned post times come from `TIME_PROFILES`, see Post times above).
 - **Carousels** (`placement: "carousel"`: Instagram, Facebook multi-photo, Threads, TikTok photo, LinkedIn multi-image, Pinterest): all `planning`. Instagram carousels and Facebook multi-photo posts publish through `services/meta-lambda` (claimed with `placements` including `carousel`; `claim-due-posts` returns `slides` in order, or `[]` if any slide is gone, which fails the post instead of posting a shorter one); Threads carousels publish through `services/threads-lambda` (its tick now claims `post` and `carousel`); Pinterest carousel Pins publish through `services/pinterest-lambda` (claims `pin`, `video`, `carousel`); LinkedIn multi-image posts and **PDF documents** (`placement: "document"`, 3-20 images stitched into one PDF by `pdf-lib`, posted through LinkedIn's Documents API) publish through `services/linkedin-lambda` (claims `post`, `carousel`, `document`, `text`, `link`, `poll`; its zip carries `node_modules/pdf-lib`). **Hand-written LinkedIn posts** (`text`, `link`, `poll`; formats are `integration`, never planned) are queued from a form on Connections (inside each connected LinkedIn brand card; `components/linkedin-writer.tsx`) (`queue-custom`, `linkedin-custom.mjs`): saved as `planned` with the details in `scoreBreakdown.custom` and a carrier image asset (every ScheduledPost needs an asset; the live schema cannot be changed from here), approved on their card like any post; TikTok photo carousels are built in `services/tiktok-lambda` (claims `video`, `carousel`; status `review`) but need an image host on a TikTok-verified domain (`TIKTOK_PHOTO_BUCKET`, `TIKTOK_PHOTO_BASE_URL`, `scripts/tiktok-photo-host-setup.sh`) and the app review. A format moves to `live` only after one publishes on schedule. The planner builds each from one sector's images (count between the brand's min and max, set on Review, stored in `Brand.settings.carouselSlides`, clamped to the limits in `publishing-formats.mjs`) and stores the slide asset ids in `ScheduledPost.scoreBreakdown.slideIds` (`assetId` is the lead image). `claim-due-posts` never hands a carousel to a worker that does not name `carousel` in `placements`.
 
 ## 5. Running and testing
 
 - Tests are plain Node: `node --test tests/<file>` (CI runs an explicit list in `.github/workflows/ci.yml`; add yours there).
-  As of 2026-10-31 five test files are **not** in that list, so CI never runs them: `ai-mcp-dropbox-identity`, `ai-mcp-file-hosts`,
-  `library-publications`, `meta-connect`, `post-race` (`planner-review` and `calendar` were added with the Calendar PR). Run them by hand until they are wired in.
+  As of 2026-11-01 six test files are **not** in that list, so CI never runs them: `ai-mcp-dropbox-identity`, `ai-mcp-file-hosts`,
+  `library-publications`, `list-social-accounts`, `meta-connect`, `post-race` (`planner-review` and `calendar` were added with the Calendar PR). Run them by hand until they are wired in.
   The Python patch-safety test: `python3 -m unittest discover -s tests -p "test_lambda_patch.py"`.
 - Local web dev: `npm install` then `npm run dev` (workspace `@elettro/web`). It talks to the live DEV API by default.
 - There is no local DB or local Lambda harness. Planner changes can be exercised with
@@ -203,7 +203,7 @@ something here that's wrong, fix it, or tell Dean if you can't verify the fix.
 - **At the end of any session that touched AWS, a network's status, brands, routes or deploy steps**, re-read the matching section here and fix it
   before finishing, even if the PR did not need it.
 - When a fact here is found wrong, fix it immediately and note the date. When it cannot be checked, say "not verified" instead of leaving it.
-- Do a full audit (code, AWS read-only, merged PRs since the last audit) at least every two weeks. **Last full audit: 2026-10-29.**
+- Do a full audit (code, AWS read-only, merged PRs since the last audit) at least every two weeks. **Last full audit: 2026-11-01** (code, workflows, tests and docs re-checked against merged PRs #263-#293; AWS-only facts were not re-verified this run and still carry their 2026-10-29/31 dates).
   `gh pr list -R elettro/elettro-brand-os --state merged --search "merged:>=<last audit date>"` lists what changed.
 - Procedures belong in `docs/admin/`, bug history in `docs/bug-fix/`; this file stays the map.
 
