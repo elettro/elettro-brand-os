@@ -3,6 +3,7 @@ import {runBrandMediaReset} from "./brand-media-reset.mjs";
 import {runBrandRootMigration} from "./brand-root-migration.mjs";
 import { configurePlannerBrand, runPlanWeek, runPlanWeeks, approvePlannerWeek } from "./planner-v2-db.mjs";
 import {runSharedAudioLibrarySetup,LIBRARY_SLUG,LIBRARY_AUDIO_ROOT} from "./shared-audio-library.mjs";
+import {runSharedStockGraphicsSetup,runSharedStockGraphicsTagging,LIBRARY_GRAPHICS_ROOT} from "./shared-stock-graphics.mjs";
 import {runDocumentAssetKindSetup} from "./document-asset-kind.mjs";
 import {createBrand} from "./brand-create.mjs";
 import { handleConnectionStatus, setPlatformMilestone, setTokenExpiry, renameSocialAccount, listSocialAccounts, feedResponse } from "./connection-status.mjs";
@@ -49,7 +50,9 @@ const DROPBOX_BRAND_ROOTS = [
   ["google-review", "/1---elettro-brand-os/brands/google-review"],
   ["elettro", "/1---elettro-brand-os/brands/elettro"],
   // Shared library: only the audio subtree is indexed (see shared-audio-library.mjs).
-  [LIBRARY_SLUG, LIBRARY_AUDIO_ROOT]
+  [LIBRARY_SLUG, LIBRARY_AUDIO_ROOT],
+  // ...and the stock-graphics subtree (see shared-stock-graphics.mjs). Stock videos stay unindexed.
+  [LIBRARY_SLUG, LIBRARY_GRAPHICS_ROOT]
 ];
 
 function json(statusCode, body) {
@@ -124,7 +127,7 @@ function folderHintsFromPath(sourcePath = "", brandSlug = "") {
   const normalized = String(sourcePath || "").replace(/\\/g, "/");
   const lower = normalized.toLowerCase();
   const root = brandSlug.toLowerCase() === LIBRARY_SLUG
-    ? `${LIBRARY_AUDIO_ROOT.toLowerCase()}/`
+    ? (lower.includes(`${LIBRARY_GRAPHICS_ROOT.toLowerCase()}/`) ? `${LIBRARY_GRAPHICS_ROOT.toLowerCase()}/` : `${LIBRARY_AUDIO_ROOT.toLowerCase()}/`)
     : `/1---elettro-brand-os/brands/${brandSlug.toLowerCase()}/`;
   const start = lower.indexOf(root);
   const relative = start >= 0 ? normalized.slice(start + root.length) : normalized.replace(/^\/+/, "");
@@ -426,6 +429,13 @@ async function ingestDropboxPage(event) {
     const rootByBrandId = new Map(
       rootRows.rows.map((row) => [row.brandId, row.id])
     );
+    // A brand may hold several roots (the shared library has audio + stock-graphics).
+    const rootsByBrandId = new Map();
+    for (const row of rootRows.rows) {
+      const list = rootsByBrandId.get(row.brandId) || [];
+      list.push({id: row.id, path: String(row.rootPathLower || "").toLowerCase()});
+      rootsByBrandId.set(row.brandId, list);
+    }
     // Only index files under the root the database has registered for the brand, so
     // code and database cut over together (see brand-root-migration.mjs).
     const rootPathByBrandId = new Map(
@@ -448,8 +458,8 @@ async function ingestDropboxPage(event) {
       const brandSlug = brandSlugForDropboxPath(pathLower);
       const brandId = brandIdBySlug.get(brandSlug);
 
-      const registeredRoot = rootPathByBrandId.get(brandId);
-      if (!brandId || !registeredRoot || !pathLower.startsWith(`${registeredRoot}/`)) {
+      const matchedRoot = (rootsByBrandId.get(brandId) || []).find((r) => r.path && pathLower.startsWith(`${r.path}/`));
+      if (!brandId || !matchedRoot) {
         skipped += 1;
         continue;
       }
@@ -493,7 +503,7 @@ async function ingestDropboxPage(event) {
            WHERE "id" = $1`,
           [
             existing.rows[0].id,
-            rootByBrandId.get(brandId) || null,
+            matchedRoot.id,
             entry.path_display || entry.path_lower,
             pathLower,
             entry.content_hash || null,
@@ -516,7 +526,7 @@ async function ingestDropboxPage(event) {
              'needs_metadata','suggested','approved',CURRENT_TIMESTAMP)`,
           [
             brandId,
-            rootByBrandId.get(brandId) || null,
+            matchedRoot.id,
             entry.id,
             sourceMetadata,
             entry.path_display || entry.path_lower,
@@ -1592,6 +1602,9 @@ export const handler = async (event = {}) => {
   if (iamOnly && event.action === "list-social-accounts") return listSocialAccounts(event, connectDatabase, json);
   // IAM-only shared audio library setup (dry-run unless mode:"apply"); never exposed through HTTP or MCP.
   if(event.action === "setup-shared-audio-library-20261017" && !event.requestContext && !event.rawPath && !event.path) return runSharedAudioLibrarySetup(event,connectDatabase,json);
+  // IAM-only shared stock graphics root + tagging (dry-run unless mode:"apply"); never exposed through HTTP or MCP.
+  if(event.action === "setup-shared-stock-graphics-20261101" && !event.requestContext && !event.rawPath && !event.path) return runSharedStockGraphicsSetup(event,connectDatabase,json);
+  if(event.action === "tag-shared-stock-graphics-20261101" && !event.requestContext && !event.rawPath && !event.path) return runSharedStockGraphicsTagging(event,connectDatabase,json);
   // IAM-only: add the 'document' (PDF) asset kind (dry-run unless mode:"apply").
   if(event.action === "setup-document-asset-kind-20261029" && !event.requestContext && !event.rawPath && !event.path) return runDocumentAssetKindSetup(event,connectDatabase,json);
   // IAM-only: fold duplicate connected rows of one login into one (dry-run unless mode:"apply").
