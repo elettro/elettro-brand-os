@@ -33,5 +33,5 @@ test("allowed brands and duration are writable through bulk metadata", () => {
 test("schemas and packaging know about audio", () => {
   assert.ok(read("services/dev-api-lambda/init.sql").includes("'carousel','audio'"));
   assert.ok(read("packages/database/prisma/schema.prisma").includes("allowedBrandSlugs"));
-  assert.ok(read(".github/workflows/build-dev-api-lambda.yml").includes("shared-audio-library.mjs document-asset-kind.mjs init.sql"));
+  assert.ok(read(".github/workflows/build-dev-api-lambda.yml").includes("shared-audio-library.mjs shared-stock-graphics.mjs document-asset-kind.mjs init.sql"));
 });

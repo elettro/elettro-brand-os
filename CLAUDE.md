@@ -90,6 +90,7 @@ EventBridge, every 15 min ──> platform worker Lambda ──> network API
   `PublicationLedger`, `BrandStorageRoot`, `StorageConnection`, `Campaign`, `Collection`, `MetadataPreset`, `IntakeBatch`, …
   Schema in `services/dev-api-lambda/init.sql` and `packages/database/prisma`.
 - **Dropbox layout**: the library root is `/1---elettro-brand-os/brands/<brand>/…` (migrated 2026-10-17 with a clean-slate reset).
+- **Shared stock graphics** (2026-11-01): `creative-assets/stock-graphics` is indexed under the `creative-assets` library owner beside `audio` (a second `BrandStorageRoot`; stock videos stay unindexed). IAM-only dev-api actions `setup-shared-stock-graphics-20261101` (register the root) and `tag-shared-stock-graphics-20261101` (title/topic/tags by Dropbox path), both dry run unless `mode:"apply"` (`shared-stock-graphics.mjs`). Not applied in AWS yet (not verified).
 - **Asset kinds** (`Asset.kind`, Postgres enum `AssetKind`): `video`, `image`, `carousel`, `audio`, and `document` (PDF, added 2026-10-29). `.pdf` files in a
   brand's Dropbox folder, direct uploads and the register/intake tools all become `document` assets (`mimeType` `application/pdf`; no thumbnail,
   because Dropbox cannot render one, so the UI shows a glyph; no AI enrichment). The planner **never** picks a document unless a placement's pool rule lists
