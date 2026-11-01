@@ -18,7 +18,8 @@ const NAV: NavSection[] = [
     { label: "Assets", href: "/assets" },
     { label: "Content Pool", href: "/content-pool" },
     { label: "Collections", href: "/collections" },
-    { label: "Upload", href: "/epe-upload" }
+    { label: "Upload", href: "/epe-upload" },
+    { label: "MultiCam", href: "/multicam" }
   ] },
   { label: "Publishing", items: [
     { label: "Review", href: "/review" },
@@ -50,7 +51,7 @@ const AR_SECTION: NavSection = { label: "AR", items: [
 ] };
 
 // Pages that stand alone (sign-in errors) keep no frame.
-const BARE = ["/auth", "/welcome"];
+const BARE = ["/auth", "/welcome", "/mc/"];
 
 const BRANDS = [{ id: "all", name: "All brands", timezone: "" }, ...brandConfigs.map(({ id, name, timezone }) => ({ id, name, timezone }))];
 
@@ -58,7 +59,7 @@ const BRANDS = [{ id: "all", name: "All brands", timezone: "" }, ...brandConfigs
 // each follow-up that opens a page for clients flips it to "active" here.
 const CLIENT_NAV: Record<string, "active" | "soon" | "hidden"> = {
   "/": "active", "/ar": "active", "/ar/qr": "active", "/ar/sets": "active", "/review": "active", "/calendar": "active", "/assets": "active", "/content-pool": "active", "/connections": "active",
-  "/collections": "hidden", "/holidays": "hidden", "/ai-gateway": "hidden", "/planner": "hidden"
+  "/collections": "hidden", "/multicam": "hidden", "/holidays": "hidden", "/ai-gateway": "hidden", "/planner": "hidden"
 };
 
 // Who is signed in: owner sees everything; a client sees only the listed brands.
