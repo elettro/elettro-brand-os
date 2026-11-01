@@ -76,7 +76,8 @@ test("mapping validation rejects path drift and reused ids", () => {
 
 test("ingest only indexes files under the database-registered root and matches either id column", () => {
   const api = fs.readFileSync(new URL("../services/dev-api-lambda/index.mjs", import.meta.url), "utf8");
-  assert.match(api, /pathLower\.startsWith\(`\$\{registeredRoot\}\/`\)/);
+  // Matches any root registered to the brand (the shared library has audio + stock-graphics).
+  assert.match(api, /pathLower\.startsWith\(`\$\{r\.path\}\/`\)/);
   assert.match(api, /\("sourceFileId" = \$2 OR "sourceExternalId" = \$2\)/);
   assert.match(api, /event\.action === "migrate-dropbox-brand-roots-20261017" && !event\.requestContext/);
 });
