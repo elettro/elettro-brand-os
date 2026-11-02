@@ -28,6 +28,8 @@ export async function getAsset(id: string, brands?: string[] | null) {
   return fetchJson<{ ok: boolean; asset: ApiAsset }>(`/assets?id=${encodeURIComponent(id)}${brands ? "&" + scoped(brands, true) : ""}`);
 }
 
-export async function getContentPool(brands?: string[] | null) {
-  return fetchJson<{ ok: boolean; assets: ApiAsset[] }>(`/content-pool${brands ? "?" + scoped(brands) : ""}`);
+// `stock` returns the shared creative-assets (stock gallery) library instead of the brands' own assets.
+export async function getContentPool(brands?: string[] | null, stock = false) {
+  const query = [brands ? scoped(brands) : "", stock ? "stock=1" : ""].filter(Boolean).join("&");
+  return fetchJson<{ ok: boolean; assets: ApiAsset[] }>(`/content-pool${query ? "?" + query : ""}`);
 }

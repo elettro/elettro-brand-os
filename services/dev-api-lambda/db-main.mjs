@@ -673,10 +673,13 @@ export const handler = async (event = {}) => {
         WHERE a."approvalStatus" = 'approved'
           AND a."ingestStatus" = 'ready'
           AND a."retiredAt" IS NULL
-          AND ($1::text[] IS NULL OR b."slug" = ANY($1::text[]))
+          AND (
+            ($2::boolean AND b."slug" = $3)
+            OR (NOT $2::boolean AND ($1::text[] IS NULL OR b."slug" = ANY($1::text[])))
+          )
         ORDER BY a."updatedAt" DESC
-        LIMIT 100
-      `, [brandFilter(event)]);
+        LIMIT 2000
+      `, [brandFilter(event), event?.queryStringParameters?.stock === "1", SHARED_LIBRARY_SLUG]);
       return json(200, { ok: true, assets: result.rows });
     }
 
