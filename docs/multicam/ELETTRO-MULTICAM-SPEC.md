@@ -14,8 +14,14 @@ Every phone in the room, one multi-cam video. Dean's concept (2026-11-01), first
    retried on weak signal; the screen is kept awake. The host page shows the angles arriving (refreshes every 5 s).
    **One file can cover several songs** (Dean, 2026-11-01): the phone picks *Several songs in one take*; those clips sit under a
    session-level "Several songs (long take)" entry, count toward every song's *Make it*, and Phase 3 cuts each song out of them by audio.
-4. **Make it** — the host taps *Make it* on a song once at least one clip is in. **Phase 1 records the request**; the
-   automatic edit is Phase 3. Until then the editor (Claude) pulls the clips (download links on the host page).
+4. **Make it** — the host taps *Make it* on a song once at least one clip is in. A panel opens: a **style prompt** (free
+   text up to 1,000 characters: look, transitions, effects, B-roll, who to feature; three idea buttons fill it in) and the
+   **outputs** (16:9 full video on/off, 0-5 vertical shorts, stills on/off, quality `1080p` / `1080p+4k` / `4k`; defaults
+   on, 3 shorts, 1080p). The panel starts from the song's last request, else the newest prompt in the session, so a set
+   keeps one look. While the song is `requested` the host can change and resend it; once `rendering` or `done` it is locked.
+   Stored on `MultiCamSong` as `makeStyle` and `makeOutputs` (JSONB) (added 2026-11-02). **Phase 1 records the request**;
+   the automatic render is Phase 3, which reads the prompt and outputs. Until then the editor (Claude) pulls the clips
+   (download links on the host page) and follows the prompt.
 5. **Post** — Phase 4: outputs land in Elettro OS as Stashbox assets and draft posts in Review; nothing posts without approval.
 
 Decisions (Dean, 2026-11-01): start at **1080p**, move to **4K30** if the wait is acceptable; band **stops and waits** after
@@ -44,7 +50,7 @@ instead of band logins; S3 for raw clips and rendering, Dropbox + Elettro OS Ass
 - **Session code**: 10 characters from a 31-letter alphabet without 0/O/1/I/L (~49 bits), unique, expires after 18 h by
   default (1-72), or when the host taps *End session*.
 - **Tables** (created by IAM-only `setup-multicam-tables-20261101`, dry run unless `mode:"apply"`): `MultiCamSession`
-  (brand, code, location, date, status, expiresAt), `MultiCamSong` (title, slug, status `collecting|requested|rendering|done`),
+  (brand, code, location, date, status, expiresAt), `MultiCamSong` (title, slug, status `collecting|requested|rendering|done`, `makeStyle`, `makeOutputs`),
   `MultiCamClip` (contributor, angle, kind video/audio, filename, size, part plan, bucket, key, uploadId, status
   `uploading|uploaded|aborted`).
 - **Storage**: bucket `MULTICAM_BUCKET`, falling back to `ASSET_UPLOAD_BUCKET` (`elettro-brand-os-dev-assets`), prefix

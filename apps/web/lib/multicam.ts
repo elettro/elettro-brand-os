@@ -32,7 +32,13 @@ export async function multicamCall<T = Record<string, unknown>>(body: Record<str
 }
 
 export type McClip = { id: string; songId: string; contributor: string; angle: string; kind: string; filename: string; sizeBytes: number; status: string; createdAt: string; completedAt: string | null };
-export type McSong = { id: string; title: string; slug: string; status: string; makeRequestedAt: string | null; longTake: boolean; clips: McClip[] };
+// What "Make it" renders (kept in step with makeRequest in multicam.mjs; defaults live in the host component,
+// because this file is server-only).
+export type McOutputs = { full: boolean; shorts: number; stills: boolean; quality: "1080p" | "1080p+4k" | "4k" };
+export type McSong = {
+  id: string; title: string; slug: string; status: string; makeRequestedAt: string | null; makeRequestedBy: string | null;
+  makeStyle: string | null; makeOutputs: McOutputs | null; longTake: boolean; clips: McClip[];
+};
 export type McSession = {
   id: string; brand: string; brandName: string; code: string; title: string | null; location: string; sessionDate: string;
   status: string; expiresAt: string; open: boolean; folder: string; deliveryFolder: string;

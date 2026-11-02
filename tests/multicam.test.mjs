@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   newSessionCode, normalizeCode, slug, cleanLabel, isoDate, yymmdd, clipExtension, partPlan, sessionFolder, clipFilename,
   clipKey, deliveryFolderName, sessionIsOpen, validParts, handleMultiCam, runMultiCamSetup, HOST_OPS, BAND_OPS,
-  CODE_LENGTH, MIN_PART_BYTES, MAX_PARTS, LONG_TAKE_TITLE, LONG_TAKE_SLUG
+  CODE_LENGTH, MIN_PART_BYTES, MAX_PARTS, LONG_TAKE_TITLE, LONG_TAKE_SLUG, makeRequest, cleanStyle, DEFAULT_OUTPUTS, MAX_STYLE_CHARS
 } from "../services/dev-api-lambda/multicam.mjs";
 
 const json = (status, body) => ({ status, body });
@@ -100,7 +100,7 @@ function fakeWorld({ status = "open", expiresAt = "2099-01-01T00:00:00Z" } = {})
       if (sql.includes('INSERT INTO "MultiCamSong"')) { const s = { id: "song-" + songs.length, sessionId: params[0], title: params[1], slug: params[2], position: params[3], status: "collecting" }; songs.push(s); return { rows: [s] }; }
       if (sql.includes('FROM "MultiCamSong" WHERE "id"=$1 AND "sessionId"=$2')) return { rows: songs.filter((s) => s.id === params[0]) };
       if (sql.includes('FROM "MultiCamSong" WHERE "sessionId"=$1 ORDER BY')) return { rows: songs };
-      if (sql.includes('UPDATE "MultiCamSong"')) { songs.find((s) => s.id === params[0]).status = "requested"; return { rows: [] }; }
+      if (sql.includes('UPDATE "MultiCamSong"')) { Object.assign(songs.find((s) => s.id === params[0]), { status: "requested", makeRequestedBy: params[1], makeStyle: params[2], makeOutputs: JSON.parse(params[3]) }); return { rows: [] }; }
       if (sql.includes('COUNT(*)::int AS n FROM "MultiCamClip" c JOIN')) {
         const longIds = songs.filter((g) => g.slug === params[2]).map((g) => g.id);
         return { rows: [{ n: clips.filter((c) => c.status === "uploaded" && (c.songId === params[0] || longIds.includes(c.songId))).length }] };
@@ -232,4 +232,47 @@ test("a long take (several songs in one file) counts for every song's Make it", 
   const joined = await handleMultiCam({ op: "join", code: "ABCDEFGHJK" }, w.connect, json, w.deps);
   assert.equal(joined.body.longTakeTitle, LONG_TAKE_TITLE);
   assert.equal(joined.body.songs.find((x) => x.longTake).title, LONG_TAKE_TITLE);
+});
+
+// ---------- Make it: style prompt + outputs (2026-11-02) ----------
+
+test("makeRequest defaults, cleans the prompt and refuses bad outputs", () => {
+  assert.deepEqual(makeRequest({}), { style: null, outputs: DEFAULT_OUTPUTS });
+  assert.equal(cleanStyle("  Warm\tsurf\r\n\r\n\r\n\r\nvibe \u0007 "), "Warm surf\n\nvibe");
+  const r = makeRequest({ style: "Psychedelic 60s, mirror floor", outputs: { full: true, shorts: 0, stills: false, quality: "1080p+4k" } });
+  assert.equal(r.style, "Psychedelic 60s, mirror floor");
+  assert.deepEqual(r.outputs, { full: true, shorts: 0, stills: false, quality: "1080p+4k" });
+  assert.throws(() => makeRequest({ style: "x".repeat(MAX_STYLE_CHARS + 1) }), /too long/);
+  assert.throws(() => makeRequest({ outputs: { shorts: 9 } }), /Shorts/);
+  assert.throws(() => makeRequest({ outputs: { shorts: 1.5 } }), /Shorts/);
+  assert.throws(() => makeRequest({ outputs: { quality: "8k" } }), /Quality/);
+  assert.throws(() => makeRequest({ outputs: { full: false, shorts: 0, stills: false } }), /at least one/);
+  assert.equal(makeRequest({ outputs: { full: "yes" } }).outputs.full, false, "only a real true turns an output on");
+});
+
+test("host: Make it saves the style prompt and outputs, can be changed, and is locked once rendering", async () => {
+  const w = fakeWorld();
+  w.clips.push({ id: "c1", songId: w.songs[0].id, status: "uploaded", contributor: "Dean", angle: "Singer", sizeBytes: 5 });
+  const base = { op: "request-make", brand: "stashbox", sessionId: w.session.id, songId: w.songs[0].id, requestedBy: "dean@example.com" };
+  assert.equal((await handleMultiCam({ ...base, outputs: { quality: "8k" } }, w.connect, json, w.deps)).status, 400);
+  assert.equal(w.songs[0].status, "collecting", "a bad request records nothing");
+  const r = await handleMultiCam({ ...base, style: "Warm surf vibe, smooth dissolves", outputs: { shorts: 2 } }, w.connect, json, w.deps);
+  assert.equal(r.status, 200);
+  assert.equal(r.body.songs[0].makeStyle, "Warm surf vibe, smooth dissolves");
+  assert.deepEqual(r.body.songs[0].makeOutputs, { full: true, shorts: 2, stills: true, quality: "1080p" });
+  const again = await handleMultiCam({ ...base, style: "Psychedelic instead" }, w.connect, json, w.deps);
+  assert.equal(again.body.songs[0].makeStyle, "Psychedelic instead");
+  w.songs[0].status = "rendering";
+  assert.equal((await handleMultiCam({ ...base, style: "too late" }, w.connect, json, w.deps)).status, 409);
+});
+
+test("setup adds the Make-it columns to existing tables", async () => {
+  const queries = [];
+  const connect = async () => ({ async query(sql) { queries.push(sql); return { rows: [] }; }, async end() {} });
+  const dry = await runMultiCamSetup({}, connect, json);
+  assert.deepEqual(dry.body.missingColumns, ["makeStyle", "makeOutputs"]);
+  assert.ok(!queries.some((q) => q.includes("ALTER TABLE")));
+  const applied = await runMultiCamSetup({ mode: "apply" }, connect, json);
+  assert.deepEqual(applied.body.addedColumns, ["makeStyle", "makeOutputs"]);
+  assert.ok(queries.some((q) => q.includes('ADD COLUMN IF NOT EXISTS "makeStyle"')));
 });

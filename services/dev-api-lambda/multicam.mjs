@@ -123,6 +123,36 @@ export function validParts(parts, partCount) {
   return out;
 }
 
+// "Make it" carries a style prompt and the outputs to render (Dean, 2026-11-02). The prompt is free text for the
+// editor (Claude today, the Phase 3 worker later); the outputs are a fixed menu so the worker can plan the render.
+export const MAX_STYLE_CHARS = 1000;
+export const MAX_SHORTS = 5;
+export const QUALITIES = ["1080p", "1080p+4k", "4k"];
+export const DEFAULT_OUTPUTS = { full: true, shorts: 3, stills: true, quality: "1080p" };
+
+export function cleanStyle(value) {
+  return String(value ?? "").replace(/\r\n?/g, "\n").replace(/[\x00-\x09\x0b-\x1f\x7f]/g, " ").replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+// Returns { style, outputs } or throws a message for the host.
+export function makeRequest(body) {
+  const style = cleanStyle(body?.style);
+  if (style.length > MAX_STYLE_CHARS) throw new Error(`Style prompt is too long (max ${MAX_STYLE_CHARS} characters)`);
+  const raw = body?.outputs && typeof body.outputs === "object" ? body.outputs : {};
+  const shorts = raw.shorts === undefined ? DEFAULT_OUTPUTS.shorts : Number(raw.shorts);
+  if (!Number.isInteger(shorts) || shorts < 0 || shorts > MAX_SHORTS) throw new Error(`Shorts must be 0-${MAX_SHORTS}`);
+  const quality = raw.quality === undefined ? DEFAULT_OUTPUTS.quality : String(raw.quality);
+  if (!QUALITIES.includes(quality)) throw new Error("Quality must be 1080p, 1080p+4k or 4k");
+  const outputs = {
+    full: raw.full === undefined ? DEFAULT_OUTPUTS.full : raw.full === true,
+    shorts,
+    stills: raw.stills === undefined ? DEFAULT_OUTPUTS.stills : raw.stills === true,
+    quality
+  };
+  if (!outputs.full && !outputs.shorts && !outputs.stills) throw new Error("Pick at least one thing to make");
+  return { style: style || null, outputs };
+}
+
 // ---------- database setup (IAM only) ----------
 
 const TABLES_SQL = [
@@ -173,8 +203,12 @@ const TABLES_SQL = [
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "completedAt" TIMESTAMP(3)
   )`,
-  `CREATE INDEX IF NOT EXISTS "MultiCamClip_songId_status_idx" ON "MultiCamClip"("songId","status")`
+  `CREATE INDEX IF NOT EXISTS "MultiCamClip_songId_status_idx" ON "MultiCamClip"("songId","status")`,
+  // 2026-11-02: style prompt + outputs on Make it. Safe to re-run on the live tables.
+  `ALTER TABLE "MultiCamSong" ADD COLUMN IF NOT EXISTS "makeStyle" TEXT`,
+  `ALTER TABLE "MultiCamSong" ADD COLUMN IF NOT EXISTS "makeOutputs" JSONB`
 ];
+const SONG_COLUMNS = ["makeStyle", "makeOutputs"];
 
 export async function runMultiCamSetup(event, connectDatabase, json) {
   if (event.requestContext || event.rawPath || event.path) return json(403, { ok: false, error: "Direct IAM invocation required" });
@@ -185,12 +219,17 @@ export async function runMultiCamSetup(event, connectDatabase, json) {
     const existing = (await client.query(
       `SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('MultiCamSession','MultiCamSong','MultiCamClip')`
     )).rows.map((r) => r.table_name).sort();
-    if (mode !== "apply") return json(200, { ok: true, mode, note: "Dry run; nothing changed", existing, statements: TABLES_SQL.length });
+    const songColumns = (await client.query(
+      `SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND table_name='MultiCamSong' AND column_name = ANY($1)`,
+      [SONG_COLUMNS]
+    )).rows.map((r) => r.column_name);
+    const missingColumns = SONG_COLUMNS.filter((c) => !songColumns.includes(c));
+    if (mode !== "apply") return json(200, { ok: true, mode, note: "Dry run; nothing changed", existing, missingColumns, statements: TABLES_SQL.length });
     await client.query("BEGIN");
     await client.query("CREATE EXTENSION IF NOT EXISTS pgcrypto");
     for (const sql of TABLES_SQL) await client.query(sql);
     await client.query("COMMIT");
-    return json(200, { ok: true, mode, before: existing, created: ["MultiCamSession", "MultiCamSong", "MultiCamClip"].filter((t) => !existing.includes(t)) });
+    return json(200, { ok: true, mode, before: existing, created: ["MultiCamSession", "MultiCamSong", "MultiCamClip"].filter((t) => !existing.includes(t)), addedColumns: missingColumns });
   } catch (error) {
     if (client) { try { await client.query("ROLLBACK"); } catch {} }
     console.error("[multicam-setup] failed", error);
@@ -273,7 +312,8 @@ async function sessionDetail(client, session, brand) {
       deliveryFolder: deliveryFolderName({ ...session, sessionDate: isoOf(session.sessionDate) }, contributors)
     },
     songs: songs.map((s) => ({
-      id: s.id, title: s.title, slug: s.slug, status: s.status, makeRequestedAt: s.makeRequestedAt, longTake: s.slug === LONG_TAKE_SLUG,
+      id: s.id, title: s.title, slug: s.slug, status: s.status, makeRequestedAt: s.makeRequestedAt, makeRequestedBy: s.makeRequestedBy || null,
+      makeStyle: s.makeStyle ?? null, makeOutputs: s.makeOutputs ?? null, longTake: s.slug === LONG_TAKE_SLUG,
       clips: clips.filter((c) => c.songId === s.id).map((c) => ({ ...c, sizeBytes: Number(c.sizeBytes) }))
     }))
   };
@@ -342,6 +382,9 @@ async function hostOp(op, body, client, ctx) {
     const song = (await client.query(`SELECT * FROM "MultiCamSong" WHERE "id"=$1 AND "sessionId"=$2`, [String(body.songId || ""), session.id])).rows[0];
     if (!song) throw new Bad(404, "Song not found");
     if (song.slug === LONG_TAKE_SLUG) throw new Bad(400, "Long takes are used by every song; tap Make it on a song instead");
+    if (song.status !== "collecting" && song.status !== "requested") throw new Bad(409, "This song is already rendering or done");
+    let make;
+    try { make = makeRequest(body); } catch (error) { throw new Bad(400, error.message); }
     const uploaded = Number((await client.query(
       `SELECT COUNT(*)::int AS n FROM "MultiCamClip" c JOIN "MultiCamSong" g ON g."id"=c."songId"
        WHERE c."status"='uploaded' AND (c."songId"=$1 OR (g."sessionId"=$2 AND g."slug"=$3))`,
@@ -349,10 +392,11 @@ async function hostOp(op, body, client, ctx) {
     )).rows[0].n);
     if (!uploaded) throw new Bad(400, "No clips have finished uploading for this song yet");
     await client.query(
-      `UPDATE "MultiCamSong" SET "status"='requested',"makeRequestedAt"=CURRENT_TIMESTAMP,"makeRequestedBy"=$2,"updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$1`,
-      [song.id, who]
+      `UPDATE "MultiCamSong" SET "status"='requested',"makeRequestedAt"=CURRENT_TIMESTAMP,"makeRequestedBy"=$2,"makeStyle"=$3,"makeOutputs"=$4::jsonb,"updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$1`,
+      [song.id, who, make.style, JSON.stringify(make.outputs)]
     );
-    // Phase 3 hands this song to the auto-edit worker; until then the request is recorded for the editor (Claude) to pick up.
+    // Phase 3 hands this song (style + outputs) to the auto-edit worker; until then the editor (Claude) picks it up.
+    // Tapping again while it is still "requested" replaces the style and outputs.
     return sessionDetail(client, session, brand);
   }
 

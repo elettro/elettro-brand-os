@@ -1,8 +1,9 @@
 "use client";
-// Elettro MultiCam host console: start a session, show its QR code, watch the angles arrive, tap Make it.
+// Elettro MultiCam host console: start a session, show its QR code, watch the angles arrive, then Make it with a
+// style prompt and the outputs to render.
 import { useCallback, useEffect, useMemo, useState } from "react";
 import qrcode from "qrcode-generator";
-import type { McSessionDetail, McSessionRow } from "@/lib/multicam";
+import type { McOutputs, McSessionDetail, McSessionRow, McSong } from "@/lib/multicam";
 
 async function host<T = Record<string, unknown>>(body: Record<string, unknown>): Promise<T> {
   const response = await fetch("/api/multicam/host", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
@@ -14,6 +15,19 @@ async function host<T = Record<string, unknown>>(body: Record<string, unknown>):
 function today() { const d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); }
 const fmtSize = (n: number) => (n >= 1024 ** 3 ? (n / 1024 ** 3).toFixed(2) + " GB" : Math.max(1, Math.round(n / 1024 / 1024)) + " MB");
 const MAKE_LABEL: Record<string, string> = { collecting: "Make it", requested: "Requested ✓", rendering: "Rendering…", done: "Done ✓" };
+// Kept in step with makeRequest in services/dev-api-lambda/multicam.mjs.
+const DEFAULT_OUTPUTS: McOutputs = { full: true, shorts: 3, stills: true, quality: "1080p" };
+const MAX_STYLE_CHARS = 1000;
+const QUALITY_LABEL: Record<McOutputs["quality"], string> = { "1080p": "1080p (fast)", "1080p+4k": "1080p now, 4K after", "4k": "4K only" };
+const STYLE_IDEAS = [
+  "Warm surf vibe, smooth dissolves, mirror floor, ocean B-roll in the solo. Guitar on the solo, drummer on the fills.",
+  "Psychedelic 60s: aura and soul-echo ghosts, floor portal on the bridge. Smooth dissolves, no pulsing.",
+  "Clean and simple. Stay on the singer, cut to the band on the chorus, no effects, no B-roll."
+];
+function outputsText(o: McOutputs | null) {
+  if (!o) return "";
+  return [o.full && "16:9 full video", o.shorts ? `${o.shorts} short${o.shorts > 1 ? "s" : ""} 9:16` : "", o.stills && "stills", QUALITY_LABEL[o.quality]].filter(Boolean).join(" · ");
+}
 
 export function MultiCamHost({ brands, publicOrigin }: { brands: string[]; publicOrigin: string }) {
   const [brand, setBrand] = useState(brands[0]);
@@ -27,6 +41,10 @@ export function MultiCamHost({ brands, publicOrigin }: { brands: string[]; publi
   const [songs, setSongs] = useState("");
   const [newSong, setNewSong] = useState("");
   const [copied, setCopied] = useState(false);
+  // The Make-it panel: one song at a time.
+  const [makeFor, setMakeFor] = useState<string | null>(null);
+  const [style, setStyle] = useState("");
+  const [outputs, setOutputs] = useState<McOutputs>(DEFAULT_OUTPUTS);
 
   const act = useCallback(async <T,>(body: Record<string, unknown>) => {
     setError("");
@@ -65,6 +83,19 @@ export function MultiCamHost({ brands, publicOrigin }: { brands: string[]; publi
     if (r) { setDetail(r); loadList(); }
     setBusy(false);
   }
+  function openMake(song: McSong) {
+    // Start from this song's last request, else the newest prompt in this session, so a set keeps one look.
+    const latest = detail?.songs.filter((s) => s.makeStyle || s.makeOutputs).sort((a, b) => String(b.makeRequestedAt).localeCompare(String(a.makeRequestedAt)))[0];
+    setStyle(song.makeStyle ?? latest?.makeStyle ?? "");
+    setOutputs(song.makeOutputs ?? latest?.makeOutputs ?? DEFAULT_OUTPUTS);
+    setMakeFor(song.id);
+  }
+  async function sendMake(songId: string) {
+    await op({ op: "request-make", songId, style, outputs });
+    setMakeFor(null);
+  }
+  const nothingToMake = !outputs.full && !outputs.shorts && !outputs.stills;
+
   async function download(clipId: string) {
     if (!detail) return;
     const r = await act<{ url: string }>({ op: "clip-download", sessionId: detail.session.id, clipId });
@@ -130,8 +161,8 @@ export function MultiCamHost({ brands, publicOrigin }: { brands: string[]; publi
                       <h2>{song.title}</h2>
                       <span className="mcx-mu">{uploaded.length} in{song.clips.length > uploaded.length ? ` · ${song.clips.length - uploaded.length} uploading` : ""}{!song.longTake && longTakes ? ` · +${longTakes} long take${longTakes > 1 ? "s" : ""}` : ""}</span>
                       {song.longTake ? <span className="mcx-mu small">Used by every song; the edit finds each song in these by sound.</span> :
-                      <button className={"mcx-make" + (song.status !== "collecting" ? " done" : "")} disabled={busy || !(uploaded.length || longTakes) || song.status !== "collecting"} onClick={() => op({ op: "request-make", songId: song.id })}>
-                        ✦ {MAKE_LABEL[song.status] || song.status}
+                      <button className={"mcx-make" + (song.status !== "collecting" ? " done" : "")} disabled={busy || !(uploaded.length || longTakes) || (song.status !== "collecting" && song.status !== "requested") || makeFor === song.id} onClick={() => openMake(song)}>
+                        ✦ {song.status === "requested" ? "Requested ✓ · change" : MAKE_LABEL[song.status] || song.status}
                       </button>}
                     </div>
                     {song.clips.length === 0 && <p className="mcx-mu">Waiting for the first clip…</p>}
@@ -142,7 +173,34 @@ export function MultiCamHost({ brands, publicOrigin }: { brands: string[]; publi
                         {c.status === "uploaded" ? <button className="mcx-link" onClick={() => download(c.id)}>Download</button> : <span className="mcx-mu">uploading…</span>}
                       </div>
                     ))}
-                    {song.status === "requested" && <p className="mcx-mu small">Requested. The automatic edit is the next build phase; until then the editor (Claude) picks it up from here.</p>}
+                    {makeFor === song.id && (
+                      <div className="mcx-makepanel">
+                        <label className="mcx-lbl">Style prompt: the look, transitions, effects, B-roll, who to feature
+                          <textarea className="mcx-input" rows={4} maxLength={MAX_STYLE_CHARS} value={style} onChange={(e) => setStyle(e.target.value)} placeholder={STYLE_IDEAS[0]} autoFocus />
+                        </label>
+                        <div className="mcx-ideas">{STYLE_IDEAS.map((idea) => <button key={idea} type="button" className="mcx-chip" onClick={() => setStyle(idea)}>{idea.split(/[,:.]/)[0]}</button>)}<span className="mcx-mu small">{style.length}/{MAX_STYLE_CHARS}</span></div>
+                        <div className="mcx-outs">
+                          <label><input type="checkbox" checked={outputs.full} onChange={(e) => setOutputs({ ...outputs, full: e.target.checked })} /> 16:9 full video</label>
+                          <label>Shorts 9:16 <select className="mcx-input mcx-small" value={outputs.shorts} onChange={(e) => setOutputs({ ...outputs, shorts: Number(e.target.value) })}>{[0, 1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}</select></label>
+                          <label><input type="checkbox" checked={outputs.stills} onChange={(e) => setOutputs({ ...outputs, stills: e.target.checked })} /> Stills &amp; thumbnails</label>
+                        </div>
+                        <div className="mcx-outs">{(Object.keys(QUALITY_LABEL) as McOutputs["quality"][]).map((q) => (
+                          <label key={q}><input type="radio" name={"q-" + song.id} checked={outputs.quality === q} onChange={() => setOutputs({ ...outputs, quality: q })} /> {QUALITY_LABEL[q]}</label>
+                        ))}</div>
+                        <div className="mcx-actions">
+                          <button className="mcx-make" disabled={busy || nothingToMake} onClick={() => sendMake(song.id)}>✦ {song.status === "requested" ? "Update request" : "Make it"}</button>
+                          <button className="mcx-btn ghost" onClick={() => setMakeFor(null)}>Cancel</button>
+                          {nothingToMake && <span className="mcx-err small">Pick at least one thing to make.</span>}
+                        </div>
+                      </div>
+                    )}
+                    {song.status === "requested" && makeFor !== song.id && (
+                      <div className="mcx-req">
+                        {song.makeStyle ? <p className="mcx-style">“{song.makeStyle}”</p> : <p className="mcx-mu small">No style prompt (house style).</p>}
+                        <p className="mcx-mu small">{outputsText(song.makeOutputs)}</p>
+                        <p className="mcx-mu small">Requested. The automatic render is the next build phase; until then the editor (Claude) picks it up from here, style prompt included.</p>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -190,6 +248,14 @@ const CSS = `
 .mcx-make.done{background:var(--accent-soft);color:var(--accent)}
 .mcx-clip{display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:center;border-top:1px solid var(--line);padding-top:8px}
 .mcx-link{background:none;border:0;color:var(--accent);cursor:pointer;text-decoration:underline;font:inherit}
+.mcx-makepanel,.mcx-req{border-top:1px solid var(--line);padding-top:10px;display:flex;flex-direction:column;gap:10px}
+.mcx-ideas{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.mcx-chip{background:var(--panel-soft);border:1px solid var(--line);border-radius:99px;color:var(--text);padding:5px 11px;cursor:pointer;font:inherit;font-size:13px}
+.mcx-outs{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;font-size:14px}
+.mcx-outs label{display:flex;align-items:center;gap:6px}
+.mcx-small{padding:4px 6px}
+.mcx-style{margin:0;font-style:italic;white-space:pre-wrap}
+.mcx-req p{margin:0}
 .mcx-addsong{flex-direction:row}
 .mcx-addsong .mcx-input{flex:1}
 `;
