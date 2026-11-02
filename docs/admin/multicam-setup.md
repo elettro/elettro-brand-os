@@ -12,6 +12,17 @@ Spec: `docs/multicam/ELETTRO-MULTICAM-SPEC.md`. Read-only facts below were check
   "This MultiCam link is not valid" (web → dev-api → Postgres), and an S3 preflight from `https://os.elettro.com` returns `Access-Control-Allow-Origin` and exposes `ETag`.
 - **Not yet tested:** a real phone upload (start → parts → complete) and a host session.
 
+## Make-it style prompt (2026-11-02)
+
+Adds two columns to `MultiCamSong` (`makeStyle` TEXT, `makeOutputs` JSONB). After merge, in this order (both `stashbox-audit`):
+1. Deploy the dev-api from the "Build DEV API Lambda" artifact of the merge commit (`docs/admin/deploy-dev-api-lambda.md`).
+2. Re-run the setup action: the dry run lists `missingColumns`, apply adds them (`ADD COLUMN IF NOT EXISTS`; existing rows untouched).
+   ```
+   aws lambda invoke --function-name elettro-brand-os-dev-api --cli-binary-format raw-in-base64-out --payload '{"action":"setup-multicam-tables-20261101"}' /dev/stdout --profile stashbox-audit --region us-east-1
+   aws lambda invoke --function-name elettro-brand-os-dev-api --cli-binary-format raw-in-base64-out --payload '{"action":"setup-multicam-tables-20261101","mode":"apply"}' /dev/stdout --profile stashbox-audit --region us-east-1
+   ```
+   Until step 2 runs, *Make it* fails with "MultiCam request failed" (the UPDATE names the new columns); everything else keeps working.
+
 ## Facts checked
 
 - dev-api `elettro-brand-os-dev-api`: `ASSET_UPLOAD_BUCKET=elettro-brand-os-dev-assets`, no `MULTICAM_BUCKET`, 256 MB / 60 s, in the VPC.
