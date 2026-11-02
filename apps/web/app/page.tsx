@@ -13,7 +13,7 @@ const pipeline = [
 export default function DashboardPage() {
   return (
     <div className="shell">
-      <aside className="sidebar">
+      <aside className="sidebar" style={{ display: "flex", flexDirection: "column" }}>
         <div className="brandmark">Elettro <span>Brand OS</span></div>
 
         <div className="nav-section">
@@ -36,6 +36,11 @@ export default function DashboardPage() {
           <a className="nav-item" href="#">Chat</a>
           <a className="nav-item" href="#">Analytics</a>
           <a className="nav-item" href="#">Knowledge</a>
+        </div>
+
+        <div className="nav-section" style={{ marginTop: "auto" }}>
+          <div className="nav-label">Master Admin</div>
+          <Link className="nav-item" href="/admin/estimate-builder">Estimate Builder</Link>
         </div>
       </aside>
 
