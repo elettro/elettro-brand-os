@@ -119,6 +119,8 @@ export function ContentPoolClient({ assets }: { assets: ApiAsset[] }) {
                   {thumb ? (
                     <img
                       src={thumb}
+                      loading="lazy"
+                      decoding="async"
                       alt={asset.filename}
                       style={{ maxWidth: "100%", maxHeight: "100%", width: "auto", height: "auto", objectFit: "contain", borderRadius: 10 }}
                     />
