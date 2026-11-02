@@ -37,7 +37,8 @@ const NAV: NavSection[] = [
   // Super admin only (owner): hidden from every client in CLIENT_NAV, and the page and its API are owner-only on the server.
   { label: "Admin", items: [
     { label: "AI Gateway", href: "/ai-gateway" },
-    { label: "Planner", href: "/planner" }
+    { label: "Planner", href: "/planner" },
+    { label: "Estimate Builder", href: "/admin/estimate-builder" }
   ] }
 ];
 
@@ -59,7 +60,7 @@ const BRANDS = [{ id: "all", name: "All brands", timezone: "" }, ...brandConfigs
 // each follow-up that opens a page for clients flips it to "active" here.
 const CLIENT_NAV: Record<string, "active" | "soon" | "hidden"> = {
   "/": "active", "/ar": "active", "/ar/qr": "active", "/ar/sets": "active", "/review": "active", "/calendar": "active", "/assets": "active", "/content-pool": "active", "/connections": "active",
-  "/collections": "hidden", "/multicam": "hidden", "/holidays": "hidden", "/ai-gateway": "hidden", "/planner": "hidden"
+  "/collections": "hidden", "/multicam": "hidden", "/holidays": "hidden", "/ai-gateway": "hidden", "/planner": "hidden", "/admin/estimate-builder": "hidden"
 };
 
 // Who is signed in: owner sees everything; a client sees only the listed brands.
