@@ -109,8 +109,8 @@ export async function getContentPool() {
 
 
 export function getAssetThumbnailUrl(sourcePath?: string | null, kind: string = "image") {
-  // Dropbox cannot render a PDF preview, so documents get a glyph instead of a thumbnail.
-  if (!sourcePath || kind === "document") return null;
+  // Dropbox cannot render a PDF preview and audio has none, so those get a glyph instead of a thumbnail.
+  if (!sourcePath || kind === "document" || kind === "audio") return null;
   return `/api/dev-api/dropbox/thumbnail?path=${encodeURIComponent(sourcePath)}&kind=${encodeURIComponent(kind)}`;
 }
 

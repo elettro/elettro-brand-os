@@ -23,7 +23,7 @@ function ratioForAsset(asset: ApiAsset) {
 }
 
 export function ContentPoolClient({ assets }: { assets: ApiAsset[] }) {
-  const [media, setMedia] = useState<"all" | "image" | "video" | "document">("all");
+  const [media, setMedia] = useState<"all" | "image" | "video" | "audio" | "carousel" | "document">("all");
   const [ratio, setRatio] = useState("all");
   const [sort, setSort] = useState<SortMode>("newest");
   const [view, setView] = useState<"cards" | "list">("cards");
@@ -68,9 +68,11 @@ export function ContentPoolClient({ assets }: { assets: ApiAsset[] }) {
             <label className="intake-control">
               <span className="metric">Media</span>
               <select value={media} onChange={(e) => setMedia(e.target.value as typeof media)}>
-                <option value="all">Videos & Images</option>
+                <option value="all">All media</option>
                 <option value="video">Videos</option>
                 <option value="image">Images</option>
+                <option value="carousel">Carousels</option>
+                <option value="audio">Audio (songs)</option>
                 <option value="document">PDF documents</option>
               </select>
             </label>
@@ -124,7 +126,7 @@ export function ContentPoolClient({ assets }: { assets: ApiAsset[] }) {
                       alt={asset.filename}
                       style={{ maxWidth: "100%", maxHeight: "100%", width: "auto", height: "auto", objectFit: "contain", borderRadius: 10 }}
                     />
-                  ) : <span className="muted">No preview</span>}
+                  ) : <span className="muted">{asset.kind === "audio" ? "♪ Audio" : "No preview"}</span>}
                 </button>
                 <strong style={{ overflowWrap: "anywhere" }}>{asset.filename}</strong>
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
