@@ -9,8 +9,7 @@ HTTP API `zkjngy7rdd` (us-east-1, account 656260749296) in front of Lambda `elet
    ```
    (`stashbox-audit` could create the route.) Stage `$default` auto-deploys.
 2. **A Lambda resource-policy statement per route.** Missing = HTTP 500 "Internal Server Error", while a direct
-   `aws lambda invoke` of the same event still works. This was run by Dean with the `elettro` (root) profile; it was not tried
-   with `stashbox-audit`.
+   `aws lambda invoke` of the same event still works. Earlier runs used the `elettro` (root) profile; **`stashbox-audit` can do it too** (verified 2026-11-01, `multicam-route`).
    ```
    aws lambda add-permission --function-name elettro-brand-os-dev-api --statement-id <name>-route --action lambda:InvokeFunction --principal apigateway.amazonaws.com --source-arn "arn:aws:execute-api:us-east-1:656260749296:zkjngy7rdd/*/*/connections/<name>" --region us-east-1 --profile elettro
    ```

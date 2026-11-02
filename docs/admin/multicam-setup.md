@@ -1,7 +1,16 @@
 # Elettro MultiCam — AWS setup (Phase 1)
 
 Spec: `docs/multicam/ELETTRO-MULTICAM-SPEC.md`. Read-only facts below were checked 2026-11-01 with `stashbox-audit`.
-Nothing here has been run yet (**not verified** end to end).
+**Done 2026-11-01** (steps 1-5; step 6 not done):
+- dev-api deployed from the "Build DEV API Lambda" artifact of merge `73eb452` (CodeSha256 `11/jDQve…`; previous `1gPnC3y…`), `stashbox-audit`.
+- Tables created (`setup-multicam-tables-20261101` apply; a second dry run lists all three), `stashbox-audit`.
+- Route `POST /multicam` (route id `p2pilxt`) and Lambda permission `multicam-route`, **both with `stashbox-audit`** (add-permission works with it; root not needed).
+  Smoke test returns 401 "Connect key required".
+- Bucket CORS now lists `https://os.elettro.com` first, then the two old origins; lifecycle rule `multicam-abort-incomplete` (prefix `multicam/`, 2 days).
+  **Both needed the root profile**: `stashbox-audit` is denied `s3:PutBucketCORS` and `s3:PutLifecycleConfiguration`.
+- Checked live: `/mc/<code>` returns 200, `/multicam` sends a signed-out visitor to login, `/api/multicam/band` with an unknown code returns 404
+  "This MultiCam link is not valid" (web → dev-api → Postgres), and an S3 preflight from `https://os.elettro.com` returns `Access-Control-Allow-Origin` and exposes `ETag`.
+- **Not yet tested:** a real phone upload (start → parts → complete) and a host session.
 
 ## Facts checked
 
