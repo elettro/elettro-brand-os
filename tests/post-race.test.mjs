@@ -63,3 +63,9 @@ test("days fills the last 30 calendar days with zeros, oldest first, ending toda
   assert.equal(days[0].d, "2026-10-04");
   assert.equal(days[0].posts, 0);
 });
+
+test("days has no repeated or skipped date across the November DST change", () => {
+  const days = fillDays([], Date.parse("2026-11-03T02:00:00Z"));
+  assert.equal(new Set(days.map((x) => x.d)).size, 30);
+  assert.deepEqual(days.slice(-3).map((x) => x.d), ["2026-10-31", "2026-11-01", "2026-11-02"]);
+});

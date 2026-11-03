@@ -20,7 +20,9 @@ const dayKey = (t) => new Date(t).toLocaleDateString("en-CA", { timeZone: TZ });
 export function fillDays(rows, now = Date.now()) {
   const counts = new Map(rows.map((r) => [String(r.d).slice(0, 10), r.n]));
   const out = [];
-  for (let i = DAYS - 1; i >= 0; i--) { const d = dayKey(now - i * 86400000); out.push({ d, posts: counts.get(d) || 0 }); }
+  // Step back by calendar date (UTC arithmetic on the date string), not by 24 h, so a DST change can't repeat or skip a day.
+  const [y, m, dd] = dayKey(now).split("-").map(Number);
+  for (let i = DAYS - 1; i >= 0; i--) { const d = new Date(Date.UTC(y, m - 1, dd - i)).toISOString().slice(0, 10); out.push({ d, posts: counts.get(d) || 0 }); }
   return out;
 }
 
