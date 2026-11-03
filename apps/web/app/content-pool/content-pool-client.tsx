@@ -1,9 +1,64 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getAssetThumbnailUrl, type ApiAsset } from "@/lib/dev-api";
 
 type SortMode = "newest" | "oldest" | "alpha" | "last-used";
+
+// The AWS account allows only 10 concurrent Lambdas, so a grid asking for 100 thumbnails at once gets most of them
+// throttled (503). Thumbnails load a few at a time, only when scrolled near, and a failed one retries with a pause.
+const MAX_THUMBS_AT_ONCE = 4;
+let thumbsLoading = 0;
+const thumbQueue: Array<() => void> = [];
+function acquireThumbSlot(start: () => void) {
+  if (thumbsLoading < MAX_THUMBS_AT_ONCE) { thumbsLoading++; start(); } else thumbQueue.push(start);
+}
+function releaseThumbSlot() {
+  const next = thumbQueue.shift();
+  if (next) next(); else thumbsLoading = Math.max(0, thumbsLoading - 1);
+}
+
+function Thumb({ src, alt }: { src: string; alt: string }) {
+  const box = useRef<HTMLSpanElement>(null);
+  const [current, setCurrent] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  const tries = useRef(0);
+  const holding = useRef(false);
+
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    let cancelled = false;
+    const begin = () => acquireThumbSlot(() => { holding.current = true; if (!cancelled) setCurrent(src); else done(); });
+    const done = () => { if (holding.current) { holding.current = false; releaseThumbSlot(); } };
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) { observer.disconnect(); begin(); }
+    }, { rootMargin: "400px" });
+    observer.observe(el);
+    return () => { cancelled = true; observer.disconnect(); done(); };
+  }, [src]);
+
+  return (
+    <span ref={box} style={{ display: "grid", placeItems: "center", width: "100%", height: "100%" }}>
+      {failed ? <span className="muted">Preview unavailable</span> : current ? (
+        <img
+          src={current}
+          alt={alt}
+          decoding="async"
+          style={{ maxWidth: "100%", maxHeight: "100%", width: "auto", height: "auto", objectFit: "contain", borderRadius: 10 }}
+          onLoad={() => { if (holding.current) { holding.current = false; releaseThumbSlot(); } }}
+          onError={() => {
+            if (holding.current) { holding.current = false; releaseThumbSlot(); }
+            if (tries.current >= 3) { setFailed(true); return; }
+            tries.current += 1;
+            const n = tries.current;
+            setTimeout(() => acquireThumbSlot(() => { holding.current = true; setCurrent(`${src}${src.includes("?") ? "&" : "?"}r=${n}`); }), 1500 * n);
+          }}
+        />
+      ) : <span className="muted">Loading…</span>}
+    </span>
+  );
+}
 
 function formatLastUsed(value?: string | null) {
   if (!value) return "Never";
@@ -118,15 +173,7 @@ export function ContentPoolClient({ assets }: { assets: ApiAsset[] }) {
                   onClick={() => setPreview(asset)}
                   style={{ border: 0, background: "transparent", padding: 0, height: 280, display: "grid", placeItems: "center", cursor: "zoom-in" }}
                 >
-                  {thumb ? (
-                    <img
-                      src={thumb}
-                      loading="lazy"
-                      decoding="async"
-                      alt={asset.filename}
-                      style={{ maxWidth: "100%", maxHeight: "100%", width: "auto", height: "auto", objectFit: "contain", borderRadius: 10 }}
-                    />
-                  ) : <span className="muted">{asset.kind === "audio" ? "♪ Audio" : "No preview"}</span>}
+                  {thumb ? <Thumb src={thumb} alt={asset.filename} /> : <span className="muted">{asset.kind === "audio" ? "♪ Audio" : "No preview"}</span>}
                 </button>
                 <strong style={{ overflowWrap: "anywhere" }}>{asset.filename}</strong>
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
