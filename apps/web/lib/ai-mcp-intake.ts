@@ -2,7 +2,7 @@ import {createHmac,randomBytes,timingSafeEqual} from "node:crypto";
 import {parseChatFileParam,type ChatFile} from "@/lib/ai-mcp-chat-file";
 export type {ChatFile} from "@/lib/ai-mcp-chat-file";
 import {serverSetting} from "@/lib/cognito-auth";
-import {brandConfigs} from "@/lib/brand-config";
+import {gatewayBrandConfigs} from "@/lib/brand-config";
 import {executeAiGateway,GatewayError} from "@/lib/ai-gateway";
 import type {McpIdentity} from "@/lib/ai-mcp-auth";
 
@@ -79,7 +79,7 @@ export function normalizedMetadata(value:unknown,name:string):IntakeMetadata{
  return result;
 }
 export function insideBrand(slug:string,path:string):boolean{
- const root=brandConfigs.find(item=>item.id===slug)?.dropboxRoot;
+ const root=gatewayBrandConfigs.find(item=>item.id===slug)?.dropboxRoot;
  if(!root||typeof path!=="string"||path.length>2048||
    /[\\\x00-\x1f]/.test(path)||
    path.split("/").some((part,i)=>i>0&&(!part||part==="."||part==="..")))
@@ -137,7 +137,7 @@ export async function verifyIntakePlan(token:unknown,identity:McpIdentity,file:C
 export async function prepareChatFileIntake(args:unknown,identity:McpIdentity){
  const obj=inputRecord(args),file=validChatFile(obj.file);
  const slug=String(obj.brandSlug||"");
- const config=brandConfigs.find(item=>item.id===slug);
+ const config=gatewayBrandConfigs.find(item=>item.id===slug);
  if(!config||!identity.brandSlugs.includes(slug))
   throw new GatewayError(403,"Brand not authorized");
  const filename=safeFilename(file.file_name||obj.filename);

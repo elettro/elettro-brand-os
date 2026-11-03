@@ -11,3 +11,15 @@ export const brandConfigs = [
   { id: "reggaeland", name: "Reggae.Land", timezone: "America/New_York", dropboxRoot: "/1---elettro-brand-os/brands/reggaeland" },
   { id: "google-review", name: "Google Review", timezone: "America/New_York", dropboxRoot: "/1---elettro-brand-os/brands/google-review" }
 ] as const;
+
+/**
+ * The shared creative-assets library (stock graphics, audio). It is not a brand: it stays out of `brandConfigs`
+ * (brand switchers, planner, Review) but the AI/MCP gateway treats it as a peer of the brand folders, so
+ * search, read, tag, upload and folder tools reach it exactly as they reach a brand.
+ */
+export const SHARED_LIBRARY_ID = "creative-assets";
+export const sharedLibraryConfig = {
+  id: SHARED_LIBRARY_ID, name: "Creative Assets (shared)", timezone: "America/New_York",
+  dropboxRoot: "/1---elettro-brand-os/creative-assets"
+};
+export const gatewayBrandConfigs = [...brandConfigs, sharedLibraryConfig];

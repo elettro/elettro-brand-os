@@ -1,6 +1,6 @@
 import {createHash,timingSafeEqual} from "node:crypto";
 import {SSMClient,GetParameterCommand} from "@aws-sdk/client-ssm";
-import {brandConfigs} from "@/lib/brand-config";
+import {brandConfigs,gatewayBrandConfigs,SHARED_LIBRARY_ID} from "@/lib/brand-config";
 
 const KEY="/amplify/d2k28tehm1a8zw/develop-branch-b11b55647b/ELETTRO_AI_MCP_CLIENTS_JSON";
 const ssm=new SSMClient({region:"us-east-1"});
@@ -31,12 +31,19 @@ export async function loadMcpAuthSettings():Promise<{clients:Client[];chatgptOau
 async function clientConfig():Promise<Client[]>{
  return (await loadMcpAuthSettings()).clients;
 }
+// The shared creative-assets library is open to every client that already covers all brands (owner-level clients),
+// and to any other client that lists it explicitly in its brandSlugs.
+export function withSharedLibrary(slugs:string[]):string[]{
+ const out=new Set(slugs);
+ if(brandConfigs.every(b=>out.has(b.id)))out.add(SHARED_LIBRARY_ID);
+ return [...out];
+}
 export async function authorizeMcp(header:string|null):Promise<McpIdentity>{
  if(!header||!/^Bearer [A-Za-z0-9_-]{43,256}$/.test(header))
   throw new McpAuthorizationError(401,"Bearer token required");
  const hashed=createHash("sha256").update(header.slice(7)).digest();
  const clients=await clientConfig();
- const brands:ReadonlySet<string>=new Set(brandConfigs.map(x=>x.id));
+ const brands:ReadonlySet<string>=new Set(gatewayBrandConfigs.map(x=>x.id));
  let chosen:Client|undefined;
  for(const client of clients){
   if(!client||typeof client.tokenSha256!=="string"||!/^[a-f0-9]{64}$/i.test(client.tokenSha256))continue;
@@ -47,7 +54,7 @@ export async function authorizeMcp(header:string|null):Promise<McpIdentity>{
     !Array.isArray(chosen.permissions)||!chosen.brandSlugs.length||!chosen.permissions.length||
     chosen.brandSlugs.some(x=>!brands.has(x))||chosen.permissions.some(x=>!permissions.includes(x)))
   throw new McpAuthorizationError(503,"Invalid MCP client scope");
- return {clientId:chosen.id,brandSlugs:[...new Set(chosen.brandSlugs)],permissions:[...new Set(chosen.permissions)]};
+ return {clientId:chosen.id,brandSlugs:withSharedLibrary(chosen.brandSlugs),permissions:[...new Set(chosen.permissions)]};
 }
 export function requireMcpScope(identity:McpIdentity,permission:McpPermission,brand:unknown){
  if(!identity.permissions.includes(permission))throw new McpAuthorizationError(403,"MCP operation denied");
