@@ -35,6 +35,9 @@ jobs:
       - name: Test per-user brand access
         run: node --experimental-strip-types --test tests/brand-access.test.mjs
 
+      - name: Test scroll relay (phone remote for elettro.com/scroll)
+        run: node --test tests/scroll-relay.test.mjs
+
       - name: Test asset metadata state and enrichment guards
         run: node --test tests/asset-enrichment-safety.test.mjs
 
