@@ -63,3 +63,14 @@ test("wired into index, zip list and syntax check", () => {
   assert.ok(read("services/dev-api-lambda/package.json").includes("asset-tagging.mjs"));
   assert.ok(read(".github/workflows/build-dev-api-lambda.yml").includes("node --check asset-tagging.mjs"));
 });
+
+test("allowedDestinations can open an asset to every network, and bad values are rejected", async () => {
+  const db = fakeDb([{ id: ID, tags: ["gmb"], title: null, topic: null, creativeNotes: null, retiredAt: null, allowedDestinations: ["gmb"] }]);
+  const r = await runTagAssets({ mode: "apply", allowedDestinations: [], items: [{ assetId: ID, tags: ["show-promo"] }] }, db.connect, json);
+  assert.deepEqual(r.body.results[0].allowedDestinations, { before: ["gmb"], after: [] });
+  assert.deepEqual(db.updates[db.updates.length - 1], [ID, []]);
+  const before = db.updates.length;
+  const bad = await runTagAssets({ mode: "apply", allowedDestinations: ["ok", "bad name!"], items: [{ assetId: ID, tags: ["x"] }] }, db.connect, json);
+  assert.equal(bad.body.results[0].status, "rejected");
+  assert.equal(db.updates.length, before);
+});
