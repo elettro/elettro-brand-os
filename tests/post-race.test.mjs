@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildRace, postRaceFeed, GOAL } from "../services/dev-api-lambda/post-race.mjs";
+import { buildRace, fillDays, postRaceFeed, GOAL } from "../services/dev-api-lambda/post-race.mjs";
 
 const brands = [{ id: "b1", slug: "stashbox", name: "Stashbox" }, { id: "b2", slug: "elettro", name: "Elettro" }, { id: "lib", slug: "creative-assets", name: "Library" }];
 const at = (s) => new Date(s);
@@ -52,4 +52,14 @@ test("feed queries the ledger and looks up the 1000th post only for scopes at th
   const race = await postRaceFeed(async () => client, { now: Date.now() + 10 * 60_000 });
   assert.equal(race.total.finishedAt, "2026-11-19T00:00:00.000Z");
   assert.equal(seen.filter((s) => s.includes("OFFSET 999")).length, 3);
+});
+
+test("days fills the last 30 calendar days with zeros, oldest first, ending today", () => {
+  const now = Date.parse("2026-11-02T15:00:00Z");
+  const days = fillDays([{ d: "2026-11-02", n: 7 }, { d: "2026-10-30", n: 2 }], now);
+  assert.equal(days.length, 30);
+  assert.deepEqual(days[29], { d: "2026-11-02", posts: 7 });
+  assert.deepEqual(days.find((x) => x.d === "2026-10-30"), { d: "2026-10-30", posts: 2 });
+  assert.equal(days[0].d, "2026-10-04");
+  assert.equal(days[0].posts, 0);
 });
