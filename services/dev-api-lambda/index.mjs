@@ -3,6 +3,7 @@ import {runBrandMediaReset} from "./brand-media-reset.mjs";
 import {runBrandRootMigration} from "./brand-root-migration.mjs";
 import { configurePlannerBrand, runPlanWeek, runPlanWeeks, approvePlannerWeek } from "./planner-v2-db.mjs";
 import {runSharedAudioLibrarySetup,LIBRARY_SLUG,LIBRARY_AUDIO_ROOT} from "./shared-audio-library.mjs";
+import {runListUntaggedAssets,runTagAssets} from "./asset-tagging.mjs";
 import {runSharedStockGraphicsSetup,runSharedStockGraphicsTagging,LIBRARY_GRAPHICS_ROOT} from "./shared-stock-graphics.mjs";
 import {runDocumentAssetKindSetup} from "./document-asset-kind.mjs";
 import {createBrand} from "./brand-create.mjs";
@@ -1606,6 +1607,8 @@ export const handler = async (event = {}) => {
   // IAM-only shared stock graphics root + tagging (dry-run unless mode:"apply"); never exposed through HTTP or MCP.
   if(event.action === "setup-shared-stock-graphics-20261101" && !event.requestContext && !event.rawPath && !event.path) return runSharedStockGraphicsSetup(event,connectDatabase,json);
   if(event.action === "tag-shared-stock-graphics-20261101" && !event.requestContext && !event.rawPath && !event.path) return runSharedStockGraphicsTagging(event,connectDatabase,json);
+  if(event.action === "list-untagged-assets-20261103" && !event.requestContext && !event.rawPath && !event.path) return runListUntaggedAssets(event,connectDatabase,json);
+  if(event.action === "tag-assets-20261103" && !event.requestContext && !event.rawPath && !event.path) return runTagAssets(event,connectDatabase,json);
   // IAM-only: add the 'document' (PDF) asset kind (dry-run unless mode:"apply").
   if(event.action === "setup-document-asset-kind-20261029" && !event.requestContext && !event.rawPath && !event.path) return runDocumentAssetKindSetup(event,connectDatabase,json);
   // IAM-only: fold duplicate connected rows of one login into one (dry-run unless mode:"apply").
