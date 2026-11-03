@@ -17,7 +17,7 @@ function rig() {
     sent.push({ cid, data: JSON.parse(data) });
   };
   let t = 1000;
-  const h = makeHandler({ db, post, now: () => (t += 1000) });
+  const h = makeHandler({ db, post, now: () => (t += 1000), log: () => {} });
   const connect = (cid, s, r, origin) => h({
     requestContext: { routeKey: '$connect', connectionId: cid },
     queryStringParameters: { s, r },
@@ -125,4 +125,13 @@ test('oversized and unknown-connection messages are ignored', async () => {
   await r.msg('P1', 'x'.repeat(9000));
   await r.msg('NOPE', { t: 'p', v: 1 });
   assert.equal(r.sent.length, 0);
+});
+
+test('a heartbeat ping is answered to the sender only and never forwarded', async () => {
+  const r = rig();
+  await r.connect('D1', 'abcd1234', 'display');
+  await r.connect('P1', 'abcd1234', 'phone');
+  r.sent.length = 0;
+  await r.msg('P1', { t: '_ping' });
+  assert.deepEqual(r.sent, [{ cid: 'P1', data: { t: '_pong' } }]);
 });

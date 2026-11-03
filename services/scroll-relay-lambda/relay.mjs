@@ -34,7 +34,8 @@ function header(event, name) {
  *           post(connectionId:string, data:string):Promise<void>,   // throws an error with statusCode 410 when the peer is gone
  *           now?():number, extraOrigins?:string[] }} deps
  */
-export function makeHandler({ db, post, now = () => Date.now(), extraOrigins = [] }) {
+export function makeHandler({ db, post, now = () => Date.now(), extraOrigins = [], log = (o) => console.log(JSON.stringify(o)) }) {
+  const short = (c) => String(c || '').slice(-6);
   const ttl = () => Math.floor(now() / 1000) + TTL_SECONDS;
 
   async function send(cid, payload) {
@@ -51,7 +52,8 @@ export function makeHandler({ db, post, now = () => Date.now(), extraOrigins = [
     return db.query(`s#${sid}`); // [{ sk: connectionId, role }]
   }
 
-  async function dropConnection(cid, sid) {
+  async function dropConnection(cid, sid, why = 'drop') {
+    log({ ev: why, sid, cid: short(cid) });
     await db.del({ pk: `c#${cid}`, sk: '-' });
     if (sid) await db.del({ pk: `s#${sid}`, sk: cid });
   }
@@ -68,23 +70,24 @@ export function makeHandler({ db, post, now = () => Date.now(), extraOrigins = [
 
     // a newly opened display replaces the old one (a reloaded or next page); drop its stale record
     if (role === 'display') {
-      for (const p of peers.filter((x) => x.role === 'display')) await dropConnection(p.sk, sid);
+      for (const p of peers.filter((x) => x.role === 'display')) await dropConnection(p.sk, sid, 'replaced-display');
     }
     // one phone at a time, and the newest one wins: a phone that slept or reloaded must never lock you out.
     // The older phone (if still connected) is told another phone took over.
     if (role === 'phone') {
       for (const p of peers.filter((x) => x.role === 'phone')) {
         await send(p.sk, { t: 'busy' });
-        await dropConnection(p.sk, sid);
+        await dropConnection(p.sk, sid, 'replaced-phone');
       }
     }
+    log({ ev: 'connect', sid, role, cid: short(cid), peers: peers.map((x) => x.role + ':' + short(x.sk)) });
     await db.put({ pk: `s#${sid}`, sk: cid, role, ttl: ttl() });
     await db.put({ pk: `c#${cid}`, sk: '-', sid, role, ttl: ttl() });
 
     // tell the display a phone arrived (the display treats this as "connection open")
     if (role === 'phone') {
       for (const d of peers.filter((x) => x.role === 'display')) {
-        if (!(await send(d.sk, { t: '_join' }))) await dropConnection(d.sk, sid);
+        if (!(await send(d.sk, { t: '_join' }))) await dropConnection(d.sk, sid, 'gone-on-join');
       }
     }
     return { statusCode: 200, body: 'ok' };
@@ -93,12 +96,13 @@ export function makeHandler({ db, post, now = () => Date.now(), extraOrigins = [
   async function onDisconnect(event) {
     const cid = event.requestContext.connectionId;
     const me = await db.get({ pk: `c#${cid}`, sk: '-' });
-    if (!me) return { statusCode: 200, body: 'ok' };
-    await dropConnection(cid, me.sid);
+    if (!me) { log({ ev: 'disconnect-unknown', cid: short(cid) }); return { statusCode: 200, body: 'ok' }; }
+    log({ ev: 'disconnect', sid: me.sid, role: me.role, cid: short(cid) });
+    await dropConnection(cid, me.sid, 'disconnect-row');
     const peers = await peersOf(me.sid);
     const wantRole = me.role === 'phone' ? 'display' : 'phone';
     for (const p of peers.filter((x) => x.role === wantRole)) {
-      if (!(await send(p.sk, { t: '_leave', role: me.role }))) await dropConnection(p.sk, me.sid);
+      if (!(await send(p.sk, { t: '_leave', role: me.role }))) await dropConnection(p.sk, me.sid, 'gone-on-leave');
     }
     return { statusCode: 200, body: 'ok' };
   }
@@ -108,7 +112,9 @@ export function makeHandler({ db, post, now = () => Date.now(), extraOrigins = [
     if (!body || body.length > MAX_BODY) return { statusCode: 200, body: 'ignored' };
     const cid = event.requestContext.connectionId;
     const me = await db.get({ pk: `c#${cid}`, sk: '-' });
-    if (!me) return { statusCode: 200, body: 'ignored' };
+    if (!me) { log({ ev: 'msg-from-unknown', cid: short(cid) }); return { statusCode: 200, body: 'ignored' }; }
+    // Heartbeat: the page pings every few seconds and treats silence as a dead connection (a browser can miss a closed socket).
+    if (body.length < 30 && body.includes('"_ping"')) { await send(cid, { t: '_pong' }); return { statusCode: 200, body: 'pong' }; }
     const peers = await peersOf(me.sid);
 
     // A display announces itself once its socket is open (API Gateway cannot push during $connect).
@@ -119,8 +125,9 @@ export function makeHandler({ db, post, now = () => Date.now(), extraOrigins = [
     }
     const wantRole = me.role === 'phone' ? 'display' : 'phone';
     const targets = peers.filter((x) => x.role === wantRole && x.sk !== cid);
+    if (!targets.length) log({ ev: 'no-peer', sid: me.sid, from: me.role, cid: short(cid) });
     for (const p of targets) {
-      if (!(await send(p.sk, body))) await dropConnection(p.sk, me.sid);
+      if (!(await send(p.sk, body))) await dropConnection(p.sk, me.sid, 'gone-on-forward');
     }
     return { statusCode: 200, body: 'ok' };
   }
