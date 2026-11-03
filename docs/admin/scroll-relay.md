@@ -23,7 +23,7 @@ Rules: a session is an 4-32 character lowercase code; one display (a new one rep
 older one is sent `{"t":"busy"}`); messages over 8 KB are dropped; browsers must come from `elettro.com`, `www.elettro.com` or localhost.
 The session code is the only credential, the same as before (it is in the QR code).
 
-## Setup (not done as of 2026-11-02: root profile, ask Dean first)
+## Setup (done 2026-11-03, root profile; re-run only to update)
 
 `stashbox-audit` cannot create any of this (checked 2026-11-02: `CreateFunction`, `CreateRole`, `PassRole`, `CreateTable` and API
 Gateway writes are all implicit deny). Run once with the root profile `elettro`:
@@ -53,7 +53,7 @@ Re-run `scripts/scroll-relay-setup.sh` (root), or zip `index.mjs relay.mjs packa
 
 ## Unknown / ask Dean
 
-- Not verified against real API Gateway yet: the `$connect` origin check (`Origin` header), the 10-minute idle timeout (the page sends a
+- Verified on real API Gateway 2026-11-03: the `$connect` origin check (foreign origin gets 403), two-way messages, `_join`/`_leave`, and a real phone. Still not verified: the 10-minute idle timeout (the page sends a
   keep-alive every 4 minutes) and the 2-hour maximum connection length (the page reconnects by itself).
 - Whether the demo should get its own domain (for example `relay.elettro.com`) instead of the default `execute-api` address.
 - Cost: pay-per-request DynamoDB, WebSocket messages and Lambda invocations; expected to be pennies a month at demo traffic. Not measured.
