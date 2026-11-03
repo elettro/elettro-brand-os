@@ -1,6 +1,6 @@
 import {createPublicKey,verify,type JsonWebKey as NodeJsonWebKey} from "node:crypto";
 import {COGNITO_DOMAIN,LEGACY_ORIGIN} from "@/lib/cognito-auth";
-import {brandConfigs} from "@/lib/brand-config";
+import {brandConfigs,SHARED_LIBRARY_ID} from "@/lib/brand-config";
 import {isVerifiedCognitoOwner} from "@/lib/ai-mcp-userinfo";
 import {loadMcpAuthSettings,McpAuthorizationError,type McpIdentity} from "@/lib/ai-mcp-auth";
 
@@ -130,7 +130,7 @@ export async function authorizeChatGptOauth(header:string):Promise<McpIdentity>{
  // arbitrary registration remain excluded regardless of supplied scopes.
  return {
   clientId:"chatgpt_oauth",
-  brandSlugs:brandConfigs.map(brand=>brand.id),
+  brandSlugs:brandConfigs.map(brand=>brand.id).concat(SHARED_LIBRARY_ID),
   permissions:claims.scope.split(" ").includes(MCP_OAUTH_WRITE_SCOPE)
    ? ["assets:read","folders:read","assets:write","folders:write","assets:upload"]
    : ["assets:read","folders:read"]

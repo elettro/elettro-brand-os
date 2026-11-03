@@ -1,6 +1,6 @@
 import { connectKeyHeaders } from "@/lib/dev-api-key";
 import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
-import { brandConfigs } from "@/lib/brand-config";
+import { gatewayBrandConfigs } from "@/lib/brand-config";
 
 /**
  * Elettro AI Gateway V1: shared, provider-neutral actions.
@@ -33,7 +33,7 @@ function str(value: unknown, label: string, max = 256): string {
 }
 function brandConfig(slug: unknown) {
   const name = str(slug, "brandSlug", 100);
-  const config = brandConfigs.find(item => item.id === name);
+  const config = gatewayBrandConfigs.find(item => item.id === name);
   if (!config) throw new GatewayError(400, "Unknown brand");
   return config;
 }
@@ -241,7 +241,8 @@ export async function executeAiGateway(input: unknown): Promise<Dict> {
     if (q.length > 160) throw new GatewayError(400, "Search query too long");
     const limit = command.limit === undefined ? 25 : Number(command.limit);
     if (!Number.isInteger(limit) || limit < 1 || limit > 50) throw new GatewayError(400, "limit must be 1–50");
-    const result = await api("/assets");
+    // Filter on the server (up to 2000 newest of this brand or of the shared library), not the global newest 500.
+    const result = await api("/assets?brands=" + encodeURIComponent(slug));
     const rows = result.assets;
     if (!Array.isArray(rows)) throw new GatewayError(502, "Asset list unavailable");
     const matches = rows.map(sanitizedAsset).filter(item => item.brandSlug === slug &&
