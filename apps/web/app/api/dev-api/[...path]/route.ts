@@ -31,7 +31,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       cache: "no-store",
       signal: AbortSignal.timeout(25000)
     });
-    const headers = new Headers({ "cache-control": route === "dropbox/thumbnail" ? "private, max-age=300" : "no-store" });
+    // Only a good thumbnail is cached; a 503 from a burst of requests must not stick for five minutes.
+    const headers = new Headers({ "cache-control": route === "dropbox/thumbnail" && upstream.ok ? "private, max-age=300" : "no-store" });
     const type = upstream.headers.get("content-type");
     if (type) headers.set("content-type", type);
     return new NextResponse(upstream.body, { status: upstream.status, headers });
