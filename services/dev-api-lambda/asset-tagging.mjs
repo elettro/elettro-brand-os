@@ -29,7 +29,8 @@ export async function runListUntaggedAssets(event, connectDatabase, json) {
        WHERE ${where} GROUP BY b."slug" ORDER BY b."slug"`, [kind, maxTags, brandSlug])).rows;
     const rows = (await client.query(
       `SELECT a."id", b."slug" AS "brandSlug", a."filename", a."sourcePath", a."kind", a."aspectRatioLabel", a."durationMs",
-              a."contentGroup", a."title", a."topic", a."tags", a."creativeNotes"
+              a."contentGroup", a."title", a."topic", a."tags", a."creativeNotes",
+              a."allowedDestinations", a."excludedDestinations", a."eligibilityType"
        FROM "Asset" a JOIN "Brand" b ON b."id"=a."brandId"
        WHERE ${where} AND ($4::uuid IS NULL OR a."id" > $4::uuid)
        ORDER BY a."id" LIMIT $5`, [kind, maxTags, brandSlug, after, limit])).rows;
@@ -61,7 +62,7 @@ export async function runTagAssets(event, connectDatabase, json) {
       const add = cleanTags(item?.tags);
       if (!/^[0-9a-f-]{36}$/i.test(id) || !add.length) { results.push({assetId: item?.assetId, status: "rejected"}); continue; }
       const row = (await client.query(
-        'SELECT "id","tags","title","topic","creativeNotes","retiredAt" FROM "Asset" WHERE "id"=$1', [id])).rows[0];
+        'SELECT "id","tags","title","topic","creativeNotes","retiredAt","allowedDestinations" FROM "Asset" WHERE "id"=$1', [id])).rows[0];
       if (!row) { results.push({assetId: id, status: "not-found"}); continue; }
       if (row.retiredAt) { results.push({assetId: id, status: "retired"}); continue; }
       const have = Array.isArray(row.tags) ? row.tags : [];
@@ -79,6 +80,15 @@ export async function runTagAssets(event, connectDatabase, json) {
         else if (el.type === "annual" && mmdd(el.fromMmdd) && mmdd(el.untilMmdd)) eligibility = {type: "annual", from: el.fromMmdd, until: el.untilMmdd};
         else { results.push({assetId: id, status: "rejected", error: "bad eligibility"}); continue; }
       }
+      // allowedDestinations: [] opens the asset to every network; a list restricts it to those networks.
+      const wantDest = item.allowedDestinations !== undefined ? item.allowedDestinations : event.allowedDestinations;
+      let destinations;
+      if (wantDest !== undefined) {
+        if (!Array.isArray(wantDest) || wantDest.length > 20 || wantDest.some((d) => typeof d !== "string" || !/^[a-z0-9_-]{2,30}$/i.test(d))) {
+          results.push({assetId: id, status: "rejected", error: "bad allowedDestinations"}); continue;
+        }
+        destinations = [...new Set(wantDest.map((d) => d.toLowerCase()))];
+      }
       const title = pick(row.title, item.title, 200), topic = pick(row.topic, item.topic, 200), notes = pick(row.creativeNotes, item.notes, 2000);
       if (mode === "apply") {
         await client.query(
@@ -87,8 +97,10 @@ export async function runTagAssets(event, connectDatabase, json) {
         if (eligibility) await client.query(
           'UPDATE "Asset" SET "eligibilityType"=$2::"EligibilityType","annualFromMmdd"=$3,"annualUntilMmdd"=$4,"eligibleFrom"=NULL,"eligibleUntil"=NULL WHERE "id"=$1',
           [id, eligibility.type, eligibility.from, eligibility.until]);
+        if (destinations) await client.query('UPDATE "Asset" SET "allowedDestinations"=$2 WHERE "id"=$1', [id, destinations]);
       }
-      results.push({assetId: id, status: mode === "apply" ? "tagged" : "would-tag", tagsAdded: tags.length - have.length, tags, eligibility});
+      results.push({assetId: id, status: mode === "apply" ? "tagged" : "would-tag", tagsAdded: tags.length - have.length, tags, eligibility,
+        ...(destinations ? {allowedDestinations: {before: row.allowedDestinations || [], after: destinations}} : {})});
     }
     return json(200, {ok: true, mode, overwrite, summary: results.reduce((m, r) => ({...m, [r.status]: (m[r.status] || 0) + 1}), {}), results});
   } catch (error) {
