@@ -1,9 +1,38 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-31",
+  "updated_at": "2026-11-03",
   "source_of_truth": "docs/bug-fix/",
   "workflow": "docs/bug-fix/AGENT_WORKFLOW.md",
   "bugs": [
+    {
+      "id": "EOS-BUG-0006",
+      "title": "elettro.com/scroll freezes or \"dies at #N\" mid-session",
+      "status": "Fixed",
+      "verification": "Pending",
+      "severity": "High",
+      "area": "Scroll Remote",
+      "environment": "Both",
+      "reported_at": "2026-10",
+      "fixed_at": "2026-11-03",
+      "verified_at": null,
+      "symptom": "The elettro.com/scroll screen stopped following the phone remote at random points (\"dies at #6\", \"#8\", \"#12\"). Later reports after the first fix: the phone dropped moments after connecting.",
+      "root_cause": "PeerJS blip made the screen pick a new session code and orphan the phone; no heartbeat; relay deleted peers on a 410 handshake race; unknown senders and replaced phones were unhandled.",
+      "fix_summary": "Own AWS WebSocket relay, relay-only page, 5s ping/pong heartbeat with 12s reconnect, never delete a peer on 410, reset unknown senders, keep replaced phones busy, reconnect on wake.",
+      "future_repair": "1. Get the session code. Filter CloudWatch `/aws/lambda/elettro-scroll-dev-relay` for it (Git Bash needs `MSYS_NO_PATHCONV=1`).\n2. Read the connect / disconnect / drop / no-peer events in order. A code that changes mid-session means the page switched sessions.\n3. Reproduce with the harness, simulating hidden with `document.hidden` override plus a `visibilitychange` event (a second Chrome tab does not hide the rig tab).\n4. Follow `docs/admin/scroll-relay.md`.",
+      "files_changed": [
+        "services/scroll-relay-lambda/",
+        "scroll/index.html (elettro/elettro)",
+        "docs/admin/scroll-relay.md"
+      ],
+      "commits": [
+        "PR #307",
+        "PR #309",
+        "PR #310",
+        "PR #316"
+      ],
+      "related": [],
+      "record": "docs/bug-fix/fixed/EOS-BUG-0006.md"
+    },
     {
       "id": "EOS-BUG-0005",
       "title": "dev-api build fails again: gmb-planner.mjs missing from the zip list, and the guard test could not see it",
@@ -17,10 +46,19 @@
       "verified_at": null,
       "root_cause": "The workflow's node --check list and zip -r list share one line; the zip-contents test counted every word on it, so a module named only in the syntax-check part passed.",
       "fix_summary": "Added gmb-planner.mjs to the workflow zip list; the test now reads only the words after zip -r.",
-      "files_changed": [".github/workflows/build-dev-api-lambda.yml", "tests/dev-api-zip-contents.test.mjs"],
-      "commits": ["PR (fix/dev-api-zip-gmb-planner)"],
-      "related": ["EOS-BUG-0003"],
-      "record": "docs/bug-fix/fixed/EOS-BUG-0005.md"
+      "files_changed": [
+        ".github/workflows/build-dev-api-lambda.yml",
+        "tests/dev-api-zip-contents.test.mjs"
+      ],
+      "commits": [
+        "PR (fix/dev-api-zip-gmb-planner)"
+      ],
+      "related": [
+        "EOS-BUG-0003"
+      ],
+      "record": "docs/bug-fix/fixed/EOS-BUG-0005.md",
+      "symptom": "\"Build DEV API Lambda\" failed on develop (run 41248382923, merge commit 4fe1a72) at \"Verify packaged handler loads\":\n`Cannot find module '/tmp/zipcheck/gmb-planner.mjs' imported from /tmp/zipcheck/planner-review.mjs`. No zip artifact, so nothing was deployed.",
+      "future_repair": "When \"Verify packaged handler loads\" says `Cannot find module`, add the named file to the `zip -r` list in the workflow and to `package.json` build, and run `node --test tests/dev-api-zip-contents.test.mjs`."
     },
     {
       "id": "EOS-BUG-0004",
@@ -35,10 +73,16 @@
       "verified_at": null,
       "root_cause": "HolidayClient copied its initial prop into state (useState(initial)); the brand dropdown only changes ?brand=, so React kept the old client state from the All brands view.",
       "fix_summary": "Key HolidayClient by the chosen brand so it remounts with fresh state when the brand changes.",
-      "files_changed": ["apps/web/app/holidays/[key]/page.tsx"],
-      "commits": ["PR (fix/holidays-brand-filter)"],
+      "files_changed": [
+        "apps/web/app/holidays/[key]/page.tsx"
+      ],
+      "commits": [
+        "PR (fix/holidays-brand-filter)"
+      ],
       "related": [],
-      "record": "docs/bug-fix/fixed/EOS-BUG-0004.md"
+      "record": "docs/bug-fix/fixed/EOS-BUG-0004.md",
+      "symptom": "On the Halloween page (`/holidays/halloween`) with the header dropdown set to Stashbox, the other brands' Halloween drafts and pictures were still listed. Expected: only Stashbox's.",
+      "future_repair": "If a `?brand=` page shows stale data after using the header dropdown but is right after a reload, look for `useState(initial)` in a client component and key it by the brand (or derive state from props)."
     },
     {
       "id": "EOS-BUG-0003",
@@ -53,10 +97,18 @@
       "verified_at": null,
       "root_cause": "index.mjs imports bluesky-connect.mjs (PR #248) but the build workflow zip and syntax-check lists omit it; the build's load check fails, so no deployable zip.",
       "fix_summary": "Added the module to the workflow lists and a test that every module index.mjs reaches is in both zip lists (workflow and package.json).",
-      "files_changed": [".github/workflows/build-dev-api-lambda.yml", "tests/dev-api-zip-contents.test.mjs", ".github/workflows/ci.yml"],
-      "commits": ["PR (fix/dev-api-zip-bluesky)"],
+      "files_changed": [
+        ".github/workflows/build-dev-api-lambda.yml",
+        "tests/dev-api-zip-contents.test.mjs",
+        ".github/workflows/ci.yml"
+      ],
+      "commits": [
+        "PR (fix/dev-api-zip-bluesky)"
+      ],
       "related": [],
-      "record": "docs/bug-fix/fixed/EOS-BUG-0003.md"
+      "record": "docs/bug-fix/fixed/EOS-BUG-0003.md",
+      "symptom": "The \"Build DEV API Lambda\" workflow failed on develop (runs 40887723357 on 2227557 and 40888467231 on 298e5da) at \"Verify packaged\nhandler loads\": `Cannot find module '/tmp/zipcheck/bluesky-connect.mjs' imported from /tmp/zipcheck/index.mjs`. No zip artifact was produced.",
+      "future_repair": "Add the new module to BOTH the workflow (`node --check` and the `zip -r` list) and `services/dev-api-lambda/package.json`; run\n`node --test tests/dev-api-zip-contents.test.mjs`. Until the zip is fixed, the previous artifact still works for deploys."
     },
     {
       "id": "EOS-BUG-0002",
@@ -71,10 +123,20 @@
       "verified_at": null,
       "root_cause": "ConnectionDisconnect navigated straight to the page; only the LinkedIn section had an anchor id.",
       "fix_summary": "Show a success notice for ~1.8 s, then reload onto the network's own section; added anchors for the other six networks.",
-      "files_changed": ["apps/web/components/connection-disconnect.tsx", "apps/web/app/connections/page.tsx", "tests/connection-disconnect.test.mjs"],
-      "commits": ["PR #243"],
-      "related": ["EOS-BUG-0001"],
-      "record": "docs/bug-fix/fixed/EOS-BUG-0002.md"
+      "files_changed": [
+        "apps/web/components/connection-disconnect.tsx",
+        "apps/web/app/connections/page.tsx",
+        "tests/connection-disconnect.test.mjs"
+      ],
+      "commits": [
+        "PR #243"
+      ],
+      "related": [
+        "EOS-BUG-0001"
+      ],
+      "record": "docs/bug-fix/fixed/EOS-BUG-0002.md",
+      "symptom": "After disconnecting, the page reloaded and the card flipped to Connect, but nothing said it had worked next to the button. The\nonly message was a banner at the top of the page, far above the LinkedIn card.",
+      "future_repair": "Edit `ConnectionDisconnect`; keep section ids in `connections/page.tsx` equal to the `network` prop values."
     },
     {
       "id": "EOS-BUG-0001",
@@ -90,9 +152,15 @@
       "root_cause": "API Gateway had no POST /connections/disconnect route; once added, the dev-api Lambda resource policy had no per-route invoke permission for it.",
       "fix_summary": "Created route aqvtww7 -> integration h25cb92, then Dean added Lambda permission statement disconnect-route. Keyless smoke test now returns 401.",
       "files_changed": [],
-      "commits": ["AWS-only change; code from PR #222/#223"],
-      "related": ["EOS-BUG-0002"],
-      "record": "docs/bug-fix/fixed/EOS-BUG-0001.md"
+      "commits": [
+        "AWS-only change; code from PR #222/#223"
+      ],
+      "related": [
+        "EOS-BUG-0002"
+      ],
+      "record": "docs/bug-fix/fixed/EOS-BUG-0001.md",
+      "symptom": "Clicking Disconnect on the Elettro LinkedIn card showed \"Disconnect failed (HTTP 404)\".",
+      "future_repair": "See `repairs/api-gateway-routes.md` and `docs/admin/new-api-route.md`. Short form: a gateway 404 means the route is missing;\na gateway 500 with the Lambda working when invoked directly means the Lambda resource policy lacks the route."
     }
   ]
 }

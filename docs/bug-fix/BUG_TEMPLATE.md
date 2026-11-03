@@ -2,7 +2,7 @@
 
 Status: Open
 Severity: Medium
-Area: AR | Publishing | Connections | Review/Planner | Assets/DAM | Auth/Access | Dashboard | API/Infra | Other
+Area: AR | Publishing | Connections | Review/Planner | Assets/DAM | Auth/Access | Dashboard | API/Infra | Scroll Remote | Other
 Environment: DEV | PROD | Both
 Date reported: YYYY-MM-DD
 Date fixed:
