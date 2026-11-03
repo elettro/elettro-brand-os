@@ -130,7 +130,7 @@ export async function authorizeChatGptOauth(header:string):Promise<McpIdentity>{
  // arbitrary registration remain excluded regardless of supplied scopes.
  return {
   clientId:"chatgpt_oauth",
-  brandSlugs:brandConfigs.map(brand=>brand.id).concat(SHARED_LIBRARY_ID),
+  brandSlugs:brandConfigs.map((brand):string=>brand.id).concat(SHARED_LIBRARY_ID),
   permissions:claims.scope.split(" ").includes(MCP_OAUTH_WRITE_SCOPE)
    ? ["assets:read","folders:read","assets:write","folders:write","assets:upload"]
    : ["assets:read","folders:read"]

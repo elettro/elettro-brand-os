@@ -5,6 +5,30 @@
   "workflow": "docs/bug-fix/AGENT_WORKFLOW.md",
   "bugs": [
     {
+      "id": "EOS-BUG-0007",
+      "title": "Amplify web build fails on a type error; nothing deploys (os.elettro.com/bugs is 404)",
+      "status": "Fixed",
+      "verification": "Pending",
+      "severity": "High",
+      "area": "API/Infra",
+      "environment": "DEV",
+      "reported_at": "2026-11-03",
+      "fixed_at": "2026-11-03",
+      "verified_at": null,
+      "symptom": "os.elettro.com/bugs returned 404 after PR #317 merged. Amplify builds 461-464 all FAILED, so no web change after #311 was deployed.",
+      "root_cause": "brandConfigs.map(brand=>brand.id) is typed as the brand-id union; .concat(SHARED_LIBRARY_ID) adds a plain string, which next build's type check rejects (lib/ai-mcp-oauth.ts:133).",
+      "fix_summary": "Widen the mapped array to string[] in apps/web/lib/ai-mcp-oauth.ts.",
+      "future_repair": "Check Amplify list-jobs first; read the BUILD log and grep for Type error; run npx tsc --noEmit in apps/web before any web PR and do not dismiss existing errors.",
+      "files_changed": [
+        "apps/web/lib/ai-mcp-oauth.ts"
+      ],
+      "commits": [
+        "PR (fix/ai-mcp-oauth-brandslugs-type)"
+      ],
+      "related": [],
+      "record": "docs/bug-fix/fixed/EOS-BUG-0007.md"
+    },
+    {
       "id": "EOS-BUG-0006",
       "title": "elettro.com/scroll freezes or \"dies at #N\" mid-session",
       "status": "Fixed",
