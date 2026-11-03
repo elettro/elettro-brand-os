@@ -14,7 +14,8 @@ function fakeDb(rows) {
     connect: async () => ({
       query: async (sql, params) => {
         if (sql.startsWith("UPDATE")) { updates.push(params); return { rows: [] }; }
-        if (sql.includes('FROM "Asset" WHERE "id"=$1')) return { rows: rows.filter((r) => r.id === params[0]) };
+        if (sql.includes('WHERE a."id"=$1')) return { rows: rows.filter((r) => r.id === params[0]) };
+        if (sql.includes('a."sourcePathLower"=$2')) return { rows: rows.filter((r) => r.sourcePath && r.sourcePath.toLowerCase() === params[1]) };
         return { rows: [] };
       },
       end: async () => {}
@@ -85,4 +86,26 @@ test("allowedDestinations can open an asset to every network, and bad values are
   const bad = await runTagAssets({ mode: "apply", allowedDestinations: ["ok", "bad name!"], items: [{ assetId: ID, tags: ["x"] }] }, db.connect, json);
   assert.equal(bad.body.results[0].status, "rejected");
   assert.equal(db.updates.length, before);
+});
+
+test("a freshly synced file is found by path, filled in and marked approved", async () => {
+  const db = fakeDb([{ id: ID, sourcePath: "/1---elettro-brand-os/brands/stashbox/merch/video/9x16/now-spinning/a.mp4", tags: [], title: null, topic: null,
+    creativeNotes: null, creativeFamily: null, contentGroup: null, retiredAt: null, approvalStatus: "pending", ingestStatus: "raw" }]);
+  const item = { brandSlug: "stashbox", sourcePath: "/1---Elettro-Brand-OS/brands/stashbox/merch/video/9x16/now-spinning/A.mp4", tags: ["merch", "genre:reggae"],
+    title: "T", creativeFamily: "Stashbox Merch", contentGroup: "merch-month-2" };
+  const dry = await runTagAssets({ items: [item], markApproved: true }, db.connect, json);
+  assert.equal(dry.body.results[0].status, "would-tag");
+  assert.deepEqual(dry.body.results[0].approval, { before: "pending/raw", after: "approved/ready" });
+  assert.equal(db.updates.length, 0);
+  const r = await runTagAssets({ mode: "apply", items: [item], markApproved: true }, db.connect, json);
+  assert.equal(r.body.results[0].status, "tagged");
+  assert.ok(db.updates.some((u) => u.length === 3 && u[1] === "Stashbox Merch" && u[2] === "merch-month-2"));
+  assert.ok(db.updates.some((u) => u.length === 1 && u[0] === ID), "approval update ran");
+});
+
+test("without markApproved the approval status is never touched", async () => {
+  const db = fakeDb([{ id: ID, tags: [], title: null, topic: null, creativeNotes: null, retiredAt: null, approvalStatus: "pending", ingestStatus: "raw" }]);
+  const r = await runTagAssets({ mode: "apply", items: [{ assetId: ID, tags: ["x"] }] }, db.connect, json);
+  assert.equal(r.body.results[0].approval, undefined);
+  assert.ok(!db.updates.some((u) => u.length === 1));
 });
