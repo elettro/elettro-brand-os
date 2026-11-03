@@ -7,7 +7,11 @@
 //       Tags are MERGED with the existing ones (nothing is removed). title/topic/notes fill only EMPTY fields
 //       unless overwrite:true. Optional `eligibility` (top level, or per item) sets when the planner may use the asset:
 //       {type:"annual", fromMmdd:1031, untilMmdd:1031} (month*100+day, e.g. only on Oct 31) or {type:"evergreen"}.
-//       Never touches approval, ingest or enrichment status, and skips retired assets.
+//       Items identify an asset by `assetId`, or by `{brandSlug, sourcePath}` (Dropbox path, for freshly synced files).
+//       Optional `creativeFamily` / `contentGroup` fill when empty (or overwrite:true). Optional `markApproved:true`
+//       (top level or per item) sets approvalStatus=approved, ingestStatus=ready and firstApprovedAt, so the asset is
+//       planner-ready with no further review. Without markApproved it never touches approval, ingest or enrichment
+//       status. Retired assets are always skipped.
 
 const KINDS = ["image", "video", "carousel", "audio", "document"];
 const direct = (event) => !event.requestContext && !event.rawPath && !event.path;
@@ -44,6 +48,8 @@ export async function runListUntaggedAssets(event, connectDatabase, json) {
   }
 }
 
+const ASSET_SELECT = 'SELECT a."id",a."tags",a."title",a."topic",a."creativeNotes",a."creativeFamily",a."contentGroup",a."retiredAt",a."allowedDestinations",a."approvalStatus",a."ingestStatus" FROM "Asset" a';
+
 const cleanTags = (tags) => [...new Set((Array.isArray(tags) ? tags : [])
   .filter((t) => typeof t === "string" && t.trim()).map((t) => t.trim().slice(0, 100)))].slice(0, 50);
 
@@ -58,12 +64,19 @@ export async function runTagAssets(event, connectDatabase, json) {
     client = await connectDatabase();
     const results = [];
     for (const item of items) {
-      const id = String(item?.assetId || "");
       const add = cleanTags(item?.tags);
-      if (!/^[0-9a-f-]{36}$/i.test(id) || !add.length) { results.push({assetId: item?.assetId, status: "rejected"}); continue; }
-      const row = (await client.query(
-        'SELECT "id","tags","title","topic","creativeNotes","retiredAt","allowedDestinations" FROM "Asset" WHERE "id"=$1', [id])).rows[0];
-      if (!row) { results.push({assetId: id, status: "not-found"}); continue; }
+      let row;
+      if (item?.assetId) {
+        if (!/^[0-9a-f-]{36}$/i.test(String(item.assetId))) { results.push({assetId: item.assetId, status: "rejected"}); continue; }
+        row = (await client.query(ASSET_SELECT + ' WHERE a."id"=$1', [String(item.assetId)])).rows[0];
+      } else if (item?.brandSlug && item?.sourcePath) {
+        row = (await client.query(ASSET_SELECT + ' JOIN "Brand" b ON b."id"=a."brandId" WHERE b."slug"=$1 AND a."sourcePathLower"=$2 LIMIT 1',
+          [String(item.brandSlug), String(item.sourcePath).toLowerCase()])).rows[0];
+      }
+      const ref = item?.assetId || item?.sourcePath;
+      if (!add.length || (!item?.assetId && !(item?.brandSlug && item?.sourcePath))) { results.push({assetId: ref, status: "rejected"}); continue; }
+      if (!row) { results.push({assetId: ref, status: "not-found"}); continue; }
+      const id = row.id;
       if (row.retiredAt) { results.push({assetId: id, status: "retired"}); continue; }
       const have = Array.isArray(row.tags) ? row.tags : [];
       const seen = new Set(have.map((t) => String(t).toLowerCase()));
@@ -90,16 +103,23 @@ export async function runTagAssets(event, connectDatabase, json) {
         destinations = [...new Set(wantDest.map((d) => d.toLowerCase()))];
       }
       const title = pick(row.title, item.title, 200), topic = pick(row.topic, item.topic, 200), notes = pick(row.creativeNotes, item.notes, 2000);
+      const family = pick(row.creativeFamily, item.creativeFamily, 100), group = pick(row.contentGroup, item.contentGroup, 100);
+      const approve = (item.markApproved !== undefined ? item.markApproved : event.markApproved) === true;
       if (mode === "apply") {
         await client.query(
           'UPDATE "Asset" SET "title"=$2,"topic"=$3,"tags"=$4,"creativeNotes"=$5,"updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$1',
           [id, title, topic, tags, notes]);
+        await client.query('UPDATE "Asset" SET "creativeFamily"=$2,"contentGroup"=$3 WHERE "id"=$1', [id, family, group]);
+        if (approve) await client.query(
+          `UPDATE "Asset" SET "approvalStatus"='approved'::"ApprovalStatus","ingestStatus"='ready'::"IngestStatus",
+                  "enrichmentStatus"='reviewed'::"EnrichmentStatus","firstApprovedAt"=COALESCE("firstApprovedAt",CURRENT_TIMESTAMP) WHERE "id"=$1`, [id]);
         if (eligibility) await client.query(
           'UPDATE "Asset" SET "eligibilityType"=$2::"EligibilityType","annualFromMmdd"=$3,"annualUntilMmdd"=$4,"eligibleFrom"=NULL,"eligibleUntil"=NULL WHERE "id"=$1',
           [id, eligibility.type, eligibility.from, eligibility.until]);
         if (destinations) await client.query('UPDATE "Asset" SET "allowedDestinations"=$2 WHERE "id"=$1', [id, destinations]);
       }
       results.push({assetId: id, status: mode === "apply" ? "tagged" : "would-tag", tagsAdded: tags.length - have.length, tags, eligibility,
+        ...(approve ? {approval: {before: `${row.approvalStatus}/${row.ingestStatus}`, after: "approved/ready"}} : {}),
         ...(destinations ? {allowedDestinations: {before: row.allowedDestinations || [], after: destinations}} : {})});
     }
     return json(200, {ok: true, mode, overwrite, summary: results.reduce((m, r) => ({...m, [r.status]: (m[r.status] || 0) + 1}), {}), results});
