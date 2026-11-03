@@ -51,6 +51,18 @@ Re-run `scripts/scroll-relay-setup.sh` (root), or zip `index.mjs relay.mjs packa
   a simulated phone connected in about 0.5 s, and moving the screen to the next page reconnected in about 0.5 s.
 - With `?debug=1` on the scroll page, a green box shows fps, scroll position, phone target, connection and how many messages arrived.
 
+## Lessons (2026-11-03)
+
+- **Random "dies at #N" was not the page.** The screen still ran PeerJS beside the relay; a PeerJS broker blip led to
+  `unavailable-id`, the page picked a NEW session code and moved its relay link there, orphaning the phone on the old code
+  (relay log: `mwyf7m` -> `mv2xyi`). With `RELAY_URL` set the screen no longer starts PeerJS and the phone has no PeerJS fallback.
+- **Heartbeat:** pages send `{"t":"_ping"}` every 5 s and the relay answers `{"t":"_pong"}` to the sender only; 12 s of silence
+  makes the page replace its socket (a browser can miss a dropped socket). Verified by deleting the screen's connection
+  server-side mid-scroll: same session code, scrolling resumed in about 4 s.
+- **Lambda concurrency:** this account allows only 10 concurrent Lambda runs. At 25 phone messages/s the relay hit 10 and
+  dropped messages; the phone now sends about 8/s over the relay (peak since: 5).
+- **Logs:** every connect / disconnect / drop / no-peer writes one JSON line; filter CloudWatch by the lowercase session code.
+
 ## Unknown / ask Dean
 
 - Verified on real API Gateway 2026-11-03: the `$connect` origin check (foreign origin gets 403), two-way messages, `_join`/`_leave`, and a real phone. Still not verified: the 10-minute idle timeout (the page sends a
