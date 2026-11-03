@@ -38,7 +38,7 @@ sleep 10   # a new role needs a moment before Lambda can use it
 
 echo "3/6 Lambda $FN (128 MB / 10 s: it only forwards small messages)"
 ZIPDIR=$(mktemp -d -p "$HOME")
-PY=$(command -v python3 || command -v python)
+PY=$(command -v python || command -v python3)
 "$PY" "$HERE/scripts/scroll-relay-zip.py" "$SVC" "$ZIPDIR/relay.zip"
 if aws lambda get-function --function-name "$FN" >/dev/null 2>&1; then
   aws lambda update-function-code --function-name "$FN" --zip-file "fileb://$(cygpath -m "$ZIPDIR")/relay.zip" --query LastModified --output text
