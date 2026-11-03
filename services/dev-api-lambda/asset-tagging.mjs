@@ -5,7 +5,9 @@
 //       Params: brandSlug (omit for all), kind (default "image"), maxTags, limit (1-500, default 200), after (asset id cursor).
 //   action "tag-assets-20261103": sets title/topic/tags/notes on up to 200 assets by id. Dry run unless mode:"apply".
 //       Tags are MERGED with the existing ones (nothing is removed). title/topic/notes fill only EMPTY fields
-//       unless overwrite:true. Never touches approval, ingest or enrichment status, and skips retired assets.
+//       unless overwrite:true. Optional `eligibility` (top level, or per item) sets when the planner may use the asset:
+//       {type:"annual", fromMmdd:1031, untilMmdd:1031} (month*100+day, e.g. only on Oct 31) or {type:"evergreen"}.
+//       Never touches approval, ingest or enrichment status, and skips retired assets.
 
 const KINDS = ["image", "video", "carousel", "audio", "document"];
 const direct = (event) => !event.requestContext && !event.rawPath && !event.path;
@@ -70,6 +72,14 @@ export async function runTagAssets(event, connectDatabase, json) {
         const v = String(next || "").trim().slice(0, max);
         return v && (overwrite || !current) ? v : current || null;
       };
+      const el = item.eligibility || event.eligibility || null;
+      let eligibility = null;
+      if (el) {
+        const mmdd = (v) => (Number.isInteger(v) && v >= 101 && v <= 1231 && v % 100 >= 1 && v % 100 <= 31 ? v : null);
+        if (el.type === "evergreen") eligibility = {type: "evergreen", from: null, until: null};
+        else if (el.type === "annual" && mmdd(el.fromMmdd) && mmdd(el.untilMmdd)) eligibility = {type: "annual", from: el.fromMmdd, until: el.untilMmdd};
+        else { results.push({assetId: id, status: "rejected", error: "bad eligibility"}); continue; }
+      }
       // allowedDestinations: [] opens the asset to every network; a list restricts it to those networks.
       const wantDest = item.allowedDestinations !== undefined ? item.allowedDestinations : event.allowedDestinations;
       let destinations;
@@ -80,11 +90,16 @@ export async function runTagAssets(event, connectDatabase, json) {
         destinations = [...new Set(wantDest.map((d) => d.toLowerCase()))];
       }
       const title = pick(row.title, item.title, 200), topic = pick(row.topic, item.topic, 200), notes = pick(row.creativeNotes, item.notes, 2000);
-      if (mode === "apply") await client.query(
-        'UPDATE "Asset" SET "title"=$2,"topic"=$3,"tags"=$4,"creativeNotes"=$5,"updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$1',
-        [id, title, topic, tags, notes]);
-      if (mode === "apply" && destinations) await client.query('UPDATE "Asset" SET "allowedDestinations"=$2 WHERE "id"=$1', [id, destinations]);
-      results.push({assetId: id, status: mode === "apply" ? "tagged" : "would-tag", tagsAdded: tags.length - have.length, tags,
+      if (mode === "apply") {
+        await client.query(
+          'UPDATE "Asset" SET "title"=$2,"topic"=$3,"tags"=$4,"creativeNotes"=$5,"updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$1',
+          [id, title, topic, tags, notes]);
+        if (eligibility) await client.query(
+          'UPDATE "Asset" SET "eligibilityType"=$2::"EligibilityType","annualFromMmdd"=$3,"annualUntilMmdd"=$4,"eligibleFrom"=NULL,"eligibleUntil"=NULL WHERE "id"=$1',
+          [id, eligibility.type, eligibility.from, eligibility.until]);
+        if (destinations) await client.query('UPDATE "Asset" SET "allowedDestinations"=$2 WHERE "id"=$1', [id, destinations]);
+      }
+      results.push({assetId: id, status: mode === "apply" ? "tagged" : "would-tag", tagsAdded: tags.length - have.length, tags, eligibility,
         ...(destinations ? {allowedDestinations: {before: row.allowedDestinations || [], after: destinations}} : {})});
     }
     return json(200, {ok: true, mode, overwrite, summary: results.reduce((m, r) => ({...m, [r.status]: (m[r.status] || 0) + 1}), {}), results});

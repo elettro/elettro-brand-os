@@ -435,3 +435,15 @@ test("ChatGPT MCP action discovery logs statuses and tool counts without credent
  assert.ok(!route.includes('console.log(bearer)'));
  assert.ok(!route.includes('console.warn(bearer)'));
 });
+
+test("creative-assets library is a gateway peer of the brands but not a UI brand", () => {
+  const cfg = readFileSync(new URL("../apps/web/lib/brand-config.ts", import.meta.url), "utf8");
+  assert.match(cfg, /export const gatewayBrandConfigs = \[\.\.\.brandConfigs, sharedLibraryConfig\]/);
+  const brandList = cfg.slice(0, cfg.indexOf("] as const"));
+  assert.ok(!brandList.includes("creative-assets"), "must not be in brandConfigs");
+  const gateway = readFileSync(new URL("../apps/web/lib/ai-gateway.ts", import.meta.url), "utf8");
+  assert.ok(gateway.includes("gatewayBrandConfigs.find"));
+  assert.ok(gateway.includes('api("/assets?brands=" + encodeURIComponent(slug))'));
+  const auth = readFileSync(new URL("../apps/web/lib/ai-mcp-auth.ts", import.meta.url), "utf8");
+  assert.ok(auth.includes("withSharedLibrary(chosen.brandSlugs)"));
+});

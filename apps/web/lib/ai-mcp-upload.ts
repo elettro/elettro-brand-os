@@ -2,7 +2,7 @@ import { connectKeyHeaders } from "@/lib/dev-api-key";
 import { enrichAfterRegistrationIfEnabled } from "@/lib/asset-ai-enrichment";
 import {createHash} from "node:crypto";
 import {SecretsManagerClient,GetSecretValueCommand} from "@aws-sdk/client-secrets-manager";
-import {brandConfigs} from "@/lib/brand-config";
+import {gatewayBrandConfigs} from "@/lib/brand-config";
 import {executeAiGateway,GatewayError} from "@/lib/ai-gateway";
 import {validChatFile,verifyIntakePlan,mediaType,type ChatFile} from "@/lib/ai-mcp-intake";
 import {approvedChatGptFileHost} from "@/lib/ai-mcp-file-hosts";
@@ -179,7 +179,7 @@ export async function uploadApprovedChatFile(args:unknown,identity:McpIdentity){
  // The same actual folder must still exist at commit time.
  await executeAiGateway({action:"list_folders",scope:"brand",
   brandSlug:plan.brandSlug,path:plan.folder});
- const root=brandConfigs.find(v=>v.id===plan.brandSlug)?.dropboxRoot;
+ const root=gatewayBrandConfigs.find(v=>v.id===plan.brandSlug)?.dropboxRoot;
  if(!root)throw new GatewayError(403,"Invalid upload brand");
  const bytes=await downloadChatFile(file);
  const contentHash=dropboxContentHash(bytes);

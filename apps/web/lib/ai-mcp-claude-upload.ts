@@ -2,7 +2,7 @@ import { connectKeyHeaders } from "@/lib/dev-api-key";
 import { enrichAfterRegistrationIfEnabled } from "@/lib/asset-ai-enrichment";
 import {createHmac,timingSafeEqual} from "node:crypto";
 import {serverSetting} from "@/lib/cognito-auth";
-import {brandConfigs} from "@/lib/brand-config";
+import {gatewayBrandConfigs} from "@/lib/brand-config";
 import {executeAiGateway,GatewayError} from "@/lib/ai-gateway";
 import {safeFilename,mediaType,normalizedMetadata,insideBrand} from "@/lib/ai-mcp-intake";
 import {dropboxToken,metadata,matchingBrandFile} from "@/lib/ai-mcp-upload";
@@ -49,7 +49,7 @@ function allowed(identity:McpIdentity,command:Obj){
 }
 export async function prepareClaudeTransfer(args:unknown,identity:McpIdentity){
  const command=obj(args);allowed(identity,command);
- const config=brandConfigs.find(v=>v.id===command.brandSlug);
+ const config=gatewayBrandConfigs.find(v=>v.id===command.brandSlug);
  if(!config)throw new GatewayError(403,"Unknown brand");
  const filename=safeFilename(command.filename);
  if(!/^(image|video)\//.test(mediaType(filename)))throw new GatewayError(400,"Only images and video can currently be registered");
