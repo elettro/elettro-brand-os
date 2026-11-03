@@ -76,8 +76,9 @@ test('the newest phone wins: the older one is told, and only the new one control
   await r.connect('P2', 'abcd1234', 'phone');
   assert.deepEqual(r.sent.find((s) => s.cid === 'P1'), { cid: 'P1', data: { t: 'busy' } });
   r.sent.length = 0;
-  await r.msg('P1', { t: 'p', v: 0.9 }); // the replaced phone's messages go nowhere
-  assert.equal(r.sent.length, 0);
+  await r.msg('P1', { t: 'p', v: 0.9 }); // the replaced phone's messages go nowhere; it is told 'busy' again, never 'reconnect'
+  assert.deepEqual(r.sent, [{ cid: 'P1', data: { t: 'busy' } }]);
+  r.sent.length = 0;
   await r.msg('P2', { t: 'p', v: 0.1 });
   assert.deepEqual(r.sent.at(-1), { cid: 'D1', data: { t: 'p', v: 0.1 } });
 });
@@ -107,14 +108,17 @@ test('disconnect cleans up and tells the other side', async () => {
   assert.ok(![...r.rows.keys()].some((k) => k.includes('P1')));
 });
 
-test('a vanished peer (410) is dropped instead of failing the sender', async () => {
+test('a 410 does not delete the peer (it may still be mid-handshake) and does not fail the sender', async () => {
   const r = rig();
   await r.connect('D1', 'abcd1234', 'display');
   await r.connect('P1', 'abcd1234', 'phone');
   r.gone.add('D1');
   const res = await r.msg('P1', { t: 'p', v: 0.2 });
   assert.equal(res.statusCode, 200);
-  assert.ok(![...r.rows.keys()].some((k) => k.includes('D1')));
+  assert.ok([...r.rows.keys()].some((k) => k.includes('D1')));
+  r.gone.delete('D1');
+  await r.msg('P1', { t: 'p', v: 0.3 });
+  assert.deepEqual(r.sent.at(-1), { cid: 'D1', data: { t: 'p', v: 0.3 } });
 });
 
 test('oversized and unknown-connection messages are ignored', async () => {
@@ -124,7 +128,7 @@ test('oversized and unknown-connection messages are ignored', async () => {
   r.sent.length = 0;
   await r.msg('P1', 'x'.repeat(9000));
   await r.msg('NOPE', { t: 'p', v: 1 });
-  assert.equal(r.sent.length, 0);
+  assert.deepEqual(r.sent, [{ cid: 'NOPE', data: { t: '_reset' } }]); // unknown sender is told to reconnect, nothing forwarded
 });
 
 test('a heartbeat ping is answered to the sender only and never forwarded', async () => {

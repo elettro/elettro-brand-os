@@ -38,6 +38,8 @@ export function makeHandler({ db, post, now = () => Date.now(), extraOrigins = [
   const short = (c) => String(c || '').slice(-6);
   const ttl = () => Math.floor(now() / 1000) + TTL_SECONDS;
 
+  // A 410 is NOT proof a peer is dead: API Gateway also answers 410 for a connection whose handshake has not finished
+  // (seen 2026-11-03: a phone deleted 86 ms after connecting). Rows are only removed on $disconnect, replacement or TTL.
   async function send(cid, payload) {
     try {
       await post(cid, typeof payload === 'string' ? payload : JSON.stringify(payload));
@@ -77,7 +79,10 @@ export function makeHandler({ db, post, now = () => Date.now(), extraOrigins = [
     if (role === 'phone') {
       for (const p of peers.filter((x) => x.role === 'phone')) {
         await send(p.sk, { t: 'busy' });
-        await dropConnection(p.sk, sid, 'replaced-phone');
+        // keep a 'replaced' marker so its stragglers keep getting 'busy' (never 'reconnect', which would start a tug of war)
+        log({ ev: 'replaced-phone', sid, cid: short(p.sk) });
+        await db.del({ pk: `s#${sid}`, sk: p.sk });
+        await db.put({ pk: `c#${p.sk}`, sk: '-', sid, role: 'phone', replaced: true, ttl: ttl() });
       }
     }
     log({ ev: 'connect', sid, role, cid: short(cid), peers: peers.map((x) => x.role + ':' + short(x.sk)) });
@@ -87,7 +92,7 @@ export function makeHandler({ db, post, now = () => Date.now(), extraOrigins = [
     // tell the display a phone arrived (the display treats this as "connection open")
     if (role === 'phone') {
       for (const d of peers.filter((x) => x.role === 'display')) {
-        if (!(await send(d.sk, { t: '_join' }))) await dropConnection(d.sk, sid, 'gone-on-join');
+        if (!(await send(d.sk, { t: '_join' }))) log({ ev: 'gone-skip', on: 'join', sid, cid: short(d.sk) });
       }
     }
     return { statusCode: 200, body: 'ok' };
@@ -97,12 +102,13 @@ export function makeHandler({ db, post, now = () => Date.now(), extraOrigins = [
     const cid = event.requestContext.connectionId;
     const me = await db.get({ pk: `c#${cid}`, sk: '-' });
     if (!me) { log({ ev: 'disconnect-unknown', cid: short(cid) }); return { statusCode: 200, body: 'ok' }; }
+    if (me.replaced) { await db.del({ pk: `c#${cid}`, sk: '-' }); return { statusCode: 200, body: 'ok' }; }
     log({ ev: 'disconnect', sid: me.sid, role: me.role, cid: short(cid) });
     await dropConnection(cid, me.sid, 'disconnect-row');
     const peers = await peersOf(me.sid);
     const wantRole = me.role === 'phone' ? 'display' : 'phone';
     for (const p of peers.filter((x) => x.role === wantRole)) {
-      if (!(await send(p.sk, { t: '_leave', role: me.role }))) await dropConnection(p.sk, me.sid, 'gone-on-leave');
+      if (!(await send(p.sk, { t: '_leave', role: me.role }))) log({ ev: 'gone-skip', on: 'leave', sid: me.sid, cid: short(p.sk) });
     }
     return { statusCode: 200, body: 'ok' };
   }
@@ -112,7 +118,9 @@ export function makeHandler({ db, post, now = () => Date.now(), extraOrigins = [
     if (!body || body.length > MAX_BODY) return { statusCode: 200, body: 'ignored' };
     const cid = event.requestContext.connectionId;
     const me = await db.get({ pk: `c#${cid}`, sk: '-' });
-    if (!me) { log({ ev: 'msg-from-unknown', cid: short(cid) }); return { statusCode: 200, body: 'ignored' }; }
+    // A connection we hold no record for (e.g. replaced, or cleaned up): tell it to reconnect now instead of talking into nothing.
+    if (!me) { log({ ev: 'msg-from-unknown', cid: short(cid) }); await send(cid, { t: '_reset' }); return { statusCode: 200, body: 'reset' }; }
+    if (me.replaced) { await send(cid, { t: 'busy' }); return { statusCode: 200, body: 'busy' }; }
     // Heartbeat: the page pings every few seconds and treats silence as a dead connection (a browser can miss a closed socket).
     if (body.length < 30 && body.includes('"_ping"')) { await send(cid, { t: '_pong' }); return { statusCode: 200, body: 'pong' }; }
     const peers = await peersOf(me.sid);
@@ -127,7 +135,7 @@ export function makeHandler({ db, post, now = () => Date.now(), extraOrigins = [
     const targets = peers.filter((x) => x.role === wantRole && x.sk !== cid);
     if (!targets.length) log({ ev: 'no-peer', sid: me.sid, from: me.role, cid: short(cid) });
     for (const p of targets) {
-      if (!(await send(p.sk, body))) await dropConnection(p.sk, me.sid, 'gone-on-forward');
+      if (!(await send(p.sk, body))) log({ ev: 'gone-skip', on: 'forward', sid: me.sid, cid: short(p.sk) });
     }
     return { statusCode: 200, body: 'ok' };
   }
