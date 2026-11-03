@@ -38,7 +38,7 @@ record, fix the root cause, then record cause, files, commit, verification and t
 
 ## Areas
 
-AR | Publishing | Connections | Review/Planner | Assets/DAM | Auth/Access | Dashboard | API/Infra | Other
+AR | Publishing | Connections | Review/Planner | Assets/DAM | Auth/Access | Dashboard | API/Infra | Scroll Remote | Other
 
 ## Rule
 

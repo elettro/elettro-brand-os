@@ -4,6 +4,7 @@ Newest first. Records live in `open/` and `fixed/`; the machine-readable copy is
 
 | ID | Title | Area | Severity | Status | Verified |
 |---|---|---|---|---|---|
+| [EOS-BUG-0006](fixed/EOS-BUG-0006.md) | elettro.com/scroll freezes or "dies at #N" mid-session | Scroll Remote | High | Fixed | No |
 | [EOS-BUG-0005](fixed/EOS-BUG-0005.md) | dev-api build fails again: gmb-planner.mjs missing from the zip list, and the guard test could not see it | API/Infra | Medium | Fixed | No |
 | [EOS-BUG-0004](fixed/EOS-BUG-0004.md) | Holidays page keeps showing every brand after picking one in the header dropdown | Review/Planner | Medium | Fixed | No |
 | [EOS-BUG-0003](fixed/EOS-BUG-0003.md) | dev-api build fails: new module missing from the zip file list (Bluesky) | API/Infra | Medium | Fixed | No (needs CI run on develop) |
@@ -12,4 +13,4 @@ Newest first. Records live in `open/` and `fixed/`; the machine-readable copy is
 
 ## Next ID
 
-EOS-BUG-0006
+EOS-BUG-0007

@@ -57,6 +57,11 @@ export async function session(): Promise<(Access & { email: string }) | null> {
 export async function authenticated(): Promise<boolean> {
   return !!(await session())?.owner;
 }
+// Super admin: the owner email itself, not just anyone in the owner group. Gates the bug tracker.
+export async function superAdmin(): Promise<boolean> {
+  const who = await session();
+  return !!who?.owner && who.email.toLowerCase() === ownerEmail();
+}
 // Owner, or a user whose Cognito groups include this brand.
 export async function authenticatedFor(brand: string): Promise<boolean> {
   return canAccessBrand(await session(), brand);

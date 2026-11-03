@@ -60,11 +60,11 @@ const BRANDS = [{ id: "all", name: "All brands", timezone: "" }, ...brandConfigs
 // each follow-up that opens a page for clients flips it to "active" here.
 const CLIENT_NAV: Record<string, "active" | "soon" | "hidden"> = {
   "/": "active", "/ar": "active", "/ar/qr": "active", "/ar/sets": "active", "/review": "active", "/calendar": "active", "/assets": "active", "/content-pool": "active", "/connections": "active",
-  "/collections": "hidden", "/multicam": "hidden", "/holidays": "hidden", "/ai-gateway": "hidden", "/planner": "hidden", "/admin/estimate-builder": "hidden"
+  "/collections": "hidden", "/multicam": "hidden", "/holidays": "hidden", "/ai-gateway": "hidden", "/planner": "hidden", "/admin/estimate-builder": "hidden", "/bugs": "hidden"
 };
 
 // Who is signed in: owner sees everything; a client sees only the listed brands.
-type Scope = { owner: boolean; brands: string[] | null };
+type Scope = { owner: boolean; superAdmin: boolean; brands: string[] | null };
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() || "/";
@@ -74,8 +74,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (bare) return;
     fetch("/api/auth/status", { cache: "no-store" })
-      .then((r) => r.json() as Promise<{ signedIn?: boolean; owner?: boolean; brands?: string[] | null }>)
-      .then((s) => setScope(s.signedIn ? { owner: !!s.owner, brands: s.brands ?? null } : null))
+      .then((r) => r.json() as Promise<{ signedIn?: boolean; owner?: boolean; superAdmin?: boolean; brands?: string[] | null }>)
+      .then((s) => setScope(s.signedIn ? { owner: !!s.owner, superAdmin: !!s.superAdmin, brands: s.brands ?? null } : null))
       .catch(() => setScope(null));
   }, [bare]);
   useEffect(() => {
@@ -135,6 +135,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               )}
             </div>
           ))}
+          {scope?.superAdmin && (
+            <div className="nav-bottom">
+              <Link href="/bugs" className={`nav-item${isActive("/bugs") ? " active" : ""}`}>Bug Tracker</Link>
+            </div>
+          )}
         </nav>
         <div className="app-content">{scope?.owner && <ReconnectBanner />}{children}</div>
       </div>
