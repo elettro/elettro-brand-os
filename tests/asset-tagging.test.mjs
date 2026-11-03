@@ -63,3 +63,15 @@ test("wired into index, zip list and syntax check", () => {
   assert.ok(read("services/dev-api-lambda/package.json").includes("asset-tagging.mjs"));
   assert.ok(read(".github/workflows/build-dev-api-lambda.yml").includes("node --check asset-tagging.mjs"));
 });
+
+test("eligibility sets an annual window, and a bad one is rejected", async () => {
+  const db = fakeDb([{ id: ID, tags: [], title: null, topic: null, creativeNotes: null, retiredAt: null }]);
+  const ok = await runTagAssets({ mode: "apply", eligibility: { type: "annual", fromMmdd: 1031, untilMmdd: 1031 }, items: [{ assetId: ID, tags: ["halloween"] }] }, db.connect, json);
+  assert.equal(ok.body.results[0].status, "tagged");
+  const last = db.updates[db.updates.length - 1];
+  assert.deepEqual(last, [ID, "annual", 1031, 1031]);
+  const before = db.updates.length;
+  const bad = await runTagAssets({ mode: "apply", eligibility: { type: "annual", fromMmdd: 1332, untilMmdd: 1031 }, items: [{ assetId: ID, tags: ["x"] }] }, db.connect, json);
+  assert.equal(bad.body.results[0].status, "rejected");
+  assert.equal(db.updates.length, before);
+});
