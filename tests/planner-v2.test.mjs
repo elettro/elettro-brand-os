@@ -224,3 +224,14 @@ test("photo formats take images even when the brand pool is vertical video", () 
   assert.equal(poolRejection(clip, { destination: "pinterest", placement: "pin" }, settings), "kind");
   assert.equal(poolRejection(photo, { destination: "instagram", placement: "reel" }, settings), "kind");
 });
+
+test("audio-only exclude tags keep out videos but not photos stamped no-audio", () => {
+  const account = { destination: "instagram", placement: "post" };
+  const reel = { destination: "instagram", placement: "reel" };
+  const s = resolvePlannerSettings({ planner: { pool: { kinds: [], aspectRatios: [], excludeTagsAny: ["no-audio", "silent-audio", "no-music", "draft"] } } });
+  const base = { id: "x", aspectRatioLabel: "4x5" };
+  assert.equal(poolRejection({ ...base, kind: "image", tags: ["no-audio"] }, account, s), null);
+  assert.equal(poolRejection({ ...base, kind: "image", tags: ["draft"] }, account, s), "excluded-tag");
+  assert.equal(poolRejection({ ...base, kind: "video", tags: ["no-audio"] }, reel, s), "excluded-tag");
+  assert.equal(poolRejection({ ...base, kind: "video", tags: ["silent-audio"] }, reel, s), "excluded-tag");
+});
