@@ -38,7 +38,8 @@ const NAV: NavSection[] = [
   { label: "Admin", items: [
     { label: "AI Gateway", href: "/ai-gateway" },
     { label: "Planner", href: "/planner" },
-    { label: "Estimate Builder", href: "/admin/estimate-builder" }
+    { label: "Estimate Builder", href: "/admin/estimate-builder" },
+    { label: "Bugs", href: "/bugs" }
   ] }
 ];
 
@@ -88,7 +89,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [bare, scope]);
   if (bare) return <>{children}</>;
   const client = !!scope && !scope.owner;
-  const itemState = (item: NavItem) => (item.children ? (client ? "hidden" : "active") : !client ? "active" : item.href ? CLIENT_NAV[item.href] ?? "soon" : "soon");
+  const itemState = (item: NavItem) => item.href === "/bugs" && !scope?.superAdmin ? "hidden" : (item.children ? (client ? "hidden" : "active") : !client ? "active" : item.href ? CLIENT_NAV[item.href] ?? "soon" : "soon");
   const brands = scope?.brands ? BRANDS.filter((b) => scope.brands!.includes(b.id)) : BRANDS;
   const isActive = (href: string) => (href === "/" || href === "/ar" ? pathname === href : pathname.startsWith(href));
 
