@@ -218,6 +218,7 @@ something here that's wrong, fix it, or tell Dean if you can't verify the fix.
 - **Any bug, regression or "it's broken"**: follow `docs/bug-fix/AGENT_WORKFLOW.md`. Search `docs/bug-fix/` and `bugs.json` first,
   keep one `EOS-BUG-####` record per bug, and leave the root cause and repair procedure behind. One tracker for all of Elettro OS;
   AR is an Area, not a separate tracker.
+- **Bug Tracker page** (`/bugs`, PR #317, 2026-11-03): searchable view of `docs/bug-fix/bugs.json` (bundled at build, read-only). Super admin only: `superAdmin()` in `apps/web/lib/cognito-auth.ts` requires the owner email, not just the owner group; link pinned at the bottom of the left rail. A new bug still means a `BUG_TEMPLATE.md` copy plus entries in `bugs.json` and `BUG_INDEX.md`. Not yet checked in a browser on Amplify (not verified).
 - **Admin tasks** (adding a brand, adding an HTTP route, deploying the dev-api): use the runbooks in `docs/admin/` instead of
   working it out again. If a runbook is missing or wrong, fix it in the same PR and say what was never verified.
 
