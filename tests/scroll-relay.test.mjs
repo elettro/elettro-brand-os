@@ -17,7 +17,7 @@ function rig() {
     sent.push({ cid, data: JSON.parse(data) });
   };
   let t = 1000;
-  const h = makeHandler({ db, post, now: () => (t += 1000) });
+  const h = makeHandler({ db, post, now: () => (t += 1000), log: () => {} });
   const connect = (cid, s, r, origin) => h({
     requestContext: { routeKey: '$connect', connectionId: cid },
     queryStringParameters: { s, r },
