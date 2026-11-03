@@ -126,3 +126,12 @@ test('oversized and unknown-connection messages are ignored', async () => {
   await r.msg('NOPE', { t: 'p', v: 1 });
   assert.equal(r.sent.length, 0);
 });
+
+test('a heartbeat ping is answered to the sender only and never forwarded', async () => {
+  const r = rig();
+  await r.connect('D1', 'abcd1234', 'display');
+  await r.connect('P1', 'abcd1234', 'phone');
+  r.sent.length = 0;
+  await r.msg('P1', { t: '_ping' });
+  assert.deepEqual(r.sent, [{ cid: 'P1', data: { t: '_pong' } }]);
+});

@@ -113,6 +113,8 @@ export function makeHandler({ db, post, now = () => Date.now(), extraOrigins = [
     const cid = event.requestContext.connectionId;
     const me = await db.get({ pk: `c#${cid}`, sk: '-' });
     if (!me) { log({ ev: 'msg-from-unknown', cid: short(cid) }); return { statusCode: 200, body: 'ignored' }; }
+    // Heartbeat: the page pings every few seconds and treats silence as a dead connection (a browser can miss a closed socket).
+    if (body.length < 30 && body.includes('"_ping"')) { await send(cid, { t: '_pong' }); return { statusCode: 200, body: 'pong' }; }
     const peers = await peersOf(me.sid);
 
     // A display announces itself once its socket is open (API Gateway cannot push during $connect).
