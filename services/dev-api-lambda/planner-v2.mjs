@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 import { placementRule, slideRange } from "./publishing-formats.mjs";
 
 export const PLANNER_VERSION = "planner-v2.0";
+const AUDIO_ONLY_TAGS = ["no-audio", "silent-audio", "no-music"];
 export const DURATION_BUCKETS = ["under-15s", "15-30s", "30-60s", "1-3min", "3min-plus"];
 const DAY_MS = 86400000;
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -203,7 +204,11 @@ export function poolRejection(asset, account, settings) {
   // A PDF is never a video or photo: only a placement that lists "document" can plan one.
   if (asset.kind === "document" && !kinds.includes("document")) return "kind";
   if (aspectRatios.length && !aspectRatios.includes(asset.aspectRatioLabel)) return "aspect";
-  if (hasAny(tags, pool.excludeTagsAny)) return "excluded-tag";
+  // no-audio / silent-audio / no-music describe sound, so they can only exclude video (a photo never has audio and
+  // was wrongly kept out of every pool when its pipeline stamped it "no-audio").
+  const soundless = asset.kind === "image" || asset.kind === "carousel" || asset.kind === "document";
+  const excludeTags = soundless ? (pool.excludeTagsAny || []).filter((t) => !AUDIO_ONLY_TAGS.includes(String(t).toLowerCase())) : pool.excludeTagsAny;
+  if (hasAny(tags, excludeTags)) return "excluded-tag";
   const allowed = Array.isArray(asset.allowedDestinations) ? asset.allowedDestinations : [];
   const excluded = Array.isArray(asset.excludedDestinations) ? asset.excludedDestinations : [];
   if (excluded.includes(dest) || (allowed.length && !allowed.includes(dest))) return "destination";
