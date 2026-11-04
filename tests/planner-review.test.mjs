@@ -113,7 +113,7 @@ test("the review window reaches nine weeks: this week plus two months", () => {
 
 test("cadence needs a connected account", async () => {
   process.env.CONNECTIONS_API_SHARED_SECRET = KEY;
-  const r = await handlePlannerReview(event, { brand: "stashbox", action: "cadence", destination: "instagram", placement: "reel", postsPerWeek: 7 },
+  const r = await handlePlannerReview(event, { brand: "stashbox", action: "cadence", destination: "instagram", placement: "reel", postsPerWeek: 21 },
     async () => fakeClient(), json);
   assert.equal(r.statusCode, 409);
 });
@@ -204,7 +204,7 @@ test("cadence refuses unknown formats and formats still waiting on an integratio
   assert.equal(linkedinText.statusCode, 409);
 });
 
-test("GMB stores a posts-per-day number, one a day at most, and is still never planned", async () => {
+test("GMB stores a posts-per-day number, three a day at most, and is not planned by planner-v2", async () => {
   process.env.CONNECTIONS_API_SHARED_SECRET = KEY;
   const client = () => fakeClient([['FROM "SocialAccount" WHERE', { rows: [{ id: "sa-gmb" }] }], ["AS n FROM", { rows: [{ n: 0 }] }]]);
   const ok = client();
@@ -214,9 +214,9 @@ test("GMB stores a posts-per-day number, one a day at most, and is still never p
   assert.ok(ok.seen.some((q) => q.sql.includes('INSERT INTO "CadenceRule"') && q.params.includes(5)));
   const seven = await handlePlannerReview(event, { brand: "stashbox", action: "cadence", destination: "gmb", placement: "update", postsPerWeek: 7 }, async () => client(), json);
   assert.equal(seven.statusCode, 200);
-  const eight = await handlePlannerReview(event, { brand: "stashbox", action: "cadence", destination: "gmb", placement: "update", postsPerWeek: 8 }, async () => client(), json);
+  const eight = await handlePlannerReview(event, { brand: "stashbox", action: "cadence", destination: "gmb", placement: "update", postsPerWeek: 22 }, async () => client(), json);
   assert.equal(eight.statusCode, 400);
-  assert.match(eight.body.error, /at most 7 a week \(1 a day\)/);
+  assert.match(eight.body.error, /at most 21 a week \(3 a day\)/);
   assert.equal(isPlannable(formatOf("gmb", "update")), false);
   assert.ok(!PLANNABLE_DESTINATIONS.includes("gmb"));
 });

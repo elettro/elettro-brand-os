@@ -4,8 +4,8 @@
  * The normal planner (planner-v2) is built for video clips and songs and skips Google Business. This module adds
  * Update posts for the Review page's "Posts per day" number on the GMB box (CadenceRule placement "update"):
  *
- *   - one post a day at most, on the days that spread best across the week, at a time between 10:00 and 16:30 on the
- *     brand's own clock (the publisher gate is 9 AM-6 PM; GMB_ASSET_SPEC.md);
+ *   - up to MAX_GMB_PER_DAY (3) posts a day, spread over the days of the week, each in its own band of the 10:00-16:30
+ *     window on the brand's own clock (the publisher gate is 9 AM-6 PM; GMB_ASSET_SPEC.md);
  *   - a pillar per post (A shows for hire, B custom song libraries, C label streaming + ads, F fan/release) chosen so
  *     business pillars stay over half of the last 30 days (the same rule gmb-lambda's mixAllows enforces at publish);
  *   - a real photo from the brand's image/4x3, image/3x2 or image/16x9 folders, 1200x800 or larger, 10 KB-5 MB, JPG or
@@ -14,8 +14,9 @@
  *   - a caption from the pillar's written variants (no URL, no phone number, no ALL CAPS, 1,350 characters at most);
  *   - exactly one button with its link (BOOK / LEARN_MORE / SHOP), set per pillar.
  *
- * Posts are saved `planned` (to review): they go out only after the owner approves them on Review, and the publisher
- * (services/gmb-lambda) re-checks every rule before anything reaches Google. Brands with no pillar wording yet are
+ * Posts are saved `planned` (to review) unless the brand is autonomous (Brand.settings.gmb.autoApprove, or the default
+ * below for Stashbox) or the owner already approved the week: those go in `approved` and the publisher
+ * (services/gmb-lambda) sends them. The publisher re-checks every rule before anything reaches Google. Brands with no pillar wording yet are
  * skipped with a reason. Per-brand wording and buttons can be overridden in Brand.settings.gmb.pillars.<A|B|C|F>.
  */
 import { ymdInTimeZone, addDaysToYmd, localDateTimeToUtc } from "./planner-v2.mjs";
@@ -33,10 +34,11 @@ const TAKEN = ["approved", "paused", "removed", "queued", "publishing", "process
 const COUNTED = ["planned", "approved", "queued", "publishing", "processing", "published"];
 
 // Pillar wording and buttons. Only what the spec (GMB_ASSET_SPEC.md) and Dean's notes say: no invented clients, results or
-// numbers. Dean approves each draft on Review before it can go out. Brands not listed here are skipped until they have pillars.
+// numbers. Dean approves each draft on Review before it can go out, except for brands with autoApprove (Stashbox). Brands not listed here are skipped until they have pillars.
 export const GMB_DEFAULTS = {
   stashbox: {
     languageCode: "en-US",
+    autoApprove: true,   // Dean 2026-11-04: Stashbox publishes on its own; the publisher's spec gates and 30-day mix still apply
     pillars: {
       A: {
         weight: 0.45, cta: { actionType: "BOOK", url: "https://stashbox.com/booking" },
@@ -103,7 +105,7 @@ export function gmbConfigFor(brand) {
     if (merged.cta && Array.isArray(merged.captions) && merged.captions.length && Number(merged.weight) > 0) pillars[letter] = merged;
   }
   if (!Object.keys(pillars).length) return null;
-  return { languageCode: own?.languageCode || base?.languageCode || "en-US", pillars };
+  return { languageCode: own?.languageCode || base?.languageCode || "en-US", pillars, autoApprove: own?.autoApprove ?? base?.autoApprove ?? false };
 }
 
 // ---- checks that mirror services/gmb-lambda (kept in step by tests/gmb-planner.test.mjs) ----
@@ -148,6 +150,29 @@ export function spreadDays(available, count) {
   const n = Math.min(count, available.length);
   if (n <= 0) return [];
   return [...new Set(Array.from({ length: n }, (_, k) => available[Math.min(available.length - 1, Math.floor(((k + 0.5) * available.length) / n))]))];
+}
+
+/** Posts a day at most (Dean 2026-11-04: more than 1). The Review box and publishing-formats.mjs cap at the same number. */
+export const MAX_GMB_PER_DAY = 3;
+
+/**
+ * `count` posts over the available days as evenly as possible, at most `perDay` on one day (default MAX_GMB_PER_DAY).
+ * `room` (optional) is how many more posts each day can take, by day number. Returns [{ day, n }] in day order.
+ */
+export function spreadSlots(available, count, perDay = MAX_GMB_PER_DAY, room = {}) {
+  const cap = (d) => Math.max(0, Math.min(perDay, room[d] ?? perDay));
+  const days = available.filter((d) => cap(d) > 0);
+  const total = Math.min(count, days.reduce((n, d) => n + cap(d), 0));
+  if (total <= 0) return [];
+  const take = new Map(days.map((d) => [d, 0]));
+  let left = total;
+  // Round 1 gives a post to the best-spread days, then each further round tops up the days that still have room.
+  while (left > 0) {
+    const open = days.filter((d) => take.get(d) < cap(d));
+    if (!open.length) break;
+    for (const d of spreadDays(open, left)) { take.set(d, take.get(d) + 1); left -= 1; }
+  }
+  return days.filter((d) => take.get(d) > 0).map((d) => ({ day: d, n: take.get(d) }));
 }
 
 /** A stable minute for one brand and day inside the window, never on :00 :15 :30 :45 (planner convention). */
@@ -251,13 +276,13 @@ export async function planGmbWeek(client, brand, { weekStart, now = new Date() }
          FROM "ScheduledPost" sp WHERE sp."socialAccountId" = $1 AND sp."placement" = 'update' AND sp."scheduledFor" >= $2::timestamp - INTERVAL '90 days'
          ORDER BY sp."scheduledFor"`, [account.socialAccountId, from])).rows;
       const lastUsed = new Map(); const recentCaptions = []; const counts = {};
-      const takenDays = new Set();
+      const takenCount = new Map();
       for (const h of history) {
         const at = new Date(h.scheduledFor).getTime();
         if (h.assetId) lastUsed.set(h.assetId, Math.max(lastUsed.get(h.assetId) || 0, at));
         if (h.generatedCaption) recentCaptions.push(h.generatedCaption);
         const inWeek = at >= from.getTime() && at < to.getTime();
-        if (inWeek && TAKEN.includes(h.status)) takenDays.add(ymdInTimeZone(new Date(h.scheduledFor), timeZone));
+        if (inWeek && TAKEN.includes(h.status)) { const y = ymdInTimeZone(new Date(h.scheduledFor), timeZone); takenCount.set(y, (takenCount.get(y) || 0) + 1); }
         // the 30 days before the end of the week count toward the business mix
         if (COUNTED.includes(h.status) && h.pillar && at >= to.getTime() - 30 * 864e5 && at < to.getTime()) counts[h.pillar] = (counts[h.pillar] || 0) + 1;
       }
@@ -265,22 +290,30 @@ export async function planGmbWeek(client, brand, { weekStart, now = new Date() }
       const available = [];
       for (let d = 0; d < 7; d++) {
         const ymd = addDaysToYmd(weekStart, d);
-        if (ymd < todayYmd || takenDays.has(ymd)) continue;
+        if (ymd < todayYmd) continue;
         if (ymd === todayYmd && localMinutesOf(notBefore, timeZone) + 1 > WINDOW_LAST_MINUTE) continue;   // too late today: another day takes the post
         available.push(d);
       }
-      const days = spreadDays(available, Number(account.postsPerWeek));
+      // The week's target counts posts already holding a day (approved, sent, paused, removed); only the rest is planned.
+      // The Review box is posts per DAY: 7 a week is one a day, 14 two a day, 21 three a day; that is the most any one day takes.
+      const perDay = Math.min(MAX_GMB_PER_DAY, Math.max(1, Math.ceil(Number(account.postsPerWeek) / 7)));
+      const alreadyThisWeek = [...takenCount.values()].reduce((n, c) => n + c, 0);
+      const room = Object.fromEntries(available.map((d) => [d, perDay - (takenCount.get(addDaysToYmd(weekStart, d)) || 0)]));
+      const days = spreadSlots(available, Math.max(0, Number(account.postsPerWeek) - alreadyThisWeek), perDay, room);
       const pillars = Object.keys(config.pillars);
       const weights = Object.fromEntries(pillars.map((p) => [p, Number(config.pillars[p].weight)]));
       const takenNow = new Set();
       const notes = [];
-      for (const d of days) {
+      const autoApprove = config.autoApprove === true || (Array.isArray(brand.settings?.approvedWeeks) && brand.settings.approvedWeeks.includes(weekStart));
+      for (const { day: d, n } of days) for (let k = 0; k < n; k++) {
         const ymd = addDaysToYmd(weekStart, d);
-        // Today's slot starts after the lead time; later days use the whole window.
+        // Today's slots start after the lead time; later days use the whole window. A day's posts each get their own band.
         let first = WINDOW_FIRST_MINUTE;
         if (ymd === todayYmd) first = Math.max(first, localMinutesOf(notBefore, timeZone) + 1);
-        const minute = slotMinute(`${brand.slug}|${ymd}`, first, WINDOW_LAST_MINUTE);
-        if (minute === null) { notes.push(`${ymd}: too late in the day`); continue; }
+        const band = (WINDOW_LAST_MINUTE - first + 1) / n;
+        const bandFirst = Math.ceil(first + k * band), bandLast = Math.floor(first + (k + 1) * band) - 1;
+        const minute = slotMinute(`${brand.slug}|${ymd}|${k}`, bandFirst, Math.max(bandFirst, bandLast));
+        if (minute === null || minute > WINDOW_LAST_MINUTE) { notes.push(`${ymd}: too late in the day`); continue; }
         const eligible = pillars.filter((p) => pickPhoto(photos, p, lastUsed, takenNow));
         const pillar = nextPillar(counts, weights, eligible);
         if (!pillar) { notes.push(`${ymd}: no photo fits a pillar`); continue; }
@@ -293,11 +326,11 @@ export async function planGmbWeek(client, brand, { weekStart, now = new Date() }
         const when = localDateTimeToUtc(ymd, mm(minute), timeZone);
         await client.query(
           `INSERT INTO "ScheduledPost" ("brandId","socialAccountId","assetId","placement","scheduledFor","status","selectionReason","scoreBreakdown","publishingMode","generatedCaption","generatedHashtags","updatedAt")
-           VALUES ($1,$2,$3,'update',$4,'planned',$5,$6::jsonb,$7,$8,$9,CURRENT_TIMESTAMP)`,
+           VALUES ($1,$2,$3,'update',$4,$10,$5,$6::jsonb,$7,$8,$9,CURRENT_TIMESTAMP)`,
           [brand.id, account.socialAccountId, photo.id, when.toISOString(),
            `Google Business pillar ${pillar}: photo ${photo.filename}`,
            JSON.stringify({ plannerVersion: GMB_PLANNER_VERSION, weekStart, gmb: { pillar, topicType: "STANDARD", languageCode: config.languageCode, cta: { actionType: setup.cta.actionType, ...(setup.cta.url ? { url: setup.cta.url } : {}) } }, copy: { source: "gmb-pillar-wording", status: "ready" } }),
-           account.publishingMode || "approval", caption, []]);
+           account.publishingMode || "approval", caption, [], autoApprove ? "approved" : "planned"]);
         takenNow.add(photo.id); lastUsed.set(photo.id, when.getTime()); recentCaptions.push(caption);
         counts[pillar] = (counts[pillar] || 0) + 1;
         out.planned += 1;

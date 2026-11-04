@@ -5,7 +5,7 @@ Added 2026-10-31 (Dean). Rules: `GMB_ASSET_SPEC.md` (Dropbox / Claude Skills MD)
 
 ## How a GMB post is made
 
-1. **Review → Posts per day → Google Business**: set a number (0-7 a week, 1 a day at most) and Save. This writes a `CadenceRule`
+1. **Review → Posts per day → Google Business**: set a number (0-3 a day, 21 a week at most) and Save. This writes a `CadenceRule`
    (`placement` `update`) on the brand's connected GMB profile.
 2. **Review → Plan** a week. `startPlanning` (planner-review.mjs) also calls `planGmbWeek`: one Update post per chosen day, spread
    across the week, at a time between 10:00 and 16:30 on the brand's clock, any weekday. The posts are saved `planned` (to review).
