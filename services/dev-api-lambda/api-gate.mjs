@@ -7,7 +7,7 @@
  */
 import { timingSafeEqual } from "node:crypto";
 
-export const PUBLIC_HTTP_PATHS = ["/status/connections", "/status/posts"];
+export const PUBLIC_HTTP_PATHS = ["/status/connections", "/status/posts", "/status/assets"];
 
 export function isHttpEvent(event) {
   return Boolean(event?.requestContext || event?.rawPath || event?.path);
