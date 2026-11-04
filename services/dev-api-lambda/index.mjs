@@ -11,6 +11,7 @@ import {createBrand} from "./brand-create.mjs";
 import {runMultiCamSetup, handleMultiCam} from "./multicam.mjs";
 import { handleConnectionStatus, setPlatformMilestone, setTokenExpiry, renameSocialAccount, listSocialAccounts, feedResponse } from "./connection-status.mjs";
 import { handlePostRace } from "./post-race.mjs";
+import { handleAssetFeed } from "./asset-feed.mjs";
 import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
 import { S3Client, PutObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
@@ -1631,6 +1632,7 @@ export const handler = async (event = {}) => {
   if (requestPath === "/status/connections" && (event?.requestContext?.http?.method || "GET") === "GET") return handleConnectionStatus(connectDatabase);
   // Public, read-only: the 1000-post race (counts per brand and network) for elettro.com/dash.
   if (requestPath === "/status/posts" && (event?.requestContext?.http?.method || "GET") === "GET") return handlePostRace(connectDatabase, feedResponse);
+  if (requestPath === "/status/assets" && (event?.requestContext?.http?.method || "GET") === "GET") return handleAssetFeed(connectDatabase, feedResponse);
   // Everything else over HTTP needs the shared connect key (deny by default); see api-gate.mjs.
   const gated = gateHttp(event, requestPath, json);
   if (gated) return gated;
