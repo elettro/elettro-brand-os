@@ -9,17 +9,20 @@ export const DAYS = 30;
 const TZ = "America/New_York";
 // Both timestamps are "timestamp without time zone" holding UTC: tag UTC first, then convert, or days roll over at 7 PM.
 export const ADDED_SQL = `(COALESCE(a."firstApprovedAt", a."createdAt") AT TIME ZONE 'UTC') AT TIME ZONE '${TZ}'`;
-const READY = `a."approvalStatus" = 'approved' AND a."ingestStatus" = 'ready' AND a."retiredAt" IS NULL AND a."kind" IN ('image','video','carousel')`;
-const media = (kind) => (kind === "video" ? "videos" : "images"); // a carousel is a set of images
+const READY = `a."approvalStatus" = 'approved' AND a."ingestStatus" = 'ready' AND a."retiredAt" IS NULL AND a."kind" IN ('image','video','carousel','audio')`;
+const media = (kind) => (kind === "video" ? "videos" : kind === "audio" ? "audio" : "images"); // a carousel is a set of images
 const dayKey = (t) => new Date(t).toLocaleDateString("en-CA", { timeZone: TZ });
 let cache = null;
 
 // Pure: rows in, feed out.
 export function buildAssetFeed({ brands, totals, added, now = Date.now() }) {
   // The shared library and the dormant google-review demo brand are not real brands: keep them out of every count.
-  const lib = new Set(brands.filter((b) => b.slug === LIBRARY_SLUG || b.slug === "google-review").map((b) => b.id));
-  const byBrand = new Map(brands.filter((b) => !lib.has(b.id)).map((b) => [b.id, { slug: b.slug, name: b.name, images: 0, videos: 0, total: 0 }]));
-  const all = { images: 0, videos: 0, total: 0 };
+  const skip = new Set(brands.filter((b) => b.slug === "google-review").map((b) => b.id));
+  // The shared creative-assets library is its own line, "Elettro Stock Gallery", and counts in every total.
+  const byBrand = new Map(brands.filter((b) => !skip.has(b.id)).map((b) => [b.id, b.slug === LIBRARY_SLUG
+    ? { slug: b.slug, name: "Elettro Stock Gallery", stock: true, images: 0, videos: 0, audio: 0, total: 0 }
+    : { slug: b.slug, name: b.name, images: 0, videos: 0, audio: 0, total: 0 }]));
+  const all = { images: 0, videos: 0, audio: 0, total: 0 };
   for (const r of totals) {
     const b = byBrand.get(r.brandId); if (!b) continue;
     const m = media(r.kind);
@@ -30,18 +33,18 @@ export function buildAssetFeed({ brands, totals, added, now = Date.now() }) {
   const perDay = new Map();
   for (const r of added) {
     if (!byBrand.has(r.brandId)) continue;
-    const d = String(r.d).slice(0, 10), o = perDay.get(d) || { images: 0, videos: 0, byBrand: {} };
+    const d = String(r.d).slice(0, 10), o = perDay.get(d) || { images: 0, videos: 0, audio: 0, byBrand: {} };
     o[media(r.kind)] += r.n; o.byBrand[byBrand.get(r.brandId).slug] = (o.byBrand[byBrand.get(r.brandId).slug] || 0) + r.n;
     perDay.set(d, o);
   }
   const days = [];
   const windowStart = new Date(Date.UTC(y, mo - 1, dd - (DAYS - 1))).toISOString().slice(0, 10);
-  const windowAdded = [...perDay.entries()].filter(([d]) => d >= windowStart).reduce((s, [, o]) => s + o.images + o.videos, 0);
+  const windowAdded = [...perDay.entries()].filter(([d]) => d >= windowStart).reduce((s, [, o]) => s + o.images + o.videos + o.audio, 0);
   let cum = all.total - windowAdded; // total on the morning of day one
   for (let i = DAYS - 1; i >= 0; i--) {
-    const d = new Date(Date.UTC(y, mo - 1, dd - i)).toISOString().slice(0, 10), o = perDay.get(d) || { images: 0, videos: 0, byBrand: {} };
-    cum += o.images + o.videos;
-    days.push({ d, images: o.images, videos: o.videos, total: cum, byBrand: o.byBrand });
+    const d = new Date(Date.UTC(y, mo - 1, dd - i)).toISOString().slice(0, 10), o = perDay.get(d) || { images: 0, videos: 0, audio: 0, byBrand: {} };
+    cum += o.images + o.videos + o.audio;
+    days.push({ d, images: o.images, videos: o.videos, audio: o.audio, total: cum, byBrand: o.byBrand });
   }
   return { ok: true, generatedAt: new Date(now).toISOString(), refreshSeconds: CACHE_MS / 1000, total: all,
     days, brands: [...byBrand.values()].sort((a, z) => z.total - a.total || a.name.localeCompare(z.name)) };
