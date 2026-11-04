@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildRace, fillDays, postRaceFeed, GOAL } from "../services/dev-api-lambda/post-race.mjs";
+import { buildRace, fillDays, DAY_SQL, postRaceFeed, GOAL } from "../services/dev-api-lambda/post-race.mjs";
 
 const brands = [{ id: "b1", slug: "stashbox", name: "Stashbox" }, { id: "b2", slug: "elettro", name: "Elettro" }, { id: "lib", slug: "creative-assets", name: "Library" }];
 const at = (s) => new Date(s);
@@ -68,4 +68,8 @@ test("days has no repeated or skipped date across the November DST change", () =
   const days = fillDays([], Date.parse("2026-11-03T02:00:00Z"));
   assert.equal(new Set(days.map((x) => x.d)).size, 30);
   assert.deepEqual(days.slice(-3).map((x) => x.d), ["2026-10-31", "2026-11-01", "2026-11-02"]);
+});
+
+test("day bucketing tags the naive UTC column as UTC before converting to New York", () => {
+  assert.match(DAY_SQL, /AT TIME ZONE 'UTC'\) AT TIME ZONE 'America\/New_York'/);
 });
