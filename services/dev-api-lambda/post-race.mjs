@@ -16,6 +16,9 @@ const iso = (v) => (v ? new Date(v).toISOString() : null);
 // Last DAYS calendar days (New York time, same clock as the race) with zeros filled in, oldest first.
 export const DAYS = 30;
 const TZ = "America/New_York";
+// "publishedAt" is a timestamp WITHOUT time zone holding UTC. A single AT TIME ZONE would read it as New York wall time
+// and shift every post 5 h late (days rolled over at 2 PM ET). Tag it UTC first, then convert to New York.
+export const DAY_SQL = `(pl."publishedAt" AT TIME ZONE 'UTC') AT TIME ZONE '${TZ}'`;
 const dayKey = (t) => new Date(t).toLocaleDateString("en-CA", { timeZone: TZ });
 export function fillDays(rows, now = Date.now()) {
   const counts = new Map(rows.map((r) => [String(r.d).slice(0, 10), r.n]));
@@ -74,7 +77,7 @@ export async function postRaceFeed(connectDatabase, { now = Date.now() } = {}) {
          FROM "ScheduledPost" sp JOIN "SocialAccount" sa ON sa."id" = sp."socialAccountId"
         WHERE sp."status" = ANY($1::text[]) GROUP BY sa."brandId", sa."destination"`, [PIPELINE])).rows;
     const days = (await client.query(
-      `SELECT to_char(pl."publishedAt" AT TIME ZONE '${TZ}', 'YYYY-MM-DD') AS d, COUNT(*)::int AS n
+      `SELECT to_char(${DAY_SQL}, 'YYYY-MM-DD') AS d, COUNT(*)::int AS n
          FROM "PublicationLedger" pl JOIN "Brand" b ON b."id" = pl."brandId"
         WHERE b."slug" <> $1 AND pl."publishedAt" >= NOW() - INTERVAL '${DAYS + 1} days' GROUP BY 1`, [LIBRARY_SLUG])).rows;
     // When did each scope cross the line? The publishedAt of its GOAL-th post, only looked up once it has one.
