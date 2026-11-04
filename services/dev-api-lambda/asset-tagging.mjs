@@ -130,3 +130,35 @@ export async function runTagAssets(event, connectDatabase, json) {
     if (client) { try { await client.end(); } catch {} }
   }
 }
+
+// Retire assets whose Dropbox file was deleted on purpose (2026-11-04). The sync never retires a deleted file, so
+// without this a deleted-but-approved asset stays in the planner pool and posts fail on a missing source.
+// IAM-only, dry run unless mode:"apply". Items are {brandSlug, sourcePath}; 1-200 per call. Never deletes a row
+// (history is kept), only sets retiredAt and ingestStatus='source_missing'. Already retired assets are skipped.
+export async function runRetireAssets(event, connectDatabase, json) {
+  if (!direct(event)) return json(403, {ok: false, error: "Direct IAM invocation required"});
+  const mode = event.mode === "apply" ? "apply" : "dry-run";
+  const items = Array.isArray(event.items) ? event.items : [];
+  if (!items.length || items.length > 200) return json(400, {ok: false, error: "items must hold 1-200 entries"});
+  let client;
+  try {
+    client = await connectDatabase();
+    const results = [];
+    for (const item of items) {
+      if (!item?.brandSlug || !item?.sourcePath) { results.push({sourcePath: item?.sourcePath, status: "rejected"}); continue; }
+      const row = (await client.query('SELECT a."id",a."retiredAt" FROM "Asset" a JOIN "Brand" b ON b."id"=a."brandId" WHERE b."slug"=$1 AND a."sourcePathLower"=$2 LIMIT 1',
+        [String(item.brandSlug), String(item.sourcePath).toLowerCase()])).rows[0];
+      if (!row) { results.push({sourcePath: item.sourcePath, status: "not-found"}); continue; }
+      if (row.retiredAt) { results.push({assetId: row.id, sourcePath: item.sourcePath, status: "already-retired"}); continue; }
+      if (mode === "apply") await client.query(
+        `UPDATE "Asset" SET "retiredAt"=CURRENT_TIMESTAMP,"ingestStatus"='source_missing'::"IngestStatus","updatedAt"=CURRENT_TIMESTAMP WHERE "id"=$1`, [row.id]);
+      results.push({assetId: row.id, sourcePath: item.sourcePath, status: mode === "apply" ? "retired" : "would-retire"});
+    }
+    return json(200, {ok: true, mode, summary: results.reduce((m, r) => ({...m, [r.status]: (m[r.status] || 0) + 1}), {}), results});
+  } catch (error) {
+    console.error("[asset-tagging] retire failed", error);
+    return json(500, {ok: false, error: error instanceof Error ? error.message : "retire failed"});
+  } finally {
+    if (client) { try { await client.end(); } catch {} }
+  }
+}

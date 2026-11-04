@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { runListUntaggedAssets, runTagAssets } from "../services/dev-api-lambda/asset-tagging.mjs";
+import { runListUntaggedAssets, runTagAssets, runRetireAssets } from "../services/dev-api-lambda/asset-tagging.mjs";
 
 const json = (status, body) => ({ status, body });
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
@@ -108,4 +108,30 @@ test("without markApproved the approval status is never touched", async () => {
   const r = await runTagAssets({ mode: "apply", items: [{ assetId: ID, tags: ["x"] }] }, db.connect, json);
   assert.equal(r.body.results[0].approval, undefined);
   assert.ok(!db.updates.some((u) => u.length === 1));
+});
+
+test("retire-assets refuses HTTP, is a dry run by default and only retires, never deletes", async () => {
+  const noDb = async () => { throw new Error("must not connect"); };
+  assert.equal((await runRetireAssets({ rawPath: "/x" }, noDb, json)).status, 403);
+  const calls = [];
+  const db = async () => ({
+    query: async (sql, params) => {
+      calls.push(sql);
+      if (sql.startsWith("SELECT")) return { rows: params[1] === "/a.mp3" ? [{ id: ID, retiredAt: null }] : params[1] === "/b.mp3" ? [{ id: ID, retiredAt: new Date() }] : [] };
+      return { rows: [] };
+    },
+    end: async () => {}
+  });
+  const items = [{ brandSlug: "creative-assets", sourcePath: "/A.mp3" }, { brandSlug: "creative-assets", sourcePath: "/B.mp3" }, { brandSlug: "creative-assets", sourcePath: "/c.mp3" }, { sourcePath: "/d.mp3" }];
+  const dry = await runRetireAssets({ mode: "dry-run", items }, db, json);
+  assert.deepEqual(dry.body.summary, { "would-retire": 1, "already-retired": 1, "not-found": 1, rejected: 1 });
+  assert.equal(calls.filter((q) => q.startsWith("UPDATE")).length, 0);
+  const applied = await runRetireAssets({ mode: "apply", items }, db, json);
+  assert.equal(applied.body.summary.retired, 1);
+  assert.equal(calls.filter((q) => q.startsWith("UPDATE")).length, 1);
+  assert.ok(!calls.some((q) => /DELETE/i.test(q)));
+});
+
+test("retire-assets action is routed IAM-only in the dev-api", () => {
+  assert.match(read("services/dev-api-lambda/index.mjs"), /retire-assets-20261104" && !event\.requestContext && !event\.rawPath && !event\.path/);
 });
