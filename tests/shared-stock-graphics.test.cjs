@@ -19,6 +19,7 @@ test("only the Christmas and New Year stock-video subtrees are indexed; ingest m
   const lib = read("services/dev-api-lambda/shared-stock-graphics.mjs");
   assert.match(lib, /creative-assets\/stock-videos\/christmas"/);
   assert.match(lib, /creative-assets\/stock-videos\/new-years-2027"/);
+  assert.match(lib, /creative-assets\/stock-videos\/solar-panels"/);
   // never the whole stock-videos folder (it also holds personal clips)
   assert.doesNotMatch(lib, /creative-assets\/stock-videos"/);
   assert.match(api, /LIBRARY_VIDEO_ROOTS\.map/);

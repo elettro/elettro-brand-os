@@ -10,10 +10,12 @@
 import { LIBRARY_SLUG } from "./shared-audio-library.mjs";
 
 export const LIBRARY_GRAPHICS_ROOT = "/1---elettro-brand-os/creative-assets/stock-graphics";
-// Seasonal stock videos only. Do NOT register the whole stock-videos folder: it also holds personal clips.
+// Seasonal + solar stock videos only. Do NOT register the whole stock-videos folder: it also holds personal clips.
 export const LIBRARY_VIDEO_ROOTS = [
   "/1---elettro-brand-os/creative-assets/stock-videos/christmas",
-  "/1---elettro-brand-os/creative-assets/stock-videos/new-years-2027"
+  "/1---elettro-brand-os/creative-assets/stock-videos/new-years-2027",
+  // Mainly for SolarMeister and Neckermann Strom, but open to every brand (no allowedBrandSlugs limit).
+  "/1---elettro-brand-os/creative-assets/stock-videos/solar-panels"
 ];
 export const LIBRARY_STOCK_ROOTS = [LIBRARY_GRAPHICS_ROOT, ...LIBRARY_VIDEO_ROOTS];
 
