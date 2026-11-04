@@ -5,6 +5,7 @@ import type { PublishingFormat, ReviewAccount, ReviewList, ReviewPost, TiktokCre
 import { AssetThumb as Thumb } from "@/components/asset-thumb";
 import { TiktokCard } from "./tiktok-card";
 import { NetworkLogo } from "@/components/network-logo";
+import { TICK_MS, countdown } from "@/lib/post-eta";
 
 const NETWORK: Record<string, string> = {
   instagram: "Instagram", facebook: "Facebook", tiktok: "TikTok", threads: "Threads", bluesky: "Bluesky", youtube: "YouTube",
@@ -67,6 +68,9 @@ const TITLE_MAX = 100;
 
 export function ReviewClient({ initial }: { initial: ReviewList }) {
   const [list, setList] = useState(initial);
+  // Ticks every 30 s so the countdowns on the cards stay current.
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => { const t = setInterval(() => setNowMs(Date.now()), 30000); return () => clearInterval(t); }, []);
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
@@ -360,6 +364,16 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
                   <b>{NETWORK[p.destination] || p.destination}</b> · {p.placement} · {fmtTime(p.scheduledFor)}
                   <span className={`review-status ${p.status}`}>{p.status === "planned" ? "to review" : p.status}</span>
                 </div>
+                {(p.status === "approved" || p.status === "planned") && (() => {
+                  const at = new Date(p.scheduledFor).getTime();
+                  const left = countdown(at, nowMs);
+                  const by = fmtTime(new Date(at + TICK_MS).toISOString());
+                  const text = p.status === "planned"
+                    ? (left ? `Scheduled ${left}, once approved` : "Time has passed. Approve or reschedule")
+                    : left ? `Goes live ${left} (scheduled ${fmtTime(p.scheduledFor)}, posts by ${by})`
+                    : nowMs - at > TICK_MS ? "Past due. Posts on the next run" : `Due now. Posts by ${by}`;
+                  return <p className="review-eta muted" style={{ fontSize: 12, margin: "2px 0" }} title="Posts go out on the first 15-minute run after the scheduled time">{text}</p>;
+                })()}
                 {p.title && <p className="review-title"><b>{p.title}</b></p>}
                 {p.status === "failed" && <p className="review-warn"><b>Failed:</b> {p.failureReason || "No reason was recorded."}</p>}
                 {p.captionStale && <p className="review-warn">Clip was swapped. Check the caption still fits.</p>}
