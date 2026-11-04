@@ -113,7 +113,7 @@ EventBridge, every 15 min ──> platform worker Lambda ──> network API
 | API | `elettro-brand-os-dev-api` (+ HTTP API) |
 | Workers | `elettro-brand-os-dev-{threads,tiktok,pinterest,youtube-upload,meta,linkedin}` (all exist; `bluesky` since 2026-10-29; `gmb` is built in code but not yet created) |
 | Dropbox | `elettro-brand-os-dev-{dropbox-sync,dropbox-upload}` |
-| Runtime | all Lambdas `nodejs24.x`; dev-api 256 MB / 60 s |
+| Runtime | all Lambdas `nodejs24.x`; dev-api 256 MB / 300 s (raised from 60 s on 2026-11-04: the background `plan-week` run, which writes AI captions for every network and saves the whole week in one transaction, timed out at 60 s and rolled back silently, leaving only GMB posts on Review) |
 | HTTP API | `zkjngy7rdd`, routes made by hand (18 as of 2026-10-29, plus `POST /multicam` 2026-11-01); each needs a gateway route **and** a Lambda invoke permission (see `docs/admin/new-api-route.md`) |
 | DB | RDS `elettro-brand-os-dev` |
 | Buckets | `elettro-brand-os-dev-assets`, `elettro-brand-os-dev-thumbnails` |
