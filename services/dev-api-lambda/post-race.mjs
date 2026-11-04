@@ -19,18 +19,20 @@ const TZ = "America/New_York";
 // "publishedAt" is a timestamp WITHOUT time zone holding UTC. A single AT TIME ZONE would read it as New York wall time
 // and shift every post 5 h late (days rolled over at 2 PM ET). Tag it UTC first, then convert to New York.
 export const DAY_SQL = `(pl."publishedAt" AT TIME ZONE 'UTC') AT TIME ZONE '${TZ}'`;
+export const UPCOMING_DAY_SQL = `(sp."scheduledFor" AT TIME ZONE 'UTC') AT TIME ZONE '${TZ}'`;
 const dayKey = (t) => new Date(t).toLocaleDateString("en-CA", { timeZone: TZ });
-export function fillDays(rows, now = Date.now()) {
+export function fillDays(rows, now = Date.now(), ahead = false) {
   const counts = new Map(rows.map((r) => [String(r.d).slice(0, 10), r.n]));
   const out = [];
   // Step back by calendar date (UTC arithmetic on the date string), not by 24 h, so a DST change can't repeat or skip a day.
   const [y, m, dd] = dayKey(now).split("-").map(Number);
-  for (let i = DAYS - 1; i >= 0; i--) { const d = new Date(Date.UTC(y, m - 1, dd - i)).toISOString().slice(0, 10); out.push({ d, posts: counts.get(d) || 0 }); }
+  // ahead=true: today first, then the next DAYS-1 days (the scheduled queue); otherwise the last DAYS days ending today.
+  for (let i = DAYS - 1; i >= 0; i--) { const d = new Date(Date.UTC(y, m - 1, dd + (ahead ? DAYS - 1 - i : -i))).toISOString().slice(0, 10); out.push({ d, posts: counts.get(d) || 0 }); }
   return out;
 }
 
 // Pure: rows in, race out. Keeps the SQL thin and the scoring testable.
-export function buildRace({ published, scheduled, finishes, brands, days = [], now = Date.now() }) {
+export function buildRace({ published, scheduled, finishes, brands, days = [], upcoming = [], now = Date.now() }) {
   const lib = new Set(brands.filter((b) => b.slug === LIBRARY_SLUG).map((b) => b.id));
   const byBrand = new Map(brands.filter((b) => !lib.has(b.id)).map((b) => [b.id, { slug: b.slug, name: b.name, published: 0, scheduled: 0, firstAt: null, lastAt: null, byDestination: {} }]));
   const byDest = new Map();
@@ -59,6 +61,7 @@ export function buildRace({ published, scheduled, finishes, brands, days = [], n
     goal: GOAL, raceStart: new Date(RACE_START).toISOString(),
     total: { ...total, finishedAt: done("all") },
     days: fillDays(days, now),
+    upcoming: fillDays(upcoming, now, true),
     destinations: [...byDest.values()].map((d) => ({ ...d, finishedAt: done(`d:${d.destination}`) })),
     brands: [...byBrand.entries()].map(([id, b]) => ({ ...b, finishedAt: done(`b:${id}`) }))
   };
@@ -80,6 +83,12 @@ export async function postRaceFeed(connectDatabase, { now = Date.now() } = {}) {
       `SELECT to_char(${DAY_SQL}, 'YYYY-MM-DD') AS d, COUNT(*)::int AS n
          FROM "PublicationLedger" pl JOIN "Brand" b ON b."id" = pl."brandId"
         WHERE b."slug" <> $1 AND pl."publishedAt" >= NOW() - INTERVAL '${DAYS + 1} days' GROUP BY 1`, [LIBRARY_SLUG])).rows;
+    // Approved posts waiting to go out, per New York day, from today forward (today's are the ones not yet sent).
+    const upcoming = (await client.query(
+      `SELECT to_char(${UPCOMING_DAY_SQL}, 'YYYY-MM-DD') AS d, COUNT(*)::int AS n
+         FROM "ScheduledPost" sp JOIN "Brand" b ON b."id" = sp."brandId"
+        WHERE sp."status" = ANY($1::text[]) AND b."slug" <> $2
+          AND sp."scheduledFor" >= NOW() - INTERVAL '1 day' AND sp."scheduledFor" < NOW() + INTERVAL '${DAYS + 1} days' GROUP BY 1`, [PIPELINE, LIBRARY_SLUG])).rows;
     // When did each scope cross the line? The publishedAt of its GOAL-th post, only looked up once it has one.
     const finishes = {};
     const nth = async (key, where, params) => {
@@ -91,7 +100,7 @@ export async function postRaceFeed(connectDatabase, { now = Date.now() } = {}) {
     if (published.reduce((s, r) => s + r.n, 0) >= GOAL) await nth("all", "", []);
     for (const [dest, n] of sum(published, (r) => r.destination)) if (n >= GOAL) await nth(`d:${dest}`, `WHERE "destination" = $1`, [dest]);
     for (const [id, n] of sum(published, (r) => r.brandId)) if (n >= GOAL) await nth(`b:${id}`, `WHERE "brandId" = $1`, [id]);
-    const body = buildRace({ published, scheduled, finishes, brands, days, now });
+    const body = buildRace({ published, scheduled, finishes, brands, days, upcoming, now });
     cache = { at: now, body };
     return body;
   } finally {
