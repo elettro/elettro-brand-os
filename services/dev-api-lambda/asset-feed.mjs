@@ -54,7 +54,7 @@ export async function assetFeed(connectDatabase, { now = Date.now() } = {}) {
   if (cache && now - cache.at < CACHE_MS) return cache.body;
   const client = await connectDatabase();
   try {
-    const brands = (await client.query(`SELECT "id", "slug", "name" FROM "Brand" WHERE "status" = 'active' ORDER BY "name"`)).rows;
+    const brands = (await client.query(`SELECT "id", "slug", "name" FROM "Brand" WHERE "status" = 'active' OR "slug" = '${LIBRARY_SLUG}' ORDER BY "name"`)).rows;
     const totals = (await client.query(`SELECT a."brandId", a."kind"::text AS kind, COUNT(*)::int AS n FROM "Asset" a WHERE ${READY} GROUP BY 1, 2`)).rows;
     const added = (await client.query(
       `SELECT a."brandId", a."kind"::text AS kind, to_char(${ADDED_SQL}, 'YYYY-MM-DD') AS d, COUNT(*)::int AS n
