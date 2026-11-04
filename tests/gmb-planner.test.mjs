@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  GMB_DEFAULTS, gmbConfigFor, captionProblem, captionHasUrl, spreadDays, slotMinute, nextPillar, photoProblem, pillarOfFilename,
+  GMB_DEFAULTS, gmbConfigFor, captionProblem, captionHasUrl, spreadDays, spreadSlots, MAX_GMB_PER_DAY, slotMinute, nextPillar, photoProblem, pillarOfFilename,
   pickPhoto, pickCaption, planGmbWeek, localMinutesOf
 } from "../services/dev-api-lambda/gmb-planner.mjs";
 import { postRequest, findUrl } from "../services/gmb-lambda/index.mjs";
@@ -129,7 +129,7 @@ test("a week of 5 posts a day-spread, each one passing the publisher's own valid
   assert.equal(new Set(days).size, 5, "one post a day at most");
   for (const q of rows) {
     assert.doesNotThrow(() => postRequest(asPublisherPost(q, assets), NOW), "the publisher accepts the draft");
-    assert.match(q.sql, /'update'.*'planned'/s, "saved as a draft to review");
+    assert.equal(q.params[9], "approved", "Stashbox is autonomous: saved approved, the publisher still re-checks every rule");
   }
   const pillars = rows.map((q) => JSON.parse(q.params[5]).gmb.pillar);
   assert.ok(pillars.filter((p) => p !== "F").length >= 3, "business pillars lead: " + pillars);
@@ -235,4 +235,38 @@ test("Review's Plan button plans Google Business too, alone or next to the other
   const none = make(["facebook_none"]);
   const d = await handlePlannerReview(event, { brand: "stashbox", action: "plan", weekStart: "2026-10-26" }, async () => none, json, deps);
   assert.equal(d.statusCode, 409);
+});
+
+test("spreadSlots: up to 3 a day, spread evenly, never over a day's room", () => {
+  const all = [0, 1, 2, 3, 4, 5, 6];
+  assert.equal(MAX_GMB_PER_DAY, 3);
+  assert.deepEqual(spreadSlots(all, 7), all.map((day) => ({ day, n: 1 })));
+  const fourteen = spreadSlots(all, 14);
+  assert.equal(fourteen.reduce((n, x) => n + x.n, 0), 14);
+  assert.ok(fourteen.every((x) => x.n === 2), "2 a day, every day");
+  const max = spreadSlots(all, 99);
+  assert.equal(max.reduce((n, x) => n + x.n, 0), 21, "never more than 3 a day");
+  assert.deepEqual(spreadSlots([2, 3], 5, 3, { 2: 1, 3: 3 }).map((x) => x.n), [1, 3], "a day with posts already has less room");
+  assert.deepEqual(spreadSlots([], 3), []);
+});
+
+test("several posts a day get their own band of the window, and a brand without autoApprove saves drafts", async () => {
+  const assets = Array.from({ length: 30 }, (_, i) => asset(i + 1));
+  const c = fake({ 'JOIN "CadenceRule"': [gmbAccount(21)], 'FROM "Asset"': assets });
+  const r = await planGmbWeek(c, { ...stashbox, settings: { gmb: { autoApprove: false } } }, { weekStart: "2026-11-09", now: NOW });
+  assert.equal(r.planned, 21);
+  const rows = inserts(c);
+  assert.ok(rows.every((q) => q.params[9] === "planned"), "autoApprove false: drafts to review");
+  const byDay = new Map();
+  for (const q of rows) {
+    const d = new Date(q.params[3]);
+    const day = d.toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+    byDay.set(day, [...(byDay.get(day) || []), localMinutesOf(d, "America/New_York")].sort((a, b) => a - b));
+  }
+  assert.equal(byDay.size, 7);
+  for (const mins of byDay.values()) {
+    assert.equal(mins.length, 3);
+    assert.ok(mins[0] >= 600 && mins[2] <= 990, String(mins));
+    assert.ok(mins[1] - mins[0] >= 60 && mins[2] - mins[1] >= 60, "posts at least an hour apart: " + mins);
+  }
 });
