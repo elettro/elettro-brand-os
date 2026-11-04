@@ -71,3 +71,16 @@ export async function withDropboxIdentityTransaction(client, id, brandId, operat
     throw error;
   }
 }
+
+// The elettro-brand-os-dev/dropbox secret is written with snake_case keys
+// (access_token, app_key, ...) but the sync once read only camelCase ones.
+// Accept both so a rewrite of the secret can never silently stop ingestion.
+export function dropboxCredentials(config = {}) {
+  const pick = (camel, snake) => config[camel] || config[snake] || undefined;
+  return {
+    accessToken: pick("accessToken", "access_token"),
+    appKey: pick("appKey", "app_key"),
+    appSecret: pick("appSecret", "app_secret"),
+    refreshToken: pick("refreshToken", "refresh_token")
+  };
+}

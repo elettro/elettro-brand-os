@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
 import pg from "pg";
-import { withDropboxIdentityTransaction, findDropboxAsset, DropboxIdentityConflict } from "./dropbox-identity.mjs";
+import { withDropboxIdentityTransaction, findDropboxAsset, DropboxIdentityConflict, dropboxCredentials } from "./dropbox-identity.mjs";
 import { brandFilter, includeShared, SHARED_LIBRARY_SLUG } from "./api-gate.mjs";
 
 const { Client } = pg;
@@ -42,10 +42,13 @@ async function getJsonSecret(secretId) {
   return JSON.parse(response.SecretString);
 }
 
-async function getDropboxAccessToken(config) {
-  if (config.accessToken) return config.accessToken;
+async function getDropboxAccessToken(rawConfig) {
+  const config = dropboxCredentials(rawConfig);
+  // Prefer the refresh flow: a stored short-lived access token goes stale.
+  const canRefresh = config.appKey && config.appSecret && config.refreshToken;
+  if (config.accessToken && !canRefresh) return config.accessToken;
 
-  if (!config.appKey || !config.appSecret || !config.refreshToken) {
+  if (!canRefresh) {
     throw new Error(
       "Dropbox secret must include accessToken or appKey/appSecret/refreshToken"
     );
