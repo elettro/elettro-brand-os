@@ -16,7 +16,8 @@ let cache = null;
 
 // Pure: rows in, feed out.
 export function buildAssetFeed({ brands, totals, added, now = Date.now() }) {
-  const lib = new Set(brands.filter((b) => b.slug === LIBRARY_SLUG).map((b) => b.id));
+  // The shared library and the dormant google-review demo brand are not real brands: keep them out of every count.
+  const lib = new Set(brands.filter((b) => b.slug === LIBRARY_SLUG || b.slug === "google-review").map((b) => b.id));
   const byBrand = new Map(brands.filter((b) => !lib.has(b.id)).map((b) => [b.id, { slug: b.slug, name: b.name, images: 0, videos: 0, total: 0 }]));
   const all = { images: 0, videos: 0, total: 0 };
   for (const r of totals) {

@@ -25,3 +25,9 @@ test("30 zero-filled days end today; running total ends at the grand total", () 
   assert.equal(f.days[27].total, 11); // 10 before the window + 1 video on 11-02
   assert.equal(f.days[0].total, 10);
 });
+
+test("google-review demo brand is ignored", () => {
+  const f = buildAssetFeed({ brands: [...brands, { id: "gr", slug: "google-review", name: "Google Review" }], now, added: [], totals: [{ brandId: "gr", kind: "video", n: 8 }, { brandId: "b1", kind: "image", n: 1 }] });
+  assert.equal(f.total.total, 1);
+  assert.equal(f.brands.length, 2);
+});
