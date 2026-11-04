@@ -14,8 +14,13 @@ test("stock graphics setup and tagging are IAM-only and dry-run by default", () 
   assert.match(api, /tag-shared-stock-graphics-20261101" && !event\.requestContext && !event\.rawPath && !event\.path/);
 });
 
-test("stock videos stay unindexed; ingest matches any registered root of the library", () => {
+test("only the Christmas and New Year stock-video subtrees are indexed; ingest matches any registered root of the library", () => {
   const api = read("services/dev-api-lambda/index.mjs");
-  assert.doesNotMatch(api, /creative-assets\/stock-videos/);
+  const lib = read("services/dev-api-lambda/shared-stock-graphics.mjs");
+  assert.match(lib, /creative-assets\/stock-videos\/christmas"/);
+  assert.match(lib, /creative-assets\/stock-videos\/new-years-2027"/);
+  // never the whole stock-videos folder (it also holds personal clips)
+  assert.doesNotMatch(lib, /creative-assets\/stock-videos"/);
+  assert.match(api, /LIBRARY_VIDEO_ROOTS\.map/);
   assert.match(api, /rootsByBrandId/);
 });
