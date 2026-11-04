@@ -5,7 +5,7 @@ import { configurePlannerBrand, runPlanWeek, runPlanWeeks, approvePlannerWeek } 
 import {runSharedAudioLibrarySetup,LIBRARY_SLUG,LIBRARY_AUDIO_ROOT} from "./shared-audio-library.mjs";
 import {runListUntaggedAssets,runTagAssets} from "./asset-tagging.mjs";
 import {runAddSectorMatchTag} from "./planner-sector-tags.mjs";
-import {runSharedStockGraphicsSetup,runSharedStockGraphicsTagging,LIBRARY_GRAPHICS_ROOT} from "./shared-stock-graphics.mjs";
+import {runSharedStockGraphicsSetup,runSharedStockGraphicsTagging,LIBRARY_GRAPHICS_ROOT,LIBRARY_VIDEO_ROOTS} from "./shared-stock-graphics.mjs";
 import {runDocumentAssetKindSetup} from "./document-asset-kind.mjs";
 import {createBrand} from "./brand-create.mjs";
 import {runMultiCamSetup, handleMultiCam} from "./multicam.mjs";
@@ -54,8 +54,10 @@ const DROPBOX_BRAND_ROOTS = [
   ["elettro", "/1---elettro-brand-os/brands/elettro"],
   // Shared library: only the audio subtree is indexed (see shared-audio-library.mjs).
   [LIBRARY_SLUG, LIBRARY_AUDIO_ROOT],
-  // ...and the stock-graphics subtree (see shared-stock-graphics.mjs). Stock videos stay unindexed.
-  [LIBRARY_SLUG, LIBRARY_GRAPHICS_ROOT]
+  // ...and the stock-graphics subtree (see shared-stock-graphics.mjs),
+  [LIBRARY_SLUG, LIBRARY_GRAPHICS_ROOT],
+  // ...and the seasonal stock-video subtrees (Christmas, New Year 2027; the rest of stock-videos stays unindexed).
+  ...LIBRARY_VIDEO_ROOTS.map((root) => [LIBRARY_SLUG, root])
 ];
 
 function json(statusCode, body) {
@@ -130,7 +132,7 @@ function folderHintsFromPath(sourcePath = "", brandSlug = "") {
   const normalized = String(sourcePath || "").replace(/\\/g, "/");
   const lower = normalized.toLowerCase();
   const root = brandSlug.toLowerCase() === LIBRARY_SLUG
-    ? (lower.includes(`${LIBRARY_GRAPHICS_ROOT.toLowerCase()}/`) ? `${LIBRARY_GRAPHICS_ROOT.toLowerCase()}/` : `${LIBRARY_AUDIO_ROOT.toLowerCase()}/`)
+    ? ([LIBRARY_GRAPHICS_ROOT, ...LIBRARY_VIDEO_ROOTS].map((r) => `${r.toLowerCase()}/`).find((r) => lower.includes(r)) || `${LIBRARY_AUDIO_ROOT.toLowerCase()}/`)
     : `/1---elettro-brand-os/brands/${brandSlug.toLowerCase()}/`;
   const start = lower.indexOf(root);
   const relative = start >= 0 ? normalized.slice(start + root.length) : normalized.replace(/^\/+/, "");
