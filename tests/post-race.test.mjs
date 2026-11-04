@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildRace, fillDays, DAY_SQL, postRaceFeed, GOAL } from "../services/dev-api-lambda/post-race.mjs";
+import { buildRace, fillDays, DAY_SQL, UPCOMING_DAY_SQL, postRaceFeed, GOAL } from "../services/dev-api-lambda/post-race.mjs";
 
 const brands = [{ id: "b1", slug: "stashbox", name: "Stashbox" }, { id: "b2", slug: "elettro", name: "Elettro" }, { id: "lib", slug: "creative-assets", name: "Library" }];
 const at = (s) => new Date(s);
@@ -72,4 +72,13 @@ test("days has no repeated or skipped date across the November DST change", () =
 
 test("day bucketing tags the naive UTC column as UTC before converting to New York", () => {
   assert.match(DAY_SQL, /AT TIME ZONE 'UTC'\) AT TIME ZONE 'America\/New_York'/);
+});
+
+test("upcoming runs today forward 30 days and buckets scheduledFor like published days", () => {
+  const up = fillDays([{ d: "2026-11-04", n: 5 }, { d: "2026-11-06", n: 45 }], Date.parse("2026-11-04T15:00:00Z"), true);
+  assert.equal(up.length, 30);
+  assert.deepEqual(up[0], { d: "2026-11-04", posts: 5 });
+  assert.deepEqual(up[2], { d: "2026-11-06", posts: 45 });
+  assert.equal(up[29].d, "2026-12-03");
+  assert.match(UPCOMING_DAY_SQL, /"scheduledFor" AT TIME ZONE 'UTC'\) AT TIME ZONE 'America\/New_York'/);
 });
