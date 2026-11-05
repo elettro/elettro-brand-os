@@ -53,5 +53,5 @@ reports less. Brand milestones for the other checkpoints can be set with the IAM
 
 ## Known gaps
 - Disconnect unlinks the brand but cannot revoke at Snap (no revoke endpoint documented); the worker keeps renewing that profile's token until its secret is marked `revokedAt`.
-- `SNAPCHAT_BRANDS` in `apps/web/lib/snapchat-connect.ts` is stashbox, elettro, solarmeister (Dean 2026-11-05). Dean still has to create the Stashbox and SolarMeister Public Profiles.
+- `SNAPCHAT_BRANDS` in `apps/web/lib/snapchat-connect.ts` is stashbox, elettro, therasbox, solarmeister (Dean 2026-11-05). Dean still has to create the Stashbox and SolarMeister Public Profiles.
 - Spotlight review by Snap can reject a post after we report it published (status is not polled).
