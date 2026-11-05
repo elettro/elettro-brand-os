@@ -35,3 +35,13 @@ test("schemas and packaging know about audio", () => {
   assert.ok(read("packages/database/prisma/schema.prisma").includes("allowedBrandSlugs"));
   assert.ok(read(".github/workflows/build-dev-api-lambda.yml").includes("shared-audio-library.mjs shared-stock-graphics.mjs document-asset-kind.mjs init.sql"));
 });
+
+test("shared-library assets honour allowedBrandSlugs in the asset list, single asset and content-pool stock view", () => {
+  const src = read("services/dev-api-lambda/db-main.mjs");
+  // one restriction per shared branch: empty list = open to all; otherwise the requested brands must overlap
+  const hits = src.match(/COALESCE\(cardinality\(a\."allowedBrandSlugs"\),0\) = 0/g) || [];
+  assert.equal(hits.length, 3);
+  assert.equal((src.match(/a\."allowedBrandSlugs" && \$[12]::text\[\]/g) || []).length, 3);
+  // the library's own view (brands=creative-assets) matches on the first predicate and stays unrestricted
+  assert.ok(src.includes('b."slug" = ANY($1::text[])'));
+});

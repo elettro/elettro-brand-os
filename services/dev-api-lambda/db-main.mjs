@@ -611,7 +611,8 @@ export const handler = async (event = {}) => {
           FROM "Asset" a
           JOIN "Brand" b ON b."id" = a."brandId"
           WHERE a."id" = $1::uuid
-            AND ($2::text[] IS NULL OR b."slug" = ANY($2::text[]) OR ($3::boolean AND b."slug" = $4))
+            AND ($2::text[] IS NULL OR b."slug" = ANY($2::text[])
+               OR ($3::boolean AND b."slug" = $4 AND (COALESCE(cardinality(a."allowedBrandSlugs"),0) = 0 OR a."allowedBrandSlugs" && $2::text[])))
           LIMIT 1
         `, [assetId, brandFilter(event), includeShared(event), SHARED_LIBRARY_SLUG]);
 
@@ -645,7 +646,8 @@ export const handler = async (event = {}) => {
           b."name" AS "brandName"
         FROM "Asset" a
         JOIN "Brand" b ON b."id" = a."brandId"
-        WHERE ($1::text[] IS NULL OR b."slug" = ANY($1::text[]) OR ($2::boolean AND b."slug" = $3))
+        WHERE ($1::text[] IS NULL OR b."slug" = ANY($1::text[])
+               OR ($2::boolean AND b."slug" = $3 AND (COALESCE(cardinality(a."allowedBrandSlugs"),0) = 0 OR a."allowedBrandSlugs" && $1::text[])))
         ORDER BY a."createdAt" DESC
         LIMIT 2000
       `, [brandFilter(event), includeShared(event), SHARED_LIBRARY_SLUG]);
@@ -677,7 +679,8 @@ export const handler = async (event = {}) => {
           AND a."ingestStatus" = 'ready'
           AND a."retiredAt" IS NULL
           AND (
-            ($2::boolean AND b."slug" = $3)
+            ($2::boolean AND b."slug" = $3
+              AND ($1::text[] IS NULL OR $3 = ANY($1::text[]) OR COALESCE(cardinality(a."allowedBrandSlugs"),0) = 0 OR a."allowedBrandSlugs" && $1::text[]))
             OR (NOT $2::boolean AND ($1::text[] IS NULL OR b."slug" = ANY($1::text[])))
           )
         ORDER BY a."updatedAt" DESC
