@@ -2,7 +2,7 @@
  * Holidays (Review-style drafts for a date every year, starting with Halloween). Routed through
  * POST /planner/review like the other review actions.
  *
- *   holiday-list     the brand's drafts for one holiday (3 per brand), with the picture, swap choices and,
+ *   holiday-list     the brand's drafts for one holiday (3 for Halloween, 4 for Christmas), with the picture, swap choices and,
  *                    for approved ones, where and when they were scheduled
  *   holiday-edit     rewrite a draft's caption and hashtags
  *   holiday-skip     skip (or bring back) a draft
@@ -18,7 +18,13 @@
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 import { localDateTimeToUtc, ymdInTimeZone, addDaysToYmd } from "./planner-v2.mjs";
 
-export const HOLIDAYS = { halloween: { name: "Halloween", month: 10, day: 31 } };
+// `match` finds a brand's own pictures for the swap choices; `brands` limits which brands get drafts at all.
+// Christmas (Dean, 2026-11-04): German only, SolarMeister and Neckermann Strom, posted on Heiligabend (Dec 24).
+// The pictures are `<brand>_xmas_<n>_4x5.jpg` in brands/<brand>/shared/image/holidays/christmas/4x5/.
+export const HOLIDAYS = {
+  halloween: { name: "Halloween", month: 10, day: 31, match: "%halloween%", count: 3 },
+  christmas: { name: "Weihnachten", month: 12, day: 24, match: "%xmas%4x5%", count: 4, brands: ["solarmeister", "neckermann-strom"] }
+};
 // Networks that take one photo with text today. LinkedIn, Pinterest, TikTok, YouTube and GMB are left out on purpose.
 export const HOLIDAY_DESTINATIONS = ["instagram", "facebook", "threads", "bluesky", "mastodon"];
 export const HOLIDAY_BRAND_SLUGS = ["stashbox", "elettro", "solarmeister", "neckermann-strom", "weightlossdavie", "therasbox", "pianomusicsoothing"];
@@ -63,7 +69,29 @@ export const HALLOWEEN_COPY = {
   ]
 };
 
+// brand -> [caption, hashtags] x4, in German, same wording as the pictures. No year, no offers.
+export const CHRISTMAS_COPY = {
+  solarmeister: [
+    ["Frohe Weihnachtszeit! Ihr SolarMeister wünscht Ihnen frohe Festtage. 🎄", ["FroheWeihnachten", "Festtage", "SolarMeister"]],
+    ["Schöne Feiertage! Besinnliche Stunden und ein sonniges neues Jahr wünscht Ihr SolarMeister. ☀️🎄", ["FroheWeihnachten", "SchöneFeiertage", "SolarMeister"]],
+    ["Frohe Festtage! Ein warmes Zuhause und leuchtende Momente wünscht Ihr SolarMeister. ✨", ["FroheFesttage", "Weihnachten", "SolarMeister"]],
+    ["Frohe Weihnachten! Ihr SolarMeister wünscht ein sonniges Weihnachtsfest. 🎄☀️", ["FroheWeihnachten", "Weihnachten", "SolarMeister"]]
+  ],
+  "neckermann-strom": [
+    ["Frohe Weihnachtszeit! Wir wünschen Ihnen frohe Festtage. 🎄 Ihr Neckermann Strom", ["FroheWeihnachten", "Festtage", "NeckermannStrom"]],
+    ["Schöne Feiertage! Besinnliche Stunden mit Ihren Liebsten wünscht Neckermann Strom. 🎄", ["FroheWeihnachten", "SchöneFeiertage", "NeckermannStrom"]],
+    ["Frohe Festtage! Wir wünschen Ihnen leuchtende Weihnachten. ✨ Ihr Neckermann Strom", ["FroheFesttage", "Weihnachten", "NeckermannStrom"]],
+    ["Frohe Weihnachten! Ihr Neckermann Strom wünscht eine besinnliche Zeit. 🎄", ["FroheWeihnachten", "Weihnachten", "NeckermannStrom"]]
+  ]
+};
+
 export function seedDrafts(slug, key) {
+  if (key === "christmas") {
+    return (CHRISTMAS_COPY[slug] || []).map(([caption, hashtags], i) => ({
+      id: `${key}-${i + 1}`, status: "draft", caption, hashtags,
+      imageName: `${slug}_xmas_${i + 1}_4x5.jpg`, assetId: null, postIds: []
+    }));
+  }
   if (key !== "halloween") return [];
   const copy = HALLOWEEN_COPY[slug] || [0, 1, 2].map(() => ["Happy Halloween! 🎃", EN_TAGS]);
   return copy.map(([caption, hashtags], i) => ({
@@ -126,7 +154,7 @@ export async function holidayList(client, brand, body, now = new Date()) {
   const byName = new Map((await client.query(`SELECT ${ASSET_COLS} FROM "Asset" WHERE "brandId"=$1 AND "filename" = ANY($2::text[]) AND ${READY}`, [brand.id, names])).rows.map((a) => [a.filename, a]));
   const ids = drafts.map((d) => d.assetId).filter((id) => UUID.test(String(id || "")));
   const byId = new Map((ids.length ? (await client.query(`SELECT ${ASSET_COLS} FROM "Asset" WHERE "brandId"=$1 AND "id" = ANY($2::uuid[])`, [brand.id, ids])).rows : []).map((a) => [a.id, a]));
-  const choices = (await client.query(`SELECT ${ASSET_COLS} FROM "Asset" WHERE "brandId"=$1 AND "kind"='image' AND ${READY} AND "filename" ILIKE '%halloween%' ORDER BY "filename" LIMIT 40`, [brand.id])).rows;
+  const choices = (await client.query(`SELECT ${ASSET_COLS} FROM "Asset" WHERE "brandId"=$1 AND "kind"='image' AND ${READY} AND "filename" ILIKE $2 ORDER BY "filename" LIMIT 40`, [brand.id, h.match])).rows;
   const postIds = drafts.flatMap((d) => (d.postIds || []).filter((id) => UUID.test(String(id))));
   const posts = postIds.length ? (await client.query(
     `SELECT sp."id", sp."status", sp."scheduledFor", sa."destination", sa."accountName" FROM "ScheduledPost" sp JOIN "SocialAccount" sa ON sa."id"=sp."socialAccountId" WHERE sp."brandId"=$1 AND sp."id" = ANY($2::uuid[]) ORDER BY sp."scheduledFor"`, [brand.id, postIds])).rows : [];

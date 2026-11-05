@@ -88,3 +88,33 @@ test("edit validates the caption; a skipped draft cannot be approved", async () 
   const none = await call({ action: "holiday-approve", brand: "stashbox", key: "halloween", draftIds: ["nope"] }, fakeClient("stashbox"));
   assert.equal(none.statusCode, 409);
 });
+
+test("Christmas is German, 4 drafts, only for SolarMeister and Neckermann Strom, using their xmas 4x5 pictures", () => {
+  for (const slug of ["solarmeister", "neckermann-strom"]) {
+    const d = seedDrafts(slug, "christmas");
+    assert.equal(d.length, 4, slug);
+    d.forEach((x, i) => {
+      assert.ok(!/\b20\d\d\b/.test(x.caption), `${slug} caption has a year`);
+      assert.ok(x.caption.length <= 280);
+      assert.match(x.caption, /Weihnacht|Festtage|Feiertage/);
+      assert.equal(x.imageName, `${slug}_xmas_${i + 1}_4x5.jpg`);
+      assert.equal(x.id, `christmas-${i + 1}`);
+    });
+  }
+  for (const slug of ["stashbox", "elettro", "therasbox"]) assert.deepEqual(seedDrafts(slug, "christmas"), [], slug);
+});
+
+test("Christmas lands on Dec 24 and rolls to next year after it passes", () => {
+  assert.equal(holidayDate("christmas", new Date("2026-12-01T15:00:00Z"), "Europe/Berlin"), "2026-12-24");
+  assert.equal(holidayDate("christmas", new Date("2026-12-26T15:00:00Z"), "Europe/Berlin"), "2027-12-24");
+});
+
+test("holiday-list for Christmas asks for the brand's own xmas pictures", async () => {
+  const client = fakeClient("solarmeister", [['"filename" ILIKE', { rows: [] }]]);
+  const r = await call({ action: "holiday-list", brand: "solarmeister", key: "christmas" }, client, { now: new Date("2026-12-01T15:00:00Z") });
+  assert.equal(r.statusCode, 200);
+  assert.equal(r.body.name, "Weihnachten");
+  assert.equal(r.body.drafts.length, 4);
+  const q = client.seen.find((s) => s.sql.includes('"filename" ILIKE'));
+  assert.equal(q.params[1], "%xmas%4x5%");
+});
