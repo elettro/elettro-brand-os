@@ -252,7 +252,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
     </>}
     {pinterestBrands.length > 0 && <>
     <h2 id="pinterest" style={{ marginTop: 32 }}>Pinterest</h2>
-    <p className="muted">One Pinterest business account, pinterest.com/elettro, for Elettro and Stashbox: connect it under each brand (same login); Stashbox Pins go to the Stashbox board. While the Elettro OS app has Trial access, Pins it creates are visible only to that account. The login renews itself each time it is used; the countdown shows when it lapses if unused.</p>
+    <p className="muted">Elettro and Stashbox share the Pinterest business account pinterest.com/elettro (Stashbox Pins go to the Stashbox board); SolarMeister has its own Pinterest business account (pinterest.com/solarmeistershop). Connect each brand while logged into its account. While the Elettro OS app has Trial access, Pins it creates are visible only to that account. The login renews itself each time it is used; the countdown shows when it lapses if unused.</p>
     <div className="grid" style={{ marginTop: 20 }}>
       {pinterestBrands.map((b) => {
         const linked = pinterest[b.id];

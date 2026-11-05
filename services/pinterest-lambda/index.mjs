@@ -25,7 +25,7 @@ const APP_ID = process.env.PINTEREST_APP_ID || "1627333";
 const DROPBOX_SECRET = process.env.DROPBOX_SECRET_NAME || "elettro-brand-os-dev/dropbox";
 const API = "https://api.pinterest.com/v5";
 // Board per brand; brands not listed use their slug in title case.
-export const BOARDS = { elettro: "Elettro Digital Marketing Agency", stashbox: "Stashbox" };
+export const BOARDS = { elettro: "Elettro Digital Marketing Agency", stashbox: "Stashbox", solarmeister: "SolarMeister" };
 // Pinterest limits.
 const MAX_TITLE = 100;
 const MAX_DESCRIPTION = 800;
