@@ -44,7 +44,9 @@ export type PublishingFormat = { destination: string; placement: string; label: 
   // Carousel formats: the network's hard limits and the advisory best range of images.
   slides?: { min: number; max: number; recommended: [number, number] };
   // GMB: Review stores a posts-per-week target (at most maxPostsPerWeek) although the format is not planned yet.
-  savesCadence?: boolean; maxPostsPerWeek?: number };
+  savesCadence?: boolean; maxPostsPerWeek?: number;
+  // "week": Review opens this format's box per week (slow formats such as Substack galleries); "gallery" etc. replaces the word "carousel" in its image-count label.
+  defaultUnit?: "week"; slidesNoun?: string };
 export type ReviewList = {
   ok: boolean; error?: string; brand: string; timeZone: string; weekStart: string; weeks: number; destinations: string[]; approvedWeeks?: string[];
   hasPlannerSettings: boolean; accounts: ReviewAccount[]; posts: ReviewPost[]; formats: PublishingFormat[]; maxPostsPerWeek: number;

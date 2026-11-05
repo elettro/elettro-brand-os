@@ -16,7 +16,10 @@ What that means in practice:
 - `services/dev-api-lambda/substack-connect.mjs`: `POST /connections/substack/complete` (needs the connect key). Cookie stored in Secrets Manager `elettro-brand-os-dev/substack/<subdomain>` (`{cookie, subdomain, userId, handle, brand, connectedAt}`); the `SocialAccount` (`destination='substack'`, `externalAccountId` = subdomain, `accountName` = `<subdomain>.substack.com`) is linked to the brand.
 - Web: `/api/connections/substack/connect` (POST form: checks the cookie against `substack.com/api/v1/user/profile/self`, then calls the dev-api), `/api/connections/substack/test-post`, `apps/web/lib/substack-connect.ts`, a Substack card on `/connections`. The brand list is `SUBSTACK_BRANDS` (`elettro` only).
 - Publisher `services/substack-lambda`: tick claims `substack` / `post`, uploads the picture (`POST /image`), creates a draft (`POST /drafts`), publishes it (`POST /drafts/<id>/publish` with `send:false`), and deletes the draft if publishing is refused. Manual invoke: `{action:"post", brand, title, text, dropboxPath?}`, `{action:"check", brand}` (reads the profile, posts nothing).
-- Format: `substack:post` "Photo posts", status `planning` (`publishing-formats.mjs`). Title comes from the planner title, else the first caption line (max 150); the body is the caption (max 1,200 from the copywriter) under one picture. No hashtags.
+- Formats (`publishing-formats.mjs`, both `planning`; Review lists exactly these two for Substack):
+  - `substack:post` "Photo posts": one picture, then the text. Title is the planner title, else the first caption line (max 150); the body is the caption (max 1,200 from the copywriter). No hashtags.
+  - `substack:carousel` "Galleries": 2-20 pictures from one sector (brand range set on Review, default 4-8). The post opens with the intro text, then lists the pictures in order as separate image blocks. Review opens its box **per week** (`defaultUnit: "week"`) and caps it at 7 a week (`maxPostsPerWeek`). Pictures upload one at a time and the draft is only created after all are hosted, so a failed upload leaves nothing half-posted. If a slide is missing or non-image the post fails rather than publishing a shorter gallery.
+- Hand-written posts: `{action:"post", brand, title, text, dropboxPath | dropboxPaths}` take simple markdown in `text` (# headings, **bold**, *italic*, [links](https://...), > quotes, --- dividers). Planner posts stay plain text. Bullet lists, video, audio and Notes are not built.
 - Status feed: `substack` is listed only for brands that have a Substack account, so `elettro.com/dash` is unchanged for other brands.
 
 ## AWS steps after merge (not in git)
@@ -34,6 +37,8 @@ What that means in practice:
 - Whether `substack.sid` alone is enough or other cookies are needed (the connect form accepts a whole `name=value; ...` string too).
 - The logo path and colour in `network-logo.tsx` (Simple Icons, from memory).
 - IAM steps, the connect route and the Connections card were not run against AWS.
+
+- Galleries: how many images Substack accepts in one post, and whether consecutive image blocks render the way its own gallery block does (it has none we know the node shape of). Verify with one real 3-picture gallery before turning the weekly number up.
 
 ## Unknown / ask Dean
 - Elettro's exact publication address (`<something>.substack.com`) and `@handle`.

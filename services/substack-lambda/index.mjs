@@ -5,9 +5,12 @@ import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
 // directly through IAM: no HTTP route points at it. Ways in:
 //   an EventBridge schedule (every 15 min)   publish approved Substack posts whose time has come
 //                                             (planner claim-due-posts / finish-post)
-//   { action: "post", brand, title, text, dropboxPath?, send? }
-//                                             publish now (live on the publication's web page)
+//   { action: "post", brand, title, text, dropboxPath? | dropboxPaths?, send? }
+//                                             publish now (live on the publication's web page); dropboxPaths = a gallery of 2-20 pictures
 //   { action: "check", brand }                confirm the stored login still works (no post)
+//
+// Manual posts ({action:"post"}) accept simple markdown in `text`: # headings, **bold**, *italic*, [links](https://...), > quotes, --- dividers.
+// Scheduled planner posts stay plain text. Bullet lists and extra images are not built yet.
 //
 // IMPORTANT: Substack has NO official API for publishing. This worker uses Substack's undocumented internal API
 // (the same one the website uses, and the open-source `python-substack` package), authenticated with the browser
@@ -31,7 +34,10 @@ const BRANDS_ROOT = "/1---elettro-brand-os/brands/";
 export const MAX_TITLE = 150;
 export const MAX_BODY = 8000;
 export const IMAGE_BYTE_LIMIT = 10 * 1024 * 1024;
-const PLACEMENTS = ["post"];
+// post = one picture, carousel = a gallery (Review calls it Galleries): 2 to 20 pictures in one post.
+const PLACEMENTS = ["post", "carousel"];
+export const MIN_GALLERY = 2;
+export const MAX_GALLERY = 20;
 const POSTS_PER_TICK = 1;
 const SUBDOMAIN = /^[a-z0-9][a-z0-9-]{0,62}$/;
 const IMAGE = /\.(jpe?g|png|webp|gif)$/i;
@@ -56,20 +62,62 @@ export function titleFor(post) {
   return cut.slice(0, Math.max(cut.lastIndexOf(" "), 40)).trimEnd() + "…";
 }
 
-const paragraph = (text) => ({ type: "paragraph", content: [{ type: "text", text }] });
+const textNode = (text, marks) => (marks.length ? { type: "text", text, marks } : { type: "text", text });
+const SAFE_LINK = /^(https?:\/\/|mailto:)/i;
 
-/** ProseMirror-style document Substack's editor uses: optional hero image, then the caption's paragraphs. */
-export function buildDoc(text, imageUrl) {
-  const content = [];
-  if (imageUrl) {
-    content.push({
-      type: "captionedImage",
-      content: [{ type: "image2", attrs: { src: imageUrl, fullscreen: null, imageSize: null, height: null, width: null, resizeWidth: null, bytes: null, alt: null, title: null, type: null, href: null, belowTheFold: false, internalRedirect: null } }]
-    });
+/**
+ * Inline markdown -> Substack text nodes: **bold**, *italic*, [text](https://link). Anything else stays literal text.
+ * Mark names (strong, em, link with attrs.href) are the ones the open-source python-substack library sends.
+ */
+export function inlineNodes(input) {
+  const nodes = [];
+  const push = (text, marks) => { if (text) nodes.push(textNode(text, marks)); };
+  const scan = (text, marks) => {
+    const re = /\[([^\]]+)\]\((\S+?)\)|\*\*([^*\n]+?)\*\*|\*([^*\s][^*\n]*?)\*/g;
+    let last = 0, m;
+    while ((m = re.exec(text))) {
+      push(text.slice(last, m.index), marks);
+      if (m[1] !== undefined) {
+        if (SAFE_LINK.test(m[2])) scan(m[1], [...marks, { type: "link", attrs: { href: m[2] } }]); else push(m[0], marks);
+      } else if (m[3] !== undefined) scan(m[3], [...marks, { type: "strong" }]);
+      else scan(m[4], [...marks, { type: "em" }]);
+      last = m.index + m[0].length;
+    }
+    push(text.slice(last), marks);
+  };
+  scan(String(input), []);
+  return nodes;
+}
+
+const paragraph = (text, markdown) => ({ type: "paragraph", content: markdown ? inlineNodes(text) : [{ type: "text", text }] });
+
+/** One blank-line separated block -> a heading, divider, quote or paragraph (markdown mode), else a plain paragraph. */
+function blockNode(block, markdown) {
+  const oneLine = block.replace(/\s*\n\s*/g, " ").trim();
+  if (!markdown) return paragraph(oneLine, false);
+  if (/^(-{3,}|\*{3,})$/.test(block.trim())) return { type: "horizontal_rule" };
+  const heading = /^(#{1,4})\s+(.+)$/.exec(block.trim());
+  if (heading && !block.includes("\n")) return { type: "heading", attrs: { level: heading[1].length }, content: inlineNodes(heading[2].trim()) };
+  if (block.split("\n").every((l) => /^>\s?/.test(l))) {
+    const quoted = block.split("\n").map((l) => l.replace(/^>\s?/, "")).join(" ").trim();
+    return { type: "blockquote", content: [paragraph(quoted, true)] };
   }
-  const paragraphs = String(text || "").split(/\n{2,}/).map((p) => p.replace(/\s*\n\s*/g, " ").trim()).filter(Boolean);
-  for (const p of paragraphs) content.push(paragraph(p));
-  return { type: "doc", content };
+  return paragraph(oneLine, true);
+}
+
+/**
+ * Substack document: optional hero image, then the text's blocks. `markdown` turns on headings (# to ####), **bold**, *italic*,
+ * [links](https://...), > quotes and --- dividers; without it every block is plain text (planner captions, which may contain stray * or #).
+ */
+export function buildDoc(text, images, { markdown = false, imagesAfterText = false } = {}) {
+  const urls = (Array.isArray(images) ? images : images ? [images] : []).filter(Boolean);
+  const pictures = urls.map((src) => ({
+    type: "captionedImage",
+    content: [{ type: "image2", attrs: { src, fullscreen: null, imageSize: null, height: null, width: null, resizeWidth: null, bytes: null, alt: null, title: null, type: null, href: null, belowTheFold: false, internalRedirect: null } }]
+  }));
+  const blocks = String(text || "").split(/\n{2,}/).map((b) => b.trim()).filter(Boolean).map((b) => blockNode(b, markdown));
+  // A single picture leads the post; a gallery opens with its intro text and then lists the pictures in order.
+  return { type: "doc", content: imagesAfterText ? [...blocks, ...pictures] : [...pictures, ...blocks] };
 }
 
 // ---------- requests ----------
@@ -82,9 +130,13 @@ export function postRequest(event) {
   if (!title) throw new Error("title is required");
   if (title.length > MAX_TITLE) throw new Error(`title allows up to ${MAX_TITLE} characters`);
   if (text.length > MAX_BODY) throw new Error(`text allows up to ${MAX_BODY} characters`);
-  const path = event.dropboxPath ? safePath(event.dropboxPath) : null;
-  if (path && !IMAGE.test(path)) throw new Error("the picture must be a .jpg, .png, .webp or .gif file");
-  return { brand, title, text, path, send: event.send === true };
+  // One picture (dropboxPath) or a gallery (dropboxPaths, 2 to 20).
+  const given = Array.isArray(event.dropboxPaths) ? event.dropboxPaths : event.dropboxPath ? [event.dropboxPath] : [];
+  const paths = given.map(safePath);
+  if (paths.some((p) => !IMAGE.test(p))) throw new Error("every picture must be a .jpg, .png, .webp or .gif file");
+  if (paths.length > MAX_GALLERY) throw new Error(`a gallery holds up to ${MAX_GALLERY} pictures`);
+  if (Array.isArray(event.dropboxPaths) && paths.length < MIN_GALLERY) throw new Error(`a gallery needs at least ${MIN_GALLERY} pictures (use dropboxPath for one)`);
+  return { brand, title, text, paths, path: paths[0] || null, gallery: Array.isArray(event.dropboxPaths), send: event.send === true, markdown: true };
 }
 
 export function requestFromPost(post) {
@@ -93,10 +145,17 @@ export function requestFromPost(post) {
   const title = titleFor(post);
   if (!title) throw new Error("A Substack post needs a title or a caption");
   const text = String(post.caption || "").trim().slice(0, MAX_BODY);
+  // Scheduled posts never email subscribers.
+  if (post.placement === "carousel") {
+    const slides = Array.isArray(post.slides) ? post.slides : [];
+    if (slides.length < MIN_GALLERY || slides.length > MAX_GALLERY) throw new Error(`a Substack gallery needs ${MIN_GALLERY}-${MAX_GALLERY} pictures; this one has ${slides.length}`);
+    const paths = slides.map((s) => safePath(s.dropboxPath));
+    if (paths.some((p) => !IMAGE.test(p))) throw new Error("every gallery picture must be a .jpg, .png, .webp or .gif image");
+    return { brand: "planner", title, text, paths, path: paths[0], gallery: true, send: false, subdomain, markdown: false };
+  }
   const path = safePath(post.dropboxPath);
   if (!IMAGE.test(path)) throw new Error("a Substack photo post needs a .jpg, .png, .webp or .gif image");
-  // Scheduled posts never email subscribers.
-  return { brand: "planner", title, text, path, send: false, subdomain };
+  return { brand: "planner", title, text, paths: [path], path, gallery: false, send: false, subdomain, markdown: false };
 }
 
 // ---------- Secrets Manager + dev-api ----------
@@ -198,8 +257,11 @@ export async function uploadImage(record, bytes, path, deps = {}) {
 export async function publish(record, request, deps = {}) {
   const { download = dropboxBytes, fetchImpl = fetch } = deps;
   if (!request.title || request.title.length > MAX_TITLE) throw new Error(`title must be 1-${MAX_TITLE} characters`);
-  const imageUrl = request.path ? await uploadImage(record, await download(request.path), request.path, { fetchImpl }) : null;
-  const doc = buildDoc(request.text, imageUrl);
+  // Pictures upload one at a time (a gallery of 20 is a few minutes at most); the draft is only made once all of them are hosted.
+  const paths = Array.isArray(request.paths) ? request.paths : request.path ? [request.path] : [];
+  const imageUrls = [];
+  for (const path of paths) imageUrls.push(await uploadImage(record, await download(path), path, { fetchImpl }));
+  const doc = buildDoc(request.text, imageUrls, { markdown: request.markdown === true, imagesAfterText: request.gallery === true });
   const draft = await substack(record, "POST", "/drafts", { fetchImpl, json: {
     draft_title: request.title, draft_subtitle: "", draft_body: JSON.stringify(doc),
     draft_bylines: record.userId ? [{ id: Number(record.userId), is_guest: false }] : [],

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { completeSubstackConnect } from "../services/dev-api-lambda/substack-connect.mjs";
 import { DISCONNECT_NETWORKS } from "../services/dev-api-lambda/connection-disconnect.mjs";
 import { DESTINATIONS } from "../services/dev-api-lambda/connection-status.mjs";
-import { PUBLISHING_FORMATS, isPlannable } from "../services/dev-api-lambda/publishing-formats.mjs";
+import { PUBLISHING_FORMATS, isPlannable, slideRange } from "../services/dev-api-lambda/publishing-formats.mjs";
 
 const json = (statusCode, body) => ({ statusCode, body });
 const KEY = "k".repeat(40);
@@ -38,7 +38,19 @@ test("substack can be disconnected, appears in status destinations, and has one 
   assert.deepEqual(DISCONNECT_NETWORKS.substack, ["substack"]);
   assert.ok(DESTINATIONS.includes("substack"));
   const formats = PUBLISHING_FORMATS.filter((f) => f.destination === "substack");
-  assert.deepEqual(formats.map((f) => f.placement), ["post"]);
-  assert.equal(formats[0].status, "planning");
-  assert.ok(isPlannable(formats[0]));
+  assert.deepEqual(formats.map((f) => f.placement), ["post", "carousel"]);
+  assert.ok(formats.every((f) => f.status === "planning" && isPlannable(f)));
+});
+
+test("the Substack gallery is a carousel format: 2-20 pictures, shown per week in Review, at most 7 a week", () => {
+  const gallery = PUBLISHING_FORMATS.find((f) => f.destination === "substack" && f.placement === "carousel");
+  assert.equal(gallery.label, "Galleries");
+  assert.equal(gallery.defaultUnit, "week");
+  assert.equal(gallery.maxPostsPerWeek, 7);
+  assert.deepEqual(gallery.slides, { min: 2, max: 20, recommended: [4, 8] });
+  // Brand settings can narrow the range, and are clamped to Substack's 2-20.
+  assert.deepEqual(slideRange({}, "substack", "carousel"), { min: 4, max: 8 });
+  assert.deepEqual(slideRange({ carouselSlides: { "substack:carousel": { min: 1, max: 99 } } }, "substack", "carousel"), { min: 2, max: 20 });
+  // Only galleries get the per-week default; the plain photo post stays per day.
+  assert.equal(PUBLISHING_FORMATS.find((f) => f.destination === "substack" && f.placement === "post").defaultUnit, undefined);
 });

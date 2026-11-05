@@ -67,6 +67,11 @@ export const PUBLISHING_FORMATS = [
   // One picture + a title and short body, published live on the web (never emailed to subscribers by a scheduled post).
   { destination: "substack", placement: "post", label: "Photo posts", status: "planning", note: "Publisher is built (services/substack-lambda, unofficial API); no post has published on schedule yet",
     rule: { kinds: ["image"], aspectRatios: [] } },
+  // Substack gallery: 2-20 pictures from one sector in a single post (intro text, then the pictures in order). A gallery is a big post, so
+  // Review shows it per WEEK by default (defaultUnit) and allows at most 7 a week. Placement is "carousel" so the planner builds it from one sector's images.
+  { destination: "substack", placement: "carousel", label: "Galleries", status: "planning", defaultUnit: "week", maxPostsPerWeek: 7, slidesNoun: "gallery",
+    note: "Publisher is built (services/substack-lambda, unofficial API); no gallery has published on schedule yet. 2-20 pictures per gallery",
+    slides: { min: 2, max: 20, recommended: [4, 8] }, rule: { kinds: ["image"], aspectRatios: [] } },
   { destination: "linkedin", placement: "post", label: "Posts", status: "planning", note: "Publisher is built (services/linkedin-lambda); no post has published on schedule yet",
     rule: { kinds: ["image", "video"], aspectRatios: [] } },
   { destination: "linkedin", placement: "carousel", label: "Multi-image posts", status: "planning", note: "Scheduled publishing is built; goes live after the first scheduled multi-image post",

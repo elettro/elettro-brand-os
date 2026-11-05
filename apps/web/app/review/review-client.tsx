@@ -131,7 +131,7 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
   });
   // Weekly numbers underneath; a box shows per day unless its number isn't a whole number of days.
   const [weekly, setWeekly] = useState<Record<string, number>>(() => Object.fromEntries(slots.map((s) => [s.key, savedWeekly(s)])));
-  const [perWeek, setPerWeek] = useState<Record<string, boolean>>(() => Object.fromEntries(slots.map((s) => [s.key, savedWeekly(s) % 7 !== 0])));
+  const [perWeek, setPerWeek] = useState<Record<string, boolean>>(() => Object.fromEntries(slots.map((s) => [s.key, s.format.defaultUnit === "week" || savedWeekly(s) % 7 !== 0])));
   const weeklyOf = (s: Slot) => weekly[s.key] ?? savedWeekly(s);
   // Carousel formats also take a min and max number of images, per brand and format.
   const slideKey = (s: Slot) => `${s.format.destination}:${s.format.placement}`;
@@ -232,7 +232,7 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
                   onClick={() => setPerWeek({ ...perWeek, [s.key]: !wk })}>{wk ? "/wk" : "/day"}</button>
                 {editable && <span className="muted">{totals(value)}</span>}
                 {s.format.slides && <span className="review-slides">
-                  images per carousel
+                  images per {s.format.slidesNoun || "carousel"}
                   <input type="number" aria-label={`${s.format.label} minimum images`} min={s.format.slides.min} max={slidesOf(s).max} value={slidesOf(s).min} disabled={!editable}
                     onChange={(e) => {
                       const lim = s.format.slides!;
