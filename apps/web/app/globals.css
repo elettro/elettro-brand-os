@@ -1123,7 +1123,7 @@ code {
 
 .net-instagram { --net: #e1306c; } .net-facebook { --net: #1877f2; } .net-tiktok { --net: #25f4ee; } .net-threads { --net: #c7c7c7; }
 .net-youtube { --net: #ff3b30; } .net-pinterest { --net: #e60023; } .net-linkedin { --net: #3b8fe0; } .net-bluesky { --net: #1185fe; }
-.net-gmb { --net: #34a853; } .net-x { --net: #a3aac4; }
+.net-snapchat { --net: #fffc00; } .net-gmb { --net: #34a853; } .net-x { --net: #a3aac4; }
 
 .cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--line); gap: 1px; }
 .cal-weekday { background: var(--panel); padding: 8px; font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }

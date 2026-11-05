@@ -16,6 +16,7 @@ import { PINTEREST_BOARDS, PINTEREST_BRANDS } from "@/lib/pinterest-connect";
 import { PinterestPost } from "@/components/pinterest-post";
 import { ReconnectCountdown } from "@/components/reconnect-countdown";
 import { MASTODON_BRANDS, MASTODON_POST_LIMIT } from "@/lib/mastodon-connect";
+import { SNAPCHAT_BRANDS } from "@/lib/snapchat-connect";
 import { redirect } from "next/navigation";
 
 const TEST_POST = "Testing Elettro OS on LinkedIn. Our in-house publishing system now posts here directly; this one went out through the LinkedIn API. More from Elettro and Stashbox soon.";
@@ -74,6 +75,10 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
   const pinterest = status.pinterest || {};
   const mastodonBrands = brandConfigs.filter((b) => MASTODON_BRANDS.includes(b.id) && inView(b.id));
   const mastodon = status.mastodon || {};
+  const snapchatBrands = brandConfigs.filter((b) => SNAPCHAT_BRANDS.includes(b.id) && inView(b.id));
+  const snapchat = status.snapchat || {};
+  // Snapchat has no reconnect date (Snap documents no refresh-token lifetime), so the callback reports no expiry either.
+  if (brand && connected && network === "snapchat") snapchat[brand] = { handle: connected, expiresAt: null };
   // Mastodon tokens never expire, so the callback reports no expiry; same 60s cache applies.
   if (brand && connected && network === "mastodon") mastodon[brand] = { handle: connected, expiresAt: null };
   // The feed caches for 60s; right after a connect, trust the expiry the callback just reported.
@@ -87,7 +92,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
   // Same cache after a disconnect: the brand is no longer linked even if the feed still says so.
   if (brand && disconnected) {
     const feeds: Record<string, Array<Record<string, Linked>>> = {
-      youtube: [youtube], gmb: [gmb], linkedin: [linkedin], threads: [threads], bluesky: [bluesky], tiktok: [tiktok], pinterest: [pinterest], meta: [facebook, instagram], mastodon: [mastodon]
+      youtube: [youtube], gmb: [gmb], linkedin: [linkedin], threads: [threads], bluesky: [bluesky], tiktok: [tiktok], pinterest: [pinterest], meta: [facebook, instagram], mastodon: [mastodon], snapchat: [snapchat]
     };
     for (const feed of feeds[network || ""] || []) delete feed[brand];
   }
@@ -306,6 +311,28 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
               </form>
             )}
             {linked && <LinkedInWriter brand={b.id} accountName={linked.handle || b.name} />}
+          </article>
+        );
+      })}
+    </div>
+    </>}
+    {snapchatBrands.length > 0 && <>
+    <h2 id="snapchat" style={{ marginTop: 32 }}>Snapchat</h2>
+    <p className="muted">Posts go to the brand&apos;s Snapchat Public Profile as Stories and Spotlight videos. Sign in with the Snapchat account that manages the Public Profile. Snap has to approve Elettro OS&apos;s app before this works, so until then the connect step may be refused.</p>
+    <div className="grid" style={{ marginTop: 20 }}>
+      {snapchatBrands.map((b) => {
+        const linked = snapchat[b.id];
+        return (
+          <article className="card" key={b.id}>
+            <div className="eyebrow">Snapchat</div>
+            <h2>{b.name}</h2>
+            <p className="muted" style={{ margin: "0 0 12px" }}>
+              {linked ? <>● Connected · <b>{linked.handle}</b></> : "○ Not connected"}
+            </p>
+            <div className="connect-row">
+              <a className="status-chip" href={`/api/connections/snapchat/start?brand=${b.id}`}>{linked ? "Reconnect" : "Connect Snapchat"}</a>
+              {linked && <ConnectionDisconnect brand={b.id} network="snapchat" handle={linked.handle || "this account"} />}
+            </div>
           </article>
         );
       })}
