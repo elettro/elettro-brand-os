@@ -3,7 +3,7 @@
 // (elettro-brand-os-dev/substack/<subdomain>). The calls below use Substack's undocumented internal API (the one the
 // website and the open-source python-substack package use). They can change without notice and have not been run
 // against the live service from this repo yet (docs/admin/substack-connect.md, "Never verified").
-export const SUBSTACK_BRANDS = ["elettro"];
+export const SUBSTACK_BRANDS = ["elettro", "solarmeister"];
 export const SUBSTACK_TITLE_LIMIT = 150;
 export const SUBSTACK_BODY_LIMIT = 8000;
 export const SUBSTACK_SECRET_PREFIX = "elettro-brand-os-dev/substack/";
