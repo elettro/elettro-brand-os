@@ -16,6 +16,7 @@ import { PINTEREST_BOARDS, PINTEREST_BRANDS } from "@/lib/pinterest-connect";
 import { PinterestPost } from "@/components/pinterest-post";
 import { ReconnectCountdown } from "@/components/reconnect-countdown";
 import { MASTODON_BRANDS, MASTODON_POST_LIMIT } from "@/lib/mastodon-connect";
+import { SUBSTACK_BODY_LIMIT, SUBSTACK_BRANDS, SUBSTACK_TITLE_LIMIT } from "@/lib/substack-connect";
 import { SNAPCHAT_BRANDS } from "@/lib/snapchat-connect";
 import { redirect } from "next/navigation";
 
@@ -75,6 +76,10 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
   const pinterest = status.pinterest || {};
   const mastodonBrands = brandConfigs.filter((b) => MASTODON_BRANDS.includes(b.id) && inView(b.id));
   const mastodon = status.mastodon || {};
+  const substackBrands = brandConfigs.filter((b) => SUBSTACK_BRANDS.includes(b.id) && inView(b.id));
+  const substack = status.substack || {};
+  // A Substack login is a session cookie with no expiry date we can read; same 60s cache applies.
+  if (brand && connected && network === "substack") substack[brand] = { handle: connected, expiresAt: null };
   const snapchatBrands = brandConfigs.filter((b) => SNAPCHAT_BRANDS.includes(b.id) && inView(b.id));
   const snapchat = status.snapchat || {};
   // Snapchat has no reconnect date (Snap documents no refresh-token lifetime), so the callback reports no expiry either.
@@ -92,7 +97,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
   // Same cache after a disconnect: the brand is no longer linked even if the feed still says so.
   if (brand && disconnected) {
     const feeds: Record<string, Array<Record<string, Linked>>> = {
-      youtube: [youtube], gmb: [gmb], linkedin: [linkedin], threads: [threads], bluesky: [bluesky], tiktok: [tiktok], pinterest: [pinterest], meta: [facebook, instagram], mastodon: [mastodon], snapchat: [snapchat]
+      youtube: [youtube], gmb: [gmb], linkedin: [linkedin], threads: [threads], bluesky: [bluesky], tiktok: [tiktok], pinterest: [pinterest], meta: [facebook, instagram], mastodon: [mastodon], substack: [substack], snapchat: [snapchat]
     };
     for (const feed of feeds[network || ""] || []) delete feed[brand];
   }
@@ -102,7 +107,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
     <p className="muted">Connect each brand&apos;s accounts to Elettro OS. Google asks which YouTube channel to use; pick the one that belongs to the brand. LinkedIn logins last 60 days, so each one counts down to its reconnect date.</p>
     {connected && <p className="card" style={{ marginTop: 16 }}>Connected <b>{connected}</b>{brandName ? <> to {brandName}</> : null}.</p>}
     {disconnected && <p className="card" style={{ marginTop: 16 }}>Disconnected <b>{disconnected}</b>{brandName ? <> from {brandName}</> : null}. Elettro OS will not post to it, and posts already approved for it are back to planned. To also remove its permission, use the account&apos;s own security settings (for Google, myaccount.google.com/permissions).</p>}
-    {error && network !== "linkedin" && network !== "mastodon" && <p className="card" style={{ marginTop: 16 }}>Could not connect{brandName ? ` ${brandName}` : ""}: {error}</p>}
+    {error && network !== "linkedin" && network !== "mastodon" && network !== "substack" && <p className="card" style={{ marginTop: 16 }}>Could not connect{brandName ? ` ${brandName}` : ""}: {error}</p>}
     {brands.length > 0 && <>
     <div className="grid" id="youtube" style={{ marginTop: 20 }}>
       {brands.map((b) => {
@@ -363,6 +368,44 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
                 <label className="muted" htmlFor={`ma-text-${b.id}`}>Test post (goes live on Mastodon when you click)</label>
                 <textarea id={`ma-text-${b.id}`} name="text" rows={4} maxLength={MASTODON_POST_LIMIT} required />
                 <button type="submit" className="status-chip">Post to Mastodon now</button>
+              </form>
+            )}
+          </article>
+        );
+      })}
+    </div>
+    </>}
+    {substackBrands.length > 0 && <>
+    <h2 id="substack" style={{ marginTop: 32 }}>Substack</h2>
+    <p className="muted">Substack has no official posting API, so Elettro OS signs in with the browser session cookie of a logged-in Substack account. In Chrome, open the publication&apos;s Substack, press F12, open Application, then Cookies, and copy the value of <b>substack.sid</b>. Scheduled posts go live on the web and are never emailed to subscribers. When the cookie expires, posting stops and this page asks you to paste a fresh one.</p>
+    {network === "substack" && posted && <p className="card" style={{ marginTop: 16 }}>Posted to Substack. <a href={posted} target="_blank" rel="noreferrer">See the post</a></p>}
+    {network === "substack" && error && <p className="card" style={{ marginTop: 16 }}>Substack: {error}</p>}
+    <div className="grid" style={{ marginTop: 20 }}>
+      {substackBrands.map((b) => {
+        const linked = substack[b.id];
+        return (
+          <article className="card" key={b.id}>
+            <div className="eyebrow">Substack</div>
+            <h2>{b.name}</h2>
+            <p className="muted" style={{ margin: "0 0 12px" }}>
+              {linked ? <>● Connected · <b>{linked.handle}</b></> : "○ Not connected"}
+            </p>
+            <form method="post" action="/api/connections/substack/connect" className="test-post">
+              <input type="hidden" name="brand" value={b.id} />
+              <label className="muted" htmlFor={`ss-pub-${b.id}`}>Publication address</label>
+              <input id={`ss-pub-${b.id}`} name="publication" type="text" placeholder="yourname.substack.com" autoComplete="off" required />
+              <label className="muted" htmlFor={`ss-cookie-${b.id}`}>substack.sid cookie</label>
+              <input id={`ss-cookie-${b.id}`} name="cookie" type="password" autoComplete="off" required />
+              <button type="submit" className="status-chip">{linked ? "Reconnect" : "Connect Substack"}</button>
+            </form>
+            {linked && <div className="connect-row"><ConnectionDisconnect brand={b.id} network="substack" handle={linked.handle || "this publication"} /></div>}
+            {linked && (
+              <form method="post" action="/api/connections/substack/test-post" className="test-post">
+                <input type="hidden" name="brand" value={b.id} />
+                <label className="muted" htmlFor={`ss-title-${b.id}`}>Test post (goes live on Substack when you click; not emailed)</label>
+                <input id={`ss-title-${b.id}`} name="title" type="text" maxLength={SUBSTACK_TITLE_LIMIT} placeholder="Title" required />
+                <textarea name="text" rows={4} maxLength={SUBSTACK_BODY_LIMIT} required />
+                <button type="submit" className="status-chip">Post to Substack now</button>
               </form>
             )}
           </article>

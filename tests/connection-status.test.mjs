@@ -80,9 +80,10 @@ test("feed: system milestone (meta) reaches IG + FB, brand milestone only its pr
     const t = Date.parse("2026-10-19T12:00:00Z");
     const feed = await connectionStatusFeed(fake, { root, now: t });
     const p = Object.fromEntries(feed.brands[0].profiles.map((x) => [x.destination, x]));
-    // Mastodon is listed only for brands that have an account there, so this brand's feed is unchanged.
-    assert.equal(feed.brands[0].profiles.length, DESTINATIONS.length - 1);
+    // Mastodon and Substack are listed only for brands that have an account there, so this brand's feed is unchanged.
+    assert.equal(feed.brands[0].profiles.length, DESTINATIONS.length - 2);
     assert.equal(p.mastodon, undefined);
+    assert.equal(p.substack, undefined);
     assert.equal(p.instagram.done.api, 0.33);
     assert.equal(p.facebook.done.api, 0.33);
     assert.equal(p.tiktok.done.api, 0);
@@ -131,7 +132,29 @@ test("feed: a brand with a Mastodon account gets a mastodon profile, connected, 
   });
   const feed = await connectionStatusFeed(fake, { root, now: Date.parse("2026-10-30T12:00:00Z") });
   const p = Object.fromEntries(feed.brands[0].profiles.map((x) => [x.destination, x]));
-  assert.equal(feed.brands[0].profiles.length, DESTINATIONS.length);
+  assert.equal(feed.brands[0].profiles.length, DESTINATIONS.length - 1); // no Substack account on this brand
+  assert.equal(p.substack, undefined);
   assert.equal(p.mastodon.handle, "@solarmeister@mastodon.social");
   assert.equal(p.mastodon.tokenExpiresAt, null);
+});
+
+test("feed: a brand with a Substack account gets a substack profile, connected, with no token expiry", async () => {
+  const root = mkdtempSync(join(tmpdir(), "intel-"));
+  mkdirSync(join(root, "brands", "elettro"), { recursive: true });
+  writeFileSync(join(root, "brands", "elettro", "platforms.md"), "## [instagram] IG\n");
+  const fake = async () => ({
+    end: async () => {},
+    query: async (sql) => {
+      if (sql.includes('FROM "Brand"')) return { rows: [{ id: "b3", slug: "elettro", name: "Elettro" }] };
+      if (sql.includes('FROM "SocialAccount"')) return { rows: [{ id: "a3", destination: "substack", accountName: "elettro.substack.com",
+        externalAccountId: "elettro", publishingMode: "handoff", postsPerWeek: 0, captionedPosts: 0, approvedPosts: 0,
+        apiPublishCount: 0, lastApiPublishAt: null, tokenExpiresAt: null }] };
+      return { rows: [] };
+    }
+  });
+  const feed = await connectionStatusFeed(fake, { root, now: Date.parse("2026-11-05T12:00:00Z") });
+  const p = Object.fromEntries(feed.brands[0].profiles.map((x) => [x.destination, x]));
+  assert.equal(p.substack.handle, "elettro.substack.com");
+  assert.equal(p.substack.tokenExpiresAt, null);
+  assert.equal(p.mastodon, undefined);
 });

@@ -6,9 +6,9 @@ import { AssetThumb as Thumb } from "@/components/asset-thumb";
 
 const NETWORK: Record<string, string> = {
   instagram: "Instagram", facebook: "Facebook", tiktok: "TikTok", threads: "Threads", bluesky: "Bluesky", youtube: "YouTube",
-  pinterest: "Pinterest", mastodon: "Mastodon", snapchat: "Snapchat", linkedin: "LinkedIn", x: "X", gmb: "Google Business"
+  pinterest: "Pinterest", mastodon: "Mastodon", snapchat: "Snapchat", substack: "Substack", linkedin: "LinkedIn", x: "X", gmb: "Google Business"
 };
-const SHORT: Record<string, string> = { instagram: "IG", facebook: "FB", tiktok: "TT", threads: "TH", bluesky: "BS", mastodon: "MA", snapchat: "SC", youtube: "YT", pinterest: "PIN", linkedin: "LI", x: "X", gmb: "GBP" };
+const SHORT: Record<string, string> = { instagram: "IG", facebook: "FB", tiktok: "TT", threads: "TH", bluesky: "BS", mastodon: "MA", snapchat: "SC", substack: "SS", youtube: "YT", pinterest: "PIN", linkedin: "LI", x: "X", gmb: "GBP" };
 // Caption limits the networks enforce (the API caps every caption at 2,200).
 const CAPTION_MAX: Record<string, number> = { threads: 500, bluesky: 300, mastodon: 500, snapchat: 160, pinterest: 500, x: 280 };
 const TITLE_NETWORKS = ["youtube", "pinterest"];

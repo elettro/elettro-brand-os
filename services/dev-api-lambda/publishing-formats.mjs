@@ -63,6 +63,10 @@ export const PUBLISHING_FORMATS = [
     rule: { kinds: ["video"], aspectRatios: ["9x16"], maxDurationBucket: "30-60s" } },
   { destination: "snapchat", placement: "spotlight", label: "Spotlight", status: "planning", note: "Publisher is built (services/snapchat-lambda); waiting on Snap's Public Profile API allowlist. Vertical video, 5-60 seconds; Snap reviews each Spotlight",
     rule: { kinds: ["video"], aspectRatios: ["9x16"], maxDurationBucket: "30-60s" } },
+  // Substack: no official publishing API; the publisher (services/substack-lambda) uses the internal API with a pasted session cookie.
+  // One picture + a title and short body, published live on the web (never emailed to subscribers by a scheduled post).
+  { destination: "substack", placement: "post", label: "Photo posts", status: "planning", note: "Publisher is built (services/substack-lambda, unofficial API); no post has published on schedule yet",
+    rule: { kinds: ["image"], aspectRatios: [] } },
   { destination: "linkedin", placement: "post", label: "Posts", status: "planning", note: "Publisher is built (services/linkedin-lambda); no post has published on schedule yet",
     rule: { kinds: ["image", "video"], aspectRatios: [] } },
   { destination: "linkedin", placement: "carousel", label: "Multi-image posts", status: "planning", note: "Scheduled publishing is built; goes live after the first scheduled multi-image post",

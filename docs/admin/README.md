@@ -8,6 +8,7 @@ Task-by-task runbooks for administering Elettro OS: the things a new admin or a 
 - [add-a-brand.md](add-a-brand.md): add a brand end to end (code lists, database row, Dropbox, per-network lists).
 - [new-api-route.md](new-api-route.md): add or fix an HTTP route on the dev-api (gateway route + Lambda permission).
 - [deploy-dev-api-lambda.md](deploy-dev-api-lambda.md): get merged dev-api code running in AWS.
+- [substack-connect.md](substack-connect.md): connect Substack (unofficial API + session cookie), what was never verified, AWS steps.
 - [scroll-relay.md](scroll-relay.md): the WebSocket relay behind the elettro.com/scroll phone remote (setup, rules, checks).
 
 ## Rules for every runbook

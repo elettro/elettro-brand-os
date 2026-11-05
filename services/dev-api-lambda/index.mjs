@@ -27,6 +27,7 @@ import { completeGmbConnect } from "./gmb-connect.mjs";
 import { completeLinkedinConnect } from "./linkedin-connect.mjs";
 import { completeMetaConnect } from "./meta-connect.mjs";
 import { completeMastodonConnect } from "./mastodon-connect.mjs";
+import { completeSubstackConnect } from "./substack-connect.mjs";
 import { handlePlannerWeb, handlePlannerOps } from "./planner-ops.mjs";
 import { setPostingWindow } from "./posting-window.mjs";
 import { completeThreadsConnect } from "./threads-connect.mjs";
@@ -1825,6 +1826,10 @@ export const handler = async (event = {}) => {
   // "Connect Mastodon": same handshake; Mastodon tokens never expire, so the row has no tokenExpiresAt.
   if (requestPath === "/connections/mastodon/complete" && event?.requestContext?.http?.method === "POST") {
     return completeMastodonConnect(event, parseJsonBody(event), connectDatabase, json);
+  }
+  // "Connect Substack": the web app checked the pasted session cookie; the cookie is stored in Secrets Manager.
+  if (requestPath === "/connections/substack/complete" && event?.requestContext?.http?.method === "POST") {
+    return completeSubstackConnect(event, parseJsonBody(event), connectDatabase, json);
   }
 
   // "Connect Meta": same handshake; one Facebook Page per brand plus the Instagram account linked to it.
