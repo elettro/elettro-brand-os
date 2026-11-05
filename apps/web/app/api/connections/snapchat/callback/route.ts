@@ -52,10 +52,14 @@ export async function GET(request: NextRequest) {
   if (denied) return done({ brand, error: denied === "access_denied" ? "Snapchat access was not granted" : denied });
   const code = request.nextUrl.searchParams.get("code") || "";
   if (!code) return done({ brand, error: "Snapchat sent no code" });
+  let step = "code exchange";
   try {
     const tokens = await exchange(code);
+    step = "profile lookup";
     const who = await profile(tokens.accessToken);
+    step = "reading the connect key";
     const key = await serverSetting("CONNECTIONS_API_SHARED_SECRET");
+    step = "saving the connection";
     const response = await fetch(`${apiBaseUrl}/connections/snapchat/complete`, {
       method: "POST",
       headers: { "content-type": "application/json", "x-elettro-connect-key": key },
@@ -66,8 +70,9 @@ export async function GET(request: NextRequest) {
     if (!response.ok || !result.ok) return done({ brand, error: result.error || `Connect failed (HTTP ${response.status})` });
     return done({ brand, connected: who.username ? "@" + who.username : who.displayName || who.id });
   } catch (error) {
-    console.error("Snapchat connect callback failed", error instanceof Error ? error.name : "UnknownError");
-    const message = error instanceof Error && /^Snapchat/.test(error.message) ? error.message : "Elettro OS could not finish the connection";
+    const detail = error instanceof Error ? `${error.name}: ${error.message}`.slice(0, 300) : "UnknownError";
+    console.error(`Snapchat connect callback failed at ${step}: ${detail}`);
+    const message = error instanceof Error && /^Snapchat/.test(error.message) ? error.message : `Elettro OS could not finish the connection (${step}: ${error instanceof Error ? error.name : "error"})`;
     return done({ brand, error: message });
   }
 }
