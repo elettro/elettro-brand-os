@@ -6,6 +6,8 @@ import { Picker } from "@/components/meta-test-posts";
 type Asset = { id: string; filename: string; kind: string; sourcePath: string | null; title: string | null; aspectRatioLabel: string | null; durationMs: number | null; mimeType: string | null };
 type Board = { id: string; name: string; privacy: string };
 
+// Default destination link for a Pin made from this form: the brand's own site.
+const DEFAULT_LINKS: Record<string, string> = { elettro: "https://elettro.com", stashbox: "https://stashbox.com", solarmeister: "https://solarmeister-shop.de" };
 const DEFAULT_TITLE = "Testing Elettro OS on Pinterest";
 const DEFAULT_DESCRIPTION = "This Pin went out through Elettro OS, our in-house publishing system.";
 
@@ -24,7 +26,7 @@ export function PinterestPost({ brand, boardName }: { brand: string; boardName: 
   const [asset, setAsset] = useState<Asset | null>(null);
   const [title, setTitle] = useState(DEFAULT_TITLE);
   const [description, setDescription] = useState(DEFAULT_DESCRIPTION);
-  const [link, setLink] = useState("https://elettro.com");
+  const [link, setLink] = useState(DEFAULT_LINKS[brand] || "https://elettro.com");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ url?: string; error?: string; logged?: boolean; sandbox?: boolean; pinId?: string } | null>(null);
   const [sandbox, setSandbox] = useState(false);
