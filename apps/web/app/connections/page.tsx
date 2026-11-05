@@ -39,6 +39,8 @@ async function connectionStatus(): Promise<Record<string, Record<string, Linked>
     for (const b of feed.brands || []) {
       for (const p of b.profiles) {
         if (p.done.oauth < 1) continue;
+        // Snapchat is only connected with a real linked profile (a handle); a hand-written milestone alone must not show Connected.
+        if (p.destination === "snapchat" && !p.handle) continue;
         (out[p.destination] ||= {})[b.slug] = { handle: p.handle, expiresAt: p.tokenExpiresAt || null };
       }
     }
