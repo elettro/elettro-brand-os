@@ -11,7 +11,7 @@ export const SNAPCHAT_PROFILE_URL = "https://businessapi.snapchat.com/v1/public_
 export const SNAPCHAT_SCOPE = "snapchat-profile-api";
 export const SNAPCHAT_STATE_COOKIE = "elettro_dev_snapchat_state";
 // Brands that may connect a Snapchat Public Profile (Dean has the account; which brand it belongs to is chosen on Connections).
-export const SNAPCHAT_BRANDS = ["stashbox", "elettro", "therasbox", "solarmeister"];
+export const SNAPCHAT_BRANDS = ["stashbox", "elettro", "solarmeister"];
 export const SNAPCHAT_OAUTH_SECRET = "elettro-brand-os-dev/snapchat-oauth";
 
 const secrets = new SecretsManagerClient({ region: "us-east-1" });
