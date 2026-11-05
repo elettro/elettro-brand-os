@@ -8,7 +8,7 @@ import { withClient } from "./planner-v2-db.mjs";
 
 const NETWORK_LABELS = {
   instagram: "Instagram", facebook: "Facebook", youtube: "YouTube", tiktok: "TikTok", threads: "Threads", bluesky: "Bluesky",
-  pinterest: "Pinterest", linkedin: "LinkedIn", x: "X", gmb: "Google Business Profile"
+  pinterest: "Pinterest", snapchat: "Snapchat", linkedin: "LinkedIn", x: "X", gmb: "Google Business Profile"
 };
 const COUNTERS = ["possible", "scheduled", "awaiting", "failed", "today", "week", "month", "total"];
 const blank = () => Object.fromEntries(COUNTERS.map((c) => [c, 0]));

@@ -21,6 +21,8 @@ const LIMITS = {
   mastodon: { caption: 500, hashtags: 3 },
   // Substack: a post with a title and a short body under one picture; no hashtags. Scheduled posts never email subscribers.
   substack: { title: 150, caption: 1200, hashtags: 0 },
+  // Snapchat: a Spotlight description is 160 characters (hashtags count); Stories carry no text. No links.
+  snapchat: { caption: 160, hashtags: 2 },
   // Pinterest: searchable title + keyword description; hashtags do little there. The Pin itself links out.
   pinterest: { title: 100, caption: 800, hashtags: 0 }
 };

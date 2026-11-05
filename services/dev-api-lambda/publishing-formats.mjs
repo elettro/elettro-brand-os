@@ -57,6 +57,12 @@ export const PUBLISHING_FORMATS = [
     slides: { min: 2, max: 4, recommended: [2, 4] }, rule: { kinds: ["image"], aspectRatios: [] } },
   { destination: "mastodon", placement: "video", label: "Videos", status: "planning", note: "Publisher is built (services/mastodon-lambda); no video has published on schedule yet. Videos up to 99 MB",
     rule: { kinds: ["video"], aspectRatios: [], maxDurationBucket: "1-3min" } },
+  // Snapchat (Public Profile API, allowlisted): vertical MP4 video, 5-60 s. A Story lasts 24 hours and carries no text; a Spotlight takes a
+  // 160-character description and goes through Snap's review. Connect and the publisher (services/snapchat-lambda) are built.
+  { destination: "snapchat", placement: "story", label: "Stories", status: "planning", note: "Publisher is built (services/snapchat-lambda); waiting on Snap's Public Profile API allowlist. Vertical video, 5-60 seconds",
+    rule: { kinds: ["video"], aspectRatios: ["9x16"], maxDurationBucket: "30-60s" } },
+  { destination: "snapchat", placement: "spotlight", label: "Spotlight", status: "planning", note: "Publisher is built (services/snapchat-lambda); waiting on Snap's Public Profile API allowlist. Vertical video, 5-60 seconds; Snap reviews each Spotlight",
+    rule: { kinds: ["video"], aspectRatios: ["9x16"], maxDurationBucket: "30-60s" } },
   // Substack: no official publishing API; the publisher (services/substack-lambda) uses the internal API with a pasted session cookie.
   // One picture + a title and short body, published live on the web (never emailed to subscribers by a scheduled post).
   { destination: "substack", placement: "post", label: "Photo posts", status: "planning", note: "Publisher is built (services/substack-lambda, unofficial API); no post has published on schedule yet",
