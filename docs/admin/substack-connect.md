@@ -1,6 +1,6 @@
 # Substack: connect and publish
 
-First brand: **Elettro** (Substack account `dpalermo@elettro.com`, publication `elettro.substack.com`). **SolarMeister** added 2026-11-05 (publication `solarmeister.substack.com`, profile `@solarmeister`; German content only; each publication has its own login, so paste each brand's own cookie only on its own card). Posts go **live on the web**; a scheduled post is never emailed to subscribers.
+First brand: **Elettro** (Substack account `dpalermo@elettro.com`, publication `elettro.substack.com`). **Stashbox** added 2026-11-05 in code (its Substack account and publication did not exist yet; `stashbox.substack.com` is someone else's profile, so pick another address). **SolarMeister** added 2026-11-05 (publication `solarmeister.substack.com`, profile `@solarmeister`; German content only; each publication has its own login, so paste each brand's own cookie only on its own card). Posts go **live on the web**; a scheduled post is never emailed to subscribers.
 
 ## Read this first: there is no official API
 Substack has no official API for publishing (checked 2026-11-05: its developer API returns public creator profile data only, behind a manual approval form; its official MCP server is read-only). Elettro OS therefore uses Substack's **undocumented internal API**, the same one its website and the open-source `python-substack` package use, authenticated with the **browser session cookie** (`substack.sid`) of a logged-in account.
@@ -14,7 +14,7 @@ What that means in practice:
 
 ## Pieces
 - `services/dev-api-lambda/substack-connect.mjs`: `POST /connections/substack/complete` (needs the connect key). Cookie stored in Secrets Manager `elettro-brand-os-dev/substack/<subdomain>` (`{cookie, subdomain, userId, handle, brand, connectedAt}`); the `SocialAccount` (`destination='substack'`, `externalAccountId` = subdomain, `accountName` = `<subdomain>.substack.com`) is linked to the brand.
-- Web: `/api/connections/substack/connect` (POST form: checks the cookie against `substack.com/api/v1/user/profile/self`, then calls the dev-api), `/api/connections/substack/test-post`, `apps/web/lib/substack-connect.ts`, a Substack card on `/connections`. The brand list is `SUBSTACK_BRANDS` (`elettro`, `solarmeister`).
+- Web: `/api/connections/substack/connect` (POST form: checks the cookie against `substack.com/api/v1/user/profile/self`, then calls the dev-api), `/api/connections/substack/test-post`, `apps/web/lib/substack-connect.ts`, a Substack card on `/connections`. The brand list is `SUBSTACK_BRANDS` (`elettro`, `solarmeister`, `stashbox`).
 - Publisher `services/substack-lambda`: tick claims `substack` / `post`, uploads the picture (`POST /image`), creates a draft (`POST /drafts`), publishes it (`POST /drafts/<id>/publish` with `send:false`), and deletes the draft if publishing is refused. Manual invoke: `{action:"post", brand, title, text, dropboxPath?}`, `{action:"check", brand}` (reads the profile, posts nothing).
 - Formats (`publishing-formats.mjs`, both `planning`; Review lists exactly these two for Substack):
   - `substack:post` "Photo posts": one picture, then the text. Title is the planner title, else the first caption line (max 150); the body is the caption (max 1,200 from the copywriter). No hashtags.
