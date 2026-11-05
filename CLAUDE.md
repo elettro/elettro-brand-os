@@ -58,7 +58,7 @@ EventBridge, every 15 min ──> platform worker Lambda ──> network API
   elettro.com/dash race).
   **Every HTTP route except `GET /status/connections` and `/status/posts` needs the `x-elettro-connect-key` header**
   (deny-by-default gate in `api-gate.mjs`, which also parses the `?brands=a,b` filter that `/brands`, `/dashboard`, `/assets`
-  and `/content-pool` accept; `/assets` also takes `shared=1` to add the creative-assets library). Web server code sends the key via `connectKeyHeaders()` in `apps/web/lib/dev-api-key.ts`;
+  and `/content-pool` accept; `/assets` also takes `shared=1` to add the creative-assets library, and `/content-pool?stock=1` lists it; a shared asset with a non-empty `allowedBrandSlugs` is only returned when the requested `?brands=` overlaps that list, an empty list means open to every brand (2026-11-04, `db-main.mjs`; not deployed yet, not verified; the planner pools are per `brandId` and never read the shared library). Web server code sends the key via `connectKeyHeaders()` in `apps/web/lib/dev-api-key.ts`;
   never call the dev-api from browser code. The dropbox-sync Lambda's thumbnail route checks the same key.
 - **Worker Lambdas** `services/<platform>-lambda`: `threads`, `tiktok`, `pinterest`, `youtube-upload`, `bluesky` (created in AWS 2026-10-29), `mastodon` (created in AWS 2026-10-31), `meta`
   (Instagram + Facebook Reels, feed posts and Stories; Page tokens don't expire, so no renewal) and `linkedin`. Each is invoked only
