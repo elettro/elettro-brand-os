@@ -1,6 +1,6 @@
 # Snapchat runbook
 
-Status 2026-11-05: **connect, Disconnect, the Review posts-per-day boxes and the publisher `services/snapchat-lambda` are built and unit-tested. Nothing is deployed, and nothing has been tried against live Snap: the API is allowlist-only and our OAuth app is not approved yet.**
+Status 2026-11-05: **connect, Disconnect, the Review posts-per-day boxes and the publisher `services/snapchat-lambda` are built and unit-tested. Deployed 2026-11-05 (secret, IAM policies, route, dev-api, worker Lambda + 15-minute tick; an idle tick returns no accounts). Nothing has been tried against live Snap: the API is allowlist-only and our OAuth app `Elettro OS` (client id b6081276-cb06-4941-9e85-d6a2c16ae0c5) is not approved yet; the allowlist email went to dev-support@snap.com on 2026-11-05.**
 
 ## How Snapchat differs from the other networks
 - **Allowlist.** The Public Profile API only answers for an OAuth client id that Snap has approved. Request it by emailing
