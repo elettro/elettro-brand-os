@@ -19,6 +19,8 @@ const LIMITS = {
   bluesky: { caption: 300, hashtags: 1, links: 1 },
   // Mastodon: 500 characters (every link counts as 23); #tags and links are clickable. Scheduled posts never @mention accounts.
   mastodon: { caption: 500, hashtags: 3 },
+  // Snapchat: a Spotlight description is 160 characters (hashtags count); Stories carry no text. No links.
+  snapchat: { caption: 160, hashtags: 2 },
   // Pinterest: searchable title + keyword description; hashtags do little there. The Pin itself links out.
   pinterest: { title: 100, caption: 800, hashtags: 0 }
 };

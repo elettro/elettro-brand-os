@@ -87,6 +87,23 @@ pinned comment, description) and that location must exist for the account.
   enforced by config); originals and conversation carry the account.
 - **Replies:** EPE suggests replies; a human sends them.
 
+## [snapchat] Snapchat
+
+- **Placements:** Stories and Spotlight, both vertical video (MP4, 5-60 seconds,
+  at least 540x960), posted to the brand's Public Profile through Snap's
+  allowlisted Public Profile API. No photos, no carousels yet.
+- **Viewer:** young, fast, sound-on, swipes away in a second. Real and
+  unpolished beats produced.
+- **Story:** no text field. The first second of the video has to carry it. A
+  Story disappears after 24 hours, so it suits "tonight", "just dropped" and
+  behind-the-scenes.
+- **Spotlight:** a 160-character description (hashtags count) and Snap reviews
+  every one before it goes live. Hook-first like TikTok; one or two hashtags at
+  most; no links (the field does not make them clickable).
+- **Never:** engagement bait, "send me a snap", or anything that mentions
+  another account by name (scheduled posts never notify anyone).
+- **Status:** built, waiting on Snap's allowlist (see `docs/SNAPCHAT-RUNBOOK.md`).
+
 ## [bluesky] Bluesky
 
 Rules below marked **(rule)** come from Bluesky's Community Guidelines and

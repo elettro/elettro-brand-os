@@ -7,9 +7,9 @@ import { approveWeek, requestReplan, saveCadence } from "./actions";
 
 const NETWORK: Record<string, string> = {
   youtube: "YouTube", instagram: "Instagram", facebook: "Facebook", tiktok: "TikTok",
-  x: "X", threads: "Threads", bluesky: "Bluesky", linkedin: "LinkedIn", pinterest: "Pinterest"
+  x: "X", threads: "Threads", bluesky: "Bluesky", linkedin: "LinkedIn", pinterest: "Pinterest", snapchat: "Snapchat"
 };
-const SHORT: Record<string, string> = { youtube: "YT", instagram: "IG", facebook: "FB", tiktok: "TT", x: "X", threads: "TH", bluesky: "BS", linkedin: "LI" };
+const SHORT: Record<string, string> = { youtube: "YT", instagram: "IG", facebook: "FB", tiktok: "TT", x: "X", threads: "TH", bluesky: "BS", linkedin: "LI", snapchat: "SC" };
 // Order of the status counts, and what each one means to the owner.
 const STATUSES: Array<[string, string]> = [
   ["planned", "Needs approval"], ["approved", "Approved"], ["publishing", "Uploading"],
