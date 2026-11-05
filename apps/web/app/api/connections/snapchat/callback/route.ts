@@ -32,13 +32,18 @@ async function exchange(code: string) {
 
 async function profile(accessToken: string) {
   const response = await fetch(SNAPCHAT_PROFILE_URL, { headers: { authorization: `Bearer ${accessToken}` }, cache: "no-store" });
-  const body = await response.json().catch(() => ({})) as {
-    display_message?: string; debug_message?: string;
-    public_profile?: { id?: string; display_name?: string; snap_user_name?: string };
-  };
+  const text = await response.text();
+  let body: { display_message?: string; debug_message?: string; request_status?: string; error_code?: string; public_profile?: { id?: string; display_name?: string; snap_user_name?: string } } = {};
+  try { body = JSON.parse(text); } catch { /* not JSON */ }
   const p = body.public_profile;
   if (!response.ok || !p?.id) {
-    throw Error(`Snapchat profile lookup failed: ${body.display_message || body.debug_message || response.status}. The login needs a Snapchat Public Profile and an allowlisted app.`);
+    // Snap's reply carries no tokens; keep a short copy in the log so a refusal can be told apart (allowlist, account type, scope).
+    console.error(`Snapchat profile lookup HTTP ${response.status}: ${text.slice(0, 400)}`);
+    const why = body.display_message || body.debug_message;
+    const hint = response.status === 401 || response.status === 403
+      ? "Snap has not approved this app for the Public Profile API yet, or this login is not a Snapchat Public Profile."
+      : "The login needs a Snapchat Public Profile and an allowlisted app.";
+    throw Error(`Snapchat profile lookup failed: ${why || response.status}. ${hint}`);
   }
   return { id: p.id, displayName: p.display_name || null, username: p.snap_user_name || null };
 }
