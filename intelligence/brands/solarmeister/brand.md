@@ -21,7 +21,7 @@ Leitspruch: "Die Zukunft deiner Energie beginnt hier."
 
 SolarMeister ist ein deutscher Online-Shop für Photovoltaik zum Selbermachen:
 Balkonkraftwerke, Halterungen und Zubehör. Der Shop ist
-https://solarmeister-shop.de. Das ist der einzige Link, den ein Beitrag nennen darf.
+https://solarmeister-shop.de. Ein Beitrag darf nur Links auf diesen Shop nennen: die Produktseite des gezeigten Produkts (steht im Feld Link der Notizen, z. B. https://solarmeister-shop.de/products/halterung-blechdach) oder, wenn keine angegeben ist, https://solarmeister-shop.de.
 
 ## Regeln
 

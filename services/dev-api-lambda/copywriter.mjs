@@ -66,6 +66,10 @@ export function postFacts(asset, slotIn, songFacts = {}, links = {}, { promotion
   // Every Pin carries a destination link (Dean, 261021): the deepest record (song, streaming, booking),
   // else the store for merch, else the brand site (taken from the radio link's origin when not set).
   const site = links.site || (links.radio ? new URL(links.radio).origin : null);
+  // German brands (SolarMeister): a product image names its own shop page in its notes ("Link: https://…/products/<slug>").
+  // It must be on the brand's own shop, and it beats the shop's root address everywhere a link may go.
+  const noteUrl = language === "de" ? /https?:\/\/[^\s)]+\/products\/[^\s)]+/.exec(String(asset.creativeNotes || ""))?.[0].replace(/[.,;!?]+$/, "") : null;
+  const productUrl = noteUrl && [links.site, links.merchStore].filter(Boolean).some((root) => noteUrl.startsWith(root.replace(/\/$/, "") + "/")) ? noteUrl : null;
   // Radio and streaming posts still need their song link, as on every network.
   const pinLink = slot.destination === "pinterest" && !sectorLinks.length && !["radio", "streaming"].includes(slot.sector)
     ? (slot.sector === "merch" && links.merchStore) || site || null : null;
@@ -92,11 +96,11 @@ export function postFacts(asset, slotIn, songFacts = {}, links = {}, { promotion
     linksInCaptionAreClickable: CLICKABLE.has(slot.destination),
     // False on platforms with a promo cap (X) for the posts that stay a plain clip: no link, no ask.
     promotional,
-    primaryLink: sectorLinks[0] || pinLink,
+    primaryLink: productUrl || sectorLinks[0] || pinLink,
     songHasOwnStreamingLink: Boolean(song?.spotifyUrl || song?.appleMusicUrl || song?.youtubeMusicUrl),
     songHasRadioPage: Boolean(song?.radioUrl),
     genre: ["reggae", "rock", "blues", "folk", "ska", "dub", "funk", "soul", "jazz", "psychedelic"].find((g) => tags.includes(g)) || null,
-    allowedLinks: [...new Set([...sectorLinks, ...artistLinks, links.youtubeChannel, links.booking?.page, links.radio, links.merchStore, pinLink].filter(Boolean))],
+    allowedLinks: [...new Set([productUrl, ...sectorLinks, ...artistLinks, links.youtubeChannel, links.booking?.page, links.radio, links.merchStore, pinLink].filter(Boolean))],
     bookingEmail: promotional && slot.sector === "live-shows" ? links.booking?.email || null : null,
     // Goal #1 (subscribers) closes posts where the brand allows it; radio posts already ask people to join.
     subscribeReminder: !promotional || slot.sector === "radio" ? null : (links.subscribeReminders || {})[slot.destination] || null,
@@ -147,7 +151,8 @@ function germanTemplateCopy(f, seed) {
   if (!name) return null;
   const youtube = f.destination === "youtube";
   const titled = youtube || f.destination === "pinterest";
-  const link = f.primaryLink || (f.sector === "produkte" && f.promotional !== false ? f.allowedLinks[0] : null) || null;
+  // The product's own page when the asset names one, else the shop's root address; no link on the plain posts under a promo cap.
+  const link = f.promotional === false ? null : f.primaryLink || f.allowedLinks[0] || null;
   const clickable = Boolean(link) && f.linksInCaptionAreClickable;
   const ask = f.promotional === false ? null : f.sector === "weihnachten"
     ? pick(seed + "ask", ["Frohe Weihnachten von deinem SolarMeister-Team.", "Schöne Feiertage wünscht dir SolarMeister.", "Ein sonniges Weihnachtsfest wünscht dir SolarMeister."])

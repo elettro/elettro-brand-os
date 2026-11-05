@@ -284,3 +284,29 @@ test("SolarMeister guidance loads for every sector and says German only", () => 
     assert.match(g.guidance, /100 % deutsch/);
   }
 });
+
+test("German brand: a product image links to its own product page, others to the shop root, plain posts to nothing", () => {
+  const url = "https://solarmeister-shop.de/products/halterung-blechdach";
+  const withUrl = deAsset("Halterung Blechdach", []);
+  withUrl.creativeNotes = `Produkt: Halterung Blechdach. Link: ${url}. Highlights: Einfache Installation.`;
+  const mk = (asset, destination, promotional = true) => ({ ...postFacts(asset, deSlot("produkte", destination), {}, deLinks, { language: "de", promotional }), brandSlug: "solarmeister" });
+  for (const destination of ["instagram", "bluesky", "threads", "pinterest", "youtube"]) {
+    const f = mk(withUrl, destination);
+    assert.equal(f.primaryLink, url, destination);
+    const copy = templateCopy(f, "seed");
+    assert.equal(copy.primaryLink, url);
+    assert.deepEqual(validateCopy(copy, f), [], destination);
+  }
+  assert.match(templateCopy(mk(withUrl, "threads"), "seed").caption, /products\/halterung-blechdach/);
+  // no product page in the notes: the shop's root address
+  assert.equal(mk(deAsset("Balkonkraftwerk"), "threads").primaryLink, null);
+  assert.match(templateCopy(mk(deAsset("Balkonkraftwerk"), "threads"), "seed").caption, /https:\/\/solarmeister-shop\.de/);
+  // a product page on some other site is never used
+  const other = deAsset("X"); other.creativeNotes = "Link: https://example.com/products/x";
+  assert.equal(mk(other, "threads").primaryLink, null);
+  // plain posts under a promo cap carry no link
+  assert.ok(!/https?:/.test(templateCopy(mk(withUrl, "bluesky", false), "seed").caption));
+  // an English-language brand is untouched
+  const en = postFacts(withUrl, deSlot("produkte"), {}, deLinks, {});
+  assert.notEqual(en.primaryLink, url);
+});
