@@ -19,9 +19,9 @@ export const CHECKPOINTS = [
   { key: "live", label: "Auto-publishing + metrics live", w: 10 }
 ];
 
-export const DESTINATIONS = ["youtube", "instagram", "facebook", "tiktok", "x", "linkedin", "threads", "bluesky", "pinterest", "gmb", "reddit", "mastodon"];
+export const DESTINATIONS = ["youtube", "instagram", "facebook", "tiktok", "x", "linkedin", "threads", "bluesky", "pinterest", "gmb", "reddit", "mastodon", "substack"];
 // Listed in the feed only for brands that have an account there, so the public feed and elettro.com/dash stay as they were for everyone else.
-const OPT_IN_DESTINATIONS = ["mastodon"];
+const OPT_IN_DESTINATIONS = ["mastodon", "substack"];
 
 // One developer app per platform family, shared by every brand (app review happens once).
 export const PLATFORM_APP = { instagram: "meta", facebook: "meta", threads: "meta", youtube: "google", gmb: "google" };

@@ -57,6 +57,10 @@ export const PUBLISHING_FORMATS = [
     slides: { min: 2, max: 4, recommended: [2, 4] }, rule: { kinds: ["image"], aspectRatios: [] } },
   { destination: "mastodon", placement: "video", label: "Videos", status: "planning", note: "Publisher is built (services/mastodon-lambda); no video has published on schedule yet. Videos up to 99 MB",
     rule: { kinds: ["video"], aspectRatios: [], maxDurationBucket: "1-3min" } },
+  // Substack: no official publishing API; the publisher (services/substack-lambda) uses the internal API with a pasted session cookie.
+  // One picture + a title and short body, published live on the web (never emailed to subscribers by a scheduled post).
+  { destination: "substack", placement: "post", label: "Photo posts", status: "planning", note: "Publisher is built (services/substack-lambda, unofficial API); no post has published on schedule yet",
+    rule: { kinds: ["image"], aspectRatios: [] } },
   { destination: "linkedin", placement: "post", label: "Posts", status: "planning", note: "Publisher is built (services/linkedin-lambda); no post has published on schedule yet",
     rule: { kinds: ["image", "video"], aspectRatios: [] } },
   { destination: "linkedin", placement: "carousel", label: "Multi-image posts", status: "planning", note: "Scheduled publishing is built; goes live after the first scheduled multi-image post",
