@@ -3,7 +3,7 @@ import {runBrandMediaReset} from "./brand-media-reset.mjs";
 import {runBrandRootMigration} from "./brand-root-migration.mjs";
 import { configurePlannerBrand, runPlanWeek, runPlanWeeks, approvePlannerWeek } from "./planner-v2-db.mjs";
 import {runSharedAudioLibrarySetup,LIBRARY_SLUG,LIBRARY_AUDIO_ROOT} from "./shared-audio-library.mjs";
-import {runListUntaggedAssets,runTagAssets} from "./asset-tagging.mjs";
+import {runListUntaggedAssets,runTagAssets,runRetireAssets} from "./asset-tagging.mjs";
 import {runAddSectorMatchTag} from "./planner-sector-tags.mjs";
 import {runSharedStockGraphicsSetup,runSharedStockGraphicsTagging,LIBRARY_GRAPHICS_ROOT,LIBRARY_VIDEO_ROOTS} from "./shared-stock-graphics.mjs";
 import {runDocumentAssetKindSetup} from "./document-asset-kind.mjs";
@@ -1614,6 +1614,7 @@ export const handler = async (event = {}) => {
   if(event.action === "add-sector-match-tag-20261103" && !event.requestContext && !event.rawPath && !event.path) return runAddSectorMatchTag(event,connectDatabase,json);
   if(event.action === "list-untagged-assets-20261103" && !event.requestContext && !event.rawPath && !event.path) return runListUntaggedAssets(event,connectDatabase,json);
   if(event.action === "tag-assets-20261103" && !event.requestContext && !event.rawPath && !event.path) return runTagAssets(event,connectDatabase,json);
+  if(event.action === "retire-assets-20261104" && !event.requestContext && !event.rawPath && !event.path) return runRetireAssets(event,connectDatabase,json);
   // IAM-only: add the 'document' (PDF) asset kind (dry-run unless mode:"apply").
   if(event.action === "setup-document-asset-kind-20261029" && !event.requestContext && !event.rawPath && !event.path) return runDocumentAssetKindSetup(event,connectDatabase,json);
   // IAM-only: fold duplicate connected rows of one login into one (dry-run unless mode:"apply").
