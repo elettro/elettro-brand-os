@@ -1,0 +1,286 @@
+{
+  "note": "Seed for Brand.settings.planner of SolarMeister (German solar shop, Europe/Berlin). Built 2026-11-05 from the tags on its ready assets. Settings only: posts per day per network are set on Review (0 = skipped). All copy is German (language de). Posts 7 days a week, 08:00-20:00 Berlin with 70% between 10:00 and 16:00. Used by Review -> Plan when the brand has no planner block. Load by hand with: {\"action\":\"configure-planner-brand\",\"brandSlug\":\"solarmeister\",\"settings\":<settings>,\"accounts\":[]}",
+  "settings": {
+    "version": 1,
+    "pool": {
+      "kinds": [
+        "image",
+        "video"
+      ],
+      "excludeTagsAny": [
+        "no-audio",
+        "silent-audio",
+        "no-music"
+      ]
+    },
+    "placements": {},
+    "sectors": [
+      {
+        "slug": "produkte",
+        "priority": 1,
+        "share": 0.6,
+        "match": {
+          "tagsAny": [
+            "balkonkraftwerk",
+            "photovoltaik",
+            "product-link",
+            "solar",
+            "halterung"
+          ]
+        }
+      },
+      {
+        "slug": "weihnachten",
+        "priority": 2,
+        "share": 0.25,
+        "match": {
+          "tagsAny": [
+            "christmas",
+            "xmas",
+            "weihnachten"
+          ]
+        }
+      },
+      {
+        "slug": "reportagen",
+        "priority": 3,
+        "share": 0.15,
+        "match": {
+          "tagsAny": [
+            "zahlen-film",
+            "split-sortiment",
+            "dach-reportage",
+            "montage-tag"
+          ]
+        }
+      }
+    ],
+    "minPoolForSector": 1,
+    "exploration": {
+      "default": 0.1
+    },
+    "cooldowns": {
+      "assetDays": 7,
+      "songDays": 0,
+      "productDays": 3
+    },
+    "newBatchBoostDays": 14,
+    "syntheticTagsAny": [],
+    "readyTagsAny": [],
+    "candidatesPerSlot": 5,
+    "curator": {
+      "enabled": false
+    },
+    "copy": {
+      "enabled": true,
+      "task": "write_copy",
+      "concurrency": 4
+    },
+    "language": "de",
+    "links": {
+      "site": "https://solarmeister-shop.de",
+      "merchStore": "https://solarmeister-shop.de"
+    },
+    "postingTimes": {
+      "instagram": {
+        "start": "08:00",
+        "end": "20:00",
+        "days": [
+          "mon",
+          "tue",
+          "wed",
+          "thu",
+          "fri",
+          "sat",
+          "sun"
+        ],
+        "peak": {
+          "start": "10:00",
+          "end": "16:00",
+          "share": 0.7
+        }
+      },
+      "facebook": {
+        "start": "08:00",
+        "end": "20:00",
+        "days": [
+          "mon",
+          "tue",
+          "wed",
+          "thu",
+          "fri",
+          "sat",
+          "sun"
+        ],
+        "peak": {
+          "start": "10:00",
+          "end": "16:00",
+          "share": 0.7
+        }
+      },
+      "threads": {
+        "start": "08:00",
+        "end": "20:00",
+        "days": [
+          "mon",
+          "tue",
+          "wed",
+          "thu",
+          "fri",
+          "sat",
+          "sun"
+        ],
+        "peak": {
+          "start": "10:00",
+          "end": "16:00",
+          "share": 0.7
+        }
+      },
+      "tiktok": {
+        "start": "08:00",
+        "end": "20:00",
+        "days": [
+          "mon",
+          "tue",
+          "wed",
+          "thu",
+          "fri",
+          "sat",
+          "sun"
+        ],
+        "peak": {
+          "start": "10:00",
+          "end": "16:00",
+          "share": 0.7
+        }
+      },
+      "youtube": {
+        "start": "08:00",
+        "end": "20:00",
+        "days": [
+          "mon",
+          "tue",
+          "wed",
+          "thu",
+          "fri",
+          "sat",
+          "sun"
+        ],
+        "peak": {
+          "start": "10:00",
+          "end": "16:00",
+          "share": 0.7
+        }
+      },
+      "pinterest": {
+        "start": "08:00",
+        "end": "20:00",
+        "days": [
+          "mon",
+          "tue",
+          "wed",
+          "thu",
+          "fri",
+          "sat",
+          "sun"
+        ],
+        "peak": {
+          "start": "10:00",
+          "end": "16:00",
+          "share": 0.7
+        }
+      },
+      "linkedin": {
+        "start": "08:00",
+        "end": "20:00",
+        "days": [
+          "mon",
+          "tue",
+          "wed",
+          "thu",
+          "fri",
+          "sat",
+          "sun"
+        ],
+        "peak": {
+          "start": "10:00",
+          "end": "16:00",
+          "share": 0.7
+        }
+      },
+      "bluesky": {
+        "start": "08:00",
+        "end": "20:00",
+        "days": [
+          "mon",
+          "tue",
+          "wed",
+          "thu",
+          "fri",
+          "sat",
+          "sun"
+        ],
+        "peak": {
+          "start": "10:00",
+          "end": "16:00",
+          "share": 0.7
+        }
+      },
+      "mastodon": {
+        "start": "08:00",
+        "end": "20:00",
+        "days": [
+          "mon",
+          "tue",
+          "wed",
+          "thu",
+          "fri",
+          "sat",
+          "sun"
+        ],
+        "peak": {
+          "start": "10:00",
+          "end": "16:00",
+          "share": 0.7
+        }
+      },
+      "substack": {
+        "start": "08:00",
+        "end": "20:00",
+        "days": [
+          "mon",
+          "tue",
+          "wed",
+          "thu",
+          "fri",
+          "sat",
+          "sun"
+        ],
+        "peak": {
+          "start": "10:00",
+          "end": "16:00",
+          "share": 0.7
+        }
+      },
+      "snapchat": {
+        "start": "08:00",
+        "end": "20:00",
+        "days": [
+          "mon",
+          "tue",
+          "wed",
+          "thu",
+          "fri",
+          "sat",
+          "sun"
+        ],
+        "peak": {
+          "start": "10:00",
+          "end": "16:00",
+          "share": 0.7
+        }
+      }
+    }
+  },
+  "accounts": []
+}

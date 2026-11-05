@@ -241,3 +241,46 @@ test("Bluesky copy: 300 graphemes with the link counted in full, one link, no @m
   assert.ok(validateCopy({ caption: "ok", hashtags: ["#a", "#b"] }, f).includes("too many hashtags"));
   assert.ok(validateCopy({ caption: "plain https://stashbox.band/live", hashtags: [] }, { ...f, promotional: false }).includes("link or ask in a plain post (promo cap)"));
 });
+
+// ---- German brands (SolarMeister): every word is German ----
+import { englishWordsIn, cleanGermanName } from "../services/dev-api-lambda/copywriter.mjs";
+import { buildGuidance } from "../services/dev-api-lambda/intelligence.mjs";
+
+const deSlot = (sector, destination = "instagram") => ({ slotId: `s-${sector}-${destination}`, sector, destination, placement: "post" });
+const deAsset = (title, tags = []) => ({ id: "a1", filename: "x.jpg", title, tags, kind: "image" });
+const deLinks = { site: "https://solarmeister-shop.de", merchStore: "https://solarmeister-shop.de" };
+
+test("German brand: template copy is German, cleans the asset title and carries only the shop link", () => {
+  for (const sector of ["produkte", "weihnachten", "reportagen"]) {
+    for (const destination of ["instagram", "pinterest", "youtube", "bluesky"]) {
+      const f = { ...postFacts(deAsset("Frohe Weihnachten (SolarMeister, 16x9)"), deSlot(sector, destination), {}, deLinks, { language: "de" }), brandSlug: "solarmeister" };
+      const copy = templateCopy(f, "seed");
+      assert.equal(copy.status, "ready");
+      const text = [copy.caption, copy.title, copy.description].filter(Boolean).join("\n");
+      assert.deepEqual(englishWordsIn(text), [], `${sector}/${destination}: ${text}`);
+      assert.deepEqual(validateCopy(copy, f), [], `${sector}/${destination}`);
+      assert.ok(!/16x9|\(SolarMeister/.test(text), "asset-size leftovers removed");
+      assert.ok(!/stashbox/i.test(text));
+    }
+  }
+});
+
+test("German brand: English text from the AI is refused", () => {
+  const f = { ...postFacts(deAsset("Balkonkraftwerk"), deSlot("produkte"), {}, deLinks, { language: "de" }), brandSlug: "solarmeister" };
+  const problems = validateCopy({ caption: "Check out our new balcony power plant. Link in bio!" }, f);
+  assert.ok(problems.some((p) => p.startsWith("not German")), problems.join(";"));
+  assert.ok(problems.some((p) => /English call to action/.test(p)));
+  assert.deepEqual(validateCopy({ caption: "Dein Balkonkraftwerk beginnt im SolarMeister Shop. https://solarmeister-shop.de" }, f), []);
+});
+
+test("German brand: cleanGermanName strips size labels only", () => {
+  assert.equal(cleanGermanName("Frohe Weihnachten (SolarMeister, 16x9)"), "Frohe Weihnachten");
+  assert.equal(cleanGermanName("Balkonkraftwerk Halterung 9x16"), "Balkonkraftwerk Halterung");
+});
+
+test("SolarMeister guidance loads for every sector and says German only", () => {
+  for (const sector of ["produkte", "weihnachten", "reportagen"]) {
+    const g = buildGuidance("write_copy", { brand: "solarmeister", destination: "instagram", sectors: [sector] });
+    assert.match(g.guidance, /100 % deutsch/);
+  }
+});

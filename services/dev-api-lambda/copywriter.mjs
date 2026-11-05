@@ -35,7 +35,7 @@ const titleCase = (slug) => String(slug).split("-").map((w) => (w ? w[0].toUpper
 const pick = (seed, list) => list[parseInt(createHash("sha256").update(seed).digest("hex").slice(0, 8), 16) % list.length];
 
 /** Everything a caption may state about this post, from records only. */
-export function postFacts(asset, slotIn, songFacts = {}, links = {}, { promotional = true } = {}) {
+export function postFacts(asset, slotIn, songFacts = {}, links = {}, { promotional = true, language = "en" } = {}) {
   const tags = (asset.tags || []).map((t) => String(t).toLowerCase());
   // A product is captioned as a product even when the planner filled a show/song slot with it (a tee can carry song tags).
   const slot = tags.includes("merch") && slotIn.sector !== "merch" ? { ...slotIn, sector: "merch" } : slotIn;
@@ -70,6 +70,7 @@ export function postFacts(asset, slotIn, songFacts = {}, links = {}, { promotion
   const pinLink = slot.destination === "pinterest" && !sectorLinks.length && !["radio", "streaming"].includes(slot.sector)
     ? (slot.sector === "merch" && links.merchStore) || site || null : null;
   return {
+    language,
     sector: slot.sector,
     destination: slot.destination,
     placement: slot.placement,
@@ -115,6 +116,58 @@ function hashtagsFor(f) {
   return [...new Set(tags)];
 }
 
+// ---------- German brands (Brand.settings.planner.language = "de") ----------
+// Every word a German brand posts is German: the templates below, the AI (told so in the brand's brand.md),
+// and validateCopy, which refuses any text that reads as English.
+
+const ENGLISH_WORDS = /\b(the|and|with|your|you|our|link in bio|learn more|shop now|check out|new in|now in|out now|more from|follow|for more|listen|watch|tap the pin|available|discover)\b/gi;
+
+/** Distinct English words found in a text. German text with a product name or two stays under the limit. */
+export function englishWordsIn(text) {
+  return [...new Set((String(text || "").match(ENGLISH_WORDS) || []).map((w) => w.toLowerCase()))];
+}
+
+/** The asset's German title without leftovers like "(SolarMeister, 16x9)" or a bare ratio. */
+export function cleanGermanName(name) {
+  return String(name || "")
+    .replace(/\s*\([^)]*(?:\d+x\d+|solarmeister)[^)]*\)\s*/gi, " ")
+    .replace(/\b\d+x\d+\b/g, " ")
+    .replace(/_+/g, " ").replace(/\s{2,}/g, " ").trim();
+}
+
+const DE_HASHTAGS = {
+  produkte: ["#solarmeister", "#balkonkraftwerk", "#photovoltaik"],
+  weihnachten: ["#solarmeister", "#weihnachten", "#frohefesttage"],
+  reportagen: ["#solarmeister", "#solarenergie", "#photovoltaik"]
+};
+
+/** German template copy: the asset's own German name, one plain German line per sector, the brand site as the only link. */
+function germanTemplateCopy(f, seed) {
+  const name = cleanGermanName(f.song || f.product || f.assetName);
+  if (!name) return null;
+  const youtube = f.destination === "youtube";
+  const titled = youtube || f.destination === "pinterest";
+  const link = f.primaryLink || (f.sector === "produkte" && f.promotional !== false ? f.allowedLinks[0] : null) || null;
+  const clickable = Boolean(link) && f.linksInCaptionAreClickable;
+  const ask = f.promotional === false ? null : f.sector === "weihnachten"
+    ? pick(seed + "ask", ["Frohe Weihnachten von deinem SolarMeister-Team.", "Schöne Feiertage wünscht dir SolarMeister.", "Ein sonniges Weihnachtsfest wünscht dir SolarMeister."])
+    : pick(seed + "ask", [
+        "Einfach selbst installieren: Balkonkraftwerke und Zubehör im SolarMeister Shop.",
+        "Solar zum Selbermachen. Alles dafür findest du im SolarMeister Shop.",
+        "Dein Balkonkraftwerk beginnt im SolarMeister Shop."]);
+  const where = !ask ? null : clickable ? `${ask} ${link}` : link ? `${ask} Link in der Bio.` : ask;
+  const caption = [name, where].filter(Boolean).join("\n");
+  const hashtags = (DE_HASHTAGS[f.sector] || DE_HASHTAGS.produkte).slice(0, LIMITS[f.destination]?.hashtags ?? 3);
+  return {
+    status: "ready", source: "template", angle: null, hook: name,
+    caption: youtube ? null : caption,
+    title: titled ? name.slice(0, 70) : null,
+    description: youtube ? `${caption}\n\n${hashtags.join(" ")}` : null,
+    hashtags, primaryLink: link, onScreenText: null,
+    notes: ["deutsche Vorlage: Titel des Bildes plus ein Satz; vor der Freigabe bei Bedarf bearbeiten"]
+  };
+}
+
 /** Every template below is written in Stashbox's voice; any other brand must never fall back to it. */
 const isOtherBrand = (f) => Boolean(f.brandSlug) && f.brandSlug !== "stashbox";
 
@@ -142,6 +195,7 @@ function neutralCopy(f) {
  * streaming link on file) the post gets a plain caption with no link or ask, never a blank one.
  */
 export function templateCopy(f, seed) {
+  if (f.language === "de" && isOtherBrand(f)) return germanTemplateCopy(f, seed);
   if (isOtherBrand(f)) return neutralCopy(f);
   if (!f.primaryLink) return { ...plainCopy(f, seed), notes: ["no link on file for this pillar: plain caption"] };
   if (f.promotional === false) return plainCopy(f, seed);
@@ -276,6 +330,11 @@ export function validateCopy(copy, f) {
     if (!f.allowedLinks.includes(clean)) problems.push(`link not from records: ${clean}`);
   }
   if (/\$\s?\d/.test(text)) problems.push("mentions a price");
+  if (f.language === "de") {
+    const english = englishWordsIn(text);
+    if (english.length >= 2) problems.push(`not German: ${english.join(", ")}`);
+    if (/\blink in bio\b|\bshop now\b/i.test(text)) problems.push("English call to action on a German brand");
+  }
   if (isOtherBrand(f) && /stashbox/i.test(text) && !/stashbox/i.test(f.assetName || "")) problems.push(`mentions Stashbox on the ${f.brandSlug} brand`);
   for (const re of BANNED) if (re.test(text)) problems.push(`banned phrase: ${re.source}`);
   if ((f.destination === "youtube" || f.destination === "pinterest") && !copy.title) problems.push("missing title");
@@ -320,12 +379,12 @@ async function mapLimit(items, limit, fn) {
  * Write copy for every planned slot. `invoke` is the Bedrock call (same shape as
  * the curator's); without a model, template copy is used for all posts.
  */
-export async function writeWeekCopy({ slots, assetsById, songFacts, links, brandSlug, modelId, invoke, recentCaptionsByAccount = {}, concurrency = 6, intelligenceRoot, promotionalMaxShare = {} }) {
+export async function writeWeekCopy({ slots, assetsById, songFacts, links, brandSlug, modelId, invoke, recentCaptionsByAccount = {}, concurrency = 6, intelligenceRoot, promotionalMaxShare = {}, language = "en" }) {
   const written = [];
   const promo = promotionalSlotIds(slots, promotionalMaxShare);
   return mapLimit(slots, concurrency, async (slot) => {
     const asset = assetsById.get(slot.assetId);
-    const f = { ...postFacts(asset, slot, songFacts, links, { promotional: promo.has(slot.slotId) }), brandSlug };
+    const f = { ...postFacts(asset, slot, songFacts, links, { promotional: promo.has(slot.slotId), language }), brandSlug };
     const fallback = () => {
       const t = templateCopy(f, slot.slotId);
       return t ? { ...t, problems: validateCopy(t, f) } : { status: "blocked", source: "template", missing: [isOtherBrand(f) ? "assetName" : "primaryLink"], problems: [] };

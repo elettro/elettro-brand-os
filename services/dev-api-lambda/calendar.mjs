@@ -188,7 +188,7 @@ export async function replanSlot(client, brand, body, deps = {}) {
     const slot = { slotId: post.id, socialAccountId: post.socialAccountId, destination: post.destination, placement: post.placement,
       sector, ymd, scheduledFor: at.toISOString(), assetId: asset.id, synthetic: isSynthetic(asset, settings) };
     const [written] = await writeWeekCopy({ slots: [slot], assetsById: new Map([[asset.id, asset]]), songFacts, links: settings.links || {},
-      brandSlug: brand.slug, modelId, invoke, recentCaptionsByAccount: { [post.socialAccountId]: recent }, concurrency: 1,
+      brandSlug: brand.slug, language: settings.language || "en", modelId, invoke, recentCaptionsByAccount: { [post.socialAccountId]: recent }, concurrency: 1,
       promotionalMaxShare: { bluesky: 0.25, ...(settings.promotionalMaxShare || {}) } });
     const copy = written?.copy;
     if (!copy || copy.status !== "ready") continue;
