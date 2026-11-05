@@ -38,12 +38,49 @@ export async function substackProfile(cookie: string): Promise<SubstackProfile> 
   return { userId: String(body.id), handle: body.handle || null, publications };
 }
 
+type Mark = { type: string; attrs?: { href: string } };
+type Node = { type: string; text?: string; marks?: Mark[]; attrs?: { level: number }; content?: Node[] };
+const SAFE_LINK = /^(https?:\/\/|mailto:)/i;
+
+/** Inline markdown -> Substack text nodes: **bold**, *italic*, [text](https://link). Same reader as services/substack-lambda. */
+export function inlineNodes(input: string): Node[] {
+  const nodes: Node[] = [];
+  const push = (text: string, marks: Mark[]) => { if (text) nodes.push(marks.length ? { type: "text", text, marks } : { type: "text", text }); };
+  const scan = (text: string, marks: Mark[]) => {
+    const re = /\[([^\]]+)\]\((\S+?)\)|\*\*([^*\n]+?)\*\*|\*([^*\s][^*\n]*?)\*/g;
+    let last = 0, m: RegExpExecArray | null;
+    while ((m = re.exec(text))) {
+      push(text.slice(last, m.index), marks);
+      if (m[1] !== undefined) { if (SAFE_LINK.test(m[2])) scan(m[1], [...marks, { type: "link", attrs: { href: m[2] } }]); else push(m[0], marks); }
+      else if (m[3] !== undefined) scan(m[3], [...marks, { type: "strong" }]);
+      else scan(m[4], [...marks, { type: "em" }]);
+      last = m.index + m[0].length;
+    }
+    push(text.slice(last), marks);
+  };
+  scan(input, []);
+  return nodes;
+}
+
+/** Blank-line separated blocks: # headings (1-4), --- dividers, > quotes, else paragraphs with inline marks. */
+export function markdownDoc(text: string) {
+  const content: Node[] = [];
+  for (const block of text.split(/\n{2,}/).map((b) => b.trim()).filter(Boolean)) {
+    const oneLine = block.replace(/\s*\n\s*/g, " ").trim();
+    const heading = /^(#{1,4})\s+(.+)$/.exec(block);
+    if (/^(-{3,}|\*{3,})$/.test(block)) content.push({ type: "horizontal_rule" });
+    else if (heading && !block.includes("\n")) content.push({ type: "heading", attrs: { level: heading[1].length }, content: inlineNodes(heading[2].trim()) });
+    else if (block.split("\n").every((l) => /^>\s?/.test(l))) content.push({ type: "blockquote", content: [{ type: "paragraph", content: inlineNodes(block.split("\n").map((l) => l.replace(/^>\s?/, "")).join(" ").trim()) }] });
+    else content.push({ type: "paragraph", content: inlineNodes(oneLine) });
+  }
+  return { type: "doc", content };
+}
+
 /** A live post: one draft, then publish, web only (never emailed). Used by the Connections test post. */
 export async function substackPublish(cookie: string, subdomain: string, userId: string, title: string, text: string) {
   const base = `https://${subdomain}.substack.com/api/v1`;
   const headers = { cookie, accept: "application/json", "content-type": "application/json", "user-agent": UA };
-  const paragraphs = text.split(/\n{2,}/).map((p) => p.replace(/\s*\n\s*/g, " ").trim()).filter(Boolean);
-  const doc = { type: "doc", content: paragraphs.map((p) => ({ type: "paragraph", content: [{ type: "text", text: p }] })) };
+  const doc = markdownDoc(text);
   const draft = await fetch(`${base}/drafts`, { method: "POST", headers, cache: "no-store", body: JSON.stringify({
     draft_title: title, draft_subtitle: "", draft_body: JSON.stringify(doc), draft_bylines: [{ id: Number(userId), is_guest: false }],
     audience: "everyone", type: "newsletter", write_comment_permissions: "everyone" }) });
