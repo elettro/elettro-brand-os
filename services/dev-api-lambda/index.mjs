@@ -29,6 +29,7 @@ import { completeMetaConnect } from "./meta-connect.mjs";
 import { completeMastodonConnect } from "./mastodon-connect.mjs";
 import { completeSubstackConnect } from "./substack-connect.mjs";
 import { completeXConnect } from "./x-connect.mjs";
+import { completeRedditConnect } from "./reddit-connect.mjs";
 import { handlePlannerWeb, handlePlannerOps } from "./planner-ops.mjs";
 import { setPostingWindow } from "./posting-window.mjs";
 import { completeThreadsConnect } from "./threads-connect.mjs";
@@ -1851,6 +1852,11 @@ export const handler = async (event = {}) => {
   // "Connect X": same handshake; the tokens are kept in Secrets Manager and refreshed by the web app, so the row has no tokenExpiresAt.
   if (requestPath === "/connections/x/complete" && event?.requestContext?.http?.method === "POST") {
     return completeXConnect(event, parseJsonBody(event), connectDatabase, json);
+  }
+
+  // "Connect Reddit": same handshake; tokens go to Secrets Manager and the web app refreshes the 1-hour access token on demand.
+  if (requestPath === "/connections/reddit/complete" && event?.requestContext?.http?.method === "POST") {
+    return completeRedditConnect(event, parseJsonBody(event), connectDatabase, json);
   }
 
   // "Connect Snapchat": same handshake; the web app trades the code and reads the Public Profile, tokens go to Secrets Manager.

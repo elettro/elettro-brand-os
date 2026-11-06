@@ -19,6 +19,7 @@ import { MASTODON_BRANDS, MASTODON_POST_LIMIT } from "@/lib/mastodon-connect";
 import { SUBSTACK_BODY_LIMIT, SUBSTACK_BRANDS, SUBSTACK_TITLE_LIMIT } from "@/lib/substack-connect";
 import { SNAPCHAT_BRANDS } from "@/lib/snapchat-connect";
 import { X_BRANDS, X_POST_LIMIT } from "@/lib/x-connect";
+import { REDDIT_BRANDS, REDDIT_TITLE_LIMIT, REDDIT_TEXT_LIMIT } from "@/lib/reddit-connect";
 import { redirect } from "next/navigation";
 
 const TEST_POST = "Testing Elettro OS on LinkedIn. Our in-house publishing system now posts here directly; this one went out through the LinkedIn API. More from Elettro and Stashbox soon.";
@@ -91,6 +92,10 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
   const x = status.x || {};
   // X shows no countdown (the refresh-token lifetime is not verified), so the callback reports no expiry.
   if (brand && connected && network === "x") x[brand] = { handle: connected, expiresAt: null };
+  const redditBrands = brandConfigs.filter((b) => REDDIT_BRANDS.includes(b.id) && inView(b.id));
+  const reddit = status.reddit || {};
+  // Reddit's refresh token never expires on its own, so the callback reports no expiry.
+  if (brand && connected && network === "reddit") reddit[brand] = { handle: connected, expiresAt: null };
   // YouTube refresh tokens don't expire on our side; right after Connect the feed may still be the cached one, so trust the callback.
   if (brand && connected && network === "youtube") youtube[brand] = { handle: connected, expiresAt: null };
   // Mastodon tokens never expire, so the callback reports no expiry; same 60s cache applies.
@@ -106,7 +111,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
   // Same cache after a disconnect: the brand is no longer linked even if the feed still says so.
   if (brand && disconnected) {
     const feeds: Record<string, Array<Record<string, Linked>>> = {
-      youtube: [youtube], gmb: [gmb], linkedin: [linkedin], threads: [threads], bluesky: [bluesky], tiktok: [tiktok], pinterest: [pinterest], meta: [facebook, instagram], mastodon: [mastodon], substack: [substack], snapchat: [snapchat], x: [x]
+      youtube: [youtube], gmb: [gmb], linkedin: [linkedin], threads: [threads], bluesky: [bluesky], tiktok: [tiktok], pinterest: [pinterest], meta: [facebook, instagram], mastodon: [mastodon], substack: [substack], snapchat: [snapchat], x: [x], reddit: [reddit]
     };
     for (const feed of feeds[network || ""] || []) delete feed[brand];
   }
@@ -116,7 +121,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
     <p className="muted">Connect each brand&apos;s accounts to Elettro OS. Google asks which YouTube channel to use; pick the one that belongs to the brand. LinkedIn logins last 60 days, so each one counts down to its reconnect date.</p>
     {connected && <p className="card" style={{ marginTop: 16 }}>Connected <b>{connected}</b>{brandName ? <> to {brandName}</> : null}.</p>}
     {disconnected && <p className="card" style={{ marginTop: 16 }}>Disconnected <b>{disconnected}</b>{brandName ? <> from {brandName}</> : null}. Elettro OS will not post to it, and posts already approved for it are back to planned. To also remove its permission, use the account&apos;s own security settings (for Google, myaccount.google.com/permissions).</p>}
-    {error && network !== "linkedin" && network !== "mastodon" && network !== "substack" && network !== "x" && <p className="card" style={{ marginTop: 16 }}>Could not connect{brandName ? ` ${brandName}` : ""}: {error}</p>}
+    {error && network !== "linkedin" && network !== "mastodon" && network !== "substack" && network !== "x" && network !== "reddit" && <p className="card" style={{ marginTop: 16 }}>Could not connect{brandName ? ` ${brandName}` : ""}: {error}</p>}
     {brands.length > 0 && <>
     <div className="grid" id="youtube" style={{ marginTop: 20 }}>
       {brands.map((b) => {
@@ -447,6 +452,41 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
                 <label className="muted" htmlFor={`x-text-${b.id}`}>Test post (goes live on X when you click)</label>
                 <textarea id={`x-text-${b.id}`} name="text" rows={4} maxLength={X_POST_LIMIT} required />
                 <button type="submit" className="status-chip">Post to X now</button>
+              </form>
+            )}
+          </article>
+        );
+      })}
+    </div>
+    </>}
+    {redditBrands.length > 0 && <>
+    <h2 id="reddit" style={{ marginTop: 32 }}>Reddit</h2>
+    <p className="muted">Each brand posts from its own Reddit account. Sign in to Reddit with the brand&apos;s account when Reddit asks (not your own). Reddit needs to approve the Elettro OS app first, so Connect only works once that approval has arrived. The test post goes to the brand&apos;s own profile unless you type a subreddit you control; nothing is scheduled to Reddit yet.</p>
+    {network === "reddit" && posted && <p className="card" style={{ marginTop: 16 }}>Posted to Reddit. <a href={posted} target="_blank" rel="noreferrer">See the post</a></p>}
+    {network === "reddit" && error && <p className="card" style={{ marginTop: 16 }}>Reddit: {error}</p>}
+    <div className="grid" style={{ marginTop: 20 }}>
+      {redditBrands.map((b) => {
+        const linked = reddit[b.id];
+        return (
+          <article className="card" key={b.id}>
+            <div className="eyebrow">Reddit</div>
+            <h2>{b.name}</h2>
+            <p className="muted" style={{ margin: "0 0 12px" }}>
+              {linked ? <>● Connected · <b>{linked.handle}</b></> : "○ Not connected"}
+            </p>
+            <div className="connect-row">
+              <a className="status-chip" href={`/api/connections/reddit/start?brand=${b.id}`}>{linked ? "Reconnect" : "Connect Reddit"}</a>
+              {linked && <ConnectionDisconnect brand={b.id} network="reddit" handle={linked.handle || "this account"} />}
+            </div>
+            {linked && (
+              <form method="post" action="/api/connections/reddit/test-post" className="test-post">
+                <input type="hidden" name="brand" value={b.id} />
+                <label className="muted" htmlFor={`reddit-target-${b.id}`}>Post to (leave empty for the brand&apos;s own profile)</label>
+                <input id={`reddit-target-${b.id}`} name="target" type="text" maxLength={30} placeholder="r/yourSubreddit" />
+                <label className="muted" htmlFor={`reddit-title-${b.id}`}>Title (goes live on Reddit when you click)</label>
+                <input id={`reddit-title-${b.id}`} name="title" type="text" maxLength={REDDIT_TITLE_LIMIT} required />
+                <textarea name="text" rows={4} maxLength={REDDIT_TEXT_LIMIT} aria-label="Text" />
+                <button type="submit" className="status-chip">Post to Reddit now</button>
               </form>
             )}
           </article>
