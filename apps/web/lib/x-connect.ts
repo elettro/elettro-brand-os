@@ -1,6 +1,5 @@
 import { SecretsManagerClient, GetSecretValueCommand, PutSecretValueCommand } from "@aws-sdk/client-secrets-manager";
 import { DEV_ORIGIN } from "@/lib/cognito-auth";
-import { brandConfigs } from "@/lib/brand-config";
 
 // One Elettro OS app in the X developer portal (OAuth 2.0, confidential client, PKCE). Its client id/secret live in
 // Secrets Manager (elettro-brand-os-dev/x-oauth, made by scripts/x-app-setup.sh). Access tokens last about 2 hours and the
@@ -8,8 +7,9 @@ import { brandConfigs } from "@/lib/brand-config";
 export const X_CALLBACK = DEV_ORIGIN + "/api/connections/x/callback";
 export const X_SCOPES = ["tweet.read", "tweet.write", "users.read", "offline.access", "media.write"];
 export const X_STATE_COOKIE = "elettro_dev_x_state";
-// Every brand can have an X account; `google-review` is the isolated demo brand for Google's reviewer.
-export const X_BRANDS: string[] = brandConfigs.map((b) => b.id).filter((id) => id !== "google-review");
+// The active brands (Dean 2026-11-06): the same seven as Instagram/Facebook. Dean Palermo, Rompe and Reggae.Land join in Nov 2026 and
+// `google-review` is the isolated demo brand, so none of those get an X card.
+export const X_BRANDS: string[] = ["stashbox", "elettro", "therasbox", "solarmeister", "weightlossdavie", "pianomusicsoothing", "neckermann-strom"];
 // Posts are 280 characters (a link counts as 23); X refuses a longer one with a clear message.
 export const X_POST_LIMIT = 280;
 export const X_TOKEN_PREFIX = "elettro-brand-os-dev/x/";

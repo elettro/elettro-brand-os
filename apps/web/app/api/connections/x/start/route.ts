@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createHash, randomBytes } from "node:crypto";
-import { authenticatedFor, challenge, cookieSettings, seal } from "@/lib/cognito-auth";
+import { DEV_ORIGIN, authenticatedFor, challenge, cookieSettings, seal } from "@/lib/cognito-auth";
 import { X_BRANDS, X_CALLBACK, X_SCOPES, X_STATE_COOKIE, xApp } from "@/lib/x-connect";
 export const runtime = "nodejs";
 export async function GET(request: NextRequest) {
@@ -25,6 +25,7 @@ export async function GET(request: NextRequest) {
     return response;
   } catch (error) {
     console.error("X connect start failed", error instanceof Error ? error.name : "UnknownError");
-    return NextResponse.redirect(new URL("/connections?" + new URLSearchParams({ brand, network: "x", error: "X is not set up yet" }) + "#x", request.url));
+    // DEV_ORIGIN, not request.url: behind Amplify the request URL host is localhost:3000.
+    return NextResponse.redirect(DEV_ORIGIN + "/connections?" + new URLSearchParams({ brand, network: "x", error: "X is not set up yet" }) + "#x");
   }
 }

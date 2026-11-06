@@ -424,7 +424,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
     </>}
     {xBrands.length > 0 && <>
     <h2 id="x" style={{ marginTop: 32 }}>X</h2>
-    <p className="muted">Each brand posts from its own X account. Sign in to X with the brand&apos;s account when X asks (not your own). Elettro OS keeps the login fresh on its own; if X ever asks you to reconnect, click Reconnect. Publishing to X is not switched on yet; only the test post below sends anything.</p>
+    <p className="muted">Each brand posts from its own X account. Sign in to X with the brand&apos;s account when X asks (not your own). Elettro OS keeps the login fresh on its own; if X ever asks you to reconnect, click Reconnect. Scheduled posts go out from the Review page once you set X posts per day; the test post below sends one right now.</p>
     {network === "x" && posted && <p className="card" style={{ marginTop: 16 }}>Posted to X. <a href={posted} target="_blank" rel="noreferrer">See the post</a></p>}
     {network === "x" && error && <p className="card" style={{ marginTop: 16 }}>X: {error}</p>}
     <div className="grid" style={{ marginTop: 20 }}>
