@@ -222,6 +222,8 @@ export function poolRejection(asset, account, settings) {
   const allowed = Array.isArray(asset.allowedDestinations) ? asset.allowedDestinations : [];
   const excluded = Array.isArray(asset.excludedDestinations) ? asset.excludedDestinations : [];
   if (excluded.includes(dest) || (allowed.length && !allowed.includes(dest))) return "destination";
+  // A file over a placement's size cap would only fail at publish time (Bluesky refuses videos over 100 MB), so never plan it.
+  if (rule.maxBytes && Number(asset.fileSizeBytes) > rule.maxBytes) return "size";
   const bucket = durationBucketOf(asset);
   if (rule.maxDurationBucket && bucket &&
       DURATION_BUCKETS.indexOf(bucket) > DURATION_BUCKETS.indexOf(rule.maxDurationBucket)) return "duration";

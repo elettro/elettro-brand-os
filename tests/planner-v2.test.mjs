@@ -247,3 +247,12 @@ test("audio-only exclude tags keep out videos but not photos stamped no-audio", 
   assert.equal(poolRejection({ ...base, kind: "video", tags: ["no-audio"] }, reel, s), "excluded-tag");
   assert.equal(poolRejection({ ...base, kind: "video", tags: ["silent-audio"] }, reel, s), "excluded-tag");
 });
+
+test("a Bluesky video over 100 MB is never planned (it would only fail at publish), a smaller one is", () => {
+  const s = resolvePlannerSettings({ planner: { pool: { kinds: [], aspectRatios: [] } } });
+  const account = { destination: "bluesky", placement: "video" };
+  const clip = (fileSizeBytes) => ({ id: "v", kind: "video", aspectRatioLabel: "16x9", durationMs: 60000, tags: [], fileSizeBytes });
+  assert.equal(poolRejection(clip(100 * 1024 * 1024 + 1), account, s), "size");
+  assert.equal(poolRejection(clip(99 * 1024 * 1024), account, s), null);
+  assert.equal(poolRejection(clip(null), account, s), null);
+});
