@@ -6,7 +6,7 @@ import { DEV_ORIGIN } from "@/lib/cognito-auth";
 // Reddit also issues a refresh token that does not rotate and does not expire (until the user revokes the app).
 // New apps need Reddit's approval under the Responsible Builder Policy before the token endpoint works.
 export const REDDIT_CALLBACK = DEV_ORIGIN + "/api/connections/reddit/callback";
-export const REDDIT_SCOPES = ["identity", "submit", "edit", "read", "flair"];
+export const REDDIT_SCOPES = ["identity", "submit"];
 export const REDDIT_STATE_COOKIE = "elettro_dev_reddit_state";
 // Same seven active brands as X. Dean Palermo, Rompe and Reggae.Land join in Nov 2026; `google-review` is the demo brand.
 export const REDDIT_BRANDS: string[] = ["stashbox", "elettro", "therasbox", "solarmeister", "weightlossdavie", "pianomusicsoothing", "neckermann-strom"];

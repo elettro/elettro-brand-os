@@ -2,7 +2,7 @@
 
 Brands (`REDDIT_BRANDS`, same seven as X): stashbox, elettro, therasbox, solarmeister, weightlossdavie, pianomusicsoothing, neckermann-strom.
 One Reddit account per brand. Auth is the standard OAuth 2.0 authorization-code flow (web app, client id + secret) with
-`duration=permanent`; scopes `identity submit edit read flair`.
+`duration=permanent`; scopes `identity submit` (only what the approval request lists; add `edit`, `read`, `flair` later only after telling Reddit).
 
 Access tokens last **1 hour**. The refresh token Reddit returns does not rotate and does not expire until the user revokes the app, so
 `tokenExpiresAt` stays NULL and there is no reconnect countdown. The web app refreshes on demand and saves the new access token to the
