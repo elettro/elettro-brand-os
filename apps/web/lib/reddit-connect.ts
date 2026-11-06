@@ -11,7 +11,7 @@ export const REDDIT_STATE_COOKIE = "elettro_dev_reddit_state";
 // Same seven active brands as X. Dean Palermo, Rompe and Reggae.Land join in Nov 2026; `google-review` is the demo brand.
 export const REDDIT_BRANDS: string[] = ["stashbox", "elettro", "therasbox", "solarmeister", "weightlossdavie", "pianomusicsoothing", "neckermann-strom"];
 // Reddit requires a unique, descriptive User-Agent; generic ones are throttled.
-export const REDDIT_USER_AGENT = "web:os.elettro.com:v1.0 (Elettro OS publishing engine)";
+export const REDDIT_USER_AGENT = "web:com.elettro.os:v1.0 (by /u/stashboxcom)";
 export const REDDIT_TITLE_LIMIT = 300;
 export const REDDIT_TEXT_LIMIT = 40000;
 export const REDDIT_TOKEN_PREFIX = "elettro-brand-os-dev/reddit/";
