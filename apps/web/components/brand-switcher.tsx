@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 
 export type BrandOption = {
   id: string;
@@ -18,7 +18,6 @@ export function BrandSwitcher({
 }: {
   brands: BrandOption[];
 }) {
-  const router = useRouter();
   const pathname = usePathname() || "/";
   const params = useSearchParams();
   const singleBrand = SINGLE_BRAND_PAGES.some((p) => pathname.startsWith(p));
@@ -37,7 +36,9 @@ export function BrandSwitcher({
         if (event.target.value === "all") next.delete("brand");
         else next.set("brand", event.target.value);
         const query = next.toString();
-        router.push(query ? `${pathname}?${query}` : pathname);
+        // A full page load, not router.push: a soft navigation keeps client state (Review holds the old brand's plan in
+        // useState), so the page kept showing the previous brand's accounts and posts under the new brand's name (Dean 2026-11-06).
+        window.location.assign(query ? `${pathname}?${query}` : pathname);
       }}
     >
       {options.map((brand) => (
