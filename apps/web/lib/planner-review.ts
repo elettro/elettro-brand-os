@@ -7,7 +7,7 @@ const apiBaseUrl =
 
 // Brands that appear on the Review page: the Connect Meta brands, plus Neckermann Strom (no Meta login yet, but it has posts to review).
 import { META_BRANDS } from "@/lib/meta-connect";
-export const REVIEW_BRANDS = [...META_BRANDS, "neckermann-strom", "google-review"];
+export const REVIEW_BRANDS = [...META_BRANDS, "google-review"];
 
 // Holidays tab: the seven brands with pictures (Google Review is dormant; Dean Palermo, Rompe and Reggae.Land skipped on request). A brand with no database row simply shows nothing.
 export const HOLIDAY_BRANDS = ["stashbox", "elettro", "solarmeister", "neckermann-strom", "weightlossdavie", "therasbox", "pianomusicsoothing"];
