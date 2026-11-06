@@ -12,7 +12,7 @@ therefore refreshes on demand and writes the new pair back to the account's secr
 
 ## What is built (2026-11-06, Dean approved the X spend)
 Connect + Disconnect + a hand-written text test post on `/connections`, **and** the scheduled publisher `services/x-lambda`
-(formats `post` = 1 photo, `carousel` = 2-4 photos and `video`, all `planning`; video uses X's chunked upload and is limited to 256 MB and the planner's "1-3min" duration bucket).
+(formats `post` = 1 photo, `carousel` = 2-4 photos and `video`, all `planning`; video uses X's chunked upload and is limited to 1 GB (set 2026-11-06 after a 274 MB video was refused at 256 MB) and the planner's "1-3min" duration bucket).
 X is back on Review (posts per day) and the planner plans it for every brand with a connected X account.
 Video: initialize, 4 MiB append parts read from Dropbox with Range requests, finalize, then poll STATUS (up to 4 minutes); X's own limit is 20 minutes / 8 GB. Text up to 280 weighted characters (a link counts 23), up to 2 #tags, no @mentions in automated posts, images up to 5 MB (.jpg/.png/.webp),
 alt text sent best-effort. **Cost (X pay-per-use, checked 2026-10-30): $0.015 per post, $0.20 per post with a URL.** Put a spending cap in the

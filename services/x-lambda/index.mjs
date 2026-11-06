@@ -13,7 +13,7 @@ import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
 // (docs.x.com, read 2026-11-06): POST /2/media/upload/initialize (JSON: media_type, total_bytes, media_category tweet_video),
 // POST /2/media/upload/{id}/append (multipart: segment_index, media; chunks of 4 MiB, X's limit is 5 MB),
 // POST /2/media/upload/{id}/finalize, then GET /2/media/upload?command=STATUS&media_id=... until processing_info.state is
-// succeeded. X allows 20 minutes / 8 GB per post video; we cap at 256 MB. The Lambda holds one 4 MiB chunk at a time, read
+// succeeded. X allows 20 minutes / 8 GB per post video; we cap at 1 GB (a 4 MiB part per Dropbox read keeps memory small; the 900 s Lambda timeout is the real limit). The Lambda holds one 4 MiB chunk at a time, read
 // from Dropbox with Range requests, so memory stays small. Placements published: post (1 image), carousel (2-4 images), video.
 //
 // Auth: OAuth 2.0 user tokens live in Secrets Manager (elettro-brand-os-dev/x/<numeric user id>, written by the
@@ -34,9 +34,9 @@ export const MAX_TAGS = 2;
 export const MAX_IMAGES = 4;
 export const IMAGE_BYTE_LIMIT = 5 * 1024 * 1024; // X: 5 MB for a JPEG/PNG/WebP
 export const MAX_ALT = 1000;
-export const VIDEO_BYTE_LIMIT = 256 * 1024 * 1024; // our cap; X itself allows 8 GB / 20 minutes
+export const VIDEO_BYTE_LIMIT = 1024 * 1024 * 1024; // our cap; X itself allows 8 GB / 20 minutes
 export const CHUNK_BYTES = 4 * 1024 * 1024; // X: at most 5 MB per append segment
-const STATUS_POLL_LIMIT_MS = 240_000;
+const STATUS_POLL_LIMIT_MS = 420_000;
 const PLACEMENTS = ["post", "carousel", "video"];
 const POSTS_PER_TICK = 1;
 const URL_LENGTH = 23;
