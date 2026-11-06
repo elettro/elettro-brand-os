@@ -87,7 +87,7 @@ export const PUBLISHING_FORMATS = [
     rule: { kinds: ["image"], aspectRatios: [] } },
   { destination: "x", placement: "carousel", label: "Multi-photo posts", status: "planning", note: "Publisher is built (services/x-lambda); no post has published on schedule yet",
     slides: { min: 2, max: 4, recommended: [2, 4] }, rule: { kinds: ["image"], aspectRatios: [] } },
-  { destination: "x", placement: "video", label: "Videos", status: "planning", note: "Publisher is built (services/x-lambda, chunked upload); no video has published on schedule yet. Up to 256 MB, 3 minutes",
+  { destination: "x", placement: "video", label: "Videos", status: "planning", note: "Publisher is built (services/x-lambda, chunked upload); no video has published on schedule yet. Up to 1 GB, 3 minutes",
     rule: { kinds: ["video"], aspectRatios: [], maxDurationBucket: "1-3min" } },
   // savesCadence: the Review box stores a target (3 a day at most, Dean 2026-11-04) but the planner still skips GMB:
   // planning is by destination (PLANNABLE_DESTINATIONS), which excludes it until the GMB planner exists.

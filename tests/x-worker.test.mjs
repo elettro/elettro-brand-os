@@ -120,7 +120,7 @@ test("video: a failed processing, a stuck one and a too-big file each stop with 
   const src = async () => memorySource(1000);
   await assert.rejects(uploadVideo(REC, "v.mp4", { fetchImpl: base({ state: "failed", error: { message: "bad codec" } }), source: src, wait: async () => {} }), /bad codec/);
   await assert.rejects(uploadVideo(REC, "v.mp4", { fetchImpl: base({ state: "in_progress", check_after_secs: 10 }), source: src, wait: async () => {}, limitMs: 25_000 }), /still processing/);
-  await assert.rejects(uploadVideo(REC, "v.mp4", { fetchImpl: base({}), source: async () => memorySource(VIDEO_BYTE_LIMIT + 1) }), /up to 256 MB/);
+  await assert.rejects(uploadVideo(REC, "v.mp4", { fetchImpl: base({}), source: async () => memorySource(VIDEO_BYTE_LIMIT + 1) }), /up to 1024 MB/);
 });
 
 test("publish with a video posts once with the processed media id", async () => {
