@@ -15,7 +15,7 @@ export const BLUESKY_SCOPE = "atproto transition:generic";
 export const BLUESKY_OAUTH_SECRET = "elettro-brand-os-dev/bluesky-oauth";
 export const BLUESKY_STATE_COOKIE = "elettro_dev_bluesky_state";
 // Same brands as Threads for now; each connects its own Bluesky account.
-export const BLUESKY_BRANDS = ["stashbox", "elettro", "therasbox", "solarmeister", "weightlossdavie"];
+export const BLUESKY_BRANDS = ["stashbox", "elettro", "therasbox", "solarmeister", "weightlossdavie", "neckermann-strom"];
 // Blank handle: Bluesky's own sign-in page asks which account.
 export const BLUESKY_ENTRYWAY = "https://bsky.social";
 

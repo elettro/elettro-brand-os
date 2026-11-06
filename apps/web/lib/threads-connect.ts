@@ -17,7 +17,7 @@ export const THREADS_SCOPES = [
 export const THREADS_STATE_COOKIE = "elettro_dev_threads_state";
 // Same brands as Meta plus WeightLossDavie (@weightlossdavie); Stashbox (@stashboxmusic) first. While the app is in dev mode each
 // account must be a Threads Tester that accepted the invite in Threads → Settings → Account → Website permissions.
-export const THREADS_BRANDS = ["stashbox", "elettro", "therasbox", "solarmeister", "weightlossdavie"];
+export const THREADS_BRANDS = ["stashbox", "elettro", "therasbox", "solarmeister", "weightlossdavie", "neckermann-strom"];
 export const THREADS_OAUTH_SECRET = "elettro-brand-os-dev/threads-oauth";
 
 // Meta's uninstall and data-deletion callbacks POST signed_request = "<sig>.<payload>", both base64url,
