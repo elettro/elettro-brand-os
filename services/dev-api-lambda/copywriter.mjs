@@ -134,10 +134,22 @@ export function englishWordsIn(text) {
 /** The asset's German title without leftovers like "(SolarMeister, 16x9)" or a bare ratio. */
 export function cleanGermanName(name) {
   return String(name || "")
+    .replace(/\.(?:png|jpe?g|webp|gif|mp4|mov)$/i, "")
+    .replace(/\s*\(\d{1,3}\)\s*$/, "")
+    .replace(/-\d{1,3}$/, "")
     .replace(/\s*\([^)]*(?:\d+x\d+|solarmeister)[^)]*\)\s*/gi, " ")
     .replace(/\b\d+x\d+\b/g, " ")
     .replace(/_+/g, " ").replace(/\s{2,}/g, " ").trim();
 }
+
+/** Neckermann Strom (dynamic-tariff Ökostrom supplier; calm, factual, du-form, no prices, no exclamation marks, no emoji; asks are the brand brief's house-style lines). Never SolarMeister's shop wording. */
+const NS_ASKS = [
+  "Strom kostet nicht jede Stunde gleich viel. Dein Tarif muss das auch nicht.",
+  "Alle Preisbestandteile auf einen Blick. Ohne Kleingedrucktes.",
+  "Transparent. Nachvollziehbar. 100 % Ökostrom.",
+  "Wechsel in wenigen Minuten. Die Kündigung beim alten Anbieter übernehmen wir."
+];
+const NS_HASHTAGS = ["#neckermannstrom", "#ökostrom", "#energie"];
 
 const DE_HASHTAGS = {
   produkte: ["#solarmeister", "#balkonkraftwerk", "#photovoltaik"],
@@ -154,7 +166,8 @@ function germanTemplateCopy(f, seed) {
   // The product's own page when the asset names one, else the shop's root address; no link on the plain posts under a promo cap.
   const link = f.promotional === false ? null : f.primaryLink || f.allowedLinks[0] || null;
   const clickable = Boolean(link) && f.linksInCaptionAreClickable;
-  const ask = f.promotional === false ? null : f.sector === "weihnachten"
+  const ns = f.brandSlug === "neckermann-strom";
+  const ask = f.promotional === false ? null : ns ? pick(seed + "ask", NS_ASKS) : f.sector === "weihnachten"
     ? pick(seed + "ask", ["Frohe Weihnachten von deinem SolarMeister-Team.", "Schöne Feiertage wünscht dir SolarMeister.", "Ein sonniges Weihnachtsfest wünscht dir SolarMeister."])
     : pick(seed + "ask", [
         "Einfach selbst installieren: Balkonkraftwerke und Zubehör im SolarMeister Shop.",
@@ -162,7 +175,7 @@ function germanTemplateCopy(f, seed) {
         "Dein Balkonkraftwerk beginnt im SolarMeister Shop."]);
   const where = !ask ? null : clickable ? `${ask} ${link}` : link ? `${ask} Link in der Bio.` : ask;
   const caption = [name, where].filter(Boolean).join("\n");
-  const hashtags = (DE_HASHTAGS[f.sector] || DE_HASHTAGS.produkte).slice(0, LIMITS[f.destination]?.hashtags ?? 3);
+  const hashtags = (ns ? NS_HASHTAGS : DE_HASHTAGS[f.sector] || DE_HASHTAGS.produkte).slice(0, LIMITS[f.destination]?.hashtags ?? 3);
   return {
     status: "ready", source: "template", angle: null, hook: name,
     caption: youtube ? null : caption,
