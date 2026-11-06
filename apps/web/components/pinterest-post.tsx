@@ -7,7 +7,7 @@ type Asset = { id: string; filename: string; kind: string; sourcePath: string | 
 type Board = { id: string; name: string; privacy: string };
 
 // Default destination link for a Pin made from this form: the brand's own site.
-const DEFAULT_LINKS: Record<string, string> = { elettro: "https://elettro.com", stashbox: "https://stashbox.com", solarmeister: "https://solarmeister-shop.de" };
+const DEFAULT_LINKS: Record<string, string> = { elettro: "https://elettro.com", stashbox: "https://stashbox.com", solarmeister: "https://solarmeister-shop.de", "neckermann-strom": "https://neckermann-strom.de" };
 const DEFAULT_TITLE = "Testing Elettro OS on Pinterest";
 const DEFAULT_DESCRIPTION = "This Pin went out through Elettro OS, our in-house publishing system.";
 
