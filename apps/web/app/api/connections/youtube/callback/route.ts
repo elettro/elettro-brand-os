@@ -63,7 +63,7 @@ export async function GET(request: NextRequest) {
     });
     const result = await response.json().catch(() => ({})) as { ok?: boolean; error?: string };
     if (!response.ok || !result.ok) return done({ brand, error: result.error || `Connect failed (HTTP ${response.status})` });
-    return done({ brand, connected: channel.handle || channel.title });
+    return done({ brand, network: "youtube", connected: channel.handle || channel.title });
   } catch (error) {
     console.error("YouTube connect callback failed", error instanceof Error ? error.name : "UnknownError");
     const message = error instanceof Error && /^(Google|YouTube|That Google)/.test(error.message) ? error.message : "Elettro OS could not finish the connection";
