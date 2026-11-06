@@ -1,0 +1,269 @@
+{
+  "note": "Seed for Brand.settings.planner of Neckermann Strom (German power company, residential + commercial, Europe/Berlin). Built 2026-11-06 from the tags on its 93 ready assets (evergreen/year-round and winter-months, window Nov 15-Mar 30). Own assets only for now; the planned 80% Neckermann / 20% SolarMeister split needs a cross-brand pool change (planner-v2-db.mjs loads assets by brandId) and is a separate PR. Settings only: posts per day per network are set on Review (0 = skipped). All copy is German (language de). Posts 7 days a week, 08:00-20:00 Berlin with 70% between 10:00 and 16:00. Load by hand with: {\"action\":\"configure-planner-brand\",\"brandSlug\":\"neckermann-strom\",\"settings\":<settings>,\"accounts\":[]}",
+  "settings": {
+    "version": 1,
+    "pool": {
+      "kinds": [
+        "image",
+        "video"
+      ],
+      "excludeTagsAny": [
+        "no-audio",
+        "silent-audio",
+        "no-music"
+      ]
+    },
+    "placements": {},
+    "sectors": [
+      {
+        "slug": "evergreen",
+        "priority": 1,
+        "share": 0.6,
+        "match": {
+          "tagsAny": [
+            "evergreen",
+            "year-round"
+          ]
+        }
+      },
+      {
+        "slug": "winter",
+        "priority": 2,
+        "share": 0.4,
+        "match": {
+          "tagsAny": [
+            "winter-months",
+            "winter"
+          ]
+        }
+      }
+    ],
+    "minPoolForSector": 1,
+    "exploration": {
+      "default": 0.1
+    },
+    "cooldowns": {
+      "assetDays": 7,
+      "songDays": 0,
+      "productDays": 3
+    },
+    "newBatchBoostDays": 14,
+    "syntheticTagsAny": [],
+    "readyTagsAny": [],
+    "candidatesPerSlot": 5,
+    "curator": {
+      "enabled": false
+    },
+    "copy": {
+      "enabled": true,
+      "task": "write_copy",
+      "concurrency": 4
+    },
+    "language": "de",
+    "links": {
+      "site": "https://neckermann-strom.de",
+      "merchStore": "https://neckermann-strom.de"
+    },
+    "postingTimes": {
+      "instagram": {
+        "start": "08:00",
+        "end": "20:00",
+        "days": [
+          "mon",
+          "tue",
+          "wed",
+          "thu",
+          "fri",
+          "sat",
+          "sun"
+        ],
+        "peak": {
+          "start": "10:00",
+          "end": "16:00",
+          "share": 0.7
+        }
+      },
+      "facebook": {
+        "start": "08:00",
+        "end": "20:00",
+        "days": [
+          "mon",
+          "tue",
+          "wed",
+          "thu",
+          "fri",
+          "sat",
+          "sun"
+        ],
+        "peak": {
+          "start": "10:00",
+          "end": "16:00",
+          "share": 0.7
+        }
+      },
+      "threads": {
+        "start": "08:00",
+        "end": "20:00",
+        "days": [
+          "mon",
+          "tue",
+          "wed",
+          "thu",
+          "fri",
+          "sat",
+          "sun"
+        ],
+        "peak": {
+          "start": "10:00",
+          "end": "16:00",
+          "share": 0.7
+        }
+      },
+      "tiktok": {
+        "start": "08:00",
+        "end": "20:00",
+        "days": [
+          "mon",
+          "tue",
+          "wed",
+          "thu",
+          "fri",
+          "sat",
+          "sun"
+        ],
+        "peak": {
+          "start": "10:00",
+          "end": "16:00",
+          "share": 0.7
+        }
+      },
+      "youtube": {
+        "start": "08:00",
+        "end": "20:00",
+        "days": [
+          "mon",
+          "tue",
+          "wed",
+          "thu",
+          "fri",
+          "sat",
+          "sun"
+        ],
+        "peak": {
+          "start": "10:00",
+          "end": "16:00",
+          "share": 0.7
+        }
+      },
+      "pinterest": {
+        "start": "08:00",
+        "end": "20:00",
+        "days": [
+          "mon",
+          "tue",
+          "wed",
+          "thu",
+          "fri",
+          "sat",
+          "sun"
+        ],
+        "peak": {
+          "start": "10:00",
+          "end": "16:00",
+          "share": 0.7
+        }
+      },
+      "linkedin": {
+        "start": "08:00",
+        "end": "20:00",
+        "days": [
+          "mon",
+          "tue",
+          "wed",
+          "thu",
+          "fri",
+          "sat",
+          "sun"
+        ],
+        "peak": {
+          "start": "10:00",
+          "end": "16:00",
+          "share": 0.7
+        }
+      },
+      "bluesky": {
+        "start": "08:00",
+        "end": "20:00",
+        "days": [
+          "mon",
+          "tue",
+          "wed",
+          "thu",
+          "fri",
+          "sat",
+          "sun"
+        ],
+        "peak": {
+          "start": "10:00",
+          "end": "16:00",
+          "share": 0.7
+        }
+      },
+      "mastodon": {
+        "start": "08:00",
+        "end": "20:00",
+        "days": [
+          "mon",
+          "tue",
+          "wed",
+          "thu",
+          "fri",
+          "sat",
+          "sun"
+        ],
+        "peak": {
+          "start": "10:00",
+          "end": "16:00",
+          "share": 0.7
+        }
+      },
+      "substack": {
+        "start": "08:00",
+        "end": "20:00",
+        "days": [
+          "mon",
+          "tue",
+          "wed",
+          "thu",
+          "fri",
+          "sat",
+          "sun"
+        ],
+        "peak": {
+          "start": "10:00",
+          "end": "16:00",
+          "share": 0.7
+        }
+      },
+      "snapchat": {
+        "start": "08:00",
+        "end": "20:00",
+        "days": [
+          "mon",
+          "tue",
+          "wed",
+          "thu",
+          "fri",
+          "sat",
+          "sun"
+        ],
+        "peak": {
+          "start": "10:00",
+          "end": "16:00",
+          "share": 0.7
+        }
+      }
+    }
+  },
+  "accounts": []
+}
