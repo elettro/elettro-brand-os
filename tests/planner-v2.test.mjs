@@ -74,6 +74,18 @@ test("sector sequence tracks shares and exploration tracks the rate", () => {
   assert.equal(explorationFlags(14, 0.25).filter(Boolean).length, 3);
 });
 
+test("Instagram never gets a non-JPEG photo (rule #1), other networks still do", () => {
+  const ig = account("instagram", "post", 3);
+  const photo = (filename, extra = {}) => asset(["studio-session"], { kind: "image", aspectRatioLabel: "4x5", filename, ...extra });
+  const pool = { ...settings, pool: { ...settings.pool, kinds: [], aspectRatios: [] } };
+  assert.equal(poolRejection(photo("a.png"), ig, pool), "format");
+  assert.equal(poolRejection(photo("a.webp"), ig, pool), "format");
+  assert.equal(poolRejection(photo("a.JPG"), ig, pool), null);
+  assert.equal(poolRejection(photo("a.jpeg"), ig, pool), null);
+  assert.equal(poolRejection(photo("a.jpg", { sourcePath: "/x/a.png" }), ig, pool), "format");
+  assert.equal(poolRejection(photo("a.png"), account("facebook", "post", 3), pool), null);
+});
+
 test("pool rules drop wrong aspect, excluded tags and over-length clips", () => {
   const tiktok = account("tiktok", "video", 14);
   assert.equal(poolRejection(library.find((a) => a.tags.includes("no-audio")), tiktok, settings), "excluded-tag");
