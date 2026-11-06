@@ -231,15 +231,33 @@ async function dropboxBytes(path) {
 
 const origin = (record) => `https://${record.subdomain}.substack.com`;
 
+/** Tells a real "please sign in" answer from a block page (Cloudflare, bot check, wrong domain). */
+export function rejectionDetail(response, raw) {
+  const text = String(raw || "");
+  const server = String(response.headers?.get?.("server") || "");
+  const snippet = text.replace(/s+/g, " ").slice(0, 200);
+  const json = text.trim().startsWith("{");
+  if (response.status === 401 || (json && /sign in/i.test(text))) return { kind: "sign-in", snippet };
+  if (/cloudflare|just a moment|captcha|challenge/i.test(text + " " + server)) return { kind: "blocked by Cloudflare or a bot check", snippet };
+  return { kind: json ? "refused with a JSON error" : "refused without a sign-in message", snippet };
+}
+
 async function substack(record, method, path, { json, form, fetchImpl = fetch } = {}) {
   const headers = { cookie: record.cookie, accept: "application/json", "user-agent": "Mozilla/5.0 (compatible; ElettroOS/1.0)" };
   const init = { method, headers, signal: AbortSignal.timeout(60000) };
   if (json !== undefined) { headers["content-type"] = "application/json"; init.body = JSON.stringify(json); }
   if (form) init.body = form;
   const response = await fetchImpl(origin(record) + "/api/v1" + path, init);
-  const out = await response.json().catch(() => ({}));
+  const raw = await response.text().catch(() => "");
+  let out = {};
+  try { out = JSON.parse(raw); } catch { /* not JSON (for example a Cloudflare page) */ }
   if (response.status === 401 || response.status === 403) {
-    throw new Error(`Substack rejected the login for ${record.subdomain}.substack.com (the session cookie probably expired); reconnect it on /connections`);
+    const detail = rejectionDetail(response, raw);
+    console.error(`Substack ${method} ${path} -> HTTP ${response.status} (${detail.kind}) ${detail.snippet}`);
+    if (detail.kind === "sign-in") {
+      throw new Error(`Substack rejected the login for ${record.subdomain}.substack.com (the session cookie probably expired); reconnect it on /connections`);
+    }
+    throw new Error(`Substack refused ${method} ${path} for ${record.subdomain}.substack.com with HTTP ${response.status} (${detail.kind}); this is not a plain expired cookie`);
   }
   return { status: response.status, ok: response.ok, out };
 }

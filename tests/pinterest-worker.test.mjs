@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { needsRefresh, refreshRecord, refreshAll, pinFromPost, boardId, boardNameFor, publish } from "../services/pinterest-lambda/index.mjs";
+import { needsRefresh, refreshRecord, refreshAll, pinFromPost, boardId, boardNameFor, publish, pinterest } from "../services/pinterest-lambda/index.mjs";
 
 const NOW = new Date("2026-10-21T00:00:00Z");
 const days = (n) => new Date(NOW.getTime() + n * 86_400_000).toISOString();
@@ -127,4 +127,9 @@ test("a carousel Pin is one Pin with a multiple_image_urls source, links on each
   assert.deepEqual(pins[0].media_source, { source_type: "multiple_image_urls", index: 0,
     items: [0, 1, 2].map((i) => ({ url: `https://dl/img${i}.jpg`, link: "https://stashbox.ai" })) });
   assert.deepEqual([pins[0].board_id, pins[0].title, pins[0].description], ["b1", "Gear day", "Five pieces."]);
+});
+
+test("a pinner-data refusal explains the Business account fix", async () => {
+  const call = async () => ({ status: 403, ok: false, json: async () => ({ code: 6410, message: "Your application does not have access to read pinner data." }) });
+  await assert.rejects(pinterest("t", "GET", "/boards?page_size=100", undefined, call), /not a Pinterest Business account/);
 });

@@ -177,6 +177,9 @@ export async function pinterest(accessToken, method, path, body, call = fetch) {
     signal: AbortSignal.timeout(30000)
   });
   const out = await response.json().catch(() => ({}));
+  if (response.status === 403 && /pinner data/i.test(out.message || "")) {
+    throw new Error(`Pinterest refused ${method} ${path.split("?")[0]}: this account is not a Pinterest Business account, so the app may not read its boards. Convert the account to Business (Pinterest settings > Account management) and retry. Pinterest said: ${out.message}`);
+  }
   if (!response.ok) throw new Error(`Pinterest ${method} ${path.split("?")[0]} failed: ${out.message || response.status}`);
   return out;
 }

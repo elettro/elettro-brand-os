@@ -1,10 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { titleFor, buildDoc, inlineNodes, postRequest, requestFromPost, uploadImage, publish, publishingTick, account, check, MAX_TITLE } from "../services/substack-lambda/index.mjs";
+import { titleFor, buildDoc, inlineNodes, postRequest, requestFromPost, uploadImage, publish, publishingTick, account, check, rejectionDetail, MAX_TITLE } from "../services/substack-lambda/index.mjs";
 
 const PATH = "/1---elettro-brand-os/brands/elettro/image/a.jpg";
 const record = { cookie: "substack.sid=secretvalue", subdomain: "elettro", userId: "42", handle: "elettro" };
-const reply = (status, body) => ({ status, ok: status >= 200 && status < 300, json: async () => body });
+const reply = (status, body) => ({ status, ok: status >= 200 && status < 300, json: async () => body, text: async () => (typeof body === "string" ? body : JSON.stringify(body)), headers: new Headers() });
 
 test("title: planner title, else first caption line, cut at a word within the limit", () => {
   assert.equal(titleFor({ title: "  Hello   world ", caption: "x" }), "Hello world");
@@ -202,4 +202,12 @@ test("gallery: the tick claims posts and carousels; manual galleries take dropbo
   assert.equal(m.paths.length, 3);
   assert.throws(() => postRequest({ brand: "elettro", title: "T", dropboxPaths: GALLERY(1).map((s) => s.dropboxPath) }), /at least 2/);
   assert.throws(() => postRequest({ brand: "elettro", title: "T", dropboxPaths: GALLERY(21).map((s) => s.dropboxPath) }), /up to 20/);
+});
+
+test("a 403 that is not a sign-in answer is reported as a block, not an expired cookie", async () => {
+  const blocked = async () => reply(403, "<html><title>Just a moment...</title>Cloudflare</html>");
+  await assert.rejects(uploadImage(record, Buffer.from("a"), PATH, { fetchImpl: blocked }), /not a plain expired cookie/);
+  const signIn = async () => reply(403, { errors: [{ msg: "Please sign in" }] });
+  await assert.rejects(uploadImage(record, Buffer.from("a"), PATH, { fetchImpl: signIn }), /reconnect/);
+  assert.equal(rejectionDetail({ status: 403, headers: new Headers() }, "plain text").kind, "refused without a sign-in message");
 });
