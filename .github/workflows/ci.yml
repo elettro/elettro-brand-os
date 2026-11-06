@@ -54,7 +54,7 @@ jobs:
         run: node --test tests/dropbox-identity.test.mjs
 
       - name: Test Planner V2, curator and intelligence budgets
-        run: node --test tests/planner-v2.test.mjs tests/planner-sector-tags.test.mjs tests/carousels.test.mjs tests/copy-and-song-facts.test.mjs tests/plan-month.test.mjs
+        run: node --test tests/planner-v2.test.mjs tests/planner-sector-tags.test.mjs tests/carousels.test.mjs tests/copy-and-song-facts.test.mjs tests/product-links-backfill.test.mjs tests/plan-month.test.mjs
 
       - name: Test connection status feed and LinkedIn connect
         run: node --test tests/connection-status.test.mjs tests/gmb-connect.test.mjs tests/linkedin-connect.test.mjs tests/mastodon-connect.test.mjs tests/snapchat-connect.test.mjs tests/substack-connect.test.mjs tests/x-connect.test.mjs tests/reddit-connect.test.mjs tests/x-worker.test.mjs tests/api-gate.test.mjs tests/dev-api-zip-contents.test.mjs tests/client-scope.test.cjs

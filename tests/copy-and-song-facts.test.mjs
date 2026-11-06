@@ -310,3 +310,39 @@ test("German brand: a product image links to its own product page, others to the
   const en = postFacts(withUrl, deSlot("produkte"), {}, deLinks, {});
   assert.notEqual(en.primaryLink, url);
 });
+
+// ---- Product deep links (2026-11-06): a Shopify product asset links to its own page, else the store root ----
+import { productUrlFromTags } from "../services/dev-api-lambda/copywriter.mjs";
+
+test("Stashbox merch asset with a product:<handle> tag links to that product page on every clickable network", () => {
+  const handle = "model-bauhaus-style-trains-pint-glass-16oz-stashbox-train-designs-009";
+  const asset = { id: "p9", filename: "now-spinning-9x16.mp4", kind: "video", title: "Female Model Bauhaus Style Pint Glass #9", tags: ["merch", "stashbox-ai", `product:${handle}`] };
+  const links = { merchStore: "https://stashbox.ai", site: "https://stashbox.com" };
+  for (const destination of ["linkedin", "facebook", "threads", "bluesky", "pinterest"]) {
+    const f = postFacts(asset, { sector: "merch", destination, placement: "post", synthetic: false }, {}, links);
+    assert.equal(f.primaryLink, `https://stashbox.ai/products/${handle}`, destination);
+    assert.ok(f.allowedLinks.includes(`https://stashbox.ai/products/${handle}`));
+    if (f.linksInCaptionAreClickable) assert.match(templateCopy(f, "seed").caption, new RegExp(`https://stashbox\.ai/products/${handle}`), destination);
+  }
+});
+
+test("merch asset without a product handle falls back to the store root", () => {
+  const asset = { id: "p0", filename: "tee.jpg", kind: "image", title: "Some Tee", tags: ["merch"] };
+  const f = postFacts(asset, { sector: "merch", destination: "linkedin", placement: "post", synthetic: false }, {}, { merchStore: "https://stashbox.ai" });
+  assert.equal(f.primaryLink, "https://stashbox.ai");
+});
+
+test("SolarMeister produkt-<handle> tag (with product-link) links to the shop product; notes link still wins; other tags do not match", () => {
+  const links = { site: "https://solarmeister-shop.de", merchStore: "https://solarmeister-shop.de" };
+  const tags = ["product-link", "produkt-max-roof-1500-bifazial-biberschwanzdach", "video-vorlage-split-sortiment"];
+  assert.equal(productUrlFromTags(tags, links), "https://solarmeister-shop.de/products/max-roof-1500-bifazial-biberschwanzdach");
+  assert.equal(productUrlFromTags(["produkt-x"], links), null, "needs the product-link tag");
+  assert.equal(productUrlFromTags(["merch"], links), null);
+  assert.equal(productUrlFromTags(["product:bad/handle"], links), null);
+  assert.equal(productUrlFromTags(["product:a-b"], {}), null, "no store address");
+  const f = postFacts(deAsset("Max Roof 1500", tags), deSlot("produkte", "facebook"), {}, links, { language: "de" });
+  assert.equal(f.primaryLink, "https://solarmeister-shop.de/products/max-roof-1500-bifazial-biberschwanzdach");
+  const withNote = deAsset("Max Roof 1500", tags);
+  withNote.creativeNotes = "Link: https://solarmeister-shop.de/products/other-handle.";
+  assert.equal(postFacts(withNote, deSlot("produkte", "facebook"), {}, links, { language: "de" }).primaryLink, "https://solarmeister-shop.de/products/other-handle");
+});
