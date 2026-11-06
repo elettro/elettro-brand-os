@@ -18,8 +18,8 @@ const STATUS: Record<PublishingFormat["status"], string> = {
 const FIRST = ["youtube", "gmb"];
 // Bluesky closes the list (Dean, 2026-10-29).
 const LAST = ["bluesky"];
-// Networks not offered on Review for now (X: not being pursued, so it is not listed in posts per day).
-const HIDDEN_NETWORKS = ["x"];
+// Networks not offered on Review for now (none; X was hidden until its publisher was built, 2026-11-06).
+const HIDDEN_NETWORKS: string[] = [];
 const rank = (destination: string) => {
   const i = FIRST.indexOf(destination);
   if (i >= 0) return i;

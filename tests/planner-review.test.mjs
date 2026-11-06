@@ -74,7 +74,7 @@ test("by default the Review page plans every connected network and approves ever
     invoke: async (payload) => { invoked.push(payload); }, readSeed: () => JSON.stringify({ settings: { sectors: [{ id: "live" }] } }),
     now: new Date("2026-10-20T15:00:00Z")
   });
-  assert.deepEqual([...invoked[0].destinations].sort(), ["facebook", "instagram", "threads", "youtube"]);
+  assert.deepEqual([...invoked[0].destinations].sort(), ["facebook", "instagram", "threads", "x", "youtube"]);
   const client = fakeClient([['UPDATE "ScheduledPost" sp SET "status"=\'approved\'', { rows: [{ id: "x" }], rowCount: 7 }]]);
   await handlePlannerReview(event, { brand: "stashbox", action: "approve-range", from: "2026-10-26", to: "2026-11-01" }, async () => client, json);
   const approve = client.seen.find((q) => q.sql.includes("SET \"status\"='approved'"));
@@ -186,7 +186,7 @@ test("list hands the page every publishing format, without planner rules, and ea
     externalAccountId: "UC1", publishingMode: "approval", placement: "short", postsPerWeek: 21, active: true }] }]]);
   const r = await handlePlannerReview(event, { brand: "stashbox", action: "list" }, async () => client, json);
   assert.equal(r.statusCode, 200);
-  assert.equal(r.body.formats.length, 35);
+  assert.equal(r.body.formats.length, 37);
   assert.ok(r.body.formats.every((f) => !("rule" in f)));
   assert.equal(r.body.formats.find((f) => f.destination === "gmb").status, "integration");
   assert.equal(r.body.maxPostsPerWeek, 98);
