@@ -6,8 +6,8 @@ import { DEV_ORIGIN } from "@/lib/cognito-auth";
 export const MASTODON_CALLBACK = DEV_ORIGIN + "/api/connections/mastodon/callback";
 export const MASTODON_SCOPES = ["read:accounts", "write:statuses", "write:media"];
 export const MASTODON_STATE_COOKIE = "elettro_dev_mastodon_state";
-// SolarMeister and Neckermann Strom (German DIY homeowners and flat owners) and Stashbox (non-promotional music); other brands are not on Mastodon.
-export const MASTODON_BRANDS = ["solarmeister", "neckermann-strom", "stashbox"];
+// SolarMeister and Neckermann Strom (German DIY homeowners and flat owners), Stashbox (non-promotional music) and Elettro; other brands are not on Mastodon.
+export const MASTODON_BRANDS = ["solarmeister", "neckermann-strom", "stashbox", "elettro"];
 // Server limit on mastodon.social; other instances differ, the API refuses an over-long post with a clear message.
 export const MASTODON_POST_LIMIT = 500;
 

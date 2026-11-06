@@ -1,6 +1,6 @@
 # Mastodon: connect and test post
 
-Brands: `solarmeister` and `neckermann-strom` (German DIY homeowners and flat owners) and `stashbox` (non-promotional music: live clips, song stories). Instance: **mastodon.social**
+Brands: `solarmeister` and `neckermann-strom` (German DIY homeowners and flat owners) `stashbox` (non-promotional music: live clips, song stories) and `elettro` (added 2026-11-06; the profile must be created on mastodon.social and marked automated before Connect). Instance: **mastodon.social**
 (chosen 2026-10-29 for size, no approval wait and no rule against business accounts; `mastodon.de` was the German-region
 alternative). Each brand uses its own profile; one profile per brand, no multi-account.
 
