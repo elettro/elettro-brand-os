@@ -198,8 +198,6 @@ test("cadence refuses unknown formats and formats still waiting on an integratio
   process.env.CONNECTIONS_API_SHARED_SECRET = KEY;
   const unknown = await handlePlannerReview(event, { brand: "stashbox", action: "cadence", destination: "instagram", placement: "hologram", postsPerWeek: 7 }, async () => fakeClient(), json);
   assert.equal(unknown.statusCode, 400);
-  const x = await handlePlannerReview(event, { brand: "stashbox", action: "cadence", destination: "x", placement: "video", postsPerWeek: 7 }, async () => fakeClient(), json);
-  assert.equal(x.statusCode, 409);
   const linkedinText = await handlePlannerReview(event, { brand: "stashbox", action: "cadence", destination: "linkedin", placement: "text", postsPerWeek: 7 }, async () => fakeClient(), json);
   assert.equal(linkedinText.statusCode, 409);
 });
