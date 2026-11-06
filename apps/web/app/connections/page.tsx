@@ -91,6 +91,8 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
   const x = status.x || {};
   // X shows no countdown (the refresh-token lifetime is not verified), so the callback reports no expiry.
   if (brand && connected && network === "x") x[brand] = { handle: connected, expiresAt: null };
+  // YouTube refresh tokens don't expire on our side; right after Connect the feed may still be the cached one, so trust the callback.
+  if (brand && connected && network === "youtube") youtube[brand] = { handle: connected, expiresAt: null };
   // Mastodon tokens never expire, so the callback reports no expiry; same 60s cache applies.
   if (brand && connected && network === "mastodon") mastodon[brand] = { handle: connected, expiresAt: null };
   // The feed caches for 60s; right after a connect, trust the expiry the callback just reported.
