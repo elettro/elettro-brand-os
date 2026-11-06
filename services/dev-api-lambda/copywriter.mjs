@@ -34,6 +34,17 @@ const ROLE_WORDS = { vocals: "vocals", guitar: "guitar", bass: "bass", drums: "d
 const titleCase = (slug) => String(slug).split("-").map((w) => (w ? w[0].toUpperCase() + w.slice(1) : w)).join(" ");
 const pick = (seed, list) => list[parseInt(createHash("sha256").update(seed).digest("hex").slice(0, 8), 16) % list.length];
 
+/** The product page for an asset tagged with its Shopify handle, on the brand's own store; null when there is no handle. */
+export function productUrlFromTags(tags, links = {}) {
+  const lower = (tags || []).map((t) => String(t).toLowerCase());
+  const handle = lower.find((t) => t.startsWith("product:"))?.slice("product:".length) ||
+    (lower.includes("product-link") ? lower.find((t) => t.startsWith("produkt-"))?.slice("produkt-".length) : null);
+  if (!handle || !/^[a-z0-9][a-z0-9-]*$/.test(handle)) return null;
+  const root = links.merchStore || links.site;
+  if (!root) return null;
+  try { return `${new URL(root).origin}/products/${handle}`; } catch { return null; }
+}
+
 /** Everything a caption may state about this post, from records only. */
 export function postFacts(asset, slotIn, songFacts = {}, links = {}, { promotional = true, language = "en" } = {}) {
   const tags = (asset.tags || []).map((t) => String(t).toLowerCase());
@@ -69,7 +80,10 @@ export function postFacts(asset, slotIn, songFacts = {}, links = {}, { promotion
   // German brands (SolarMeister): a product image names its own shop page in its notes ("Link: https://…/products/<slug>").
   // It must be on the brand's own shop, and it beats the shop's root address everywhere a link may go.
   const noteUrl = language === "de" ? /https?:\/\/[^\s)]+\/products\/[^\s)]+/.exec(String(asset.creativeNotes || ""))?.[0].replace(/[.,;!?]+$/, "") : null;
-  const productUrl = noteUrl && [links.site, links.merchStore].filter(Boolean).some((root) => noteUrl.startsWith(root.replace(/\/$/, "") + "/")) ? noteUrl : null;
+  const noteProductUrl = noteUrl && [links.site, links.merchStore].filter(Boolean).some((root) => noteUrl.startsWith(root.replace(/\/$/, "") + "/")) ? noteUrl : null;
+  // Any brand: a Shopify product asset carries its handle in a tag (Stashbox `product:<handle>`, SolarMeister `produkt-<handle>` with
+  // `product-link`), so the post links to that product's page. Without a handle it falls back to the store/site address.
+  const productUrl = noteProductUrl || productUrlFromTags(tags, links);
   // Radio and streaming posts still need their song link, as on every network.
   const pinLink = slot.destination === "pinterest" && !sectorLinks.length && !["radio", "streaming"].includes(slot.sector)
     ? (slot.sector === "merch" && links.merchStore) || site || null : null;
@@ -431,4 +445,11 @@ export async function writeWeekCopy({ slots, assetsById, songFacts, links, brand
       return { slotId: slot.slotId, facts: f, copy: { ...fallback(), aiError: error instanceof Error ? error.message : String(error) } };
     }
   });
+}
+
+/** True when a caption fits the network's own limit (Bluesky counts graphemes, like validateCopy). */
+export function captionFits(destination, caption) {
+  const limit = LIMITS[destination]?.caption;
+  if (!limit) return true;
+  return (destination === "bluesky" ? graphemes(caption || "") : String(caption || "").length) <= limit;
 }

@@ -5,6 +5,7 @@ import { configurePlannerBrand, runPlanWeek, runPlanWeeks, approvePlannerWeek } 
 import {runSharedAudioLibrarySetup,LIBRARY_SLUG,LIBRARY_AUDIO_ROOT} from "./shared-audio-library.mjs";
 import {runListUntaggedAssets,runTagAssets,runRetireAssets} from "./asset-tagging.mjs";
 import {runAddSectorMatchTag} from "./planner-sector-tags.mjs";
+import {runBackfillProductLinks} from "./product-links-backfill.mjs";
 import {runSharedStockGraphicsSetup,runSharedStockGraphicsTagging,LIBRARY_GRAPHICS_ROOT,LIBRARY_VIDEO_ROOTS} from "./shared-stock-graphics.mjs";
 import {runDocumentAssetKindSetup} from "./document-asset-kind.mjs";
 import {createBrand} from "./brand-create.mjs";
@@ -1616,6 +1617,7 @@ export const handler = async (event = {}) => {
   if(event.action === "setup-shared-stock-graphics-20261101" && !event.requestContext && !event.rawPath && !event.path) return runSharedStockGraphicsSetup(event,connectDatabase,json);
   if(event.action === "tag-shared-stock-graphics-20261101" && !event.requestContext && !event.rawPath && !event.path) return runSharedStockGraphicsTagging(event,connectDatabase,json);
   if(event.action === "add-sector-match-tag-20261103" && !event.requestContext && !event.rawPath && !event.path) return runAddSectorMatchTag(event,connectDatabase,json);
+  if(event.action === "backfill-product-links-20261106" && !event.requestContext && !event.rawPath && !event.path) return runBackfillProductLinks(event,connectDatabase,json);
   if(event.action === "list-untagged-assets-20261103" && !event.requestContext && !event.rawPath && !event.path) return runListUntaggedAssets(event,connectDatabase,json);
   if(event.action === "tag-assets-20261103" && !event.requestContext && !event.rawPath && !event.path) return runTagAssets(event,connectDatabase,json);
   if(event.action === "retire-assets-20261104" && !event.requestContext && !event.rawPath && !event.path) return runRetireAssets(event,connectDatabase,json);
