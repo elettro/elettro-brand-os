@@ -149,7 +149,7 @@ export async function runPlanWeek(event, connectDatabase, json, { modelId = proc
     const assets = (await client.query(
       `SELECT "id","filename","kind","aspectRatioLabel","durationMs","tags","title","topic","contentGroup","creativeFamily",
               "creativeNotes","priority","eligibilityType","eligibleFrom","eligibleUntil","annualFromMmdd","annualUntilMmdd",
-              "allowedDestinations","excludedDestinations","shopifyProductId","createdAt"
+              "allowedDestinations","excludedDestinations","shopifyProductId","createdAt","sourcePath"
        FROM "Asset"
        WHERE "brandId" = $1 AND "approvalStatus" = 'approved' AND "ingestStatus" = 'ready' AND "retiredAt" IS NULL
          AND ("sourcePath" IS NOT NULL OR "sourceUrl" IS NOT NULL)`, [brand.id])).rows;

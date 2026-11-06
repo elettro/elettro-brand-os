@@ -44,7 +44,7 @@ async function brandStats(client, brand, now) {
   const settings = resolvePlannerSettings(brand.settings);
   const starts = periodStarts(timeZone, now);
   const assets = (await client.query(
-    `SELECT "id","kind","aspectRatioLabel","durationMs","tags","allowedDestinations","excludedDestinations",
+    `SELECT "id","kind","filename","sourcePath","aspectRatioLabel","durationMs","tags","allowedDestinations","excludedDestinations",
             "eligibilityType","eligibleFrom","eligibleUntil","annualFromMmdd","annualUntilMmdd"
      FROM "Asset"
      WHERE "brandId" = $1 AND "approvalStatus" = 'approved' AND "ingestStatus" = 'ready' AND "retiredAt" IS NULL

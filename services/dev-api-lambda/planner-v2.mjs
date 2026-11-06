@@ -6,6 +6,15 @@ import { placementRule, slideRange } from "./publishing-formats.mjs";
 
 export const PLANNER_VERSION = "planner-v2.0";
 const AUDIO_ONLY_TAGS = ["no-audio", "silent-audio", "no-music"];
+
+// Instagram's publishing API takes JPEG photos only (rule #1, Dean 2026-11-06, every brand). The meta publisher checks the
+// file name, so the planner checks the same thing and never picks a PNG/WebP/etc. photo for an Instagram post or Story.
+const JPEG_NAME = /\.jpe?g$/i;
+export function instagramRejectsPhoto(asset) {
+  if (asset.kind !== "image") return false;
+  const name = String(asset.sourcePath || asset.filename || "");
+  return !!name && !JPEG_NAME.test(name);
+}
 export const DURATION_BUCKETS = ["under-15s", "15-30s", "30-60s", "1-3min", "3min-plus"];
 const DAY_MS = 86400000;
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -204,6 +213,7 @@ export function poolRejection(asset, account, settings) {
   // A PDF is never a video or photo: only a placement that lists "document" can plan one.
   if (asset.kind === "document" && !kinds.includes("document")) return "kind";
   if (aspectRatios.length && !aspectRatios.includes(asset.aspectRatioLabel)) return "aspect";
+  if (dest === "instagram" && instagramRejectsPhoto(asset)) return "format";
   // no-audio / silent-audio / no-music describe sound, so they can only exclude video (a photo never has audio and
   // was wrongly kept out of every pool when its pipeline stamped it "no-audio").
   const soundless = asset.kind === "image" || asset.kind === "carousel" || asset.kind === "document";
