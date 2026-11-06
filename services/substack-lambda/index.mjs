@@ -235,7 +235,7 @@ const origin = (record) => `https://${record.subdomain}.substack.com`;
 export function rejectionDetail(response, raw) {
   const text = String(raw || "");
   const server = String(response.headers?.get?.("server") || "");
-  const snippet = text.replace(/s+/g, " ").slice(0, 200);
+  const snippet = text.replace(/\s+/g, " ").slice(0, 200);
   const json = text.trim().startsWith("{");
   if (response.status === 401 || (json && /sign in/i.test(text))) return { kind: "sign-in", snippet };
   if (/cloudflare|just a moment|captcha|challenge/i.test(text + " " + server)) return { kind: "blocked by Cloudflare or a bot check", snippet };
