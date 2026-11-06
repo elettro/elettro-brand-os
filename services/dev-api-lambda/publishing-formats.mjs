@@ -82,12 +82,13 @@ export const PUBLISHING_FORMATS = [
   { destination: "linkedin", placement: "text", label: "Text posts", status: "integration", note: "Written by hand on Review; not planned automatically" },
   { destination: "linkedin", placement: "link", label: "Link posts", status: "integration", note: "Written by hand on Review; not planned automatically" },
   { destination: "linkedin", placement: "poll", label: "Polls", status: "integration", note: "Written by hand on Review; not planned automatically" },
-  // X (api.x.com, pay-per-use credits): 280 characters (a link counts as 23), up to 4 photos. Publisher: services/x-lambda. Video needs chunked upload and is not built.
+  // X (api.x.com, pay-per-use credits): 280 characters (a link counts as 23), up to 4 photos. Publisher: services/x-lambda. Video uses X's chunked upload (services/x-lambda).
   { destination: "x", placement: "post", label: "Photo posts", status: "planning", note: "Publisher is built (services/x-lambda); no post has published on schedule yet. Each post costs X credits ($0.015, $0.20 with a link)",
     rule: { kinds: ["image"], aspectRatios: [] } },
   { destination: "x", placement: "carousel", label: "Multi-photo posts", status: "planning", note: "Publisher is built (services/x-lambda); no post has published on schedule yet",
     slides: { min: 2, max: 4, recommended: [2, 4] }, rule: { kinds: ["image"], aspectRatios: [] } },
-  { destination: "x", placement: "video", label: "Videos", status: "integration", note: "X video needs chunked upload; not built yet" },
+  { destination: "x", placement: "video", label: "Videos", status: "planning", note: "Publisher is built (services/x-lambda, chunked upload); no video has published on schedule yet. Up to 256 MB, 3 minutes",
+    rule: { kinds: ["video"], aspectRatios: [], maxDurationBucket: "1-3min" } },
   // savesCadence: the Review box stores a target (3 a day at most, Dean 2026-11-04) but the planner still skips GMB:
   // planning is by destination (PLANNABLE_DESTINATIONS), which excludes it until the GMB planner exists.
   { destination: "gmb", placement: "update", label: "Update posts", status: "integration", savesCadence: true, maxPostsPerWeek: 21, note: "Posts per day is saved (3 a day at most). Profiles connected; publisher built (services/gmb-lambda) for Update posts (Offers parked, Events wait for a real show). Review → Plan plans them (gmb-planner.mjs); Stashbox goes out without approval" }

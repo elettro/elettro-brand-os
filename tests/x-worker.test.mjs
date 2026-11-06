@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { postText, weight, complianceProblems, requestFromPost, postRequest, account, uploadImage, publish, publishingTick, MAX_TEXT } from "../services/x-lambda/index.mjs";
+import { postText, weight, complianceProblems, requestFromPost, postRequest, account, uploadImage, uploadVideo, publish, publishingTick, MAX_TEXT, CHUNK_BYTES, VIDEO_BYTE_LIMIT } from "../services/x-lambda/index.mjs";
 
 const REC = { accessToken: "tok", username: "stashboxmusic", accountId: "42" };
 const PATH = "/1---elettro-brand-os/brands/stashbox/a.jpg";
@@ -25,6 +25,8 @@ test("requests: photo and multi-photo; counts, types, paths and account are chec
   assert.equal(requestFromPost(post({ placement: "carousel", slides: [{ dropboxPath: PATH }, { dropboxPath: PATH.replace("a.", "b.") }] })).paths.length, 2);
   assert.throws(() => requestFromPost(post({ placement: "carousel", slides: [{ dropboxPath: PATH }] })), /needs 2-4/);
   assert.throws(() => requestFromPost(post({ dropboxPath: PATH.replace("a.jpg", "v.mp4") })), /photo post/);
+  assert.equal(requestFromPost(post({ placement: "video", dropboxPath: PATH.replace("a.jpg", "v.mp4") })).kind, "video");
+  assert.throws(() => requestFromPost(post({ placement: "video" })), /\.mp4/);
   assert.throws(() => requestFromPost(post({ channelId: "" })), /not linked/);
   assert.throws(() => requestFromPost(post({ dropboxPath: "/elsewhere/a.jpg" })), /inside/);
 });
@@ -33,7 +35,8 @@ test("manual posts: text or images, needs a brand or account key", () => {
   assert.equal(postRequest({ brand: "stashbox", text: "hi" }).paths.length, 0);
   assert.throws(() => postRequest({ text: "hi" }), /brand slug/);
   assert.throws(() => postRequest({ brand: "stashbox", text: "x".repeat(281) }), /280/);
-  assert.throws(() => postRequest({ brand: "stashbox", dropboxPaths: [PATH.replace("a.jpg", "v.mp4")] }), /video is not supported/);
+  assert.equal(postRequest({ brand: "stashbox", dropboxPath: PATH.replace("a.jpg", "v.mp4") }).kind, "video");
+  assert.throws(() => postRequest({ brand: "stashbox", dropboxPaths: [PATH, PATH.replace("a.jpg", "v.mp4")] }), /not both/);
 });
 
 test("account: a fresh token is reused; an old one is refreshed and the rotated pair is written back", async () => {
@@ -88,4 +91,48 @@ test("the tick claims x posts, publishes, and reports each result (one bad post 
   assert.equal(out.published.length, 2);
   assert.equal(finished[0].externalPostId, "7");
   assert.match(finished[1].error, /not linked/);
+});
+
+const memorySource = (size) => ({ size, read: async (a, b) => Buffer.alloc(b - a, 1) });
+
+test("video: initialize, append in 4 MiB parts in order, finalize, then poll until processed", async () => {
+  const calls = [];
+  const size = CHUNK_BYTES * 2 + 100; // three parts
+  let polls = 0;
+  const fetchImpl = async (url, init) => {
+    calls.push(`${init.method} ${url.replace("https://api.x.com", "")}`);
+    if (url.endsWith("/initialize")) { assert.deepEqual(JSON.parse(init.body), { media_type: "video/mp4", total_bytes: size, media_category: "tweet_video" }); return res(200, { data: { id: "v1" } }); }
+    if (url.includes("/append")) return res(204, {});
+    if (url.endsWith("/finalize")) return res(200, { data: { id: "v1", processing_info: { state: "pending", check_after_secs: 1 } } });
+    polls += 1;
+    return res(200, { data: { processing_info: polls < 2 ? { state: "in_progress", check_after_secs: 1 } : { state: "succeeded" } } });
+  };
+  const id = await uploadVideo(REC, PATH.replace("a.jpg", "v.mp4"), { fetchImpl, source: async () => memorySource(size), wait: async () => {} });
+  assert.equal(id, "v1");
+  assert.deepEqual(calls.filter((c) => c.includes("/append")).length, 3);
+  assert.equal(calls[0], "POST /2/media/upload/initialize");
+  assert.ok(calls.at(-1).startsWith("GET /2/media/upload?command=STATUS&media_id=v1"));
+  assert.equal(polls, 2);
+});
+
+test("video: a failed processing, a stuck one and a too-big file each stop with a clear message", async () => {
+  const base = (info) => async (url) => url.endsWith("/initialize") ? res(200, { data: { id: "v" } }) : url.includes("/append") ? res(204, {}) : url.endsWith("/finalize") ? res(200, { data: { processing_info: info } }) : res(200, { data: { processing_info: info } });
+  const src = async () => memorySource(1000);
+  await assert.rejects(uploadVideo(REC, "v.mp4", { fetchImpl: base({ state: "failed", error: { message: "bad codec" } }), source: src, wait: async () => {} }), /bad codec/);
+  await assert.rejects(uploadVideo(REC, "v.mp4", { fetchImpl: base({ state: "in_progress", check_after_secs: 10 }), source: src, wait: async () => {}, limitMs: 25_000 }), /still processing/);
+  await assert.rejects(uploadVideo(REC, "v.mp4", { fetchImpl: base({}), source: async () => memorySource(VIDEO_BYTE_LIMIT + 1) }), /up to 256 MB/);
+});
+
+test("publish with a video posts once with the processed media id", async () => {
+  const seen = [];
+  const fetchImpl = async (url, init) => {
+    seen.push(url);
+    if (url.endsWith("/initialize")) return res(200, { data: { id: "vv" } });
+    if (url.includes("/append")) return res(204, {});
+    if (url.endsWith("/finalize")) return res(200, { data: { id: "vv" } });
+    assert.deepEqual(JSON.parse(init.body).media, { media_ids: ["vv"] });
+    return res(201, { data: { id: "555" } });
+  };
+  const out = await publish(REC, { text: "Clip", paths: [PATH.replace("a.jpg", "v.mp4")], kind: "video" }, { fetchImpl, source: async () => memorySource(10) });
+  assert.equal(out.url, "https://x.com/stashboxmusic/status/555");
 });

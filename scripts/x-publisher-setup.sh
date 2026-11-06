@@ -37,12 +37,14 @@ aws iam put-role-policy --role-name "$ROLE" --policy-name x-worker --policy-docu
     {"Effect":"Allow","Action":"lambda:InvokeFunction","Resource":"arn:aws:lambda:us-east-1:'"$ACCOUNT"':function:'"$API_FN"'"}]}'
 sleep 10   # a new role needs a moment before Lambda can use it
 
-echo "2/4 Lambda $FN (512 MB: images up to 5 MB are held in memory; 5 minutes)"
+echo "2/4 Lambda $FN (512 MB; 15 minutes because a video is sent in 4 MiB parts and then X processes it)"
 ZIP=$(latest_zip build-x-lambda.yml)
 if aws lambda get-function --function-name "$FN" >/dev/null 2>&1; then
+  aws lambda update-function-configuration --function-name "$FN" --timeout 900 --query Timeout --output text
+  aws lambda wait function-updated --function-name "$FN"
   aws lambda update-function-code --function-name "$FN" --zip-file "fileb://$(cygpath -m "$ZIP")" --query LastModified --output text
 else
-  aws lambda create-function --function-name "$FN" --runtime nodejs24.x --handler index.handler --memory-size 512 --timeout 300 \
+  aws lambda create-function --function-name "$FN" --runtime nodejs24.x --handler index.handler --memory-size 512 --timeout 900 \
     --role "arn:aws:iam::$ACCOUNT:role/$ROLE" --zip-file "fileb://$(cygpath -m "$ZIP")" --query FunctionArn --output text
 fi
 aws lambda wait function-active --function-name "$FN"

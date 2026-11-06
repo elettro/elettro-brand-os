@@ -12,9 +12,9 @@ therefore refreshes on demand and writes the new pair back to the account's secr
 
 ## What is built (2026-11-06, Dean approved the X spend)
 Connect + Disconnect + a hand-written text test post on `/connections`, **and** the scheduled publisher `services/x-lambda`
-(formats `post` = 1 photo and `carousel` = 2-4 photos, both `planning`; `video` stays `integration`: X needs chunked upload, not built).
+(formats `post` = 1 photo, `carousel` = 2-4 photos and `video`, all `planning`; video uses X's chunked upload and is limited to 256 MB and the planner's "1-3min" duration bucket).
 X is back on Review (posts per day) and the planner plans it for every brand with a connected X account.
-Text up to 280 weighted characters (a link counts 23), up to 2 #tags, no @mentions in automated posts, images up to 5 MB (.jpg/.png/.webp),
+Video: initialize, 4 MiB append parts read from Dropbox with Range requests, finalize, then poll STATUS (up to 4 minutes); X's own limit is 20 minutes / 8 GB. Text up to 280 weighted characters (a link counts 23), up to 2 #tags, no @mentions in automated posts, images up to 5 MB (.jpg/.png/.webp),
 alt text sent best-effort. **Cost (X pay-per-use, checked 2026-10-30): $0.015 per post, $0.20 per post with a URL.** Put a spending cap in the
 X Developer Console. A 402 from X shows up as "out of credits" on the post. Nothing here has run against the live X API (see "Never verified").
 
@@ -50,7 +50,7 @@ X Developer Console. A 402 from X shows up as "out of credits" on the post. Noth
 
 ## Never verified
 Written without a live X developer app: the authorize and token exchange, `users/me`, the refresh-token rotation, `POST /2/tweets`,
-`POST /2/media/upload` (multipart, `media_category=tweet_image`), `POST /2/media/metadata` (alt text), the IAM access in step 4, and whether
+`POST /2/media/upload` (multipart, `media_category=tweet_image`), `POST /2/media/metadata` (alt text), the chunked video endpoints (`/2/media/upload/initialize`, `/append`, `/finalize`, `GET /2/media/upload?command=STATUS`; written from docs.x.com on 2026-11-06), the IAM access in step 4, and whether
 X returns a refresh token for this app type have not been run against the real service. The first scheduled post is the real test.
 
 ## Unknown / ask Dean

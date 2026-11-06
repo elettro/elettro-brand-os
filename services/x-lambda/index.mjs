@@ -6,11 +6,15 @@ import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
 //   an EventBridge schedule (every 15 min)   publish approved X posts whose time has come
 //                                             (planner claim-due-posts / finish-post)
 //   { action: "post", brand | accountKey, text, dropboxPaths? | dropboxPath? }
-//                                             publish now: text only, or 1-4 Dropbox images
+//                                             publish now: text only, 1-4 Dropbox images, or one Dropbox video
 //
 // Post shape (POST https://api.x.com/2/tweets): up to 280 characters (a link counts as 23), media_ids for up to 4
-// images. Images go up first through POST /2/media/upload (scope media.write). Placements published: post (1 image),
-// carousel (2-4 images). Video is NOT built (X needs chunked upload); its format stays "integration".
+// images. Images go up first through POST /2/media/upload (scope media.write). Video uses X's chunked upload
+// (docs.x.com, read 2026-11-06): POST /2/media/upload/initialize (JSON: media_type, total_bytes, media_category tweet_video),
+// POST /2/media/upload/{id}/append (multipart: segment_index, media; chunks of 4 MiB, X's limit is 5 MB),
+// POST /2/media/upload/{id}/finalize, then GET /2/media/upload?command=STATUS&media_id=... until processing_info.state is
+// succeeded. X allows 20 minutes / 8 GB per post video; we cap at 256 MB. The Lambda holds one 4 MiB chunk at a time, read
+// from Dropbox with Range requests, so memory stays small. Placements published: post (1 image), carousel (2-4 images), video.
 //
 // Auth: OAuth 2.0 user tokens live in Secrets Manager (elettro-brand-os-dev/x/<numeric user id>, written by the
 // dev-api's /connections/x/complete). The access token lasts ~2 hours and the refresh token ROTATES on use (the old
@@ -30,7 +34,10 @@ export const MAX_TAGS = 2;
 export const MAX_IMAGES = 4;
 export const IMAGE_BYTE_LIMIT = 5 * 1024 * 1024; // X: 5 MB for a JPEG/PNG/WebP
 export const MAX_ALT = 1000;
-const PLACEMENTS = ["post", "carousel"];
+export const VIDEO_BYTE_LIMIT = 256 * 1024 * 1024; // our cap; X itself allows 8 GB / 20 minutes
+export const CHUNK_BYTES = 4 * 1024 * 1024; // X: at most 5 MB per append segment
+const STATUS_POLL_LIMIT_MS = 240_000;
+const PLACEMENTS = ["post", "carousel", "video"];
 const POSTS_PER_TICK = 1;
 const URL_LENGTH = 23;
 
@@ -79,23 +86,25 @@ const safePath = (value) => {
   return path;
 };
 const IMAGE = /\.(jpe?g|png|webp)$/i;
-const MIME = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp" };
+const VIDEO = /\.(mp4|mov|m4v)$/i;
+const MIME = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", mp4: "video/mp4", mov: "video/quicktime", m4v: "video/mp4" };
 export const mimeOf = (path) => MIME[String(path).split(".").pop().toLowerCase()] || "application/octet-stream";
 const ACCOUNT_KEY = /^[0-9]{1,25}$/; // the numeric X user id, also the tail of the token secret's name
 
-// A manual post: text, or 1-4 images.
+// A manual post: text, 1-4 images, or one video.
 export function postRequest(event) {
   const text = String(event.text || "").trim();
   if (weight(text) > MAX_TEXT) throw new Error(`text allows up to ${MAX_TEXT} characters`);
   const paths = (Array.isArray(event.dropboxPaths) ? event.dropboxPaths : event.dropboxPath ? [event.dropboxPath] : []).map(safePath);
   if (!paths.length && !text) throw new Error("a post needs text, Dropbox images, or both");
   if (paths.length > MAX_IMAGES) throw new Error(`an X post holds up to ${MAX_IMAGES} images`);
-  if (!paths.every((p) => IMAGE.test(p))) throw new Error("use .jpg, .png or .webp images (video is not supported yet)");
+  const video = paths.length === 1 && VIDEO.test(paths[0]);
+  if (!video && !paths.every((p) => IMAGE.test(p))) throw new Error("use up to 4 .jpg/.png/.webp images, or exactly one .mp4/.mov/.m4v video (not both)");
   const brand = String(event.brand || "");
   const accountKey = String(event.accountKey || "");
   if (!accountKey && !/^[a-z0-9-]{2,40}$/.test(brand)) throw new Error("give a brand slug such as stashbox, or an accountKey");
   if (accountKey && !ACCOUNT_KEY.test(accountKey)) throw new Error("accountKey is the numeric X user id");
-  return { brand, accountKey, text, paths };
+  return { brand, accountKey, text, paths, kind: video ? "video" : "images" };
 }
 
 export function requestFromPost(post) {
@@ -105,16 +114,21 @@ export function requestFromPost(post) {
   const accountKey = String(post.channelId || "");
   if (!ACCOUNT_KEY.test(accountKey)) throw new Error("This post's X account is not linked (reconnect it on /connections)");
   const alt = String(post.altText || post.caption || post.title || "").trim().slice(0, MAX_ALT);
+  if (post.placement === "video") {
+    const path = safePath(post.dropboxPath);
+    if (!VIDEO.test(path)) throw new Error("an X video must be an .mp4, .mov or .m4v file");
+    return { text, paths: [path], alt, accountKey, kind: "video" };
+  }
   if (post.placement === "carousel") {
     const slides = Array.isArray(post.slides) ? post.slides : [];
     if (slides.length < 2 || slides.length > MAX_IMAGES) throw new Error(`an X multi-photo post needs 2-${MAX_IMAGES} images; this one has ${slides.length}`);
     const paths = slides.map((s) => safePath(s.dropboxPath));
     if (!paths.every((p) => IMAGE.test(p))) throw new Error("every slide must be a .jpg, .png or .webp image");
-    return { text, paths, alt, accountKey };
+    return { text, paths, alt, accountKey, kind: "images" };
   }
   const path = safePath(post.dropboxPath);
   if (!IMAGE.test(path)) throw new Error("an X photo post needs a .jpg, .png or .webp image");
-  return { text, paths: [path], alt, accountKey };
+  return { text, paths: [path], alt, accountKey, kind: "images" };
 }
 
 // ---------- Secrets Manager + dev-api ----------
@@ -191,13 +205,33 @@ async function dropboxAccessToken() {
   return (await response.json()).access_token;
 }
 
-async function dropboxBytes(path) {
+async function dropboxLink(path) {
   const linkResponse = await fetch("https://api.dropboxapi.com/2/files/get_temporary_link", {
     method: "POST", headers: { authorization: `Bearer ${await dropboxAccessToken()}`, "content-type": "application/json" },
     body: JSON.stringify({ path }), signal: AbortSignal.timeout(20000)
   });
   if (!linkResponse.ok) throw new Error(`Dropbox could not open ${path} (HTTP ${linkResponse.status})`);
-  const file = await fetch((await linkResponse.json()).link, { signal: AbortSignal.timeout(120000) });
+  return (await linkResponse.json()).link;
+}
+
+/** A video read in pieces: its size, and any byte range [start, end) through an HTTP Range request on a temporary link. */
+export async function dropboxSource(path) {
+  const link = await dropboxLink(path);
+  const probe = await fetch(link, { headers: { range: "bytes=0-0" }, signal: AbortSignal.timeout(30000) });
+  const total = Number(/\/(\d+)\s*$/.exec(probe.headers.get("content-range") || "")?.[1]);
+  if (probe.status !== 206 || !Number.isFinite(total) || total < 1) throw new Error(`Dropbox did not report the size of ${path}`);
+  return {
+    size: total,
+    read: async (start, end) => {
+      const part = await fetch(link, { headers: { range: `bytes=${start}-${end - 1}` }, signal: AbortSignal.timeout(120000) });
+      if (part.status !== 206 && part.status !== 200) throw new Error(`Dropbox download failed for ${path} (HTTP ${part.status})`);
+      return Buffer.from(await part.arrayBuffer());
+    }
+  };
+}
+
+async function dropboxBytes(path) {
+  const file = await fetch(await dropboxLink(path), { signal: AbortSignal.timeout(120000) });
   if (!file.ok) throw new Error(`Dropbox download failed for ${path} (HTTP ${file.status})`);
   return Buffer.from(await file.arrayBuffer());
 }
@@ -235,12 +269,49 @@ export async function uploadImage(record, bytes, name, path, alt, deps = {}) {
   return String(id);
 }
 
-/** Upload the images, then create the post. Returns its id and URL. */
+/** Upload one video through X's chunked upload and wait until X has processed it. Returns the media id. */
+export async function uploadVideo(record, path, deps = {}) {
+  const { fetchImpl = fetch, source = dropboxSource, wait = (ms) => new Promise((r) => setTimeout(r, ms)), limitMs = STATUS_POLL_LIMIT_MS } = deps;
+  const src = await source(path);
+  if (src.size > VIDEO_BYTE_LIMIT) throw new Error(`This video is ${(src.size / 1048576).toFixed(0)} MB; Elettro OS sends X videos up to ${VIDEO_BYTE_LIMIT / 1048576} MB`);
+  const init = await xcall(record, "POST", "/2/media/upload/initialize", {
+    fetchImpl, headers: { "content-type": "application/json" },
+    body: JSON.stringify({ media_type: mimeOf(path), total_bytes: src.size, media_category: "tweet_video" })
+  });
+  const id = init.out?.data?.id;
+  if (!init.ok || !id) throw new Error(`X video upload could not start: ${why(init.out, init.status)}`);
+  let index = 0;
+  for (let start = 0; start < src.size; start += CHUNK_BYTES, index += 1) {
+    const form = new FormData();
+    form.append("segment_index", String(index));
+    form.append("media", new Blob([await src.read(start, Math.min(start + CHUNK_BYTES, src.size))]), `part${index}`);
+    const part = await xcall(record, "POST", `/2/media/upload/${encodeURIComponent(id)}/append`, { body: form, fetchImpl });
+    if (!part.ok) throw new Error(`X video upload failed at part ${index + 1}: ${why(part.out, part.status)}`);
+  }
+  const done = await xcall(record, "POST", `/2/media/upload/${encodeURIComponent(id)}/finalize`, { fetchImpl });
+  if (!done.ok) throw new Error(`X video upload could not finish: ${why(done.out, done.status)}`);
+  let info = done.out?.data?.processing_info;
+  let waited = 0;
+  while (info && info.state !== "succeeded") {
+    if (info.state === "failed") throw new Error(`X could not process the video: ${info.error?.message || info.error?.name || "unknown reason"}`);
+    const pause = Math.min(Math.max(Number(info.check_after_secs) || 5, 1), 30) * 1000;
+    if (waited + pause > limitMs) throw new Error(`X was still processing the video after ${Math.round(waited / 1000)} s`);
+    await wait(pause);
+    waited += pause;
+    const status = await xcall(record, "GET", `/2/media/upload?command=STATUS&media_id=${encodeURIComponent(id)}`, { fetchImpl });
+    if (!status.ok) throw new Error(`X video status check failed: ${why(status.out, status.status)}`);
+    info = status.out?.data?.processing_info;
+  }
+  return String(id);
+}
+
+/** Upload the images or the video, then create the post. Returns its id and URL. */
 export async function publish(record, request, deps = {}) {
   const { download = dropboxBytes, fetchImpl = fetch } = deps;
   if (weight(request.text) > MAX_TEXT) throw new Error(`text allows up to ${MAX_TEXT} characters`);
   const ids = [];
-  for (const path of request.paths) ids.push(await uploadImage(record, await download(path), path.split("/").pop(), path, request.alt, deps));
+  if (request.kind === "video") ids.push(await uploadVideo(record, request.paths[0], deps));
+  else for (const path of request.paths) ids.push(await uploadImage(record, await download(path), path.split("/").pop(), path, request.alt, deps));
   const created = await xcall(record, "POST", "/2/tweets", {
     fetchImpl, headers: { "content-type": "application/json" },
     body: JSON.stringify({ text: request.text, ...(ids.length ? { media: { media_ids: ids } } : {}) })
