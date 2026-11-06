@@ -28,6 +28,7 @@ import { completeLinkedinConnect } from "./linkedin-connect.mjs";
 import { completeMetaConnect } from "./meta-connect.mjs";
 import { completeMastodonConnect } from "./mastodon-connect.mjs";
 import { completeSubstackConnect } from "./substack-connect.mjs";
+import { completeXConnect } from "./x-connect.mjs";
 import { handlePlannerWeb, handlePlannerOps } from "./planner-ops.mjs";
 import { setPostingWindow } from "./posting-window.mjs";
 import { completeThreadsConnect } from "./threads-connect.mjs";
@@ -1845,6 +1846,11 @@ export const handler = async (event = {}) => {
   // "Connect Bluesky": same handshake; the web app runs the AT Protocol OAuth and sends the saved session.
   if (requestPath === "/connections/bluesky/complete" && event?.requestContext?.http?.method === "POST") {
     return completeBlueskyConnect(event, parseJsonBody(event), connectDatabase, json);
+  }
+
+  // "Connect X": same handshake; the tokens are kept in Secrets Manager and refreshed by the web app, so the row has no tokenExpiresAt.
+  if (requestPath === "/connections/x/complete" && event?.requestContext?.http?.method === "POST") {
+    return completeXConnect(event, parseJsonBody(event), connectDatabase, json);
   }
 
   // "Connect Snapchat": same handshake; the web app trades the code and reads the Public Profile, tokens go to Secrets Manager.

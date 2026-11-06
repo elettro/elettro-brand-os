@@ -1,0 +1,91 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { postText, weight, complianceProblems, requestFromPost, postRequest, account, uploadImage, publish, publishingTick, MAX_TEXT } from "../services/x-lambda/index.mjs";
+
+const REC = { accessToken: "tok", username: "stashboxmusic", accountId: "42" };
+const PATH = "/1---elettro-brand-os/brands/stashbox/a.jpg";
+const post = (over = {}) => ({ id: "p1", placement: "post", caption: "Hello", hashtags: ["a", "b", "c"], channelId: "42", dropboxPath: PATH, ...over });
+const res = (status, body) => ({ status, ok: status >= 200 && status < 300, json: async () => body });
+
+test("a link weighs 23 characters; postText keeps up to two tags within 280", () => {
+  assert.equal(weight("see https://example.com/a/very/long/path/that/goes/on"), 4 + 23);
+  assert.equal(postText("Hi", ["a", "#b c", "d"]), "Hi\n\n#a #bc");
+  const long = postText("word ".repeat(100), ["tag"]);
+  assert.ok(weight(long) <= MAX_TEXT && long.endsWith("#tag"));
+});
+
+test("scheduled posts may not @mention accounts", () => {
+  assert.equal(complianceProblems("thanks @someone").length, 1);
+  assert.equal(complianceProblems("mail dean@elettro.com or visit https://stashbox.com").length, 0);
+  assert.throws(() => requestFromPost(post({ caption: "hi @friend" })), /mention/);
+});
+
+test("requests: photo and multi-photo; counts, types, paths and account are checked", () => {
+  assert.deepEqual(requestFromPost(post()).paths, [PATH]);
+  assert.equal(requestFromPost(post({ placement: "carousel", slides: [{ dropboxPath: PATH }, { dropboxPath: PATH.replace("a.", "b.") }] })).paths.length, 2);
+  assert.throws(() => requestFromPost(post({ placement: "carousel", slides: [{ dropboxPath: PATH }] })), /needs 2-4/);
+  assert.throws(() => requestFromPost(post({ dropboxPath: PATH.replace("a.jpg", "v.mp4") })), /photo post/);
+  assert.throws(() => requestFromPost(post({ channelId: "" })), /not linked/);
+  assert.throws(() => requestFromPost(post({ dropboxPath: "/elsewhere/a.jpg" })), /inside/);
+});
+
+test("manual posts: text or images, needs a brand or account key", () => {
+  assert.equal(postRequest({ brand: "stashbox", text: "hi" }).paths.length, 0);
+  assert.throws(() => postRequest({ text: "hi" }), /brand slug/);
+  assert.throws(() => postRequest({ brand: "stashbox", text: "x".repeat(281) }), /280/);
+  assert.throws(() => postRequest({ brand: "stashbox", dropboxPaths: [PATH.replace("a.jpg", "v.mp4")] }), /video is not supported/);
+});
+
+test("account: a fresh token is reused; an old one is refreshed and the rotated pair is written back", async () => {
+  const now = () => Date.parse("2026-11-06T12:00:00Z");
+  const fresh = { accessToken: "a", refreshToken: "r", expiresAt: "2026-11-06T13:00:00Z", username: "u" };
+  let wrote = null;
+  assert.equal((await account("42", { read: async () => fresh, write: async () => { wrote = 1; }, now })).accessToken, "a");
+  assert.equal(wrote, null);
+  const old = { ...fresh, expiresAt: "2026-11-06T11:00:00Z" };
+  let calls = 0;
+  const read = async (n) => (n.endsWith("x-oauth") ? { clientId: "id", clientSecret: "sec" } : old);
+  const fetchImpl = async (url, init) => { calls++; assert.match(String(init.body), /grant_type=refresh_token/); assert.match(init.headers.authorization, /^Basic /); return res(200, { access_token: "new", refresh_token: "r2", expires_in: 7200 }); };
+  const got = await account("42", { read, write: async (id, v) => { wrote = { id, v }; }, fetchImpl, now });
+  assert.equal(got.accessToken, "new");
+  assert.equal(wrote.id, "elettro-brand-os-dev/x/42");
+  assert.equal(wrote.v.refreshToken, "r2");
+  assert.equal(calls, 1);
+});
+
+test("account: a refused refresh asks for a reconnect and writes nothing", async () => {
+  const old = { accessToken: "a", refreshToken: "r", expiresAt: "2020-01-01T00:00:00Z", username: "u" };
+  const read = async (n) => (n.endsWith("x-oauth") ? { clientId: "id", clientSecret: "s" } : old);
+  await assert.rejects(account("42", { read, write: async () => assert.fail("must not write"), fetchImpl: async () => res(400, { error: "invalid_request" }) }), /reconnect/);
+});
+
+test("publish uploads each image then creates one post with the media ids", async () => {
+  const seen = [];
+  const fetchImpl = async (url, init) => {
+    seen.push(url);
+    if (url.endsWith("/2/media/upload")) return res(200, { data: { id: "m" + seen.length } });
+    if (url.endsWith("/2/media/metadata")) return res(200, {});
+    return res(201, { data: { id: "999" } });
+  };
+  const out = await publish(REC, { text: "Hi", paths: [PATH, PATH], alt: "pic" }, { download: async () => Buffer.from("x"), fetchImpl });
+  assert.equal(out.url, "https://x.com/stashboxmusic/status/999");
+  assert.equal(seen.filter((u) => u.endsWith("/2/tweets")).length, 1);
+});
+
+test("big images, expired logins and an empty credit balance fail with a clear message", async () => {
+  await assert.rejects(uploadImage(REC, Buffer.alloc(6 * 1024 * 1024), "a.jpg", "a.jpg", ""), /5 MB/);
+  await assert.rejects(publish(REC, { text: "Hi", paths: [] }, { fetchImpl: async () => res(401, {}) }), /reconnect/);
+  await assert.rejects(publish(REC, { text: "Hi", paths: [] }, { fetchImpl: async () => res(402, {}) }), /credits/);
+});
+
+test("the tick claims x posts, publishes, and reports each result (one bad post does not stop the loop)", async () => {
+  const finished = [];
+  const callApi = async (p) => {
+    if (p.action === "claim-due-posts") { assert.equal(p.destination, "x"); return { ok: true, posts: [post({ id: "good" }), post({ id: "bad", channelId: "" })], missed: 0, stuck: 0 }; }
+    finished.push(p); return { ok: true };
+  };
+  const out = await publishingTick({ callApi, find: async () => REC, send: async () => ({ id: "7", url: "https://x.com/u/status/7" }) });
+  assert.equal(out.published.length, 2);
+  assert.equal(finished[0].externalPostId, "7");
+  assert.match(finished[1].error, /not linked/);
+});
