@@ -1,9 +1,34 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-03",
+  "updated_at": "2026-11-07",
   "source_of_truth": "docs/bug-fix/",
   "workflow": "docs/bug-fix/AGENT_WORKFLOW.md",
   "bugs": [
+    {
+      "id": "EOS-BUG-0008",
+      "title": "Product carousels mixed other products' images",
+      "status": "Fixed",
+      "verification": "Pending",
+      "severity": "Medium",
+      "area": "Review/Planner",
+      "environment": "DEV",
+      "reported_at": "2026-11-07",
+      "fixed_at": "2026-11-07",
+      "verified_at": null,
+      "root_cause": "planWeek filled a carousel with the next-best images of the whole sector (pillar), not of the lead's product, so a Bauhaus pint-glass carousel also showed two tees and another glass.",
+      "fix_summary": "carouselMates: one product per carousel (own slide set, else same product; generic pillar images only for non-product leads); lead moves to a candidate that can fill the minimum. One-off refill-carousel-slides-20261107 repairs scheduled carousels.",
+      "files_changed": [
+        "services/dev-api-lambda/planner-v2.mjs",
+        "services/dev-api-lambda/carousel-refill.mjs",
+        "services/dev-api-lambda/index.mjs",
+        "tests/carousels.test.mjs"
+      ],
+      "commits": [],
+      "related": [],
+      "record": "docs/bug-fix/fixed/EOS-BUG-0008.md",
+      "symptom": "Bluesky carousel 'Bauhaus Style Trains Scene Pint Glass #6' (2026-11-07) showed four different products; caption named only one.",
+      "future_repair": "Dry-run refill-carousel-slides-20261107 for the brand and compare before/after; keep slide sets named <name>-slide-NN in one folder per product."
+    },
     {
       "id": "EOS-BUG-0007",
       "title": "Amplify web build fails on a type error; nothing deploys (os.elettro.com/bugs is 404)",
