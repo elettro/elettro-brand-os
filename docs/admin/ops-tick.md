@@ -1,7 +1,7 @@
 # Manual worker tick (Stream Deck)
 
 `POST /ops/tick` on the dev-api fires a platform worker's publishing tick right now, so Dean can release due posts from
-a Stream Deck key instead of waiting for the 15-minute schedule. Written 2026-11-07. **Not deployed or run against AWS yet (not verified).**
+a Stream Deck key instead of waiting for the 15-minute schedule. Written 2026-11-07. **Live in DEV since 2026-11-07** (verified: a Snapchat test tick ran the worker, which found nothing due and published nothing; a real press on a worker with due posts has not been checked).
 
 ## What a press does
 
@@ -19,13 +19,13 @@ a Stream Deck key instead of waiting for the 15-minute schedule. Written 2026-11
 Its own token, header `x-elettro-deck-key`, compared with env `OPS_TICK_TOKEN` on the dev-api Lambda. It is checked inside the
 handler, before the shared connect-key gate, so the deck PC never holds the connect key. Empty `OPS_TICK_TOKEN` = route answers 503.
 
-## AWS steps after merge (ask Dean first; none are done yet)
+## AWS steps (done 2026-11-07, kept as the record)
 
-1. Deploy the dev-api (`docs/admin/deploy-dev-api-lambda.md`).
-2. Create the gateway route + Lambda permission (`docs/admin/new-api-route.md`) for `POST /ops/tick`.
-3. Generate a long random token and set `OPS_TICK_TOKEN` on `elettro-brand-os-dev-api` (merge into the existing environment; do not replace it).
+1. Deploy the dev-api (done; "Build DEV API Lambda" artifact, `stashbox-audit`) (`docs/admin/deploy-dev-api-lambda.md`).
+2. Create the gateway route (done; route id `vd6j1eq`, statement id `ops-tick-route`) + Lambda permission (`docs/admin/new-api-route.md`) for `POST /ops/tick`.
+3. Generate a long random token (done) and set `OPS_TICK_TOKEN` on `elettro-brand-os-dev-api` (merge into the existing environment; do not replace it).
 4. The dev-api role needs `lambda:InvokeFunction` on `arn:aws:lambda:us-east-1:656260749296:function:elettro-brand-os-dev-*`
-   for the twelve workers (IAM step: root, ask Dean). Until then every press answers `AccessDeniedException`.
+   for the twelve workers (done by Dean with root: inline policy `ElettroBrandOSDevInvokeWorkerTicks` on `elettro-brand-os-dev-api-role-ddsp99yg`). Without it every press answers `AccessDeniedException`.
 5. Put the same token in the deck PC's `%USERPROFILE%\elettrodeck\secrets.json` (never in git).
 6. Smoke test: `curl -s -X POST -H "x-elettro-deck-key: <token>" -d '{"worker":"gmb"}' https://zkjngy7rdd.execute-api.us-east-1.amazonaws.com/ops/tick`.
    No header = `401 Deck key required`; 404 = no gateway route; 500 = no Lambda permission.
