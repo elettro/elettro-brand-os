@@ -71,7 +71,7 @@ export function complianceProblems(text) {
 // GLOBAL RULE, every brand: NO URL POSTS ON X. X bills $0.20 for a post containing a URL against $0.015 for one without
 // (13x), and it also treats a bare domain such as stashbox.com/radio as a link. So no text we send carries a link of any kind.
 const SCHEME_URL = /(?:https?:\/\/|\bwww\.)\S+/gi;
-const BARE_DOMAIN = /(?<![@\w#])[a-z0-9-]{2,}(?:\.[a-z0-9-]+)*\.(?:com|net|org|ai|io|de|co|us|tv|fm|app|shop|radio|info|biz|me|ly|gg|xyz|online|site|store|link|page|dev|eu)\b(?:\/\S*)?/gi;
+const BARE_DOMAIN = /(?<![@\w#])[a-z0-9-]{2,}(?:\.[a-z0-9-]+)*\.(?:com|net|org|ai|io|de|co|us|tv|fm|app|shop|radio|info|biz|me|ly|gg|xyz|online|site|store|link|page|dev|eu|land)\b(?:\/\S*)?/gi;
 export const hasUrl = (text) => { const t = String(text || ""); return new RegExp(SCHEME_URL.source, "i").test(t) || new RegExp(BARE_DOMAIN.source, "i").test(t); };
 export function stripUrls(text) {
   return String(text || "").replace(SCHEME_URL, "").replace(BARE_DOMAIN, "")
@@ -124,7 +124,7 @@ export function requestFromPost(post) {
   if (broken.length) throw new Error(broken.join("; "));
   const accountKey = String(post.channelId || "");
   if (!ACCOUNT_KEY.test(accountKey)) throw new Error("This post's X account is not linked (reconnect it on /connections)");
-  const alt = String(post.altText || post.caption || post.title || "").trim().slice(0, MAX_ALT);
+  const alt = stripUrls(post.altText || post.caption || post.title || "").slice(0, MAX_ALT);
   if (post.placement === "video") {
     const path = safePath(post.dropboxPath);
     if (!VIDEO.test(path)) throw new Error("an X video must be an .mp4, .mov or .m4v file");
@@ -320,6 +320,8 @@ export async function uploadVideo(record, path, deps = {}) {
 export async function publish(record, request, deps = {}) {
   const { download = dropboxBytes, fetchImpl = fetch } = deps;
   if (weight(request.text) > MAX_TEXT) throw new Error(`text allows up to ${MAX_TEXT} characters`);
+  // Last line of defence for NO URL POSTS: whatever built this request, a link never reaches X (a URL post costs 13x).
+  if (hasUrl(request.text)) throw new Error("blocked: this X post contains a URL or domain (no URL posts on X)");
   const ids = [];
   if (request.kind === "video") ids.push(await uploadVideo(record, request.paths[0], deps));
   else for (const path of request.paths) ids.push(await uploadImage(record, await download(path), path.split("/").pop(), path, request.alt, deps));
