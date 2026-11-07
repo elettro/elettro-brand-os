@@ -25,10 +25,10 @@ jobs:
           node-version: "24"
 
       - name: Check syntax
-        run: node --check index.mjs
+        run: node --check index.mjs && node --check metrics.mjs
 
       - name: Package Lambda
-        run: zip -r elettro-brand-os-dev-meta.zip index.mjs package.json
+        run: zip -r elettro-brand-os-dev-meta.zip index.mjs metrics.mjs package.json
 
       - name: Upload Lambda package
         uses: actions/upload-artifact@v4

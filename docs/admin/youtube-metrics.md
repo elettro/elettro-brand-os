@@ -22,3 +22,13 @@ Read-only collection of YouTube numbers per published video. Nothing here posts,
 
 ## Not built
 Other networks, baselines / Performance Index, the Calendar stats slot, the "What we learned" card and planner feedback (spec sections 4-6).
+
+
+## Instagram, Facebook and Threads (2026-11-07, not verified against live APIs)
+
+Same table and loop; the meta and threads workers collect in their ticks (8 posts per network per tick).
+
+1. Merge, then run `setup-post-metrics-20261107` on the dev-api with `"mode":"apply"` **first**: it adds the `reach` and `saves` columns. Deploying the dev-api before this makes the Calendar query fail and every Stats panel go empty (it is wrapped, so nothing else breaks).
+2. Deploy the dev-api and the meta and threads workers from their Build artifacts.
+3. Check the metric names on real posts without saving: invoke each worker with `{"action":"metrics"}` (dry run). `samples[]` holds the numbers and Meta's raw answers per metric; an `{error}` in `raw.insights.<metric>` means Meta refused that metric for that kind of post (Meta renames and withdraws metrics often; fix the lists at the top of `services/meta-lambda/metrics.mjs`). Then `{"action":"metrics","mode":"apply"}` saves, or just wait for the tick.
+4. Stories are never collected (their insights vanish after 24 hours). A post none of whose numbers came back is retried every tick, not saved as zeros.
