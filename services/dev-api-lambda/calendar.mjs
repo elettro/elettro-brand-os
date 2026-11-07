@@ -38,7 +38,7 @@ export function calendarGrid(month, timeZone) {
 
 const assetCard = (r) => ({ id: r.assetId, filename: r.filename, kind: r.kind, sourcePath: r.sourcePath, title: r.assetTitle, durationMs: r.durationMs });
 
-const METRIC_FIELDS = ["views", "likes", "comments", "shares", "watchTimeSeconds", "avgViewDurationSeconds", "followsGained", "reach", "saves"];
+const METRIC_FIELDS = ["views", "likes", "comments", "shares", "watchTimeSeconds", "avgViewDurationSeconds", "followsGained", "reach", "saves", "linkClicks"];
 
 /** The latest PostMetric snapshot as the Calendar's `stats`: the age it was taken at plus only the numbers that exist (a missing number is never shown as 0). */
 export function statsFromMetric(row) {

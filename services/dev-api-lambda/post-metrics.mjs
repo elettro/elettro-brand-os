@@ -21,7 +21,7 @@ const MAX_AGE_MS = 45 * 24 * 60 * 60 * 1000;
 // Brands that exist only for testing; never collected (google-review is the demo brand for Google's API reviewer).
 export const EXCLUDED_BRANDS = ["google-review"];
 // Networks with a collector. Stories are left out: their insights disappear after 24 hours, before most buckets are reached.
-export const METRIC_DESTINATIONS = ["youtube", "instagram", "facebook", "threads"];
+export const METRIC_DESTINATIONS = ["youtube", "instagram", "facebook", "threads", "pinterest"];
 const SKIPPED_PLACEMENTS = ["story"];
 const DEFAULT_LIMIT = 25;
 const MAX_LIMIT = 100;
@@ -46,7 +46,8 @@ export const POST_METRIC_TABLES_SQL = [
   `CREATE INDEX IF NOT EXISTS "PostMetric_ledgerId_idx" ON "PostMetric"("ledgerId")`,
   // Added with the Instagram / Facebook / Threads collectors (2026-11-07); re-running setup adds them to an existing table.
   `ALTER TABLE "PostMetric" ADD COLUMN IF NOT EXISTS "reach" INTEGER`,
-  `ALTER TABLE "PostMetric" ADD COLUMN IF NOT EXISTS "saves" INTEGER`
+  `ALTER TABLE "PostMetric" ADD COLUMN IF NOT EXISTS "saves" INTEGER`,
+  `ALTER TABLE "PostMetric" ADD COLUMN IF NOT EXISTS "linkClicks" INTEGER`
 ];
 
 /** The age buckets a post has reached by `now` and has no snapshot for yet. Oldest first. */
@@ -73,7 +74,7 @@ export function cleanMetricItem(item) {
     ledgerId, ageBucket, source,
     views: whole(m.views), likes: whole(m.likes), comments: whole(m.comments), shares: whole(m.shares),
     watchTimeSeconds: whole(m.watchTimeSeconds), avgViewDurationSeconds: decimal(m.avgViewDurationSeconds),
-    followsGained: whole(m.followsGained), reach: whole(m.reach), saves: whole(m.saves),
+    followsGained: whole(m.followsGained), reach: whole(m.reach), saves: whole(m.saves), linkClicks: whole(m.linkClicks),
     raw: item?.raw && typeof item.raw === "object" ? item.raw : null
   };
 }
@@ -106,7 +107,7 @@ export async function runPostMetricsSetup(event, connectDatabase, json) {
 }
 
 /**
- * { destination?: "youtube" | "instagram" | "facebook" | "threads", limit? } — published posts of that network that reached an age bucket without a snapshot, plus every
+ * { destination?: "youtube" | "instagram" | "facebook" | "threads" | "pinterest", limit? } — published posts of that network that reached an age bucket without a snapshot, plus every
  * connected channel (so a worker can also check access). Read only.
  */
 export async function runListPostMetricsDue(event, connectDatabase, json, now = Date.now()) {
@@ -161,9 +162,9 @@ export async function runRecordPostMetrics(event, connectDatabase, json) {
     let saved = 0;
     for (const r of rows) {
       const result = await client.query(
-        `INSERT INTO "PostMetric" ("ledgerId","ageBucket","source","views","likes","comments","shares","watchTimeSeconds","avgViewDurationSeconds","followsGained","reach","saves","raw")
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) ON CONFLICT ("ledgerId","ageBucket") DO NOTHING`,
-        [r.ledgerId, r.ageBucket, r.source, r.views, r.likes, r.comments, r.shares, r.watchTimeSeconds, r.avgViewDurationSeconds, r.followsGained, r.reach, r.saves, r.raw ? JSON.stringify(r.raw) : null]);
+        `INSERT INTO "PostMetric" ("ledgerId","ageBucket","source","views","likes","comments","shares","watchTimeSeconds","avgViewDurationSeconds","followsGained","reach","saves","linkClicks","raw")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) ON CONFLICT ("ledgerId","ageBucket") DO NOTHING`,
+        [r.ledgerId, r.ageBucket, r.source, r.views, r.likes, r.comments, r.shares, r.watchTimeSeconds, r.avgViewDurationSeconds, r.followsGained, r.reach, r.saves, r.linkClicks, r.raw ? JSON.stringify(r.raw) : null]);
       saved += result.rowCount || 0;
     }
     return json(200, { ok: true, saved, skipped: rows.length - saved });
