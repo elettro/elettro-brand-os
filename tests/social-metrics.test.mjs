@@ -138,3 +138,22 @@ test("reach and saves are kept, and setup adds the columns to an existing table"
   assert.ok(POST_METRIC_TABLES_SQL.some((s) => /ADD COLUMN IF NOT EXISTS "reach"/.test(s)));
   assert.ok(POST_METRIC_TABLES_SQL.some((s) => /ADD COLUMN IF NOT EXISTS "saves"/.test(s)));
 });
+
+test("Facebook: a photo's id is swapped for its post id, and an id with no such field is read as a video", async () => {
+  const asked = [];
+  const photo = await facebookSnapshot({ postId: "555", placement: "post" }, "t", async (m, path, params) => {
+    asked.push(path);
+    if (params.fields === "page_story_id") return { page_story_id: "9_555" };
+    return params.metric ? value(params.metric, 7) : {};
+  });
+  assert.ok(asked.includes("9_555/insights"));
+  assert.equal(photo.metrics.views, 7);
+  const paths = [];
+  const video = await facebookSnapshot({ postId: "777", placement: "post" }, "t", async (m, path, params) => {
+    paths.push(path);
+    if (params.fields === "page_story_id") throw new Error("(#100) Tried accessing nonexisting field (page_story_id)");
+    return params.metric ? value(params.metric, params.metric === "fb_reels_total_plays" ? 40 : 1) : {};
+  });
+  assert.ok(paths.includes("777/video_insights"));
+  assert.equal(video.metrics.views, 40);
+});

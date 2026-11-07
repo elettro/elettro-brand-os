@@ -15,12 +15,21 @@ export function insightValue(body) {
   return typeof value === "object" && value !== null ? null : num(value);
 }
 
+/** A breakdown answer (reactions by type) added up; null when there is none. */
+export function insightSum(body) {
+  const value = body?.data?.[0]?.values?.[0]?.value ?? body?.data?.[0]?.total_value?.value;
+  if (value === null || typeof value !== "object") return num(value);
+  const parts = Object.values(value).map(num).filter((n) => n !== null);
+  return parts.length ? parts.reduce((a, b) => a + b, 0) : null;
+}
+
 // Instagram media insights. Reels also have watch time (milliseconds).
 export const INSTAGRAM_METRICS = ["views", "reach", "likes", "comments", "shares", "saved"];
 export const INSTAGRAM_REEL_METRICS = ["ig_reels_avg_watch_time", "ig_reels_video_view_total_time"];
 // Facebook post and video insights; the object itself also carries reaction, comment and share counts.
-export const FACEBOOK_METRICS = ["post_media_view", "post_total_media_view_unique"];
-export const FACEBOOK_VIDEO_METRICS = ["total_video_views", "total_video_avg_time_watched", "total_video_view_total_time"];
+export const FACEBOOK_METRICS = ["post_media_view", "post_total_media_view_unique", "post_reactions_by_type_total"];
+// Reels answer to the Reels names; "total_video_*" came back empty for Reels on 2026-11-07, so several spellings are asked and the first to answer wins.
+export const FACEBOOK_VIDEO_METRICS = ["fb_reels_total_plays", "blue_reels_play_count", "post_video_avg_time_watched", "post_video_view_time", "post_impressions_unique", "total_video_views", "total_video_avg_time_watched", "total_video_view_total_time"];
 
 async function ask(call, path, params, accessToken) {
   try {
@@ -35,7 +44,7 @@ async function insights(call, path, names, accessToken) {
   const got = {};
   const raw = {};
   names.forEach((metric, i) => {
-    raw[metric] = answers[i].ok ? insightValue(answers[i].body) : { error: answers[i].error };
+    raw[metric] = answers[i].ok ? insightSum(answers[i].body) : { error: answers[i].error };
     if (answers[i].ok) got[metric] = raw[metric];
   });
   return { got, raw };
@@ -63,8 +72,17 @@ export async function instagramSnapshot({ postId, placement }, accessToken, call
 }
 
 /** Facebook: one snapshot for a post, photo, video or Reel id. */
-export async function facebookSnapshot({ postId, placement }, accessToken, call) {
-  const isVideo = placement === "reel" || placement === "video";
+export async function facebookSnapshot(item, accessToken, call) {
+  const { placement } = item;
+  let isVideo = placement === "reel" || placement === "video";
+  let postId = item.postId;
+  // An id with no underscore is either a photo (its post id, pageId_postId, is on `page_story_id`) or a wide video posted as a "post"
+  // (only a photo has that field), and a video is read through video insights like a Reel.
+  if (!isVideo && !String(postId).includes("_")) {
+    const story = await ask(call, postId, { fields: "page_story_id" }, accessToken);
+    if (story.ok && story.body.page_story_id) postId = story.body.page_story_id;
+    else if (!story.ok) isVideo = true;
+  }
   const { got, raw } = await insights(call, `${postId}/${isVideo ? "video_insights" : "insights"}`, isVideo ? FACEBOOK_VIDEO_METRICS : FACEBOOK_METRICS, accessToken);
   // Reactions, comments and shares sit on the object itself. A video id has no `shares` field of its own.
   const wanted = isVideo ? "likes.summary(true).limit(0),comments.summary(true).limit(0)" : "reactions.summary(true).limit(0),comments.summary(true).limit(0),shares";
@@ -72,17 +90,17 @@ export async function facebookSnapshot({ postId, placement }, accessToken, call)
   const body = fields.ok ? fields.body : {};
   const counts = { reactions: body.reactions?.summary?.total_count ?? body.likes?.summary?.total_count ?? null, comments: body.comments?.summary?.total_count ?? null, shares: body.shares?.count ?? null };
   const metrics = {
-    views: got.post_media_view ?? got.total_video_views ?? null,
-    reach: got.post_total_media_view_unique ?? null,
-    likes: num(counts.reactions),
+    views: got.post_media_view ?? got.fb_reels_total_plays ?? got.blue_reels_play_count ?? got.total_video_views ?? null,
+    reach: got.post_total_media_view_unique ?? got.post_impressions_unique ?? null,
+    likes: num(counts.reactions) ?? got.post_reactions_by_type_total ?? null,
     comments: num(counts.comments),
     shares: num(counts.shares),
     saves: null,
-    watchTimeSeconds: seconds(got.total_video_view_total_time),
-    avgViewDurationSeconds: got.total_video_avg_time_watched === undefined || got.total_video_avg_time_watched === null ? null : got.total_video_avg_time_watched / 1000,
+    watchTimeSeconds: seconds(got.post_video_view_time ?? got.total_video_view_total_time),
+    avgViewDurationSeconds: (() => { const ms = got.post_video_avg_time_watched ?? got.total_video_avg_time_watched; return ms === undefined || ms === null ? null : ms / 1000; })(),
     followsGained: null
   };
-  return { metrics, raw: { insights: raw, fields: fields.ok ? counts : { error: fields.error } } };
+  return { metrics, raw: { postId, insights: raw, fields: fields.ok ? counts : { error: fields.error } } };
 }
 
 /**
