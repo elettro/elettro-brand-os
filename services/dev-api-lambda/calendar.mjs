@@ -38,6 +38,19 @@ export function calendarGrid(month, timeZone) {
 
 const assetCard = (r) => ({ id: r.assetId, filename: r.filename, kind: r.kind, sourcePath: r.sourcePath, title: r.assetTitle, durationMs: r.durationMs });
 
+const METRIC_FIELDS = ["views", "likes", "comments", "shares", "watchTimeSeconds", "avgViewDurationSeconds", "followsGained"];
+
+/** The latest PostMetric snapshot as the Calendar's `stats`: the age it was taken at plus only the numbers that exist (a missing number is never shown as 0). */
+export function statsFromMetric(row) {
+  if (!row) return null;
+  const metrics = {};
+  for (const field of METRIC_FIELDS) {
+    const value = row[field];
+    if (value !== null && value !== undefined && Number.isFinite(Number(value))) metrics[field] = Number(value);
+  }
+  return Object.keys(metrics).length ? { asOf: row.ageBucket, source: row.source, metrics } : null;
+}
+
 export async function calendarMonth(client, brand, body, now = new Date()) {
   const timeZone = brand.timezone || "America/New_York";
   const month = MONTH.test(String(body.month || "")) ? body.month : ymdInTimeZone(now, timeZone).slice(0, 7);
@@ -65,6 +78,20 @@ export async function calendarMonth(client, brand, body, now = new Date()) {
     WHERE pl."brandId" = $1 AND pl."publishedAt" >= $2 AND pl."publishedAt" < $3
     ORDER BY pl."publishedAt", pl."destination"`, [brand.id, grid.from, grid.to])).rows;
 
+  // The latest snapshot per published post (1h < 24h < 7d < 30d). A missing PostMetric table or any error just means no stats.
+  const metricByLedger = new Map();
+  if (published.length) {
+    try {
+      const rows = (await client.query(`
+        SELECT DISTINCT ON ("ledgerId") "ledgerId", "ageBucket", "source", ${METRIC_FIELDS.map((f) => `"${f}"`).join(", ")}
+        FROM "PostMetric" WHERE "ledgerId" = ANY($1::uuid[])
+        ORDER BY "ledgerId", CASE "ageBucket" WHEN '30d' THEN 4 WHEN '7d' THEN 3 WHEN '24h' THEN 2 ELSE 1 END DESC`, [published.map((p) => p.id)])).rows;
+      for (const row of rows) metricByLedger.set(row.ledgerId, row);
+    } catch (error) {
+      console.error("[calendar] post metrics unavailable:", error instanceof Error ? error.message : error);
+    }
+  }
+
   const posts = [
     ...scheduled.map((p) => {
       const at = new Date(p.scheduledFor);
@@ -90,8 +117,8 @@ export async function calendarMonth(client, brand, body, now = new Date()) {
       asset: assetCard(p), externalUrl: p.externalUrl || null, method: p.method,
       carousel: Array.isArray(p.scoreBreakdown?.slideIds) && p.scoreBreakdown.slideIds.length > 0,
       custom: p.scoreBreakdown?.custom || null, tiktok: null, passedOver: false, editable: false,
-      // Filled in by the stats phase (per-post insights from each network).
-      stats: null
+      // The latest PostMetric snapshot (YouTube so far); null until one exists.
+      stats: statsFromMetric(metricByLedger.get(p.id))
     }))
   ].sort((a, b) => a.at.localeCompare(b.at) || a.destination.localeCompare(b.destination));
 
