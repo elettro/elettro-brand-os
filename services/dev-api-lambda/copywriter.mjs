@@ -35,6 +35,13 @@ const titleCase = (slug) => String(slug).split("-").map((w) => (w ? w[0].toUpper
 const pick = (seed, list) => list[parseInt(createHash("sha256").update(seed).digest("hex").slice(0, 8), 16) % list.length];
 
 /** The product page for an asset tagged with its Shopify handle, on the brand's own store; null when there is no handle. */
+/** The radio blog URL: links.radioBlog, or the radio page's own /blog/ (stashbox.com/radio/ -> stashbox.com/radio/blog/). */
+export function radioBlogLink(links = {}) {
+  if (links.radioBlog) return links.radioBlog;
+  if (!links.radio) return null;
+  try { return new URL("blog/", links.radio.endsWith("/") ? links.radio : links.radio + "/").href; } catch { return null; }
+}
+
 export function productUrlFromTags(tags, links = {}) {
   const lower = (tags || []).map((t) => String(t).toLowerCase());
   const handle = lower.find((t) => t.startsWith("product:"))?.slice("product:".length) ||
@@ -71,7 +78,9 @@ export function postFacts(asset, slotIn, songFacts = {}, links = {}, { promotion
     streaming: [song?.spotifyUrl, links.streaming?.spotify, song?.appleMusicUrl, song?.youtubeMusicUrl,
       links.streaming?.appleMusic, links.streaming?.amazonMusic, links.streaming?.tidal].filter(Boolean),
     // A product post points at the brand's store.
-    merch: links.merchStore ? [links.merchStore] : []
+    merch: links.merchStore ? [links.merchStore] : [],
+    // B2B explainers point at the radio blog (Brand.settings.planner.links.radioBlog, else <radio link>/blog/).
+    "radio-blog": radioBlogLink(links) ? [radioBlogLink(links)] : []
   }[slot.sector] || [];
   const artistLinks = Object.values(links.streaming || {}).filter(Boolean);
   // Every Pin carries a destination link (Dean, 261021): the deepest record (song, streaming, booking),
@@ -359,7 +368,9 @@ export function validateCopy(copy, f) {
   const text = [copy.caption, copy.title, copy.description, copy.firstComment, copy.onScreenText].filter(Boolean).join("\n");
   for (const url of text.match(/https?:\/\/[^\s)]+/g) || []) {
     const clean = url.replace(/[.,!?]+$/, "");
-    if (!f.allowedLinks.includes(clean)) problems.push(`link not from records: ${clean}`);
+    // A record link written with or without its trailing slash is the same link.
+    const same = (a) => a === clean || a.replace(/\/$/, "") === clean.replace(/\/$/, "");
+    if (!f.allowedLinks.some(same)) problems.push(`link not from records: ${clean}`);
   }
   if (/\$\s?\d/.test(text)) problems.push("mentions a price");
   if (f.language === "de") {
