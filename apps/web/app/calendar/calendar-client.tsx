@@ -52,8 +52,9 @@ async function act<T = { ok: boolean; error?: string }>(body: Record<string, unk
   return data as T;
 }
 
-const STAT_ORDER: CalendarStatKey[] = ["views", "likes", "comments", "shares", "watchTimeSeconds", "avgViewDurationSeconds", "followsGained"];
-const STAT_LABEL: Record<CalendarStatKey, string> = { views: "Views", likes: "Likes", comments: "Comments", shares: "Shares", watchTimeSeconds: "Watch time", avgViewDurationSeconds: "Avg. view", followsGained: "New subscribers" };
+const STAT_NETWORKS = ["youtube", "instagram", "facebook", "threads"];
+const STAT_ORDER: CalendarStatKey[] = ["views", "reach", "likes", "comments", "shares", "saves", "watchTimeSeconds", "avgViewDurationSeconds", "followsGained"];
+const STAT_LABEL: Record<CalendarStatKey, string> = { views: "Views", reach: "Reach", saves: "Saves", likes: "Likes", comments: "Comments", shares: "Shares", watchTimeSeconds: "Watch time", avgViewDurationSeconds: "Avg. view", followsGained: "New subscribers" };
 const STAT_AGE: Record<CalendarStats["asOf"], string> = { "1h": "about 1 hour", "24h": "about 1 day", "7d": "about 7 days", "30d": "about 30 days" };
 // Watch time reads as 2h 14m, an average view as 0:21, everything else as a plain number.
 function statValue(key: CalendarStatKey, value: number): string {
@@ -285,9 +286,9 @@ export function CalendarClient({ initial, brandName }: { initial: CalendarMonth;
             {post.stats ? <>
               <dl>{STAT_ORDER.filter((k) => post.stats!.metrics[k] !== undefined).map((k) => <div key={k}><dt>{STAT_LABEL[k]}</dt><dd>{statValue(k, post.stats!.metrics[k] as number)}</dd></div>)}</dl>
               <p className="muted">Taken {STAT_AGE[post.stats.asOf]} after posting, not live counts.</p>
-            </> : post.destination === "youtube"
-              ? <p className="muted">Numbers appear about an hour after posting.</p>
-              : <p className="muted">Stats are only collected for YouTube so far.</p>}
+            </> : STAT_NETWORKS.includes(post.destination)
+              ? <p className="muted">{post.placement === "story" ? "Stories are not measured." : "Numbers appear about an hour after posting."}</p>
+              : <p className="muted">Stats are not collected for {NETWORK[post.destination] || post.destination} yet.</p>}
           </div>}
         </>}
 

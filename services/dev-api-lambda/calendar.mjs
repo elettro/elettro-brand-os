@@ -38,7 +38,7 @@ export function calendarGrid(month, timeZone) {
 
 const assetCard = (r) => ({ id: r.assetId, filename: r.filename, kind: r.kind, sourcePath: r.sourcePath, title: r.assetTitle, durationMs: r.durationMs });
 
-const METRIC_FIELDS = ["views", "likes", "comments", "shares", "watchTimeSeconds", "avgViewDurationSeconds", "followsGained"];
+const METRIC_FIELDS = ["views", "likes", "comments", "shares", "watchTimeSeconds", "avgViewDurationSeconds", "followsGained", "reach", "saves"];
 
 /** The latest PostMetric snapshot as the Calendar's `stats`: the age it was taken at plus only the numbers that exist (a missing number is never shown as 0). */
 export function statsFromMetric(row) {
@@ -117,7 +117,7 @@ export async function calendarMonth(client, brand, body, now = new Date()) {
       asset: assetCard(p), externalUrl: p.externalUrl || null, method: p.method,
       carousel: Array.isArray(p.scoreBreakdown?.slideIds) && p.scoreBreakdown.slideIds.length > 0,
       custom: p.scoreBreakdown?.custom || null, tiktok: null, passedOver: false, editable: false,
-      // The latest PostMetric snapshot (YouTube so far); null until one exists.
+      // The latest PostMetric snapshot (YouTube, Instagram, Facebook, Threads); null until one exists.
       stats: statsFromMetric(metricByLedger.get(p.id))
     }))
   ].sort((a, b) => a.at.localeCompare(b.at) || a.destination.localeCompare(b.destination));

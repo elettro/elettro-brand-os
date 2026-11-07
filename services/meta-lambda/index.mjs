@@ -1,5 +1,6 @@
 import { SecretsManagerClient, GetSecretValueCommand, ListSecretsCommand } from "@aws-sdk/client-secrets-manager";
 import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
+import { collectForPost } from "./metrics.mjs";
 
 // Meta (Facebook Page + Instagram) publishing worker for Elettro OS. Runs outside the VPC (it needs
 // graph.facebook.com) and is only invoked directly through IAM: no HTTP route points at it. Way in:
@@ -289,6 +290,44 @@ async function publishPost(destination, post) {
   return destination === "instagram" ? publishInstagram(record, request) : publishFacebook(record, request);
 }
 
+// Post metrics (docs/ANALYTICS-SPEC.md phase A): snapshot every published Instagram / Facebook post that reached 1h / 24h / 7d / 30d. Read only.
+const METRICS_PER_TICK = 8;
+
+/** `dryRun` collects and returns the numbers (with Meta's raw answers) without saving anything: how a mapping is checked against real posts. */
+export async function collectMetrics({ dryRun = false, limit = METRICS_PER_TICK } = {}, deps = {}) {
+  const { callApi = api, call = graph, find = tokenRecord } = deps;
+  const out = { ok: true, due: 0, saved: 0, failures: [], samples: [] };
+  for (const destination of DESTINATIONS) {
+    try {
+      const listed = await callApi({ action: "list-post-metrics-due-20261107", destination, limit });
+      if (!listed.ok) throw new Error(`list-post-metrics-due failed: ${listed.error}`);
+      out.due += listed.due.length;
+      const items = [];
+      for (const due of listed.due) {
+        try {
+          const record = await find(destination, due.channelId);
+          const snapshots = await collectForPost(destination, due, record.pageAccessToken, call);
+          items.push(...snapshots);
+          if (dryRun) out.samples.push({ destination, brand: due.brand, placement: due.placement, postId: due.postId, buckets: due.buckets, metrics: snapshots[0].metrics, raw: snapshots[0].raw });
+        } catch (error) {
+          console.error("Metrics failed:", destination, due.postId, error?.message);
+          out.failures.push({ destination, postId: due.postId, error: error?.message || "failed" });
+        }
+      }
+      if (dryRun) continue;
+      for (let i = 0; i < items.length; i += 100) {
+        const recorded = await callApi({ action: "record-post-metrics-20261107", items: items.slice(i, i + 100) });
+        if (!recorded.ok) throw new Error(`record-post-metrics failed: ${recorded.error}`);
+        out.saved += recorded.saved;
+      }
+    } catch (error) {
+      console.error(`Meta ${destination} metrics failed:`, error?.message);
+      out.failures.push({ destination, error: error?.message || "failed" });
+    }
+  }
+  return out;
+}
+
 export async function publishingTick(deps = {}) {
   const { callApi = api, publish = publishPost } = deps;
   const tick = { missed: 0, stuck: 0, published: [], errors: [] };
@@ -323,8 +362,15 @@ export async function handler(event = {}) {
   if (event.requestContext || event.rawPath) return result(403, { ok: false, error: "Direct invoke only" });
   if (event.source === "aws.events" || event.action === "tick") {
     const tick = await publishingTick();
+    // Never lets a metrics problem (table not ready, a token without insights access) hold back publishing.
+    tick.metrics = await collectMetrics().catch((error) => ({ ok: false, error: error?.message || "metrics failed" }));
     console.log("Meta tick", JSON.stringify(tick));
     return result(tick.errors.length ? 502 : 200, { ok: !tick.errors.length, ...tick });
+  }
+  if (event.action === "metrics") {
+    try { return result(200, await collectMetrics({ dryRun: event.mode !== "apply", limit: Number(event.limit) || METRICS_PER_TICK })); } catch (error) {
+      return result(502, { ok: false, error: error?.message || "Metrics failed" });
+    }
   }
   return result(400, { ok: false, error: "Unknown action" });
 }
