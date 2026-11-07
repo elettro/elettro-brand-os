@@ -8,7 +8,9 @@
  *     its address and only gains ?eo=<code>&utm_… so the store still knows which post sent the visitor.
  * Either way the store's Shopify custom pixel reports page / product / cart / checkout / purchase events with that code.
  *
- * Counts only: no IP address, no user agent and nothing about a person is stored. Link-preview robots (Mastodon servers,
+ * Counts only: no IP address, no full user agent and nothing about a person is stored (each click keeps a coarse label such as
+ * "GET ios safari lang nav" so the count can be checked). Only a GET page navigation with browser languages counts as a click;
+ * HEAD requests, prefetches and link checkers are `preview`. Link-preview robots (Mastodon servers,
  * Facebook, Slack, Bluesky cards …) are counted as `preview`, never as a click.
  *
  * Everything here is best effort: a tracking failure never stops a post from publishing.
@@ -27,6 +29,33 @@ export const PIXEL_KINDS = ["page_view", "product_view", "add_to_cart", "checkou
 export const FUNNEL_KINDS = ["click", ...PIXEL_KINDS];
 
 const BOT_UA = /bot|crawl|spider|preview|facebookexternalhit|meta-externalagent|slack|discord|telegram|whatsapp|skype|embedly|mastodon|pleroma|misskey|akkoma|bluesky|cardyb|headless|python|curl|wget|go-http|node-fetch|axios|okhttp|java\/|libwww|httpclient|vkshare|pinterest|linkedin|tumblr|redditbot|applebot|google-inspectiontool|bingpreview/i;
+
+/**
+ * Is this short-link request a person opening the link? A real tap is a GET page navigation from a browser that
+ * sends its languages. Link checkers, preview robots, HEAD requests and browser/app prefetches are not clicks.
+ * `req` = { userAgent, method, acceptLanguage, secFetchMode, secFetchDest, purpose } (all optional strings).
+ */
+export function isHumanOpen(req = {}) {
+  if (isBot(req.userAgent)) return false;
+  if (String(req.method || "GET").toUpperCase() !== "GET") return false;
+  if (/prefetch|prerender|preview/i.test(String(req.purpose || ""))) return false;
+  if (!String(req.acceptLanguage || "").trim()) return false;
+  if (req.secFetchMode && String(req.secFetchMode) !== "navigate") return false;
+  if (req.secFetchDest && !["document", "iframe"].includes(String(req.secFetchDest))) return false;
+  return true;
+}
+
+/** A coarse, non-identifying label of what opened the link (for checking the click count), e.g. "GET ios safari lang nav". */
+export function clientLabel(req = {}) {
+  const ua = String(req.userAgent || "");
+  const os = /iPhone|iPad|iOS/i.test(ua) ? "ios" : /Android/i.test(ua) ? "android" : /Windows/i.test(ua) ? "windows" : /Mac OS X|Macintosh/i.test(ua) ? "mac" : /Linux/i.test(ua) ? "linux" : "other-os";
+  const app = /Bluesky|bsky/i.test(ua) ? "bluesky" : /Instagram/i.test(ua) ? "instagram" : /FBAN|FBAV|FB_IAB/i.test(ua) ? "facebook" : /Threads|Barcelona/i.test(ua) ? "threads"
+    : /Edg\//.test(ua) ? "edge" : /CriOS|Chrome\//.test(ua) ? "chrome" : /Firefox|FxiOS/.test(ua) ? "firefox" : /Safari\//.test(ua) ? "safari" : ua ? "unknown" : "no-ua";
+  const bot = isBot(ua) ? " bot" : "";
+  const flags = [req.acceptLanguage ? "lang" : "no-lang", req.secFetchMode ? `fetch:${String(req.secFetchMode).slice(0, 12)}` : "no-fetch",
+    req.purpose ? `purpose:${String(req.purpose).slice(0, 12)}` : ""].filter(Boolean).join(" ");
+  return `${String(req.method || "GET").toUpperCase().slice(0, 7)} ${os} ${app}${bot} ${flags}`.slice(0, 120);
+}
 
 export function newCode(random = randomInt) {
   let code = "";
@@ -156,12 +185,13 @@ const cleanText = (v, max) => (typeof v === "string" && v.trim() ? v.trim().slic
 
 export async function handleLinks(body, connectDatabase, json) {
   const action = body?.action;
-  if (!["click", "event", "stats"].includes(action)) return json(400, { ok: false, error: "Unknown action" });
+  if (!["click", "event", "stats", "events"].includes(action)) return json(400, { ok: false, error: "Unknown action" });
   let client;
   try {
     client = await connectDatabase();
     if (action === "click") return json(...await recordClick(client, body));
     if (action === "event") return json(...await recordEvent(client, body));
+    if (action === "events") return json(...await linkEvents(client, body));
     return json(...await linkStats(client, body));
   } catch (error) {
     console.error("[links] failed", action, error);
@@ -179,10 +209,10 @@ export async function recordClick(client, body) {
     `SELECT tl."id", tl."brandId", tl."destination", tl."targetUrl", sp."scoreBreakdown"->>'sector' AS "sector", sp."placement"
      FROM "TrackedLink" tl LEFT JOIN "ScheduledPost" sp ON sp."id" = tl."scheduledPostId" WHERE tl."code" = $1`, [code])).rows[0];
   if (!link) return [404, { ok: false, error: "Unknown link" }];
-  const kind = isBot(body?.userAgent) ? "preview" : "click";
+  const kind = isHumanOpen(body) ? "click" : "preview";
   await client.query(
-    `INSERT INTO "LinkEvent" ("linkId", "brandId", "kind", "referrerHost") VALUES ($1, $2, $3, $4)`,
-    [link.id, link.brandId, kind, hostOf(body?.referrer)]);
+    `INSERT INTO "LinkEvent" ("linkId", "brandId", "kind", "referrerHost", "client") VALUES ($1, $2, $3, $4, $5)`,
+    [link.id, link.brandId, kind, hostOf(body?.referrer), clientLabel(body)]);
   return [200, { ok: true, kind, location: taggedUrl(link.targetUrl, { code, destination: link.destination, campaign: link.sector || link.placement }) }];
 }
 
@@ -201,6 +231,16 @@ export async function recordEvent(client, body) {
      VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT ("eventKey") DO NOTHING`,
     [link.id, link.brandId, kind, cleanText(body?.product, 200), amount, currency, cleanText(body?.eventId, 120)]);
   return [200, { ok: true, recorded: result.rowCount === 1 }];
+}
+
+/** Every event of one link, oldest first (time, kind, referring site, client label): to check what the counts are made of. */
+export async function linkEvents(client, body) {
+  const code = String(body?.code || "");
+  if (!CODE_PATTERN.test(code)) return [400, { ok: false, error: "code is required" }];
+  const rows = (await client.query(
+    `SELECT e."createdAt", e."kind", e."referrerHost", e."client", e."product", e."value"
+     FROM "LinkEvent" e JOIN "TrackedLink" tl ON tl."id" = e."linkId" WHERE tl."code" = $1 ORDER BY e."createdAt" LIMIT 500`, [code])).rows;
+  return [200, { ok: true, code, events: rows }];
 }
 
 /** Per-post funnel for one brand over a date range (newest posts first). */
@@ -261,6 +301,8 @@ export const LINK_TABLES_SQL = [
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
   )`,
   `CREATE INDEX IF NOT EXISTS "LinkEvent_linkId_kind_idx" ON "LinkEvent"("linkId","kind")`,
+  // 2026-11-07: coarse client label (method, OS, browser/app, header flags) so the click count can be checked. Safe to re-run.
+  `ALTER TABLE "LinkEvent" ADD COLUMN IF NOT EXISTS "client" TEXT`,
   `CREATE INDEX IF NOT EXISTS "LinkEvent_brandId_createdAt_idx" ON "LinkEvent"("brandId","createdAt")`
 ];
 

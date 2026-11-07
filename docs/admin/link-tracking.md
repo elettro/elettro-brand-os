@@ -25,6 +25,8 @@ Then, per post:
    are ignored; Shopify's event id (the order id for purchases) stops double counting.
 3. Shopify itself also keeps the utm fields on the order (Analytics → Reports → Sessions/Sales by UTM), a second source.
 
+**What counts as a click (2026-11-07, after the first post showed 11 clicks for one tester):** only a GET page navigation that sends browser languages and, when the browser sends them, `Sec-Fetch-Mode: navigate`. HEAD requests, prefetches (`Sec-Purpose`), link checkers and preview robots are `preview`. Each event keeps a coarse label (`client`, e.g. `GET ios safari lang fetch:navigate`), never the full user agent or IP. `POST /links {action:"events", code}` lists one link's events with time, kind, referring site and label. The column is added by re-running `setup-link-tracking-20261107` with `mode:"apply"`.
+
 Stored: `TrackedLink` (code, brand, post, network, real address, mode `short`/`direct`) and `LinkEvent` (kind, product
 title, value, currency, referrer host, time). **No IP, user agent, name, email or address is stored.** The post's
 `scoreBreakdown.tracking` keeps `{code, mode, targetUrl, shortUrl}` and `generatedCaption` holds the caption as posted.
