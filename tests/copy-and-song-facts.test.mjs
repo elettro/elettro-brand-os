@@ -367,3 +367,14 @@ test("Mastodon: an @mention after a space is caught; an email address is not a m
   assert.ok(problems("Thanks @bob@mastodon.social").some((p) => p.includes("@mention")));
   assert.ok(!problems("Write to booking@stashbox.com").some((p) => p.includes("@mention")));
 });
+
+test("a plain post (promo cap) carries no link in its facts, so neither the AI nor the template can add one", () => {
+  const slot = { sector: "live-shows", destination: "bluesky", placement: "post", synthetic: false };
+  const plain = postFacts(dylanAsset, slot, {}, links, { promotional: false });
+  assert.equal(plain.primaryLink, null);
+  assert.deepEqual(plain.allowedLinks, []);
+  const promo = postFacts(dylanAsset, slot, {}, links, { promotional: true });
+  assert.equal(promo.primaryLink, "https://stashbox.com/booking/");
+  const t = templateCopy(plain, "s1");
+  assert.ok(!/https?:\/\/|link in bio/i.test(t?.caption || ""));
+});

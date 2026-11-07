@@ -119,11 +119,13 @@ export function postFacts(asset, slotIn, songFacts = {}, links = {}, { promotion
     linksInCaptionAreClickable: CLICKABLE.has(slot.destination),
     // False on platforms with a promo cap (X) for the posts that stay a plain clip: no link, no ask.
     promotional,
-    primaryLink: productUrl || sectorLinks[0] || pinLink,
+    // A plain post (promo cap: Bluesky, X) gets no link at all, so the AI is not tempted to add one (2026-11-07 trial:
+    // 19 of 34 Bluesky AI captions were rejected for a link or ask in a plain post).
+    primaryLink: promotional === false ? null : productUrl || sectorLinks[0] || pinLink,
     songHasOwnStreamingLink: Boolean(song?.spotifyUrl || song?.appleMusicUrl || song?.youtubeMusicUrl),
     songHasRadioPage: Boolean(song?.radioUrl),
     genre: ["reggae", "rock", "blues", "folk", "ska", "dub", "funk", "soul", "jazz", "psychedelic"].find((g) => tags.includes(g)) || null,
-    allowedLinks: [...new Set([productUrl, ...sectorLinks, ...artistLinks, links.youtubeChannel, links.booking?.page, links.radio, links.merchStore, pinLink].filter(Boolean))],
+    allowedLinks: promotional === false ? [] : [...new Set([productUrl, ...sectorLinks, ...artistLinks, links.youtubeChannel, links.booking?.page, links.radio, links.merchStore, pinLink].filter(Boolean))],
     bookingEmail: promotional && slot.sector === "live-shows" ? links.booking?.email || null : null,
     // Goal #1 (subscribers) closes posts where the brand allows it; radio posts already ask people to join.
     subscribeReminder: !promotional || slot.sector === "radio" ? null : (links.subscribeReminders || {})[slot.destination] || null,
