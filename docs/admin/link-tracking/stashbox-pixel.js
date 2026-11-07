@@ -1,5 +1,5 @@
 // Elettro OS tracked links: Shopify custom pixel for stashbox.ai.
-// Paste the whole file into Shopify admin → Settings → Customer events → Add custom pixel ("Elettro OS links").
+// Paste the whole file into Shopify admin > Settings > Customer events > Add custom pixel ("Elettro OS links").
 // It only reports visits that came from an Elettro OS post: the post's code arrives as ?eo=<code> (from
 // go.stashbox.ai/<code>, or straight on Pinterest / Google Business links) and is remembered for 7 days.
 // It sends counts (event type, product name, order total) with that code. No name, email, address or IP.
