@@ -4,7 +4,6 @@
 // the pin (video metrics on an image pin, for one). So each metric is its own request: an unsuitable one costs only itself and its
 // error is kept in `raw`. Pinterest answers { all: { lifetime_metrics: { IMPRESSION: n, ... }, summary_metrics: {...}, daily_metrics: [...] } }.
 
-export const PIN_METRICS = ["IMPRESSION", "SAVE", "PIN_CLICK", "OUTBOUND_CLICK", "REACTION", "COMMENTS", "VIDEO_MRC_VIEW", "VIDEO_AVG_WATCH_TIME", "TOTAL_VIDEO_AVG_WATCH_TIME"];
 const num = (value) => (value === undefined || value === null || value === "" || !Number.isFinite(Number(value)) ? null : Number(value));
 const day = (value) => new Date(value).toISOString().slice(0, 10);
 
@@ -25,17 +24,38 @@ export function metricValue(body, metric) {
   return daily.length ? daily.reduce((a, b) => a + b, 0) : null;
 }
 
+// Pinterest rate-limits analytics hard (nine single-metric requests per pin tripped it on 2026-11-07), so the metrics go out in
+// one request per group, and only a refused group is retried one metric at a time.
+const CORE_GROUP = ["IMPRESSION", "SAVE", "PIN_CLICK", "OUTBOUND_CLICK", "REACTION", "COMMENTS"];
+const VIDEO_GROUP = ["VIDEO_MRC_VIEW", "VIDEO_AVG_WATCH_TIME"];
+const RATE_LIMITED = /rate limit|too many requests|429/i;
+
+async function askGroup(item, group, call, now, got, raw) {
+  const read = (body, names) => { for (const metric of names) { const value = metricValue(body, metric); raw.analytics[metric] = value; if (value !== null) got[metric] = value; } };
+  try {
+    read(await call("GET", analyticsPath(item.postId, group.join(","), item.publishedAt, now)), group);
+    return;
+  } catch (error) {
+    // A rate limit would only repeat for every single metric: leave it for the next tick.
+    if (RATE_LIMITED.test(String(error?.message))) { for (const metric of group) raw.analytics[metric] = { error: String(error.message).slice(0, 200) }; return; }
+  }
+  for (const metric of group) {
+    try { read(await call("GET", analyticsPath(item.postId, metric, item.publishedAt, now)), [metric]); } catch (error) { raw.analytics[metric] = { error: String(error?.message || error).slice(0, 200) }; }
+  }
+}
+
 /** Snapshots for one due pin, one per bucket. A pin none of whose requests answered throws, so it is retried instead of saved as zeros. */
 export async function collectForPin(item, call, now = Date.now()) {
-  const answers = await Promise.all(PIN_METRICS.map(async (metric) => {
-    try { return { metric, value: metricValue(await call("GET", analyticsPath(item.postId, metric, item.publishedAt, now)), metric) }; } catch (error) {
-      return { metric, error: String(error?.message || error).slice(0, 200) };
-    }
-  }));
   const got = {};
   const raw = { analytics: {} };
-  for (const a of answers) { raw.analytics[a.metric] = a.error ? { error: a.error } : a.value; if (!a.error) got[a.metric] = a.value; }
-  const avgWatch = got.VIDEO_AVG_WATCH_TIME ?? got.TOTAL_VIDEO_AVG_WATCH_TIME ?? null;
+  await askGroup(item, CORE_GROUP, call, now, got, raw);
+  if (item.placement === "video") {
+    await askGroup(item, VIDEO_GROUP, call, now, got, raw);
+    // The first snapshot wins, so a video pin is not saved without its watch time just because Pinterest asked us to slow down.
+    const limited = raw.analytics.VIDEO_MRC_VIEW;
+    if (limited && typeof limited === "object" && RATE_LIMITED.test(limited.error || "")) throw new Error(`Pinterest rate limit on ${item.postId}; retry next tick`);
+  }
+  const avgWatch = got.VIDEO_AVG_WATCH_TIME ?? null;
   const metrics = {
     views: got.IMPRESSION ?? null,
     likes: got.REACTION ?? null,

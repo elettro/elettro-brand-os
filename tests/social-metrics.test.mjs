@@ -166,14 +166,24 @@ test("Pinterest: lifetime numbers map to views, saves and link clicks; an unsuit
   const url = new URL("https://x" + analyticsPath("123", "IMPRESSION", "2026-11-01T15:00:00Z", Date.parse("2026-11-10T12:00:00Z")));
   assert.deepEqual([url.searchParams.get("start_date"), url.searchParams.get("end_date"), url.searchParams.get("metric_types")], ["2026-11-01", "2026-11-10", "IMPRESSION"]);
   const values = { IMPRESSION: 120, SAVE: 4, OUTBOUND_CLICK: 6, PIN_CLICK: 9, VIDEO_AVG_WATCH_TIME: 5000 };
+  const requests = [];
+  // Like Pinterest: the whole group answers, or a 400 when one metric does not suit the pin.
   const call = async (m, path) => {
-    const metric = new URL("https://x" + path).searchParams.get("metric_types");
-    if (!(metric in values)) throw new Error("Pinterest GET failed: metric not valid for this pin");
-    return { all: { lifetime_metrics: { [metric]: values[metric] } } };
+    const asked = new URL("https://x" + path).searchParams.get("metric_types").split(",");
+    requests.push(asked.length);
+    if (asked.length > 1 && asked.some((metric) => !(metric in values) && metric !== "REACTION" && metric !== "COMMENTS")) throw new Error("Pinterest GET failed: metric not valid");
+    const lifetime = {};
+    for (const metric of asked) if (metric in values) lifetime[metric] = values[metric];
+    return { all: { lifetime_metrics: lifetime } };
   };
-  const out = await collectForPin({ ledgerId: "a", postId: "123", publishedAt: "2026-11-01T15:00:00Z", buckets: ["1h", "24h"] }, call, Date.parse("2026-11-10T12:00:00Z"));
+  const out = await collectForPin({ ledgerId: "a", postId: "123", placement: "pin", publishedAt: "2026-11-01T15:00:00Z", buckets: ["1h", "24h"] }, call, Date.parse("2026-11-10T12:00:00Z"));
+  assert.deepEqual(requests, [6]);
   assert.equal(out.length, 2);
-  assert.deepEqual([out[0].metrics.views, out[0].metrics.saves, out[0].metrics.linkClicks, out[0].metrics.avgViewDurationSeconds, out[0].metrics.likes], [120, 4, 6, 5, null]);
+  assert.deepEqual([out[0].metrics.views, out[0].metrics.saves, out[0].metrics.linkClicks, out[0].metrics.likes], [120, 4, 6, null]);
+  const video = await collectForPin({ ledgerId: "a", postId: "124", placement: "video", publishedAt: "2026-11-01T15:00:00Z", buckets: ["1h"] }, call, Date.parse("2026-11-10T12:00:00Z"));
+  assert.equal(video[0].metrics.avgViewDurationSeconds, 5);
+  const limited = async () => { throw new Error("Pinterest GET failed: You have exceeded your rate limit. Try again later."); };
+  await assert.rejects(() => collectForPin({ ledgerId: "a", postId: "9", placement: "pin", publishedAt: "2026-11-01T00:00:00Z", buckets: ["1h"] }, limited), /no Pinterest number/);
   assert.equal(out[0].raw.pinClicks, 9);
   await assert.rejects(() => collectForPin({ ledgerId: "a", postId: "1", publishedAt: "2026-11-01T00:00:00Z", buckets: ["1h"] }, async () => { throw new Error("401"); }), /no Pinterest number/);
 });

@@ -271,7 +271,7 @@ export async function publish(record, post, deps = {}) {
 }
 
 // Pin metrics (docs/ANALYTICS-SPEC.md phase A): snapshot every published Pin that reached 1h / 24h / 7d / 30d. Read only.
-const METRICS_PER_TICK = 8;
+const METRICS_PER_TICK = 6;
 
 /** `dryRun` collects and returns the numbers (with the raw answers) without saving anything. */
 export async function collectMetrics({ dryRun = false, limit = METRICS_PER_TICK } = {}, deps = {}) {
