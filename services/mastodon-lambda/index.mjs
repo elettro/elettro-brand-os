@@ -1,5 +1,6 @@
 import { SecretsManagerClient, GetSecretValueCommand, ListSecretsCommand } from "@aws-sdk/client-secrets-manager";
 import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
+import { collectForStatus } from "./metrics.mjs";
 
 // Mastodon worker for Elettro OS. Runs outside the VPC (it needs the Mastodon instance and Dropbox) and is only
 // invoked directly through IAM: no HTTP route points at it. Ways in:
@@ -240,6 +241,36 @@ export async function publish(record, request, deps = {}) {
   return { id: String(status.out.id), url: status.out.url, handle: record.acct ? "@" + record.acct : record.accountId };
 }
 
+// Post metrics (docs/ANALYTICS-SPEC.md phase A): public favourite / reply / boost counts for every published status that reached
+// 1h / 24h / 7d / 30d. No login is needed. Read only.
+const METRICS_PER_TICK = 15;
+
+/** `dryRun` collects and returns the numbers without saving anything. */
+export async function collectMetrics({ dryRun = false, limit = METRICS_PER_TICK } = {}, deps = {}) {
+  const { callApi = api, collect = collectForStatus } = deps;
+  const listed = await callApi({ action: "list-post-metrics-due-20261107", destination: "mastodon", limit });
+  if (!listed.ok) throw new Error(`list-post-metrics-due failed: ${listed.error}`);
+  const out = { ok: true, due: listed.due.length, saved: 0, failures: [], samples: [] };
+  const items = [];
+  for (const due of listed.due) {
+    try {
+      const snapshots = await collect(due);
+      items.push(...snapshots);
+      if (dryRun) out.samples.push({ brand: due.brand, postId: due.postId, buckets: due.buckets, metrics: snapshots[0].metrics, raw: snapshots[0].raw });
+    } catch (error) {
+      console.error("Metrics failed:", due.postId, error?.message);
+      out.failures.push({ postId: due.postId, error: error?.message || "failed" });
+    }
+  }
+  if (dryRun) return out;
+  for (let i = 0; i < items.length; i += 100) {
+    const recorded = await callApi({ action: "record-post-metrics-20261107", items: items.slice(i, i + 100) });
+    if (!recorded.ok) throw new Error(`record-post-metrics failed: ${recorded.error}`);
+    out.saved += recorded.saved;
+  }
+  return out;
+}
+
 export async function publishingTick(deps = {}) {
   const { callApi = api, find = account, send = publish } = deps;
   const claimed = await callApi({ action: "claim-due-posts", destination: "mastodon", placements: PLACEMENTS, limit: POSTS_PER_TICK });
@@ -267,11 +298,18 @@ export async function handler(event = {}) {
   if (event.source === "aws.events" || event.action === "tick") {
     try {
       const tick = await publishingTick();
+      // Never lets a metrics problem (table not ready, the instance unreachable) hold back publishing.
+      tick.metrics = await collectMetrics().catch((error) => ({ ok: false, error: error?.message || "metrics failed" }));
       console.log("Mastodon tick", JSON.stringify(tick));
       return result(200, { ok: true, ...tick });
     } catch (error) {
       console.error("Mastodon tick failed:", error?.message);
       return result(502, { ok: false, error: error?.message || "Tick failed" });
+    }
+  }
+  if (event.action === "metrics") {
+    try { return result(200, await collectMetrics({ dryRun: event.mode !== "apply", limit: Number(event.limit) || METRICS_PER_TICK })); } catch (error) {
+      return result(502, { ok: false, error: error?.message || "Metrics failed" });
     }
   }
   if (event.action === "post") {

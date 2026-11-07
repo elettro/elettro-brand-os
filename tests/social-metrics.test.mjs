@@ -119,13 +119,13 @@ test("the Threads worker saves what it collects", async () => {
 });
 
 test("dev-api: due list takes each collected network, skips Stories, refuses the rest", async () => {
-  assert.deepEqual(METRIC_DESTINATIONS, ["youtube", "instagram", "facebook", "threads", "pinterest"]);
+  assert.deepEqual(METRIC_DESTINATIONS, ["youtube", "instagram", "facebook", "threads", "pinterest", "bluesky", "mastodon"]);
   const seen = [];
   const connect = async () => ({ query: async (sql, params) => { seen.push([sql, params]); return { rows: [] }; }, end: async () => {} });
   for (const destination of METRIC_DESTINATIONS) assert.equal((await runListPostMetricsDue({ destination }, connect, json, NOW)).statusCode, 200);
   assert.equal((await runListPostMetricsDue({ destination: "tiktok" }, connect, json, NOW)).statusCode, 400);
   const ledger = seen.filter(([sql]) => /FROM "PublicationLedger"/.test(sql)).at(-1);
-  assert.equal(ledger[1][0], "pinterest");
+  assert.equal(ledger[1][0], "mastodon");
   assert.ok(ledger[1].some((p) => Array.isArray(p) && p.includes("story")));
   assert.match(ledger[0], /COALESCE\(pl\."placement"::text, ''\) <> ALL/);
 });
@@ -204,4 +204,53 @@ test("the Pinterest worker saves what it collects and a dry run saves nothing", 
 test("linkClicks is kept and added by setup", () => {
   assert.equal(cleanMetricItem({ ledgerId: LEDGER, ageBucket: "1h", source: "pinterest-analytics", metrics: { linkClicks: "6" } }).linkClicks, 6);
   assert.ok(POST_METRIC_TABLES_SQL.some((s) => /ADD COLUMN IF NOT EXISTS "linkClicks"/.test(s)));
+});
+
+test("Bluesky: counts come from the public AppView in batches of 25, a missing post is left for next tick", async () => {
+  const { collectForPosts, metricsFromPost, postsUrl } = await import("../services/bluesky-lambda/metrics.mjs");
+  assert.deepEqual(metricsFromPost({ likeCount: 5, replyCount: 1, repostCount: 2, quoteCount: 1 }), { views: null, reach: null, saves: null, watchTimeSeconds: null, avgViewDurationSeconds: null, followsGained: null, likes: 5, comments: 1, shares: 3 });
+  assert.equal(metricsFromPost({}).shares, null);
+  const items = Array.from({ length: 30 }, (_, i) => ({ ledgerId: `l${i}`, postId: `at://did:plc:x/app.bsky.feed.post/${i}`, buckets: i === 0 ? ["1h", "24h"] : ["1h"] }));
+  const urls = [];
+  const fetchImpl = async (url) => {
+    urls.push(url);
+    const uris = new URL(url).searchParams.getAll("uris");
+    return { ok: true, status: 200, json: async () => ({ posts: uris.filter((u) => !u.endsWith("/7")).map((uri) => ({ uri, likeCount: 2, replyCount: 0, repostCount: 0, quoteCount: 0 })) }) };
+  };
+  const { snapshots, missing } = await collectForPosts(items, fetchImpl);
+  assert.equal(urls.length, 2);
+  assert.equal(new URL(urls[0]).searchParams.getAll("uris").length, 25);
+  assert.deepEqual(missing, ["at://did:plc:x/app.bsky.feed.post/7"]);
+  assert.equal(snapshots.length, 30);
+  assert.equal(snapshots[0].source, "bluesky-appview");
+  await assert.rejects(() => collectForPosts(items.slice(0, 1), async () => ({ ok: false, status: 502, json: async () => ({}) })), /getPosts failed/);
+  assert.match(postsUrl(["at://a/b/1"]), /uris=at%3A%2F%2Fa%2Fb%2F1/);
+});
+
+test("Mastodon: counts come from the post's own instance, and a refused status throws", async () => {
+  const { collectForStatus, instanceOf, metricsFromStatus } = await import("../services/mastodon-lambda/metrics.mjs");
+  assert.equal(instanceOf("https://mastodon.social/@stashbox/111"), "https://mastodon.social");
+  assert.equal(instanceOf("nope"), null);
+  assert.deepEqual([metricsFromStatus({ favourites_count: 4, replies_count: 1, reblogs_count: 2 }).likes, metricsFromStatus({}).likes], [4, null]);
+  const seen = [];
+  const ok = async (url) => (seen.push(url), { ok: true, status: 200, json: async () => ({ favourites_count: 4, replies_count: 1, reblogs_count: 2 }) });
+  const out = await collectForStatus({ ledgerId: "a", postId: "111", externalUrl: "https://mastodon.social/@s/111", buckets: ["1h", "24h"] }, ok);
+  assert.equal(seen[0], "https://mastodon.social/api/v1/statuses/111");
+  assert.deepEqual([out.length, out[0].metrics.likes, out[0].metrics.comments, out[0].metrics.shares], [2, 4, 1, 2]);
+  await assert.rejects(() => collectForStatus({ ledgerId: "a", postId: "1", externalUrl: "https://mastodon.social/x", buckets: ["1h"] }, async () => ({ ok: false, status: 404, json: async () => ({ error: "Record not found" }) })), /Record not found/);
+  await assert.rejects(() => collectForStatus({ ledgerId: "a", postId: "1", buckets: ["1h"] }), /no instance address/);
+});
+
+test("the Bluesky and Mastodon workers save what they collect; a dry run saves nothing", async () => {
+  const bsky = await import("../services/bluesky-lambda/index.mjs");
+  const masto = await import("../services/mastodon-lambda/index.mjs");
+  const recorded = [];
+  const mk = (due) => async (p) => p.action === "list-post-metrics-due-20261107" ? { ok: true, due } : (recorded.push(...p.items), { ok: true, saved: p.items.length });
+  const snap = (item) => [{ ledgerId: item.ledgerId, ageBucket: item.buckets[0], source: "x", metrics: { likes: 1 }, raw: {} }];
+  const due = [{ ledgerId: "a", postId: "p", buckets: ["1h"], brand: "stashbox" }];
+  assert.equal((await bsky.collectMetrics({ dryRun: true }, { callApi: mk(due), collect: async (items) => ({ snapshots: items.flatMap(snap), missing: [] }) })).saved, 0);
+  assert.equal(recorded.length, 0);
+  assert.equal((await bsky.collectMetrics({}, { callApi: mk(due), collect: async (items) => ({ snapshots: items.flatMap(snap), missing: [] }) })).saved, 1);
+  assert.equal((await masto.collectMetrics({}, { callApi: mk(due), collect: async (item) => snap(item) })).saved, 1);
+  assert.equal((await masto.collectMetrics({ dryRun: true }, { callApi: mk(due), collect: async () => { throw new Error("gone"); } })).failures.length, 1);
 });
