@@ -1,5 +1,6 @@
 import { SecretsManagerClient, GetSecretValueCommand, ListSecretsCommand, PutSecretValueCommand } from "@aws-sdk/client-secrets-manager";
 import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
+import { collectForPin } from "./metrics.mjs";
 
 // Pinterest worker for Elettro OS. Runs outside the VPC (it needs api.pinterest.com) and is only
 // invoked directly through IAM: no HTTP route points at it. Ways in:
@@ -269,6 +270,38 @@ export async function publish(record, post, deps = {}) {
   return { pinId: created.id, url: `https://www.pinterest.com/pin/${created.id}/`, boardId: board };
 }
 
+// Pin metrics (docs/ANALYTICS-SPEC.md phase A): snapshot every published Pin that reached 1h / 24h / 7d / 30d. Read only.
+const METRICS_PER_TICK = 8;
+
+/** `dryRun` collects and returns the numbers (with the raw answers) without saving anything. */
+export async function collectMetrics({ dryRun = false, limit = METRICS_PER_TICK } = {}, deps = {}) {
+  const { callApi = api, find = account, call: callOverride } = deps;
+  const out = { ok: true, due: 0, saved: 0, failures: [], samples: [] };
+  const listed = await callApi({ action: "list-post-metrics-due-20261107", destination: "pinterest", limit });
+  if (!listed.ok) throw new Error(`list-post-metrics-due failed: ${listed.error}`);
+  out.due = listed.due.length;
+  const items = [];
+  for (const due of listed.due) {
+    try {
+      const record = await find(due.channelId);
+      const call = callOverride || ((method, path) => pinterest(record.accessToken, method, path));
+      const snapshots = await collectForPin(due, call);
+      items.push(...snapshots);
+      if (dryRun) out.samples.push({ brand: due.brand, placement: due.placement, postId: due.postId, buckets: due.buckets, metrics: snapshots[0].metrics, raw: snapshots[0].raw });
+    } catch (error) {
+      console.error("Metrics failed:", due.postId, error?.message);
+      out.failures.push({ postId: due.postId, error: error?.message || "failed" });
+    }
+  }
+  if (dryRun) return out;
+  for (let i = 0; i < items.length; i += 100) {
+    const recorded = await callApi({ action: "record-post-metrics-20261107", items: items.slice(i, i + 100) });
+    if (!recorded.ok) throw new Error(`record-post-metrics failed: ${recorded.error}`);
+    out.saved += recorded.saved;
+  }
+  return out;
+}
+
 async function publishingTick() {
   const claimed = await api({ action: "claim-due-posts", destination: "pinterest", placements: PLACEMENTS, limit: POSTS_PER_TICK });
   if (!claimed.ok) throw new Error(`claim-due-posts failed: ${claimed.error}`);
@@ -295,11 +328,18 @@ export async function handler(event = {}) {
     const refresh = await refreshAll().catch((error) => ({ ok: false, error: error?.message }));
     try {
       const tick = await publishingTick();
+      // Never lets a metrics problem (table not ready, a token without pins:read) hold back publishing.
+      tick.metrics = await collectMetrics().catch((error) => ({ ok: false, error: error?.message || "metrics failed" }));
       console.log("Pinterest tick", JSON.stringify(tick));
       return result(200, { ok: refresh.ok !== false, refresh, ...tick });
     } catch (error) {
       console.error("Pinterest tick failed:", error?.message);
       return result(502, { ok: false, refresh, error: error?.message || "Tick failed" });
+    }
+  }
+  if (event.action === "metrics") {
+    try { return result(200, await collectMetrics({ dryRun: event.mode !== "apply", limit: Number(event.limit) || METRICS_PER_TICK })); } catch (error) {
+      return result(502, { ok: false, error: error?.message || "Metrics failed" });
     }
   }
   if (event.action === "refresh") {

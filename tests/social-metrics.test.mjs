@@ -119,13 +119,13 @@ test("the Threads worker saves what it collects", async () => {
 });
 
 test("dev-api: due list takes each collected network, skips Stories, refuses the rest", async () => {
-  assert.deepEqual(METRIC_DESTINATIONS, ["youtube", "instagram", "facebook", "threads"]);
+  assert.deepEqual(METRIC_DESTINATIONS, ["youtube", "instagram", "facebook", "threads", "pinterest"]);
   const seen = [];
   const connect = async () => ({ query: async (sql, params) => { seen.push([sql, params]); return { rows: [] }; }, end: async () => {} });
   for (const destination of METRIC_DESTINATIONS) assert.equal((await runListPostMetricsDue({ destination }, connect, json, NOW)).statusCode, 200);
   assert.equal((await runListPostMetricsDue({ destination: "tiktok" }, connect, json, NOW)).statusCode, 400);
   const ledger = seen.filter(([sql]) => /FROM "PublicationLedger"/.test(sql)).at(-1);
-  assert.equal(ledger[1][0], "threads");
+  assert.equal(ledger[1][0], "pinterest");
   assert.ok(ledger[1].some((p) => Array.isArray(p) && p.includes("story")));
   assert.match(ledger[0], /COALESCE\(pl\."placement"::text, ''\) <> ALL/);
 });
@@ -156,4 +156,42 @@ test("Facebook: a photo's id is swapped for its post id, and an id with no such 
   });
   assert.ok(paths.includes("777/video_insights"));
   assert.equal(video.metrics.views, 40);
+});
+
+test("Pinterest: lifetime numbers map to views, saves and link clicks; an unsuitable metric costs only itself", async () => {
+  const { collectForPin, metricValue, analyticsPath } = await import("../services/pinterest-lambda/metrics.mjs");
+  assert.equal(metricValue({ all: { lifetime_metrics: { SAVE: 3 } } }, "SAVE"), 3);
+  assert.equal(metricValue({ all: { daily_metrics: [{ metrics: { SAVE: 1 } }, { metrics: { SAVE: 2 } }] } }, "SAVE"), 3);
+  assert.equal(metricValue({ all: {} }, "SAVE"), null);
+  const url = new URL("https://x" + analyticsPath("123", "IMPRESSION", "2026-11-01T15:00:00Z", Date.parse("2026-11-10T12:00:00Z")));
+  assert.deepEqual([url.searchParams.get("start_date"), url.searchParams.get("end_date"), url.searchParams.get("metric_types")], ["2026-11-01", "2026-11-10", "IMPRESSION"]);
+  const values = { IMPRESSION: 120, SAVE: 4, OUTBOUND_CLICK: 6, PIN_CLICK: 9, VIDEO_AVG_WATCH_TIME: 5000 };
+  const call = async (m, path) => {
+    const metric = new URL("https://x" + path).searchParams.get("metric_types");
+    if (!(metric in values)) throw new Error("Pinterest GET failed: metric not valid for this pin");
+    return { all: { lifetime_metrics: { [metric]: values[metric] } } };
+  };
+  const out = await collectForPin({ ledgerId: "a", postId: "123", publishedAt: "2026-11-01T15:00:00Z", buckets: ["1h", "24h"] }, call, Date.parse("2026-11-10T12:00:00Z"));
+  assert.equal(out.length, 2);
+  assert.deepEqual([out[0].metrics.views, out[0].metrics.saves, out[0].metrics.linkClicks, out[0].metrics.avgViewDurationSeconds, out[0].metrics.likes], [120, 4, 6, 5, null]);
+  assert.equal(out[0].raw.pinClicks, 9);
+  await assert.rejects(() => collectForPin({ ledgerId: "a", postId: "1", publishedAt: "2026-11-01T00:00:00Z", buckets: ["1h"] }, async () => { throw new Error("401"); }), /no Pinterest number/);
+});
+
+test("the Pinterest worker saves what it collects and a dry run saves nothing", async () => {
+  const { collectMetrics } = await import("../services/pinterest-lambda/index.mjs");
+  const recorded = [];
+  const callApi = async (p) => p.action === "list-post-metrics-due-20261107"
+    ? { ok: true, due: [{ ledgerId: "a", postId: "9", publishedAt: new Date(Date.now() - 30 * HOUR).toISOString(), channelId: "12345", brand: "stashbox", buckets: ["1h"] }] }
+    : (recorded.push(...p.items), { ok: true, saved: p.items.length });
+  const deps = { callApi, find: async () => ({ accessToken: "t" }), call: async () => ({ all: { lifetime_metrics: { IMPRESSION: 5 } } }) };
+  assert.equal((await collectMetrics({ dryRun: true }, deps)).samples.length, 1);
+  assert.equal(recorded.length, 0);
+  assert.equal((await collectMetrics({}, deps)).saved, 1);
+  assert.equal(recorded[0].metrics.views, 5);
+});
+
+test("linkClicks is kept and added by setup", () => {
+  assert.equal(cleanMetricItem({ ledgerId: LEDGER, ageBucket: "1h", source: "pinterest-analytics", metrics: { linkClicks: "6" } }).linkClicks, 6);
+  assert.ok(POST_METRIC_TABLES_SQL.some((s) => /ADD COLUMN IF NOT EXISTS "linkClicks"/.test(s)));
 });

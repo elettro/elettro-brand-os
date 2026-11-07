@@ -76,7 +76,7 @@ export type CalendarPost = {
   // Latest stats snapshot (YouTube so far): taken 1h / 24h / 7d / 30d after publishing, only numbers that exist. null until one exists.
   stats: CalendarStats | null;
 };
-export type CalendarStatKey = "views" | "likes" | "comments" | "shares" | "watchTimeSeconds" | "avgViewDurationSeconds" | "followsGained" | "reach" | "saves";
+export type CalendarStatKey = "views" | "likes" | "comments" | "shares" | "watchTimeSeconds" | "avgViewDurationSeconds" | "followsGained" | "reach" | "saves" | "linkClicks";
 export type CalendarStats = { asOf: "1h" | "24h" | "7d" | "30d"; source: string; metrics: Partial<Record<CalendarStatKey, number>> };
 export type CalendarMonth = { ok: boolean; error?: string; brand: string; timeZone: string; month: string; start: string; end: string; today: string;
   // Approved posts still to come in any month (older API builds leave it out).
