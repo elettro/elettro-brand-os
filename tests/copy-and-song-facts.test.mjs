@@ -388,3 +388,19 @@ test("the 'it's not just X, it's Y' construction is caught in its common wording
   assert.ok(!banned("Not just for bands: venues use it too."), "no 'it's' after: fine");
   assert.ok(!banned("Just released. It's out now."));
 });
+
+test("each AI request carries per-post instructions: plain posts say no link and no ask, and never to block for it", async () => {
+  const { postInstructions } = await import("../services/dev-api-lambda/copywriter.mjs");
+  const slot = { sector: "live-shows", destination: "bluesky", placement: "post", synthetic: false };
+  const plain = postInstructions(postFacts(dylanAsset, slot, {}, links, { promotional: false }));
+  assert.match(plain[0], /^PLAIN POST: no link/);
+  assert.ok(plain.some((i) => /not a reason to block/.test(i)));
+  const promo = postInstructions(postFacts(dylanAsset, slot, {}, links, { promotional: true }));
+  assert.ok(!promo.some((i) => /PLAIN POST/.test(i)));
+  let sent;
+  const assetsById = new Map([[dylanAsset.id, dylanAsset]]);
+  await writeWeekCopy({ slots: [{ ...slot, slotId: "s1", assetId: dylanAsset.id, socialAccountId: "bs", ymd: "2026-11-09" }], assetsById, songFacts: {}, links,
+    brandSlug: "stashbox", modelId: "m", invoke: async ({ user }) => { sent = JSON.parse(user); return JSON.stringify({ status: "ready", caption: "Tangled Up in Blue, live.", hashtags: [] }); },
+    promotionalMaxShare: { bluesky: 0 } });
+  assert.match(sent.instructions[0], /^PLAIN POST/);
+});

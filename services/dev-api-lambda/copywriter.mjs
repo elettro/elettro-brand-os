@@ -35,6 +35,21 @@ const titleCase = (slug) => String(slug).split("-").map((w) => (w ? w[0].toUpper
 const pick = (seed, list) => list[parseInt(createHash("sha256").update(seed).digest("hex").slice(0, 8), 16) % list.length];
 
 /** The product page for an asset tagged with its Shopify handle, on the brand's own store; null when there is no handle. */
+/**
+ * Per-post instructions sent with the facts. The AI weighs the request itself above the general guidance; in the
+ * 2026-11-07 trials it still returned "blocked" for plain posts (the brand's pillar CTA wants a link) and for
+ * missing show details, although copywriting.md says not to.
+ */
+export function postInstructions(f) {
+  const out = ["Missing details (venue, date, city, performers, song, show) are not a reason to block: write a true post without them and never guess them."];
+  if (f.promotional === false) {
+    out.unshift("PLAIN POST: no link, no 'link in bio', no ask and no call to action (no book, listen, shop, follow, join, subscribe). This overrides the pillar's call to action. Write the moment itself. A plain post is complete without a link: do not return blocked for a missing link.");
+  } else if (!f.primaryLink) {
+    out.push("No link is on file for this post: write it without one. Do not return blocked for that.");
+  }
+  return out;
+}
+
 /** The radio blog URL: links.radioBlog, or the radio page's own /blog/ (stashbox.com/radio/ -> stashbox.com/radio/blog/). */
 export function radioBlogLink(links = {}) {
   if (links.radioBlog) return links.radioBlog;
@@ -443,7 +458,8 @@ export async function writeWeekCopy({ slots, assetsById, songFacts, links, brand
       const g = buildGuidance("write_copy", { brand: brandSlug, destination: slot.destination, sectors: [slot.sector] }, intelligenceRoot);
       const recent = [...(recentCaptionsByAccount[slot.socialAccountId] || []), ...written.filter((w) => w.socialAccountId === slot.socialAccountId).map((w) => w.text)].slice(-20);
       const user = JSON.stringify({ slot: { destination: slot.destination, placement: slot.placement, sector: slot.sector, date: slot.ymd },
-        asset: { filename: asset.filename, contentGroup: asset.contentGroup, tags: (asset.tags || []).slice(0, 30) }, facts: f, recentCaptions: recent });
+        asset: { filename: asset.filename, contentGroup: asset.contentGroup, tags: (asset.tags || []).slice(0, 30) }, facts: f, recentCaptions: recent,
+        instructions: postInstructions(f) });
       const ai = parseCopy(await invoke({ modelId, system: g.guidance, user }));
       if (ai.status === "blocked") return { slotId: slot.slotId, facts: f, copy: { ...fallback(), aiBlocked: ai.missing || [] } };
       const copy = {
