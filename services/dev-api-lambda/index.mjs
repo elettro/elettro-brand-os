@@ -10,6 +10,7 @@ import {runSharedStockGraphicsSetup,runSharedStockGraphicsTagging,LIBRARY_GRAPHI
 import {runDocumentAssetKindSetup} from "./document-asset-kind.mjs";
 import {createBrand} from "./brand-create.mjs";
 import {runMultiCamSetup, handleMultiCam} from "./multicam.mjs";
+import {handleOpsTick} from "./ops-tick.mjs";
 import { handleConnectionStatus, setPlatformMilestone, setTokenExpiry, renameSocialAccount, listSocialAccounts, feedResponse } from "./connection-status.mjs";
 import { handlePostRace } from "./post-race.mjs";
 import { handleAssetFeed } from "./asset-feed.mjs";
@@ -1640,6 +1641,8 @@ export const handler = async (event = {}) => {
   // Public, read-only: the 1000-post race (counts per brand and network) for elettro.com/dash.
   if (requestPath === "/status/posts" && (event?.requestContext?.http?.method || "GET") === "GET") return handlePostRace(connectDatabase, feedResponse);
   if (requestPath === "/status/assets" && (event?.requestContext?.http?.method || "GET") === "GET") return handleAssetFeed(connectDatabase, feedResponse);
+  // Stream Deck keys: fire a worker tick now. Its own token (x-elettro-deck-key) is checked inside, so it sits before the shared-key gate.
+  if (requestPath === "/ops/tick") return handleOpsTick(event, json);
   // Everything else over HTTP needs the shared connect key (deny by default); see api-gate.mjs.
   const gated = gateHttp(event, requestPath, json);
   if (gated) return gated;
