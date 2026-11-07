@@ -50,8 +50,11 @@ export const PILLARS = {
   A: { business: true, cta: ["BOOK"] },
   B: { business: true, cta: ["LEARN_MORE", "SIGN_UP"] },
   C: { business: true, cta: ["LEARN_MORE"] },
-  F: { business: false, cta: ["LEARN_MORE", "SHOP"] }
+  F: { business: false, cta: ["LEARN_MORE", "SHOP"] },
+  // "N" = no pillar (Dean 261106): only for the brands below, which post a rolling own-brand / sister-brand mix instead.
+  N: { business: true, cta: ["LEARN_MORE"] }
 };
+export const NO_PILLAR_BRANDS = ["neckermann-strom", "solarmeister"];
 const CTA_TYPES = ["BOOK", "ORDER", "SHOP", "LEARN_MORE", "SIGN_UP", "CALL"];
 const SHORTENERS = ["bit.ly", "t.co", "tinyurl.com", "goo.gl", "ow.ly", "buff.ly", "is.gd", "rebrand.ly", "lnkd.in", "youtu.be", "cutt.ly", "t.ly", "shorturl.at"];
 const YMD = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -115,6 +118,7 @@ export function postRequest(post, now = new Date(), { topicTypes = ALLOWED_TOPIC
   if (!topicTypes.includes(topicType)) throw new Blocked("only Update (STANDARD) posts are supported for now", topicType);
   const pillar = String(gmb.pillar || "");
   if (!PILLARS[pillar]) throw new Blocked("every post needs exactly one pillar tag (A, B, C or F)", pillar || "none");
+  if (pillar === "N" && !NO_PILLAR_BRANDS.includes(String(post.brand || "").toLowerCase())) throw new Blocked("the no-pillar tag is only for Neckermann Strom and SolarMeister", post.brand || "none");
 
   const summary = String(post.caption || "").trim();
   if (!summary) throw new Blocked("the post has no text");
