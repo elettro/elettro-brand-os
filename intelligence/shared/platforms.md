@@ -174,6 +174,34 @@ enforces them. The rest is advice.
   destination link, so it must be the most relevant record URL.
 - **Best fit:** products, visual collections, artwork, gift ideas, evergreen
   content. Weak fit: time-bound announcements.
+- **Output fields:** put the description in `caption` (it is required) and the
+  title in `title`. **No hashtags**: return `hashtags: []` and none in the
+  text (code rejects them on Pinterest).
+
+## [mastodon] Mastodon
+
+- **Placements:** public posts on the brand's mastodon.social profile: one
+  photo, 2-4 photo galleries, or one video.
+- **Viewer:** a decentralised, community-minded audience that dislikes ads and
+  marketing tone; rewards genuine, specific, human posts and good image
+  descriptions. Many follow hashtags, not accounts.
+- **Caption:** at most 500 characters (code enforces it). Conversational, one
+  idea, plain language. Links are clickable; one link at most.
+- **Hashtags:** up to 3, specific, written in CamelCase for screen readers
+  (#LiveMusic, not #livemusic).
+- **No @mentions** (automated mentions notify people and count as spam).
+- **Alt text** on every image, literal.
+
+## [substack] Substack
+
+- **Placements:** "Photo posts" (one picture + title + short body) and
+  "Galleries" (2-20 pictures from one pillar: a short intro, then the pictures
+  in order). Posts appear on the publication's web page; they are not emailed.
+- **Viewer:** readers who chose to follow the publication; they read, not scroll.
+- **Title:** in `title`, clear and specific, at most 150 characters.
+- **Body:** in `caption`, 2-5 short sentences, at most 1,200 characters (code
+  enforces it): what this is and why it matters. One link at most.
+- **No hashtags** (`hashtags: []`); they mean nothing on Substack.
 
 ## [gmb] Google Business Profile
 

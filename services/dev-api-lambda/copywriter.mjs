@@ -359,7 +359,7 @@ const graphemes = (text) => [...new Intl.Segmenter("en", { granularity: "graphem
 const MENTION = /(^|[\s(])@[a-z0-9][a-z0-9-]*(\.[a-z0-9][a-z0-9-]*)+/i;
 
 // Mastodon mentions are @name or @name@instance.
-const MASTODON_MENTION = /(^|[s(])@[a-z0-9_]+(@[a-z0-9.-]+.[a-z]{2,})?/i;
+const MASTODON_MENTION = /(^|[\s(])@[a-z0-9_]+(@[a-z0-9.-]+\.[a-z]{2,})?/i;
 
 /** Code-side checks on any copy (AI or template). Returns a list of problems. */
 export function validateCopy(copy, f) {
