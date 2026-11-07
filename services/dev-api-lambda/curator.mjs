@@ -4,7 +4,14 @@ import { buildGuidance } from "./intelligence.mjs";
 
 const MAX_OUTPUT_TOKENS = 4000;
 
-export async function bedrockInvoke({ modelId, system, user }) {
+/**
+ * Model call used by the curator, the copywriter and Calendar swaps. In AWS the dev-api runs inside the VPC,
+ * which has no route to Bedrock, so when AI_FUNCTION_NAME is set the call goes through the AI Lambda
+ * (services/ai-lambda, outside the VPC, reached over the VPC's Lambda endpoint). Without it (local runs,
+ * tests) Bedrock is called directly.
+ */
+export async function bedrockInvoke({ modelId, system, user }, { functionName = process.env.AI_FUNCTION_NAME, lambdaSend } = {}) {
+  if (functionName) return aiLambdaInvoke({ modelId, system, user, functionName, lambdaSend });
   const { BedrockRuntimeClient, ConverseCommand } = await import("@aws-sdk/client-bedrock-runtime");
   const client = new BedrockRuntimeClient({ region: process.env.AWS_REGION || "us-east-1", maxAttempts: 2 });
   const result = await client.send(new ConverseCommand({
@@ -14,6 +21,27 @@ export async function bedrockInvoke({ modelId, system, user }) {
     inferenceConfig: { maxTokens: MAX_OUTPUT_TOKENS, temperature: 0.3 }
   }), { abortSignal: AbortSignal.timeout(55000) });
   return result.output?.message?.content?.flatMap((p) => (p.text ? [p.text] : [])).join("\n") || "";
+}
+
+let lambdaClient;
+async function defaultLambdaSend(input) {
+  const { LambdaClient, InvokeCommand } = await import("@aws-sdk/client-lambda");
+  lambdaClient = lambdaClient || new LambdaClient({ region: process.env.AWS_REGION || "us-east-1", maxAttempts: 1 });
+  return lambdaClient.send(new InvokeCommand(input), { abortSignal: AbortSignal.timeout(58000) });
+}
+
+/** One converse-v1 call through the AI Lambda. Throws on any failure, like a direct Bedrock error. */
+export async function aiLambdaInvoke({ modelId, system, user, functionName, lambdaSend = defaultLambdaSend }) {
+  const result = await lambdaSend({
+    FunctionName: functionName,
+    InvocationType: "RequestResponse",
+    Payload: Buffer.from(JSON.stringify({ action: "converse-v1", modelId, system, user, maxTokens: MAX_OUTPUT_TOKENS, temperature: 0.3 }))
+  });
+  if (result.FunctionError) throw new Error(`AI Lambda failed (${result.FunctionError})`);
+  let response;
+  try { response = JSON.parse(Buffer.from(result.Payload || []).toString("utf8")); } catch { throw new Error("AI Lambda returned unreadable output"); }
+  if (!response || response.ok !== true) throw new Error(`AI Lambda: ${response?.error || "no answer"}`);
+  return typeof response.text === "string" ? response.text : "";
 }
 
 export function parseDecisions(text) {

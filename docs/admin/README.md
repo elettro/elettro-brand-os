@@ -9,6 +9,7 @@ Task-by-task runbooks for administering Elettro OS: the things a new admin or a 
 - [new-api-route.md](new-api-route.md): add or fix an HTTP route on the dev-api (gateway route + Lambda permission).
 - [deploy-dev-api-lambda.md](deploy-dev-api-lambda.md): get merged dev-api code running in AWS.
 - [substack-connect.md](substack-connect.md): connect Substack (unofficial API + session cookie), what was never verified, AWS steps.
+- [ai-lambda.md](ai-lambda.md): the AI Lambda that relays the dev-api's Bedrock (Haiku 5.5) calls out of the VPC, and how to turn AI on.
 - [scroll-relay.md](scroll-relay.md): the WebSocket relay behind the elettro.com/scroll phone remote (setup, rules, checks).
 
 ## Rules for every runbook

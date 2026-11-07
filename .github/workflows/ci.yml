@@ -38,6 +38,9 @@ jobs:
       - name: Test scroll relay (phone remote for elettro.com/scroll)
         run: node --test tests/scroll-relay.test.mjs
 
+      - name: Test AI Lambda (Bedrock relay for the dev-api)
+        run: node --test tests/ai-lambda.test.mjs
+
       - name: Test asset metadata state and enrichment guards
         run: node --test tests/asset-enrichment-safety.test.mjs
 
