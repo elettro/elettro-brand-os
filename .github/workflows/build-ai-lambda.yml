@@ -1,0 +1,44 @@
+name: Build AI Lambda
+
+on:
+  push:
+    branches:
+      - develop
+    paths:
+      - "services/ai-lambda/**"
+      - ".github/workflows/build-ai-lambda.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/ai-lambda
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Check syntax
+        run: node --check index.mjs && node --check converse.mjs
+
+      - name: Install production dependencies
+        run: npm install --omit=dev --workspaces=false
+
+      - name: Package Lambda
+        run: zip -qr elettro-brand-os-dev-ai.zip index.mjs converse.mjs package.json node_modules
+
+      - name: Verify packaged handler loads
+        run: rm -rf /tmp/zipcheck && mkdir /tmp/zipcheck && unzip -q elettro-brand-os-dev-ai.zip -d /tmp/zipcheck && cd /tmp/zipcheck && node --input-type=module -e 'const m = await import("./index.mjs"); if (typeof m.handler !== "function") throw new Error("no handler")'
+
+      - name: Upload Lambda package
+        uses: actions/upload-artifact@v4
+        with:
+          name: elettro-brand-os-dev-ai
+          path: services/ai-lambda/elettro-brand-os-dev-ai.zip
+          if-no-files-found: error
