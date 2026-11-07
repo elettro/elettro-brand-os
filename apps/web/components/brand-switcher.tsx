@@ -33,6 +33,9 @@ export function BrandSwitcher({
       value={brandId}
       onChange={(event) => {
         const next = new URLSearchParams(params.toString());
+        // One-shot result params from a connect/disconnect redirect belong to the brand that was just handled; carrying them over made
+        // the Connections page paint that handle on the newly picked brand (Dean 2026-11-07: Elettro showed @stashboxband).
+        for (const key of ["connected", "disconnected", "network", "expires", "error", "posted", "at"]) next.delete(key);
         if (event.target.value === "all") next.delete("brand");
         else next.set("brand", event.target.value);
         const query = next.toString();
