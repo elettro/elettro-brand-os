@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { AGE_BUCKETS, dueBuckets, cleanMetricItem, runPostMetricsSetup, runListPostMetricsDue, runRecordPostMetrics } from "../services/dev-api-lambda/post-metrics.mjs";
+import { AGE_BUCKETS, dueBuckets, cleanMetricItem, runPostMetricsSetup, runListPostMetricsDue, runRecordPostMetrics, EXCLUDED_BRANDS } from "../services/dev-api-lambda/post-metrics.mjs";
 import { analyticsUrl, statisticsUrl, snapshotFrom, collectForVideo } from "../services/youtube-upload-lambda/metrics.mjs";
 
 const HOUR = 3600000;
@@ -111,4 +111,16 @@ test("collectForVideo keeps the Data API numbers when Analytics is refused, and 
   assert.equal(out[0].raw.analytics.error, 403);
   t.mock.method(globalThis, "fetch", async () => ({ ok: true, status: 200, json: async () => ({ items: [] }) }));
   assert.deepEqual(await collectForVideo({ ledgerId: "a", videoId: "v", publishedAt: "2026-11-01T00:00:00Z", buckets: ["1h"] }, "token", NOW), []);
+});
+
+test("the google-review demo brand is left out of both queries", async () => {
+  const seen = [];
+  const connect = async () => ({ query: async (sql, params) => { seen.push([sql, params]); return { rows: [] }; }, end: async () => {} });
+  await runListPostMetricsDue({}, connect, json, NOW);
+  assert.deepEqual(EXCLUDED_BRANDS, ["google-review"]);
+  assert.equal(seen.length, 2);
+  for (const [sql, params] of seen) {
+    assert.match(sql, /"slug" <> ALL\(\$\d::text\[\]\)/);
+    assert.ok(params.some((p) => Array.isArray(p) && p.includes("google-review")));
+  }
 });

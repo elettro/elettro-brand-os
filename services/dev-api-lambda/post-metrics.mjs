@@ -18,6 +18,8 @@ export const AGE_BUCKETS = [
 const BUCKET_IDS = AGE_BUCKETS.map((b) => b.id);
 // A post older than this stops being collected (its 30d snapshot is the last one that matters).
 const MAX_AGE_MS = 45 * 24 * 60 * 60 * 1000;
+// Brands that exist only for testing; never collected (google-review is the demo brand for Google's API reviewer).
+export const EXCLUDED_BRANDS = ["google-review"];
 const DEFAULT_LIMIT = 25;
 const MAX_LIMIT = 100;
 
@@ -112,8 +114,8 @@ export async function runListPostMetricsDue(event, connectDatabase, json, now = 
     const channels = (await client.query(
       `SELECT b."slug" AS "brand", sa."accountName", sa."externalAccountId" AS "channelId"
        FROM "SocialAccount" sa JOIN "Brand" b ON b."id" = sa."brandId"
-       WHERE sa."destination" = 'youtube' AND sa."externalAccountId" IS NOT NULL AND sa."status" = 'active'
-       ORDER BY b."slug"`)).rows;
+       WHERE sa."destination" = 'youtube' AND sa."externalAccountId" IS NOT NULL AND sa."status" = 'active' AND b."slug" <> ALL($1::text[])
+       ORDER BY b."slug"`, [EXCLUDED_BRANDS])).rows;
     const rows = (await client.query(
       `SELECT pl."id" AS "ledgerId", pl."externalPostId" AS "videoId", pl."publishedAt", sa."externalAccountId" AS "channelId", b."slug" AS "brand",
               COALESCE(array_agg(pm."ageBucket") FILTER (WHERE pm."ageBucket" IS NOT NULL), '{}') AS "captured"
@@ -122,9 +124,9 @@ export async function runListPostMetricsDue(event, connectDatabase, json, now = 
        JOIN "Brand" b ON b."id" = pl."brandId"
        LEFT JOIN "PostMetric" pm ON pm."ledgerId" = pl."id"
        WHERE pl."destination" = 'youtube' AND pl."externalPostId" IS NOT NULL AND sa."externalAccountId" IS NOT NULL
-         AND pl."publishedAt" >= $1::timestamp
+         AND pl."publishedAt" >= $1::timestamp AND b."slug" <> ALL($2::text[])
        GROUP BY pl."id", sa."externalAccountId", b."slug"
-       ORDER BY pl."publishedAt"`, [new Date(now - MAX_AGE_MS).toISOString()])).rows;
+       ORDER BY pl."publishedAt"`, [new Date(now - MAX_AGE_MS).toISOString(), EXCLUDED_BRANDS])).rows;
     const due = [];
     for (const row of rows) {
       const buckets = dueBuckets(row.publishedAt, row.captured, now);

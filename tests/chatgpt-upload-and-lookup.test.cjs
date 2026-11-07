@@ -29,7 +29,7 @@ const identityModule=load('apps/web/lib/ai-mcp-dropbox-identity.ts');
 const ELETTRO_ASSET={id:'c2ec7a41-1cb6-43d4-a25b-eae925803b23',brandSlug:'elettro',filename:'epe-web-test.png',
  sourceType:'dropbox',sourcePath:'/1---elettro-brand-os/brands/elettro/test/epe-web-test.png',sourceFileId:'id:UM9GhyUcVDgAAAAAAAMEFg'};
 function gateway(asset){
- return load('apps/web/lib/ai-gateway.ts',{'@aws-sdk/client-secrets-manager':secretsMock,'@/lib/brand-config':{brandConfigs:brands}},
+ return load('apps/web/lib/ai-gateway.ts',{'@aws-sdk/client-secrets-manager':secretsMock,'@/lib/brand-config':{brandConfigs:brands,gatewayBrandConfigs:brands}},
   {fetch:async url=>url.includes('/assets?id=')?json(asset?{ok:true,asset}:{ok:true,asset:null}):json({ok:false},500)});
 }
 for(const action of ['get_asset','inspect_global_dropbox_id','inspect_registered_asset']){
@@ -76,7 +76,7 @@ const ASSET_ID='00112233-4455-6677-8899-aabbccddeeff';
 function uploadMocks(gatewayCalls,gatewayBehavior={}){
  return {
   '@aws-sdk/client-secrets-manager':secretsMock,
-  '@/lib/brand-config':{brandConfigs:brands},
+  '@/lib/brand-config':{brandConfigs:brands,gatewayBrandConfigs:brands},
   '@/lib/asset-ai-enrichment':{enrichAfterRegistrationIfEnabled:async()=>{(gatewayCalls.enrich||=[]).push(1);return {attempted:false};}},
   '@/lib/ai-mcp-intake':{validChatFile:f=>f,mediaType:()=> 'image/png',
    verifyIntakePlan:async()=>({brandSlug:'stashbox',folder:FOLDER,filename:'new.png',mimeType:'image/png',
