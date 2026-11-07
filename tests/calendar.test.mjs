@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { handlePlannerReview } from "../services/dev-api-lambda/planner-review.mjs";
-import { calendarGrid, rankReplacements } from "../services/dev-api-lambda/calendar.mjs";
+import { calendarGrid, rankReplacements, statsFromMetric } from "../services/dev-api-lambda/calendar.mjs";
 import { resolvePlannerSettings } from "../services/dev-api-lambda/planner-v2.mjs";
 
 const json = (statusCode, body) => ({ statusCode, body });
@@ -129,4 +129,38 @@ test("replan-slot refuses locked, carousel and not-approved posts", async () => 
   assert.equal(carousel.statusCode, 409);
   const planned = await call({ action: "replan-slot", id: POST_ID }, fakeClient([['sa."destination", sa."timezone"', { rows: [slotRow({ status: "planned" })] }]]), { now: later });
   assert.equal(planned.statusCode, 404);
+});
+
+test("a published post carries its latest PostMetric snapshot, only with the numbers that exist", async () => {
+  const asset = { assetId: OLD, filename: "a.mp4", kind: "video", sourcePath: "/a.mp4", assetTitle: null, durationMs: 1000 };
+  const ledger = (id, destination) => ({ id, scheduledPostId: null, destination, placement: "short", publishedAt: "2026-11-03T16:00:00Z", externalUrl: null, accountName: "S", scoreBreakdown: {}, ...asset });
+  const client = fakeClient([
+    ['FROM "PublicationLedger" pl', { rows: [ledger("l1", "youtube"), ledger("l2", "youtube"), ledger("l3", "instagram")] }],
+    ['FROM "PostMetric"', { rows: [{ ledgerId: "l1", ageBucket: "7d", source: "analytics", views: 120, likes: 9, comments: null, shares: 2, watchTimeSeconds: 4200, avgViewDurationSeconds: 21.5, followsGained: 0 }] }]
+  ]);
+  const r = await call({ action: "calendar", month: "2026-11" }, client, { now: new Date("2026-11-10T12:00:00Z") });
+  const byId = Object.fromEntries(r.body.posts.map((p) => [p.id, p]));
+  assert.deepEqual(byId["pub:l1"].stats, { asOf: "7d", source: "analytics", metrics: { views: 120, likes: 9, shares: 2, watchTimeSeconds: 4200, avgViewDurationSeconds: 21.5, followsGained: 0 } });
+  assert.equal("comments" in byId["pub:l1"].stats.metrics, false, "a missing number is not shown as 0");
+  assert.equal(byId["pub:l2"].stats, null, "no snapshot yet");
+  assert.equal(byId["pub:l3"].stats, null);
+  const metricQuery = client.seen.find((q) => q.sql.includes('FROM "PostMetric"'));
+  assert.deepEqual(metricQuery.params[0], ["l1", "l2", "l3"]);
+});
+
+test("a missing PostMetric table leaves the calendar working without stats", async () => {
+  const asset = { assetId: OLD, filename: "a.mp4", kind: "video", sourcePath: "/a.mp4", assetTitle: null, durationMs: 1000 };
+  const client = fakeClient([
+    ['FROM "PublicationLedger" pl', { rows: [{ id: "l1", scheduledPostId: null, destination: "youtube", placement: "short", publishedAt: "2026-11-03T16:00:00Z", externalUrl: null, accountName: "S", scoreBreakdown: {}, ...asset }] }],
+    ['FROM "PostMetric"', () => { throw new Error('relation "PostMetric" does not exist'); }]
+  ]);
+  const r = await call({ action: "calendar", month: "2026-11" }, client, { now: new Date("2026-11-10T12:00:00Z") });
+  assert.equal(r.statusCode, 200);
+  assert.equal(r.body.posts[0].stats, null);
+});
+
+test("statsFromMetric returns null when no number exists", () => {
+  assert.equal(statsFromMetric(null), null);
+  assert.equal(statsFromMetric({ ageBucket: "1h", source: "statistics", views: null, likes: undefined }), null);
+  assert.deepEqual(statsFromMetric({ ageBucket: "1h", source: "statistics", views: "5" }).metrics, { views: 5 });
 });

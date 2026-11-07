@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { CalendarMonth, CalendarPost } from "@/lib/planner-review";
+import type { CalendarMonth, CalendarPost, CalendarStatKey, CalendarStats } from "@/lib/planner-review";
 import { AssetThumb as Thumb } from "@/components/asset-thumb";
 
 const NETWORK: Record<string, string> = {
@@ -50,6 +50,19 @@ async function act<T = { ok: boolean; error?: string }>(body: Record<string, unk
   const data = await response.json().catch(() => ({})) as { ok?: boolean; error?: string };
   if (!response.ok || !data.ok) throw Error(data.error || `HTTP ${response.status}`);
   return data as T;
+}
+
+const STAT_ORDER: CalendarStatKey[] = ["views", "likes", "comments", "shares", "watchTimeSeconds", "avgViewDurationSeconds", "followsGained"];
+const STAT_LABEL: Record<CalendarStatKey, string> = { views: "Views", likes: "Likes", comments: "Comments", shares: "Shares", watchTimeSeconds: "Watch time", avgViewDurationSeconds: "Avg. view", followsGained: "New subscribers" };
+const STAT_AGE: Record<CalendarStats["asOf"], string> = { "1h": "about 1 hour", "24h": "about 1 day", "7d": "about 7 days", "30d": "about 30 days" };
+// Watch time reads as 2h 14m, an average view as 0:21, everything else as a plain number.
+function statValue(key: CalendarStatKey, value: number): string {
+  if (key === "watchTimeSeconds") {
+    const minutes = Math.round(value / 60);
+    return minutes >= 60 ? `${Math.floor(minutes / 60)}h ${minutes % 60}m` : minutes >= 1 ? `${minutes}m` : `${Math.round(value)}s`;
+  }
+  if (key === "avgViewDurationSeconds") return `${Math.floor(value / 60)}:${String(Math.round(value % 60)).padStart(2, "0")}`;
+  return value.toLocaleString();
 }
 
 // What a post's badge says.
@@ -269,8 +282,12 @@ export function CalendarClient({ initial, brandName }: { initial: CalendarMonth;
           {post.externalUrl && <p><a href={post.externalUrl} target="_blank" rel="noreferrer">View live post on {NETWORK[post.destination] || post.destination} ↗</a></p>}
           {post.kind === "published" && <div className="cal-stats">
             <div className="cal-stats-head">Stats</div>
-            {post.stats ? <dl>{Object.entries(post.stats).map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v.toLocaleString()}</dd></div>)}</dl>
-              : <p className="muted">Views, likes and comments appear here once stats collection is switched on.</p>}
+            {post.stats ? <>
+              <dl>{STAT_ORDER.filter((k) => post.stats!.metrics[k] !== undefined).map((k) => <div key={k}><dt>{STAT_LABEL[k]}</dt><dd>{statValue(k, post.stats!.metrics[k] as number)}</dd></div>)}</dl>
+              <p className="muted">Taken {STAT_AGE[post.stats.asOf]} after posting, not live counts.</p>
+            </> : post.destination === "youtube"
+              ? <p className="muted">Numbers appear about an hour after posting.</p>
+              : <p className="muted">Stats are only collected for YouTube so far.</p>}
           </div>}
         </>}
 
