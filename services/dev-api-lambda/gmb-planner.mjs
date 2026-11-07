@@ -303,7 +303,7 @@ export async function planGmbWeek(client, brand, { weekStart, now = new Date() }
   const photoRows = (await client.query(
     `SELECT "id","filename","mimeType","fileSizeBytes","width","height","brandId", COALESCE("sourcePath","sourceUrl") AS "path"
      FROM "Asset"
-     WHERE "brandId" = ANY($1::text[]) AND "kind" = 'image' AND "approvalStatus" = 'approved' AND "ingestStatus" IN ('raw','needs_metadata','ready')
+     WHERE "brandId"::text = ANY($1::text[]) AND "kind" = 'image' AND "approvalStatus" = 'approved' AND "ingestStatus" IN ('raw','needs_metadata','ready')
        AND "retiredAt" IS NULL AND COALESCE("sourcePath","sourceUrl") ILIKE ANY($2::text[])`, [[brand.id, ...(otherId ? [otherId] : [])], PHOTO_FOLDERS])).rows;
   const photos = []; const rejected = [];
   for (const a of photoRows) {
