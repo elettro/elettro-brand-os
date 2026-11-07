@@ -155,6 +155,11 @@ Google Business Profile and X, and are rare on TikTok.
 - **Source:** posts on `stashbox.com/radio/blog`. Each social post teases one
   blog post and links to it.
 - **Voice:** capable production partner. Outcomes and how it works, not fan-speak.
+- **Industry examples are concepts (Dean, 2026-10-18).** The industry-usage
+  posts (a resort, a surf brand, a fashion label, a solar shop, ...) are
+  prototypes: none of them is a real client. Every post about one says
+  **"Concept example"** plainly (e.g. "Concept example: ..."), never names the
+  business as a client, partner or user, and never claims results for it.
 - **CTA:** read the post / talk to us about building yours. Optional closing
   line to Elettro.
 - **Success:** blog visits from business audiences, inquiries.

@@ -378,3 +378,13 @@ test("a plain post (promo cap) carries no link in its facts, so neither the AI n
   const t = templateCopy(plain, "s1");
   assert.ok(!/https?:\/\/|link in bio/i.test(t?.caption || ""));
 });
+
+test("the 'it's not just X, it's Y' construction is caught in its common wordings", () => {
+  const f = { destination: "instagram", allowedLinks: [], linksInCaptionAreClickable: false };
+  const banned = (caption) => validateCopy({ status: "ready", source: "ai", caption, hashtags: [] }, f).some((p) => p.startsWith("banned phrase"));
+  assert.ok(banned("Stashbox Radio isn't just a player. It's a full ecosystem."));
+  assert.ok(banned("It's not just music, it's a movement."));
+  assert.ok(banned("This is not just a tee — it's a statement."));
+  assert.ok(!banned("Not just for bands: venues use it too."), "no 'it's' after: fine");
+  assert.ok(!banned("Just released. It's out now."));
+});
