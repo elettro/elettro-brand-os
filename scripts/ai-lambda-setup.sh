@@ -14,8 +14,12 @@ FN=elettro-brand-os-dev-ai
 ROLE=elettro-brand-os-dev-ai-role
 API_FN=elettro-brand-os-dev-api
 API_ROLE=elettro-brand-os-dev-api-role-ddsp99yg
-MODEL=us.anthropic.claude-haiku-5-5
+# Haiku 5.5 is the target, but on 2026-11-07 Bedrock refused it for this account ("not available for this account",
+# agreement already exists), while Haiku 4.5 works. Until AWS enables 5.5, MODEL is 4.5; switch it back when it is.
+MODEL=us.anthropic.claude-haiku-4-5-20251001-v1:0
 BASE=anthropic.claude-haiku-5-5
+FALLBACK=anthropic.claude-haiku-4-5-20251001-v1:0
+ALLOWED=us.anthropic.claude-haiku-5-5,global.anthropic.claude-haiku-5-5,us.$FALLBACK
 
 latest_zip() { # workflow -> prints the zip path inside a fresh temp dir under $HOME
   local run dir
@@ -42,7 +46,7 @@ set_env() { # function KEY=VALUE...
   aws lambda wait function-updated --function-name "$fn"
 }
 
-echo "1/5 IAM role for the AI Lambda (Bedrock Converse on Haiku 5.5 only; logs)"
+echo "1/5 IAM role for the AI Lambda (Bedrock Converse on Haiku 5.5 + 4.5 fallback only; logs)"
 if ! aws iam get-role --role-name "$ROLE" >/dev/null 2>&1; then
   aws iam create-role --role-name "$ROLE" --description "Elettro OS AI relay (Bedrock)" \
     --assume-role-policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"lambda.amazonaws.com"},"Action":"sts:AssumeRole"}]}' >/dev/null
@@ -57,7 +61,9 @@ aws iam put-role-policy --role-name "$ROLE" --policy-name ai-bedrock --policy-do
       "arn:aws:bedrock:us-east-1:'"$ACCOUNT"':inference-profile/us.'"$BASE"'",
       "arn:aws:bedrock:us-east-1:'"$ACCOUNT"':inference-profile/global.'"$BASE"'",
       "arn:aws:bedrock:*::foundation-model/'"$BASE"'",
-      "arn:aws:bedrock:::foundation-model/'"$BASE"'"]},
+      "arn:aws:bedrock:::foundation-model/'"$BASE"'",
+      "arn:aws:bedrock:us-east-1:'"$ACCOUNT"':inference-profile/us.'"$FALLBACK"'",
+      "arn:aws:bedrock:*::foundation-model/'"$FALLBACK"'"]},
     {"Effect":"Allow","Action":["aws-marketplace:ViewSubscriptions","aws-marketplace:Subscribe"],"Resource":"*"}]}'
 sleep 10   # a new role needs a moment before Lambda can use it
 
@@ -70,6 +76,7 @@ else
     --role "arn:aws:iam::$ACCOUNT:role/$ROLE" --zip-file "fileb://$(cygpath -m "$ZIP")" --query FunctionArn --output text
 fi
 aws lambda wait function-active --function-name "$FN"
+set_env "$FN" "AI_ALLOWED_MODEL_IDS=$ALLOWED"
 rm -rf "$(dirname "$ZIP")"
 
 echo "3/5 dev-api may invoke the AI Lambda (inline policy ElettroBrandOSDevInvokeAi) and knows its name (AI_FUNCTION_NAME)"
