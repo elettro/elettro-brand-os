@@ -61,8 +61,7 @@ totals. The Analytics page will read the same thing.
    Smoke: `curl -sI https://go.stashbox.ai/` → 302 to https://stashbox.ai; `curl -sI https://go.stashbox.ai/zzzzzzz` → 302 to
    https://stashbox.ai (unknown code).
 5. **Shopify pixel**: stashbox.ai admin → Settings → Customer events → Add custom pixel `Elettro OS links` → paste
-   `docs/admin/link-tracking/stashbox-pixel.js` → Customer privacy: Permission "Not required" (US store, no consent banner;
-   change to "Required: Analytics" if a banner is ever added) → Save → **Connect**.
+   `docs/admin/link-tracking/stashbox-pixel.js` → Customer privacy: Permission "Required" with only Analytics ticked; Data sale "does not qualify" → Save → **Connect**.
 6. **First real check**: when the next tracked Threads/Bluesky/Mastodon post goes out, open its short link on a phone,
    view the product, add to cart (no need to buy), then `{action:"stats", brandSlug:"stashbox", days:1}` should show
    1 click, 1 page_view, 1 product_view, 1 add_to_cart for that code.
@@ -73,8 +72,12 @@ Add `"go.solarmeister-shop.de"` (or the chosen host) to `LINK_HOSTS` in `apps/we
 Amplify, run the setup action with `brandSlug:"solarmeister"`, copy the pixel with its `ENDPOINT` changed to the new host.
 The pixel works for any Shopify store; nothing else changes.
 
+## Status 2026-11-07
+
+Steps 1-5 done (Amplify domain added with Manual configuration so DNS stays at Namecheap; root and www excluded). Pixel privacy: Permission **Required → Analytics only**, Data sale **does not qualify** (safer than "Not required": it respects opt-outs if a banner is ever added). Local Windows DNS may cache the old NXDOMAIN for a while (`ipconfig /flushdns`).
+
 ## Never verified (2026-11-07)
 
-Everything against live systems: the tables, the route, Amplify serving a second domain through `middleware.ts`, the
+Still unverified: a real tracked post end to end, the
 pixel inside Shopify's sandbox (field names follow Shopify's Web Pixels API docs), and whether Pinterest/GMB accept the
 tagged links. Unit tests: `node --test tests/link-tracking.test.mjs`.
