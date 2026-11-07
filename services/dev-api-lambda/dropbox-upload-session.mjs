@@ -50,7 +50,7 @@ function destination(body) {
 async function contentCall(endpoint, accessToken, arg, bytes) {
   const response = await fetch("https://content.dropboxapi.com/2/files/upload_session/" + endpoint, {
     method: "POST",
-    headers: { authorization: "Bearer " + accessToken, "content-type": "application/octet-stream", "dropbox-api-arg": JSON.stringify(arg) },
+    headers: { authorization: "Bearer " + accessToken, "content-type": "application/octet-stream", "dropbox-api-arg": JSON.stringify(arg).replace(/[^\x00-\x7e]/g, (c) => "\\u" + c.charCodeAt(0).toString(16).padStart(4, "0")) },
     body: bytes
   });
   if (!response.ok) {

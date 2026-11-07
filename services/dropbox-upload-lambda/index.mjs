@@ -37,7 +37,7 @@ async function accessToken() {
   return refreshed.access_token;
 }
 async function callDropbox(endpoint, token, args, chunk) {
-  const r = await fetch(`https://content.dropboxapi.com/2/files/upload_session/${endpoint}`, {method:'POST', headers:{authorization:`Bearer ${token}`,'content-type':'application/octet-stream','dropbox-api-arg':JSON.stringify(args)},body:chunk,signal:AbortSignal.timeout(120000)});
+  const r = await fetch(`https://content.dropboxapi.com/2/files/upload_session/${endpoint}`, {method:'POST', headers:{authorization:`Bearer ${token}`,'content-type':'application/octet-stream','dropbox-api-arg':JSON.stringify(args).replace(/[^\x00-\x7e]/g, (c) => "\\u" + c.charCodeAt(0).toString(16).padStart(4, "0"))},body:chunk,signal:AbortSignal.timeout(120000)});
   if (!r.ok) {
     const details = (await r.text()).slice(0,300).replace(/Bearer\s+\S+/g,'Bearer [REDACTED]');
     throw new Error(`Dropbox ${endpoint} returned HTTP ${r.status}: ${details}`);
