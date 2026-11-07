@@ -11,6 +11,7 @@ import {runDocumentAssetKindSetup} from "./document-asset-kind.mjs";
 import {createBrand} from "./brand-create.mjs";
 import {runMultiCamSetup, handleMultiCam} from "./multicam.mjs";
 import {runLinkTrackingSetup, handleLinks} from "./link-tracking.mjs";
+import {runPostMetricsSetup, runListPostMetricsDue, runRecordPostMetrics} from "./post-metrics.mjs";
 import {runCarouselRefill} from "./carousel-refill.mjs";
 import {handleOpsTick} from "./ops-tick.mjs";
 import { handleConnectionStatus, setPlatformMilestone, setTokenExpiry, renameSocialAccount, listSocialAccounts, feedResponse } from "./connection-status.mjs";
@@ -1633,6 +1634,10 @@ export const handler = async (event = {}) => {
   // IAM-only: create the Elettro MultiCam tables (dry-run unless mode:"apply").
   if (event.action === "refill-carousel-slides-20261107" && !event.requestContext && !event.rawPath && !event.path) return runCarouselRefill(event, connectDatabase, json);
   if (event.action === "setup-link-tracking-20261107" && !event.requestContext && !event.rawPath && !event.path) return runLinkTrackingSetup(event, connectDatabase, json);
+  // IAM-only post metrics (docs/ANALYTICS-SPEC.md phase A): table setup, the posts still lacking a snapshot, and saving snapshots.
+  if (event.action === "setup-post-metrics-20261107" && !event.requestContext && !event.rawPath && !event.path) return runPostMetricsSetup(event, connectDatabase, json);
+  if (event.action === "list-post-metrics-due-20261107" && !event.requestContext && !event.rawPath && !event.path) return runListPostMetricsDue(event, connectDatabase, json);
+  if (event.action === "record-post-metrics-20261107" && !event.requestContext && !event.rawPath && !event.path) return runRecordPostMetrics(event, connectDatabase, json);
   if(event.action === "setup-multicam-tables-20261101" && !event.requestContext && !event.rawPath && !event.path) return runMultiCamSetup(event,connectDatabase,json);
   const requestPath =
     event?.rawPath ||

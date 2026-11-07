@@ -1,5 +1,6 @@
 import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
 import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
+import { collectForVideo, checkAnalyticsAccess } from "./metrics.mjs";
 
 // Uploads videos from the brand Dropbox to connected YouTube channels.
 // Runs outside the VPC (it needs Google and Dropbox) and is only invoked directly
@@ -207,6 +208,48 @@ async function api(payload) {
   return { statusCode: out.statusCode, ...JSON.parse(out.body || "{}") };
 }
 
+// Post metrics (docs/ANALYTICS-SPEC.md phase A): snapshot every published video that reached 1h / 24h / 7d / 30d. Read only.
+const METRICS_PER_TICK = 10;
+
+async function collectMetrics() {
+  const listed = await api({ action: "list-post-metrics-due-20261107", destination: "youtube", limit: METRICS_PER_TICK });
+  if (!listed.ok) throw new Error(`list-post-metrics-due failed: ${listed.error}`);
+  const tokens = new Map();
+  const items = [];
+  const failures = [];
+  for (const due of listed.due) {
+    try {
+      if (!tokens.has(due.channelId)) tokens.set(due.channelId, await googleAccessToken(due.channelId));
+      items.push(...(await collectForVideo(due, tokens.get(due.channelId))));
+    } catch (error) {
+      console.error("Metrics failed:", due.videoId, error?.message);
+      failures.push({ videoId: due.videoId, error: error?.message || "failed" });
+    }
+  }
+  let saved = 0;
+  for (let i = 0; i < items.length; i += 100) {
+    const recorded = await api({ action: "record-post-metrics-20261107", items: items.slice(i, i + 100) });
+    if (!recorded.ok) throw new Error(`record-post-metrics failed: ${recorded.error}`);
+    saved += recorded.saved;
+  }
+  return { ok: true, due: listed.due.length, saved, failures };
+}
+
+// Does each connected channel's token reach the Analytics API? Answers with a status per channel, never the data.
+async function checkMetricsAccess() {
+  const listed = await api({ action: "list-post-metrics-due-20261107", destination: "youtube", limit: 1 });
+  if (!listed.ok) throw new Error(`list-post-metrics-due failed: ${listed.error}`);
+  const channels = [];
+  for (const channel of listed.channels) {
+    try {
+      channels.push({ brand: channel.brand, account: channel.accountName, channelId: channel.channelId, ...(await checkAnalyticsAccess(await googleAccessToken(channel.channelId))) });
+    } catch (error) {
+      channels.push({ brand: channel.brand, account: channel.accountName, channelId: channel.channelId, ok: false, reason: error?.message || "failed" });
+    }
+  }
+  return { ok: true, channels };
+}
+
 async function publishingTick() {
   const planning = await api({ action: "planner-tick" }).catch((error) => ({ ok: false, error: error.message }));
   const claimed = await api({ action: "claim-due-posts", destination: "youtube", limit: POSTS_PER_TICK });
@@ -224,7 +267,9 @@ async function publishingTick() {
     await api({ action: "finish-post", id: post.id, ...outcome });
     published.push({ id: post.id, ...outcome });
   }
-  const summary = { ok: true, planning, missed: claimed.missed, stuck: claimed.stuck, published };
+  // Never lets a metrics problem (table not created yet, a revoked token) hold back publishing.
+  const metrics = await collectMetrics().catch((error) => ({ ok: false, error: error?.message || "metrics failed" }));
+  const summary = { ok: true, planning, missed: claimed.missed, stuck: claimed.stuck, published, metrics };
   console.log("Tick", JSON.stringify(summary));
   return result(200, summary);
 }
@@ -235,6 +280,12 @@ export async function handler(event = {}) {
     try { return await publishingTick(); } catch (error) {
       console.error("Tick failed:", error?.message);
       return result(502, { ok: false, error: error?.message || "Tick failed" });
+    }
+  }
+  if (event.action === "metrics" || event.action === "metrics-check") {
+    try { return result(200, event.action === "metrics" ? await collectMetrics() : await checkMetricsAccess()); } catch (error) {
+      console.error("Metrics failed:", error?.message);
+      return result(502, { ok: false, error: error?.message || "Metrics failed" });
     }
   }
   let request;
