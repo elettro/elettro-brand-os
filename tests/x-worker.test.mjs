@@ -137,7 +137,7 @@ test("publish with a video posts once with the processed media id", async () => 
   assert.equal(out.url, "https://x.com/stashboxmusic/status/555");
 });
 
-test("NO URL POSTS: scheduled text is stripped of every link and domain, manual text with one is refused", () => {
+test("NO URL POSTS: scheduled text is stripped of every link and domain, manual text with one is refused", async () => {
   assert.equal(stripUrls("Listen now https://stashbox.com/radio today"), "Listen now today");
   assert.equal(stripUrls("Visit www.elettro.com or stashbox.com/radio!"), "Visit or");
   assert.equal(postText("New show at https://stashbox.com", ["live"]), "New show at\n\n#live");
@@ -145,4 +145,7 @@ test("NO URL POSTS: scheduled text is stripped of every link and domain, manual 
   assert.ok(hasUrl("book at elettro.com") && hasUrl("http://x.co/a") && hasUrl("www.a.io"));
   assert.equal(requestFromPost(post({ caption: "Tune in https://stashbox.com/radio" })).text.includes("http"), false);
   assert.throws(() => postRequest({ brand: "stashbox", text: "hi https://stashbox.com" }), /URL/);
+  assert.equal(stripUrls("Reggae.Land opens soon"), "opens soon");
+  await assert.rejects(publish(REC, { text: "Tune in stashbox.com", paths: [] }, { fetchImpl: async () => res(200, { data: { id: "1" } }) }), /no URL posts/);
+  assert.equal(requestFromPost(post({ altText: "Poster, see stashbox.com/radio" })).alt, "Poster, see");
 });
