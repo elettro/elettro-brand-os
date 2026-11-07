@@ -24,7 +24,7 @@ async function brandToken(brand: string): Promise<{ name: string; token: RedditA
 }
 
 // "u/name" -> "u_name", "r/name" -> "name", plain names pass through. Empty means the brand's own profile.
-export function redditTarget(raw: string) {
+function redditTarget(raw: string) {
   const value = raw.trim();
   const user = /^\/?u\/(.+)$/i.exec(value);
   if (user) return "u_" + user[1];
