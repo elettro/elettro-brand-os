@@ -91,6 +91,56 @@ export const GMB_DEFAULTS = {
         ]
       }
     }
+  },
+  // No pillars (Dean 261106): Neckermann Strom and SolarMeister post a rolling mix of the two brands' own photos
+  // (80% the profile's own brand, 20% the sister brand). The button link is per PROFILE: every post on a profile links to that
+  // profile's own site, so Google never sees a link to a different business. German only, du, no prices (brand.md).
+  "neckermann-strom": {
+    languageCode: "de",
+    mix: {
+      cta: { actionType: "LEARN_MORE", url: "https://neckermann-strom.de" },
+      own: {
+        weight: 0.8,
+        captions: [
+          "Strom kostet nicht jede Stunde gleich viel. Dein Tarif muss das auch nicht. Beim dynamischen Tarif von Neckermann Strom folgt der Preis dem Marktpreis. Er kann steigen und fallen, und du behältst den Überblick.",
+          "Alle Preisbestandteile auf einen Blick. Ohne Kleingedrucktes. Transparent. Fair. Flexibel. So ist Strom von Neckermann Strom, 100 % Ökostrom für Privat- und Gewerbekunden.",
+          "Waschmaschine, E-Auto, Wärmepumpe: Nutze Strom dann, wenn der Marktpreis niedrig ist. Mit dem dynamischen Tarif von Neckermann Strom entscheidest du, wann dein Strom läuft.",
+          "Wechsel in wenigen Minuten. Die Kündigung beim alten Anbieter übernehmen wir. Neckermann Strom ist digital, einfach und für dein Zuhause ebenso da wie für dein Gewerbe.",
+          "Energie, die zu deinem Leben passt. Neckermann Strom liefert 100 % Ökostrom, deutschlandweit und digital. Jetzt Privatstrom berechnen.",
+          "Fragen zu deinem Tarif? Im Kundenportal behältst du Verbrauch und Rechnungen im Blick, und unser Service hilft dir weiter, Montag bis Freitag von 8:30 bis 14:30 Uhr."
+        ]
+      },
+      other: {
+        brand: "solarmeister", weight: 0.2,
+        captions: [
+          "SolarMeister, eine Marke der Neckermann Strom GmbH: Photovoltaik zum Selbermachen. Balkonkraftwerke, Halterungen und Zubehör für alle, die ihre Solaranlage selbst installieren wollen.",
+          "Die Zukunft deiner Energie beginnt hier. Bei SolarMeister findest du Balkonkraftwerke und passendes Zubehör, einfach zu montieren und auch ohne Elektriker zu verstehen.",
+          "Eigener Solarstrom für Hausbesitzer und Mieter. SolarMeister bietet Balkonkraftwerke, Halterungen und Zubehör, damit du Schritt für Schritt selbst starten kannst."
+        ]
+      }
+    }
+  },
+  solarmeister: {
+    languageCode: "de",
+    mix: {
+      cta: { actionType: "LEARN_MORE", url: "https://solarmeister-shop.de" },
+      own: {
+        weight: 0.8,
+        captions: [
+          "Die Zukunft deiner Energie beginnt hier. SolarMeister: Balkonkraftwerke, Halterungen und Zubehör für die Solaranlage zum Selbermachen.",
+          "Solar selbst installieren, ohne Elektriker zu sein. Bei SolarMeister findest du Balkonkraftwerke und das passende Zubehör, klar erklärt und einfach zu montieren.",
+          "Hausbesitzer und Mieter: Mit einem Balkonkraftwerk von SolarMeister startest du mit eigenem Solarstrom. Halterungen und Zubehör findest du gleich dazu.",
+          "Photovoltaik zum Selbermachen, klar und praktisch erklärt, ohne schwere Fachbegriffe. Das ist SolarMeister."
+        ]
+      },
+      other: {
+        brand: "neckermann-strom", weight: 0.2,
+        captions: [
+          "Neckermann Strom ist ein Stromanbieter mit dynamischem Tarif und 100 % Ökostrom für Privat- und Gewerbekunden. SolarMeister ist eine Marke der Neckermann Strom GmbH.",
+          "Strom kostet nicht jede Stunde gleich viel. Der dynamische Tarif von Neckermann Strom folgt dem Marktpreis, der steigen und fallen kann. Eine Ergänzung zu deiner Solaranlage."
+        ]
+      }
+    }
   }
 };
 
@@ -98,6 +148,8 @@ export const GMB_DEFAULTS = {
 export function gmbConfigFor(brand) {
   const base = GMB_DEFAULTS[brand.slug];
   const own = brand.settings?.gmb;
+  // A no-pillars brand (see GMB_DEFAULTS): a rolling mix of its own and a sister brand's photos instead of pillars.
+  if (base?.mix && !own?.pillars) return { languageCode: own?.languageCode || base.languageCode, mix: base.mix, pillars: {}, autoApprove: own?.autoApprove ?? base.autoApprove ?? false };
   if (!base && !own?.pillars) return null;
   const pillars = {};
   for (const letter of ["A", "B", "C", "F"]) {
@@ -245,15 +297,18 @@ export async function planGmbWeek(client, brand, { weekStart, now = new Date() }
   if (!accounts.length) return { ok: true, planned: 0, accounts: [], message: "Google Business: no posts per day set" };
   if (!config) return { ok: true, planned: 0, accounts: [], message: "Google Business: this brand has no pillar wording yet" };
 
+  // A no-pillars brand draws photos from its own and its sister brand's folders; the photo's owner picks the caption.
+  const mix = config.mix || null;
+  const otherId = mix ? (await client.query(`SELECT "id" FROM "Brand" WHERE "slug" = $1`, [mix.other.brand])).rows[0]?.id : null;
   const photoRows = (await client.query(
-    `SELECT "id","filename","mimeType","fileSizeBytes","width","height", COALESCE("sourcePath","sourceUrl") AS "path"
+    `SELECT "id","filename","mimeType","fileSizeBytes","width","height","brandId", COALESCE("sourcePath","sourceUrl") AS "path"
      FROM "Asset"
-     WHERE "brandId" = $1 AND "kind" = 'image' AND "approvalStatus" = 'approved' AND "ingestStatus" IN ('raw','needs_metadata','ready')
-       AND "retiredAt" IS NULL AND COALESCE("sourcePath","sourceUrl") ILIKE ANY($2::text[])`, [brand.id, PHOTO_FOLDERS])).rows;
+     WHERE "brandId" = ANY($1::text[]) AND "kind" = 'image' AND "approvalStatus" = 'approved' AND "ingestStatus" IN ('raw','needs_metadata','ready')
+       AND "retiredAt" IS NULL AND COALESCE("sourcePath","sourceUrl") ILIKE ANY($2::text[])`, [[brand.id, ...(otherId ? [otherId] : [])], PHOTO_FOLDERS])).rows;
   const photos = []; const rejected = [];
   for (const a of photoRows) {
     const why = photoProblem(a);
-    if (why) rejected.push({ filename: a.filename, why }); else photos.push({ id: a.id, filename: a.filename, pillar: pillarOfFilename(a.filename) });
+    if (why) rejected.push({ filename: a.filename, why }); else photos.push({ id: a.id, filename: a.filename, pillar: mix ? null : pillarOfFilename(a.filename), source: a.brandId === brand.id ? "own" : "other" });
   }
 
   const weekEnd = addDaysToYmd(weekStart, 7);
@@ -272,10 +327,10 @@ export async function planGmbWeek(client, brand, { weekStart, now = new Date() }
         `DELETE FROM "ScheduledPost" WHERE "socialAccountId" = $1 AND "status" = 'planned' AND "placement" = 'update' AND "scheduledFor" >= $2 AND "scheduledFor" < $3`,
         [account.socialAccountId, from, to]);
       const history = (await client.query(
-        `SELECT sp."assetId", sp."status", sp."scheduledFor", sp."generatedCaption", sp."scoreBreakdown"->'gmb'->>'pillar' AS "pillar"
+        `SELECT sp."assetId", sp."status", sp."scheduledFor", sp."generatedCaption", sp."scoreBreakdown"->'gmb'->>'pillar' AS "pillar", sp."scoreBreakdown"->'gmb'->>'source' AS "source"
          FROM "ScheduledPost" sp WHERE sp."socialAccountId" = $1 AND sp."placement" = 'update' AND sp."scheduledFor" >= $2::timestamp - INTERVAL '90 days'
          ORDER BY sp."scheduledFor"`, [account.socialAccountId, from])).rows;
-      const lastUsed = new Map(); const recentCaptions = []; const counts = {};
+      const lastUsed = new Map(); const recentCaptions = []; const counts = {}; const sourceCounts = {};
       const takenCount = new Map();
       for (const h of history) {
         const at = new Date(h.scheduledFor).getTime();
@@ -284,7 +339,10 @@ export async function planGmbWeek(client, brand, { weekStart, now = new Date() }
         const inWeek = at >= from.getTime() && at < to.getTime();
         if (inWeek && TAKEN.includes(h.status)) { const y = ymdInTimeZone(new Date(h.scheduledFor), timeZone); takenCount.set(y, (takenCount.get(y) || 0) + 1); }
         // the 30 days before the end of the week count toward the business mix
-        if (COUNTED.includes(h.status) && h.pillar && at >= to.getTime() - 30 * 864e5 && at < to.getTime()) counts[h.pillar] = (counts[h.pillar] || 0) + 1;
+        if (COUNTED.includes(h.status) && h.pillar && at >= to.getTime() - 30 * 864e5 && at < to.getTime()) {
+          counts[h.pillar] = (counts[h.pillar] || 0) + 1;
+          if (h.source) sourceCounts[h.source] = (sourceCounts[h.source] || 0) + 1;
+        }
       }
 
       const available = [];
@@ -300,8 +358,9 @@ export async function planGmbWeek(client, brand, { weekStart, now = new Date() }
       const alreadyThisWeek = [...takenCount.values()].reduce((n, c) => n + c, 0);
       const room = Object.fromEntries(available.map((d) => [d, perDay - (takenCount.get(addDaysToYmd(weekStart, d)) || 0)]));
       const days = spreadSlots(available, Math.max(0, Number(account.postsPerWeek) - alreadyThisWeek), perDay, room);
-      const pillars = Object.keys(config.pillars);
-      const weights = Object.fromEntries(pillars.map((p) => [p, Number(config.pillars[p].weight)]));
+      const pillars = mix ? ["own", "other"] : Object.keys(config.pillars);
+      const weights = mix ? { own: Number(mix.own.weight), other: Number(mix.other.weight) } : Object.fromEntries(pillars.map((p) => [p, Number(config.pillars[p].weight)]));
+      const photosOf = (p) => (mix ? photos.filter((x) => x.source === p) : photos);
       const takenNow = new Set();
       const notes = [];
       const autoApprove = config.autoApprove === true || (Array.isArray(brand.settings?.approvedWeeks) && brand.settings.approvedWeeks.includes(weekStart));
@@ -314,25 +373,25 @@ export async function planGmbWeek(client, brand, { weekStart, now = new Date() }
         const bandFirst = Math.ceil(first + k * band), bandLast = Math.floor(first + (k + 1) * band) - 1;
         const minute = slotMinute(`${brand.slug}|${ymd}|${k}`, bandFirst, Math.max(bandFirst, bandLast));
         if (minute === null || minute > WINDOW_LAST_MINUTE) { notes.push(`${ymd}: too late in the day`); continue; }
-        const eligible = pillars.filter((p) => pickPhoto(photos, p, lastUsed, takenNow));
-        const pillar = nextPillar(counts, weights, eligible);
-        if (!pillar) { notes.push(`${ymd}: no photo fits a pillar`); continue; }
-        const setup = config.pillars[pillar];
-        const photo = pickPhoto(photos, pillar, lastUsed, takenNow);
+        const eligible = pillars.filter((p) => pickPhoto(photosOf(p), mix ? null : p, lastUsed, takenNow));
+        const pillar = nextPillar(mix ? sourceCounts : counts, weights, eligible);
+        if (!pillar) { notes.push(`${ymd}: no photo fits ${mix ? "the mix" : "a pillar"}`); continue; }
+        const setup = mix ? { ...mix[pillar], cta: mix.cta } : config.pillars[pillar];
+        const photo = pickPhoto(photosOf(pillar), mix ? null : pillar, lastUsed, takenNow);
         const usable = setup.captions.filter((c) => !captionProblem(c));
         const bad = buttonProblem(setup.cta);
-        if (!usable.length || bad) { notes.push(`${ymd}: pillar ${pillar} setup invalid (${bad || "no usable caption"})`); continue; }
+        if (!usable.length || bad) { notes.push(`${ymd}: ${mix ? pillar : `pillar ${pillar}`} setup invalid (${bad || "no usable caption"})`); continue; }
         const caption = pickCaption(usable, recentCaptions);
         const when = localDateTimeToUtc(ymd, mm(minute), timeZone);
         await client.query(
           `INSERT INTO "ScheduledPost" ("brandId","socialAccountId","assetId","placement","scheduledFor","status","selectionReason","scoreBreakdown","publishingMode","generatedCaption","generatedHashtags","updatedAt")
            VALUES ($1,$2,$3,'update',$4,$10,$5,$6::jsonb,$7,$8,$9,CURRENT_TIMESTAMP)`,
           [brand.id, account.socialAccountId, photo.id, when.toISOString(),
-           `Google Business pillar ${pillar}: photo ${photo.filename}`,
-           JSON.stringify({ plannerVersion: GMB_PLANNER_VERSION, weekStart, gmb: { pillar, topicType: "STANDARD", languageCode: config.languageCode, cta: { actionType: setup.cta.actionType, ...(setup.cta.url ? { url: setup.cta.url } : {}) } }, copy: { source: "gmb-pillar-wording", status: "ready" } }),
+           mix ? `Google Business mix (${pillar === "own" ? brand.slug : mix.other.brand}): photo ${photo.filename}` : `Google Business pillar ${pillar}: photo ${photo.filename}`,
+           JSON.stringify({ plannerVersion: GMB_PLANNER_VERSION, weekStart, gmb: { pillar: mix ? "N" : pillar, ...(mix ? { source: pillar } : {}), topicType: "STANDARD", languageCode: config.languageCode, cta: { actionType: setup.cta.actionType, ...(setup.cta.url ? { url: setup.cta.url } : {}) } }, copy: { source: "gmb-pillar-wording", status: "ready" } }),
            account.publishingMode || "approval", caption, [], autoApprove ? "approved" : "planned"]);
         takenNow.add(photo.id); lastUsed.set(photo.id, when.getTime()); recentCaptions.push(caption);
-        counts[pillar] = (counts[pillar] || 0) + 1;
+        if (mix) { counts.N = (counts.N || 0) + 1; sourceCounts[pillar] = (sourceCounts[pillar] || 0) + 1; } else counts[pillar] = (counts[pillar] || 0) + 1;
         out.planned += 1;
       }
       if (!out.planned) out.reason = !photos.length

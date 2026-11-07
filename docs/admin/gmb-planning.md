@@ -44,3 +44,12 @@ pillar furthest below its weight and never one that would push F to half. The pu
 - The planner has not been run against the live database (no local DB); the first Plan on Review is the first real run.
 - The GMB Lambda and tick rule are made by `scripts/gmb-publisher-setup.sh` (root profile); check `aws lambda get-function` before assuming posts publish.
 - Brand Settings has no Pillars screen yet; pillars live in code defaults and `Brand.settings.gmb`.
+
+## No-pillars brands: Neckermann Strom and SolarMeister (Dean 261106)
+
+These two profiles have no pillars (`GMB_DEFAULTS["neckermann-strom"].mix` and `.solarmeister.mix`; publisher tag `N`, allowed only for them via `NO_PILLAR_BRANDS`, and it skips the 30-day business mix).
+- **Mix:** Neckermann Strom profile = 80% Neckermann Strom photos, 20% SolarMeister photos; SolarMeister profile is the reverse. Chosen by whichever share is furthest below target over the last 30 days (`scoreBreakdown.gmb.source` = `own` / `other`).
+- **Photos:** each brand's own `image/4x3|3x2|16x9` folders (no new folders); the photo's owner (`Asset.brandId`) picks the caption. Least recently used photo first, never twice in a week.
+- **Link (per profile):** every post on the Neckermann Strom profile (even the SolarMeister ones) is `LEARN_MORE` -> `https://neckermann-strom.de`; every post on the SolarMeister profile is `LEARN_MORE` -> `https://solarmeister-shop.de`.
+- **Wording:** German, du, fixed variants from each brand's `brand.md` house lines (no prices, no savings promises, no URL in the text). Drafts are saved `planned` (Dean approves); set `Brand.settings.gmb.autoApprove` to skip that.
+- A brand with `Brand.settings.gmb.pillars` set uses pillars instead.

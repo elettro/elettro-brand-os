@@ -35,7 +35,7 @@ const asPublisherPost = (q, assets) => {
 
 test("the built-in pillar wording passes every publisher caption rule, and the buttons follow Dean's table", () => {
   for (const [slug, setup] of Object.entries(GMB_DEFAULTS)) {
-    for (const [letter, p] of Object.entries(setup.pillars)) {
+    for (const [letter, p] of Object.entries(setup.pillars || {})) {
       for (const caption of p.captions) {
         assert.equal(captionProblem(caption), null, `${slug} ${letter}: ${caption}`);
         const post = { id: "p", brand: slug, scheduledFor: "2026-10-26T15:00:00Z", caption, channelId: LOCATION, dropboxPath: ROOT + "x.jpg", assetMime: "image/jpeg", assetBytes: 600000, assetWidth: 1600, assetHeight: 1200, gmb: { pillar: letter, topicType: "STANDARD", cta: p.cta } };
@@ -52,7 +52,7 @@ test("the built-in pillar wording passes every publisher caption rule, and the b
 test("brand setup: built-in wording, a settings override per pillar, and nothing for brands without pillars", () => {
   assert.deepEqual(Object.keys(gmbConfigFor(stashbox).pillars), ["A", "B", "C", "F"]);
   assert.equal(gmbConfigFor({ slug: "reggaeland", settings: {} }), null);
-  assert.equal(gmbConfigFor({ slug: "solarmeister", settings: {} }), null);
+  assert.equal(gmbConfigFor({ slug: "rompe", settings: {} }), null);
   const own = gmbConfigFor({ slug: "reggaeland", settings: { gmb: { languageCode: "en-US", pillars: { A: { weight: 1, cta: { actionType: "BOOK", url: "https://reggae.land/book" }, captions: ["Live reggae for your resort night."] } } } } });
   assert.deepEqual(Object.keys(own.pillars), ["A"]);
   const over = gmbConfigFor({ slug: "stashbox", settings: { gmb: { pillars: { F: { weight: 0.1 } } } } });
@@ -269,4 +269,65 @@ test("several posts a day get their own band of the window, and a brand without 
     assert.ok(mins[0] >= 600 && mins[2] <= 990, String(mins));
     assert.ok(mins[1] - mins[0] >= 60 && mins[2] - mins[1] >= 60, "posts at least an hour apart: " + mins);
   }
+});
+
+// ---- no-pillars mix: Neckermann Strom and SolarMeister (Dean 261106) ----
+const NS = { id: "ns1", slug: "neckermann-strom", timezone: "Europe/Berlin", settings: {} };
+const NS_ROOT = "/1---elettro-brand-os/brands/neckermann-strom/image/4x3/", SM_ROOT = "/1---elettro-brand-os/brands/solarmeister/image/4x3/";
+const mixAsset = (n, own) => ({ id: `${own ? "n" : "s"}${n}`, brandId: own ? "ns1" : "sm1", filename: `${own ? "ns" : "sm"}_${n}_4x3.jpg`, mimeType: "image/jpeg", fileSizeBytes: "600000", width: 1600, height: 1200, path: (own ? NS_ROOT : SM_ROOT) + `p${n}.jpg` });
+
+test("no-pillars brands: every built-in caption passes the publisher, pillar N is allowed only for them, links are per profile", () => {
+  for (const slug of ["neckermann-strom", "solarmeister"]) {
+    const { mix, languageCode } = GMB_DEFAULTS[slug];
+    assert.equal(languageCode, "de");
+    for (const part of [mix.own, mix.other]) for (const caption of part.captions) {
+      assert.equal(captionProblem(caption), null, caption);
+      const post = { id: "p", brand: slug, scheduledFor: "2026-11-09T09:00:00Z", caption, channelId: LOCATION, dropboxPath: NS_ROOT + "x.jpg", assetMime: "image/jpeg", assetBytes: 600000, assetWidth: 1600, assetHeight: 1200, gmb: { pillar: "N", topicType: "STANDARD", languageCode, cta: mix.cta } };
+      assert.ok(postRequest(post, NOW), caption);
+      assert.throws(() => postRequest({ ...post, brand: "stashbox" }, NOW), /no-pillar tag is only for/);
+    }
+  }
+  assert.equal(GMB_DEFAULTS["neckermann-strom"].mix.cta.url, "https://neckermann-strom.de");
+  assert.equal(GMB_DEFAULTS.solarmeister.mix.cta.url, "https://solarmeister-shop.de");
+});
+
+test("Neckermann Strom plans about 80% its own photos and 20% SolarMeister photos; every post links to neckermann-strom.de and is German", async () => {
+  const assets = [...Array.from({ length: 24 }, (_, i) => mixAsset(i + 1, true)), ...Array.from({ length: 8 }, (_, i) => mixAsset(i + 1, false))];
+  const c = fake({ 'FROM "Brand"': [{ id: "sm1" }], 'JOIN "CadenceRule"': [gmbAccount(21)], 'FROM "Asset"': assets });
+  const r = await planGmbWeek(c, NS, { weekStart: "2026-11-09", now: new Date("2026-11-08T12:00:00Z") });
+  assert.equal(r.planned, 21);
+  const rows = inserts(c);
+  const sources = rows.map((q) => JSON.parse(q.params[5]).gmb.source);
+  assert.equal(sources.filter((x) => x === "other").length, 4, "21 posts: 17 own, 4 SolarMeister (about 20%)");
+  for (const q of rows) {
+    const gmb = JSON.parse(q.params[5]).gmb;
+    assert.equal(gmb.pillar, "N");
+    assert.equal(gmb.cta.url, "https://neckermann-strom.de");
+    assert.equal(gmb.languageCode, "de");
+    assert.equal(q.params[9], "planned", "not autonomous: drafts wait for Dean's approval");
+    const asset = assets.find((a) => a.id === q.params[2]);
+    assert.equal(gmb.source === "other", asset.brandId === "sm1", "a SolarMeister photo is a SolarMeister post");
+    assert.doesNotThrow(() => postRequest({ ...asPublisherPost(q, assets), brand: "neckermann-strom" }, NOW));
+  }
+  assert.equal(new Set(rows.map((q) => q.params[2])).size, 21, "no photo twice in the week");
+  assert.ok(rows.some((q) => q.params[7].includes("SolarMeister")) && rows.some((q) => q.params[7].includes("Neckermann Strom")));
+});
+
+test("SolarMeister profile is the reverse: 80% its own, 20% Neckermann, every post links to solarmeister-shop.de", async () => {
+  const SM = { id: "sm1", slug: "solarmeister", timezone: "Europe/Berlin", settings: {} };
+  const assets = [...Array.from({ length: 24 }, (_, i) => mixAsset(i + 1, false)), ...Array.from({ length: 8 }, (_, i) => mixAsset(i + 1, true))];
+  const c = fake({ 'FROM "Brand"': [{ id: "ns1" }], 'JOIN "CadenceRule"': [gmbAccount(21)], 'FROM "Asset"': assets });
+  const r = await planGmbWeek(c, SM, { weekStart: "2026-11-09", now: new Date("2026-11-08T12:00:00Z") });
+  assert.equal(r.planned, 21);
+  const rows = inserts(c);
+  assert.equal(rows.filter((q) => JSON.parse(q.params[5]).gmb.source === "other").length, 4);
+  for (const q of rows) assert.equal(JSON.parse(q.params[5]).gmb.cta.url, "https://solarmeister-shop.de");
+});
+
+test("a no-pillars brand with only its own photos still posts (the sister share waits for photos)", async () => {
+  const assets = Array.from({ length: 6 }, (_, i) => mixAsset(i + 1, true));
+  const c = fake({ 'FROM "Brand"': [{ id: "sm1" }], 'JOIN "CadenceRule"': [gmbAccount(5)], 'FROM "Asset"': assets });
+  const r = await planGmbWeek(c, NS, { weekStart: "2026-11-09", now: new Date("2026-11-08T12:00:00Z") });
+  assert.equal(r.planned, 5);
+  assert.ok(inserts(c).every((q) => JSON.parse(q.params[5]).gmb.source === "own"));
 });
