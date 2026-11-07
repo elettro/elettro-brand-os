@@ -63,7 +63,14 @@ test("plan seeds missing planner settings and starts plan-week only for the aske
   assert.equal(r.statusCode, 202);
   assert.ok(client.seen.some((q) => q.sql.includes("jsonb_set") && q.params[1].includes('"sectors"')));
   // youtube isn't connected and x isn't integrated yet, so only instagram is planned.
-  assert.deepEqual(invoked, [{ action: "plan-week", brandSlug: "stashbox", weekStart: "2026-10-26", mode: "apply", replacePlanned: true, destinations: ["instagram"] }]);
+  assert.equal(invoked.length, 1);
+  const { runId, ...payload } = invoked[0];
+  assert.deepEqual(payload, { action: "plan-week", brandSlug: "stashbox", weekStart: "2026-10-26", mode: "apply", replacePlanned: true, destinations: ["instagram"], chain: [] });
+  assert.equal(r.body.runId, runId);
+  // The week's live status starts with every planned network queued.
+  const status = client.seen.find((q) => q.sql.includes("'{planRuns}'"));
+  assert.deepEqual(Object.keys(JSON.parse(status.params[2]).networks), ["instagram"]);
+  assert.equal(JSON.parse(status.params[2]).networks.instagram.state, "queued");
 });
 
 test("by default the Review page plans every connected network and approves every network", async () => {
@@ -74,7 +81,9 @@ test("by default the Review page plans every connected network and approves ever
     invoke: async (payload) => { invoked.push(payload); }, readSeed: () => JSON.stringify({ settings: { sectors: [{ id: "live" }] } }),
     now: new Date("2026-10-20T15:00:00Z")
   });
-  assert.deepEqual([...invoked[0].destinations].sort(), ["facebook", "instagram", "threads", "x", "youtube"]);
+  // One network at a time: the first now, the rest as its chain.
+  assert.equal(invoked.length, 1);
+  assert.deepEqual([...invoked[0].destinations, ...invoked[0].chain].sort(), ["facebook", "instagram", "threads", "x", "youtube"]);
   const client = fakeClient([['UPDATE "ScheduledPost" sp SET "status"=\'approved\'', { rows: [{ id: "x" }], rowCount: 7 }]]);
   await handlePlannerReview(event, { brand: "stashbox", action: "approve-range", from: "2026-10-26", to: "2026-11-01" }, async () => client, json);
   const approve = client.seen.find((q) => q.sql.includes("SET \"status\"='approved'"));

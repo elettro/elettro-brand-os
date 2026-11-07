@@ -27,13 +27,12 @@ import { calendarMonth, replanSlot } from "./calendar.mjs";
 import { holidayList, holidayEdit, holidaySkip, holidaySwap, holidayApprove } from "./holidays.mjs";
 import { timingSafeEqual } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
 import { nextWeekStart, ymdInTimeZone, addDaysToYmd, localDateTimeToUtc } from "./planner-v2.mjs";
 import { planGmbWeek } from "./gmb-planner.mjs";
+import { startPlanRun, planStatusOf, selfInvoke } from "./plan-runs.mjs";
 import { searchLibrary, libraryAsset, recordPublication, recentPublications } from "./library-publications.mjs";
 import { PUBLISHING_FORMATS, FORMAT_DESTINATIONS, PLANNABLE_DESTINATIONS, MAX_POSTS_PER_WEEK, MAX_POSTS_PER_DAY, formatOf, isPlannable, canSaveCadence, slideRange } from "./publishing-formats.mjs";
 
-const lambda = new LambdaClient({});
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // Every network with a publishing format (publishing-formats.mjs); unconnected ones simply have no posts.
@@ -114,6 +113,7 @@ async function listPosts(client, brand, body) {
   return {
     ok: true, brand: brand.slug, timeZone: brand.timezone || "America/New_York", ...win,
     destinations: destinations || REVIEW_DESTINATIONS, approvedWeeks: approvedWeeksOf(brand.settings),
+    planStatus: planStatusOf(brand.settings, body.now ? new Date(body.now) : new Date()),
     hasPlannerSettings: Boolean(brand.settings?.planner?.sectors?.length), accounts,
     formats: PUBLISHING_FORMATS.map(({ rule, ...f }) => f), maxPostsPerWeek: MAX_POSTS_PER_WEEK,
     slideRanges: Object.fromEntries(PUBLISHING_FORMATS.filter((f) => f.slides).map((f) => [`${f.destination}:${f.placement}`, slideRange(brand.settings, f.destination, f.placement)])),
@@ -380,13 +380,11 @@ async function startPlanning(client, brand, body, { invoke, readSeed, now = new 
     try { gmb = await planGmbWeek(client, brand, { weekStart, now }); }
     catch (error) { console.error("[planner-review] gmb planning failed", error?.message); gmb = { ok: false, planned: 0, message: "Google Business planning failed" }; }
   }
-  if (destinations.length) await invoke({ action: "plan-week", brandSlug: brand.slug, weekStart, mode: "apply", replacePlanned: true, destinations });
-  return { code: destinations.length ? 202 : 200, body: { ok: true, planning: destinations.length > 0, weekStart, ...(gmb ? { gmb } : {}) } };
+  // One plan-week per network, one after another (plan-runs.mjs), each with its own time limit and a live status the page polls.
+  const run = destinations.length ? await startPlanRun(client, brand, { weekStart, destinations, replacePlanned: true, invoke, now, source: "review" }) : null;
+  return { code: destinations.length ? 202 : 200, body: { ok: true, planning: destinations.length > 0, weekStart, runId: run?.runId || null, networks: destinations, ...(gmb ? { gmb } : {}) } };
 }
 
-const selfInvoke = (payload) => lambda.send(new InvokeCommand({
-  FunctionName: process.env.AWS_LAMBDA_FUNCTION_NAME, InvocationType: "Event", Payload: Buffer.from(JSON.stringify(payload))
-}));
 
 export async function handlePlannerReview(event, body, connectDatabase, json, deps = {}) {
   if (!keyMatches((event?.headers || {})["x-elettro-connect-key"])) return json(401, { ok: false, error: "Connect key required" });
@@ -394,7 +392,7 @@ export async function handlePlannerReview(event, body, connectDatabase, json, de
   const action = String(body?.action || "");
   if (!/^[a-z0-9-]{2,40}$/.test(slug)) return json(400, { ok: false, error: "brand is required" });
   const handlers = {
-    list: async (c, b) => ({ code: 200, body: await listPosts(c, b, body) }),
+    list: async (c, b) => ({ code: 200, body: await listPosts(c, b, { ...body, now: deps.now }) }),
     "set-status": (c, b) => setStatus(c, b, body),
     "approve-range": (c, b) => approveRange(c, b, body),
     "reset-week": (c, b) => resetWeek(c, b, body, deps.now),

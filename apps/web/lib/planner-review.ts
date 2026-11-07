@@ -51,6 +51,18 @@ export type ReviewList = {
   ok: boolean; error?: string; brand: string; timeZone: string; weekStart: string; weeks: number; destinations: string[]; approvedWeeks?: string[];
   hasPlannerSettings: boolean; accounts: ReviewAccount[]; posts: ReviewPost[]; formats: PublishingFormat[]; maxPostsPerWeek: number;
   slideRanges?: Record<string, { min: number; max: number } | null>;
+  // Live planning status per week (plan-runs.mjs): one entry per network while a Plan click or the planner tick runs.
+  planStatus?: Record<string, PlanWeekStatus>;
+};
+
+export type PlanNetworkStatus = {
+  state: "queued" | "running" | "done" | "failed" | "stalled";
+  step?: "loading" | "picking" | "writing" | "saving"; done?: number; total?: number;
+  posts?: number; ai?: number; template?: number; gaps?: number; skipped?: string; error?: string; updatedAt?: string;
+};
+export type PlanWeekStatus = {
+  runId: string; startedAt: string; source: "review" | "tick" | null; networks: Record<string, PlanNetworkStatus>;
+  running: boolean; finished: number; total: number;
 };
 
 // The Calendar page (one brand, one month): published posts from the ledger plus approved, paused and sending posts.

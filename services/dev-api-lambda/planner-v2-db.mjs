@@ -8,8 +8,10 @@ import { curateWeek, bedrockInvoke } from "./curator.mjs";
 import { buildSongFacts, fetchRadioCatalog } from "./song-facts.mjs";
 import { writeWeekCopy } from "./copywriter.mjs";
 import { PLANNABLE_DESTINATIONS, PUBLISHING_FORMATS, isPlannable } from "./publishing-formats.mjs";
+import { makeReporter, writeNetwork, continueChain } from "./plan-runs.mjs";
 
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
+const AI_CONCURRENCY = 3;
 const HHMM = /^\d{2}:\d{2}$/;
 
 export async function withClient(connectDatabase, json, label, fn) {
@@ -118,7 +120,29 @@ export async function configurePlannerBrand(event, connectDatabase, json) {
 // Slots this close to now (or earlier) are left out: the week may already be under way.
 const PAST_SLOT_LEAD_MS = 15 * 60000;
 
-export async function runPlanWeek(event, connectDatabase, json, { modelId = process.env.EPE_BEDROCK_CURATOR_MODEL_ID, now = new Date() } = {}) {
+/**
+ * plan-week. With `runId` (set by startPlanRun in plan-runs.mjs, one network per call) it also reports its steps to the
+ * Review page's planning status and marks the network failed if planning fails.
+ */
+export async function runPlanWeek(event, connectDatabase, json, opts = {}) {
+  if (!event?.runId) return planWeekInner(event, connectDatabase, json, opts);
+  const raw = (status, body) => ({ status, body });
+  const result = await planWeekInner(event, connectDatabase, raw, opts);
+  if (result.status !== 200) {
+    let client;
+    try {
+      client = await connectDatabase();
+      await writeNetwork(client, { brandSlug: String(event.brandSlug || ""), weekStart: event.weekStart, runId: String(event.runId), destination: String(event.destinations?.[0] || "") },
+        { state: "failed", error: String(result.body?.error || "Planning failed").slice(0, 200), updatedAt: new Date().toISOString() });
+    } catch (error) { console.error("[plan-week] could not record failure", error?.message); }
+    finally { if (client) { try { await client.end(); } catch {} } }
+  }
+  // Next network of the run (plan-runs.mjs), whatever happened to this one.
+  await continueChain(event, opts.invokeNext);
+  return json(result.status, result.body);
+}
+
+async function planWeekInner(event, connectDatabase, json, { modelId = process.env.EPE_BEDROCK_CURATOR_MODEL_ID, now = new Date() } = {}) {
   const brandSlug = String(event.brandSlug || "").trim();
   const apply = event.mode === "apply";
   if (!brandSlug) return json(400, { ok: false, error: "brandSlug is required" });
@@ -131,6 +155,10 @@ export async function runPlanWeek(event, connectDatabase, json, { modelId = proc
     const settings = resolvePlannerSettings(brand.settings);
     if (!settings.sectors.length) return json(409, { ok: false, error: "Brand has no planner settings; run configure-planner-brand first" });
     const { timeZone, weekStart, from, to } = weekWindow(brand, event.weekStart);
+    // Live status for Review (only for a run started by startPlanRun: one network, applied).
+    const report = event.runId && apply && destinations?.length === 1
+      ? makeReporter(client, { brandId: brand.id, weekStart, runId: String(event.runId), destination: destinations[0] }) : null;
+    if (report) report.step("loading");
     // In a week that has started, only slots from here on are planned or replaced.
     const notBefore = new Date(Math.max(new Date(from).getTime(), new Date(now).getTime() + PAST_SLOT_LEAD_MS));
 
@@ -144,7 +172,22 @@ export async function runPlanWeek(event, connectDatabase, json, { modelId = proc
        ORDER BY sa."destination", cr."placement"`, [brand.id, destinations])).rows
       // A network with no plannable format yet (X, Google Business, Reddit) keeps its settings but gets no posts.
       .filter((a) => PLANNABLE_DESTINATIONS.includes(a.destination));
-    if (!accounts.length) return json(409, { ok: false, error: "No active social accounts with cadence rules" });
+    if (!accounts.length) {
+      // A one-network run (Review/tick plan each network separately) for a network set to 0 posts per day: nothing to
+      // plan, but its leftover unapproved planned posts still go, as they did when the whole brand was one run.
+      if (report && event.replacePlanned === true) {
+        const handWritten = PUBLISHING_FORMATS.filter((f) => !isPlannable(f)).map((f) => `${f.destination}:${f.placement}`);
+        const removed = (await client.query(
+          `DELETE FROM "ScheduledPost" sp USING "SocialAccount" sa
+           WHERE sa."id" = sp."socialAccountId" AND sp."brandId" = $1 AND sp."status" = 'planned' AND sp."scheduledFor" >= $2 AND sp."scheduledFor" < $3
+             AND sa."destination" = ANY($4::text[]) AND sa."destination" = ANY($5::text[]) AND (sa."destination" || ':' || sp."placement") <> ALL($6::text[])`,
+          [brand.id, notBefore, to, destinations, PLANNABLE_DESTINATIONS, handWritten])).rowCount;
+        await report.done({ posts: 0, ai: 0, template: 0, gaps: 0, skipped: "no posts per day set" });
+        await report.flush();
+        return json(200, { ok: true, mode: "apply", brand: brand.slug, weekStart, removedPlanned: removed, inserted: 0, skipped: "no posts per day set" });
+      }
+      return json(409, { ok: false, error: "No active social accounts with cadence rules" });
+    }
 
     const assets = (await client.query(
       `SELECT "id","filename","kind","aspectRatioLabel","durationMs","tags","title","topic","contentGroup","creativeFamily",
@@ -203,6 +246,7 @@ export async function runPlanWeek(event, connectDatabase, json, { modelId = proc
         .filter((u) => u.socialAccountId === a.socialAccountId && new Date(u.at) < from)
         .sort((x, y) => y.at.localeCompare(x.at)).slice(0, 10)
         .map((u) => ({ at: u.at, filename: u.filename, song: u.songKey, contentGroup: u.contentGroup }))]));
+      if (report) report.step("picking");
       const curated = await curateWeek({ plan, brandSlug, accounts, recentByAccount, modelId });
       plan = planWeek({ ...input, preferences: curated.preferences });
       curator = { enabled: true, modelId, runs: curated.runs };
@@ -255,7 +299,9 @@ export async function runPlanWeek(event, connectDatabase, json, { modelId = proc
     const copies = await writeWeekCopy({
       slots: plan.slots.filter((s) => s.status === "planned"), assetsById: new Map(assets.map((a) => [a.id, a])),
       songFacts, links: settings.links || {}, language: settings.language || "en", brandSlug, modelId: copyModel, invoke: copyModel ? bedrockInvoke : null,
-      recentCaptionsByAccount, concurrency: settings.copy?.concurrency || 6, promotionalMaxShare: { bluesky: 0.25, ...(settings.promotionalMaxShare || {}) }
+      // At most AI_CONCURRENCY model calls at once: each is a Lambda run, and the account allows 10 in total.
+      recentCaptionsByAccount, concurrency: copyModel ? Math.min(settings.copy?.concurrency || AI_CONCURRENCY, AI_CONCURRENCY) : (settings.copy?.concurrency || 6), promotionalMaxShare: { bluesky: 0.25, ...(settings.promotionalMaxShare || {}) },
+      onProgress: report ? (done, total) => report.progress(done, total) : null
     });
     const copyBySlot = new Map(copies.map((c) => [c.slotId, c.copy]));
     for (const slot of plan.slots) slot.copy = copyBySlot.get(slot.slotId) || null;
@@ -273,6 +319,7 @@ export async function runPlanWeek(event, connectDatabase, json, { modelId = proc
     if (!apply) return json(200, response);
 
     const runFor = (id) => (curator.runs || []).find((r) => r.socialAccountId === id) || null;
+    if (report) await report.step("saving");
     await client.query("BEGIN");
     try {
       let removed = 0;
@@ -322,6 +369,10 @@ export async function runPlanWeek(event, connectDatabase, json, { modelId = proc
         inserted += 1;
       }
       await client.query("COMMIT");
+      if (report) {
+        await report.done({ posts: inserted, ai: response.copyWriter.ai, template: response.copyWriter.template, gaps: (plan.gaps || []).length });
+        await report.flush();
+      }
       return json(200, { ...response, removedPlanned: removed, inserted });
     } catch (error) {
       await client.query("ROLLBACK");

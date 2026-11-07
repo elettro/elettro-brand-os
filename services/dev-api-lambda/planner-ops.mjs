@@ -4,11 +4,12 @@
 //     planner-tick     plan the next unplanned week, or a week the page asked to re-plan (one per call)
 //     claim-due-posts  hand out approved posts whose time has come, marked 'publishing'
 //     finish-post      record the outcome: 'published' + a PublicationLedger row, or 'failed'
-import { withClient, loadBrand, weekWindow, runPlanWeek, approvePlannerWeek } from "./planner-v2-db.mjs";
+import { withClient, loadBrand, weekWindow, approvePlannerWeek } from "./planner-v2-db.mjs";
 import { addDaysToYmd, brandLanguage, isSynthetic, languageOf, resolvePlannerSettings, ymdInTimeZone } from "./planner-v2.mjs";
 import { dashboardStats } from "./dashboard-stats.mjs";
 import { keyMatches } from "./youtube-connect.mjs";
 import { PLANNABLE_DESTINATIONS } from "./publishing-formats.mjs";
+import { startPlanRun, planStatusOf, selfInvoke } from "./plan-runs.mjs";
 
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_POSTS_PER_WEEK = 200;
@@ -193,7 +194,7 @@ export function weekToPlan(brand, plannedByDestination) {
   return null;
 }
 
-async function plannerTick(connectDatabase, json) {
+export async function plannerTick(connectDatabase, json, deps = {}) {
   return withClient(connectDatabase, json, "planner-tick", async (client) => {
     const brands = (await client.query(
       `SELECT DISTINCT b."slug" FROM "Brand" b
@@ -217,20 +218,17 @@ async function plannerTick(connectDatabase, json) {
       for (const r of planned) plannedByDestination[r.destination]?.push(r.week);
       const next = weekToPlan(brand, plannedByDestination);
       if (!next) continue;
-      // runPlanWeek opens its own connection; release ours first so the tick holds one at a time.
-      await client.end();
-      const raw = (status, body) => ({ status, body });
-      const result = await runPlanWeek({ brandSlug: slug, weekStart: next.weekStart, mode: "apply", replacePlanned: next.replace,
-        destinations: next.destinations || undefined }, connectDatabase, raw);
+      // Its networks are still being planned in the background (an earlier tick or a Plan click): don't start them twice.
+      if (planStatusOf(brand.settings, deps.now || new Date())[next.weekStart]?.running) continue;
+      // One plan-week per network, one after another in the background (plan-runs.mjs): a whole brand in this tick ran past the
+      // Lambda's time limit once AI captions were on. The week shows the same live status on Review as a Plan click.
+      // A requested re-plan covers every network the brand has, like a Plan click on Review.
+      const destinations = next.destinations || active;
+      const run = await startPlanRun(client, brand, { weekStart: next.weekStart, destinations, replacePlanned: next.replace, invoke: deps.invoke || selfInvoke, source: "tick" });
       if (next.replace) {
-        const again = await connectDatabase();
-        try {
-          await again.query(`UPDATE "Brand" SET "settings" = "settings" - 'plannerRuntime', "updatedAt" = CURRENT_TIMESTAMP WHERE "slug" = $1`, [slug]);
-        } finally { await again.end(); }
+        await client.query(`UPDATE "Brand" SET "settings" = "settings" - 'plannerRuntime', "updatedAt" = CURRENT_TIMESTAMP WHERE "slug" = $1`, [slug]);
       }
-      return json(result.status, { ok: result.status === 200, brand: slug, weekStart: next.weekStart, replaced: next.replace,
-        destinations: next.destinations || "all",
-        inserted: result.body.inserted ?? 0, gaps: result.body.gaps?.length ?? 0, error: result.body.error });
+      return json(202, { ok: true, brand: slug, weekStart: next.weekStart, replaced: next.replace, destinations, runId: run.runId });
     }
     return json(200, { ok: true, planned: null });
   });
@@ -392,8 +390,8 @@ async function gmbMix(event, connectDatabase, json) {
   });
 }
 
-export async function handlePlannerOps(event, connectDatabase, json) {
-  if (event.action === "planner-tick") return plannerTick(connectDatabase, json);
+export async function handlePlannerOps(event, connectDatabase, json, deps = {}) {
+  if (event.action === "planner-tick") return plannerTick(connectDatabase, json, deps);
   if (event.action === "claim-due-posts") return claimDuePosts(event, connectDatabase, json);
   if (event.action === "requeue-failed") return requeueFailed(event, connectDatabase, json);
   if (event.action === "finish-post") return finishPost(event, connectDatabase, json);

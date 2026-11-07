@@ -411,10 +411,14 @@ async function mapLimit(items, limit, fn) {
  * Write copy for every planned slot. `invoke` is the Bedrock call (same shape as
  * the curator's); without a model, template copy is used for all posts.
  */
-export async function writeWeekCopy({ slots, assetsById, songFacts, links, brandSlug, modelId, invoke, recentCaptionsByAccount = {}, concurrency = 6, intelligenceRoot, promotionalMaxShare = {}, language = "en" }) {
+export async function writeWeekCopy({ slots, assetsById, songFacts, links, brandSlug, modelId, invoke, recentCaptionsByAccount = {}, concurrency = 6, intelligenceRoot, promotionalMaxShare = {}, language = "en", onProgress = null }) {
   const written = [];
   const promo = promotionalSlotIds(slots, promotionalMaxShare);
-  return mapLimit(slots, concurrency, async (slot) => {
+  let done = 0;
+  // onProgress(done, total) after each caption (the Review page's planning status).
+  const report = (result) => { done += 1; if (onProgress) { try { onProgress(done, slots.length); } catch {} } return result; };
+  return mapLimit(slots, concurrency, async (slot) => report(await writeSlotCopy(slot)));
+  async function writeSlotCopy(slot) {
     const asset = assetsById.get(slot.assetId);
     const f = { ...postFacts(asset, slot, songFacts, links, { promotional: promo.has(slot.slotId), language }), brandSlug };
     const fallback = () => {
@@ -444,7 +448,7 @@ export async function writeWeekCopy({ slots, assetsById, songFacts, links, brand
     } catch (error) {
       return { slotId: slot.slotId, facts: f, copy: { ...fallback(), aiError: error instanceof Error ? error.message : String(error) } };
     }
-  });
+  }
 }
 
 /** True when a caption fits the network's own limit (Bluesky counts graphemes, like validateCopy). */

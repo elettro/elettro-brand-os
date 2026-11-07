@@ -198,6 +198,28 @@ test("guidance loads per task with hashes, within budget, and fails loudly when 
   }
 });
 
+test("curator splits an account's week into chunks; a failed chunk loses only its own picks", async () => {
+  const plan = run();
+  const slots = plan.slots.filter((s) => s.socialAccountId === "tiktok-video");
+  assert.equal(slots.length, 14);
+  const seen = [];
+  const invoke = async ({ user }) => {
+    const input = JSON.parse(user);
+    seen.push(input.slots.length);
+    if (input.slots[0].slotId !== slots[0].slotId) throw new Error("throttled");
+    return JSON.stringify({ decisions: input.slots.map((s) => ({ slotId: s.slotId, status: "selected", selectedAssetId: s.candidates[0].assetId })) });
+  };
+  const result = await curateWeek({ plan, brandSlug: "stashbox", accounts: [account("tiktok", "video", 14)], modelId: "test", invoke, chunkSize: 12 });
+  assert.deepEqual(seen.sort((a, b) => b - a), [12, 2]);
+  assert.equal(result.runs.length, 1);
+  assert.equal(result.runs[0].chunks, 2);
+  assert.equal(result.runs[0].failedChunks, 1);
+  assert.equal(result.runs[0].accepted, 12);
+  assert.match(result.runs[0].chunkErrors[0], /throttled/);
+  assert.equal(Object.keys(result.preferences).length, 12);
+  assert.equal(result.preferences[slots[13].slotId], undefined);
+});
+
 test("sections split on bracketed headings and keep the core", () => {
   const parts = splitSections("# T\nintro\n## [a] A\nalpha\n## Plain\nplain\n## [b] B\nbeta", "^## \\[([a-z0-9-]+)\\] ");
   assert.equal(parts.sections.a, "## [a] A\nalpha");
@@ -216,7 +238,7 @@ test("curator only passes through picks from each slot's own candidates", async 
       { slotId: input.slots[1].slotId, status: "selected", selectedAssetId: "not-a-candidate" }
     ], weekNotes: "flows" }) + "\n```";
   };
-  const result = await curateWeek({ plan, brandSlug: "stashbox", accounts: [account("tiktok", "video", 14)], modelId: "test", invoke });
+  const result = await curateWeek({ plan, brandSlug: "stashbox", accounts: [account("tiktok", "video", 14)], modelId: "test", invoke, chunkSize: 100 });
   assert.equal(result.preferences[slots[0].slotId].assetId, slots[0].candidates[1].assetId);
   assert.equal(result.preferences[slots[1].slotId], undefined);
   assert.equal(result.runs[0].accepted, 1);

@@ -1266,3 +1266,19 @@ code {
 .bug-links a:hover, .bug-links button:hover { border-color: var(--accent); color: var(--accent); }
 .bug-src { font-size: 11px; margin-top: 14px; }
 @media (max-width: 900px) { .bugs-stats { grid-template-columns: repeat(2, 1fr); } .bugs-controls, .bug-grid { grid-template-columns: 1fr; } .bug-top { display: block; } .bug-pills { justify-content: flex-start; margin-top: 10px; } }
+
+/* Review: live planning status (plan-progress.tsx, 2026-11-07) */
+.plan-progress { margin: 10px 4px 4px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-soft); }
+.plan-progress.running { border-color: var(--accent); }
+.plan-progress-head { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: baseline; }
+.plan-progress-warn { color: var(--danger); font-size: 13px; }
+.plan-progress-bar { height: 6px; margin: 10px 0; border-radius: 999px; background: var(--line); overflow: hidden; }
+.plan-progress-bar > span { display: block; height: 100%; background: var(--accent); transition: width .4s ease; }
+.plan-progress:not(.running) .plan-progress-bar > span { background: var(--success); }
+.plan-progress-nets { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 4px 16px; font-size: 13px; }
+.plan-net { display: flex; gap: 6px; align-items: baseline; min-width: 0; }
+.plan-net-name { font-weight: 600; }
+.plan-net-line { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.plan-net.done .plan-net-icon { color: var(--success); }
+.plan-net.running .plan-net-icon { color: var(--accent); }
+.plan-net.failed .plan-net-icon, .plan-net.stalled .plan-net-icon, .plan-net.failed .plan-net-line, .plan-net.stalled .plan-net-line { color: var(--danger); }
