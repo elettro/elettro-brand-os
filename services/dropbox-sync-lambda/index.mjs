@@ -59,7 +59,7 @@ async function fetchDropboxThumbnailBytes(token, path) {
         format: { ".tag": "jpeg" },
         size: { ".tag": "w640h480" },
         mode: { ".tag": "bestfit" }
-      })
+      }).replace(/[^\x00-\x7e]/g, (c) => "\\u" + c.charCodeAt(0).toString(16).padStart(4, "0")) // header bytes are Latin-1: escape non-ASCII (u-umlaut, sharp s) or Dropbox answers not_found
     }
   });
 
