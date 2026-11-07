@@ -27,7 +27,7 @@ const LIMITS = {
   pinterest: { title: 100, caption: 800, hashtags: 0 }
 };
 const CLICKABLE = new Set(["youtube", "facebook", "x", "linkedin", "threads", "bluesky", "mastodon", "substack"]);
-const BANNED = [/\belevate\b/i, /\bunleash/i, /\bunlock/i, /\bdive into\b/i, /game[- ]changer/i, /experience the magic/i, /it'?s not just .+, it'?s/i];
+const BANNED = [/\belevate\b/i, /\bunleash/i, /\bunlock/i, /\bdive into\b/i, /game[- ]changer/i, /experience the magic/i, /(?:it'?s not|isn'?t|is not|not) just\b[^\n]{0,80}?\bit'?s\b/i];
 const SHOWS = { "stashbox-does-dylan": "Stashbox Does Dylan", "stashbox-does-sublime": "Stashbox Does Sublime & Reggae" };
 const ROLE_WORDS = { vocals: "vocals", guitar: "guitar", bass: "bass", drums: "drums", keyboards: "keys", keys: "keys" };
 
