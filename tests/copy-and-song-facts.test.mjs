@@ -359,3 +359,11 @@ test("radio-blog posts link to the radio blog, and a record link matches with or
   const copy = { status: "ready", source: "ai", caption: "What if your music platform did more? Read it: https://stashbox.com/radio/blog", hashtags: [] };
   assert.ok(!validateCopy(copy, { ...f, linksInCaptionAreClickable: true }).some((p) => p.startsWith("link not from records")));
 });
+
+test("Mastodon: an @mention after a space is caught; an email address is not a mention", () => {
+  const f = { destination: "mastodon", allowedLinks: [], linksInCaptionAreClickable: true };
+  const problems = (caption) => validateCopy({ status: "ready", source: "ai", caption, hashtags: [] }, f);
+  assert.ok(problems("Thanks @bob for the night").some((p) => p.includes("@mention")));
+  assert.ok(problems("Thanks @bob@mastodon.social").some((p) => p.includes("@mention")));
+  assert.ok(!problems("Write to booking@stashbox.com").some((p) => p.includes("@mention")));
+});
