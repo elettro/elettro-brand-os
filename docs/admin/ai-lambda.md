@@ -21,12 +21,23 @@ dev-api (in VPC) --lambda:InvokeFunction, via the VPC's Lambda endpoint--> elett
   Calendar swaps). With env `AI_FUNCTION_NAME` set it calls this Lambda; without it it calls Bedrock directly (local runs).
 - Any failure throws in the dev-api, and the planner already falls back to rules-only picks and template captions.
 
+## Status 2026-11-07: running on Haiku 4.5 until AWS enables 5.5
+
+Set up the same day (`scripts/ai-lambda-setup.sh`, root): role `elettro-brand-os-dev-ai-role`, Lambda `elettro-brand-os-dev-ai`,
+dev-api policy `ElettroBrandOSDevInvokeAi` + `AI_FUNCTION_NAME`. The smoke test through the Lambda **passes on
+`us.anthropic.claude-haiku-4-5-20251001-v1:0`** and **fails on Haiku 5.5** with `AccessDeniedException: anthropic.claude-haiku-5-5
+is not available for this account` (also from root, directly, for both the `us.` and `global.` profiles), although
+`get-foundation-model-availability` says `AUTHORIZED` and `create-foundation-model-agreement` says "Agreement already exists".
+So the availability API is **not** proof a model can be called: always run one real call. Dean is asking AWS to enable 5.5.
+The Lambda env `AI_ALLOWED_MODEL_IDS` and the role policy allow both models. When 5.5 works: change `MODEL` in the script
+(or the dev-api `EPE_BEDROCK_CURATOR_MODEL_ID`) to `us.anthropic.claude-haiku-5-5`.
+
 ## Turning it on
 
 | Setting (dev-api env) | Effect |
 |---|---|
 | `AI_FUNCTION_NAME=elettro-brand-os-dev-ai` | route model calls through the AI Lambda (harmless on its own) |
-| `EPE_BEDROCK_CURATOR_MODEL_ID=us.anthropic.claude-haiku-5-5` | **turns AI on**: AI picks + AI captions on every Plan, planner tick and Calendar swap |
+| `EPE_BEDROCK_CURATOR_MODEL_ID=<MODEL in the script>` | **turns AI on**: AI picks + AI captions on every Plan, planner tick and Calendar swap |
 
 `scripts/ai-lambda-setup.sh` does steps 1-4 (role, Lambda, dev-api invoke permission + `AI_FUNCTION_NAME`, smoke test) and
 leaves AI off; `--enable` adds step 5 (`EPE_BEDROCK_CURATOR_MODEL_ID`). The script merges env variables (a plain
@@ -43,9 +54,7 @@ leaves AI off; `--enable` adds step 5 (`EPE_BEDROCK_CURATOR_MODEL_ID`). The scri
 
 ## Unknown / ask Dean (not verified)
 
-- The setup script has not been run yet. The IAM resource list (profile ARNs + `foundation-model` in every region + the
-  region-less ARN for the global profile) follows AWS's documented pattern but has not been tested against a real call.
-- Whether the `aws-marketplace` actions are needed now that the model is already `AUTHORIZED` (kept to be safe).
+- The IAM resource list works for Haiku 4.5 (verified 2026-11-07, real call). For 5.5 it cannot be tested until AWS enables the model.
 - Latency and cost of a full week's planning with AI on (one curator call per account-week, one copy call per post, concurrency 6).
 - The web app's asset enrichment (`apps/web/lib/asset-ai-enrichment.ts`, `EPE_BEDROCK_VISION_MODEL_ID`) runs on Amplify, not in
   the VPC, so it does not need this relay; it needs `bedrock:InvokeModel` on the Amplify compute role
