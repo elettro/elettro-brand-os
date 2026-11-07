@@ -68,10 +68,20 @@ export function complianceProblems(text) {
   return MENTION.test(String(text)) ? ["a scheduled X post may not @mention another account (automated mentions count as spam)"] : [];
 }
 
-/** Planner caption plus up to two #tags, within 280 weighted characters (the caption is cut, never the tags). */
+// GLOBAL RULE, every brand: NO URL POSTS ON X. X bills $0.20 for a post containing a URL against $0.015 for one without
+// (13x), and it also treats a bare domain such as stashbox.com/radio as a link. So no text we send carries a link of any kind.
+const SCHEME_URL = /(?:https?:\/\/|\bwww\.)\S+/gi;
+const BARE_DOMAIN = /(?<![@\w#])[a-z0-9-]{2,}(?:\.[a-z0-9-]+)*\.(?:com|net|org|ai|io|de|co|us|tv|fm|app|shop|radio|info|biz|me|ly|gg|xyz|online|site|store|link|page|dev|eu)\b(?:\/\S*)?/gi;
+export const hasUrl = (text) => { const t = String(text || ""); return new RegExp(SCHEME_URL.source, "i").test(t) || new RegExp(BARE_DOMAIN.source, "i").test(t); };
+export function stripUrls(text) {
+  return String(text || "").replace(SCHEME_URL, "").replace(BARE_DOMAIN, "")
+    .replace(/[ \t]+([,.;:!?])/g, "$1").replace(/[ \t]{2,}/g, " ").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+/** Planner caption (links removed, see NO URL POSTS above) plus up to two #tags, within 280 weighted characters (the caption is cut, never the tags). */
 export function postText(caption, hashtags = []) {
   const tags = (hashtags || []).map((h) => String(h).replace(/^#/, "").replace(/[^\p{L}\p{N}_]/gu, "")).filter(Boolean).slice(0, MAX_TAGS);
-  const body = String(caption || "").trim();
+  const body = stripUrls(caption);
   if (!tags.length) return truncate(body, MAX_TEXT);
   const suffix = "\n\n" + tags.map((t) => "#" + t).join(" ");
   if (weight(suffix) >= MAX_TEXT) return truncate(body, MAX_TEXT);
@@ -94,6 +104,7 @@ const ACCOUNT_KEY = /^[0-9]{1,25}$/; // the numeric X user id, also the tail of 
 // A manual post: text, 1-4 images, or one video.
 export function postRequest(event) {
   const text = String(event.text || "").trim();
+  if (hasUrl(text)) throw new Error("X posts may not contain a URL or domain (a link costs 13x as much); remove it");
   if (weight(text) > MAX_TEXT) throw new Error(`text allows up to ${MAX_TEXT} characters`);
   const paths = (Array.isArray(event.dropboxPaths) ? event.dropboxPaths : event.dropboxPath ? [event.dropboxPath] : []).map(safePath);
   if (!paths.length && !text) throw new Error("a post needs text, Dropbox images, or both");

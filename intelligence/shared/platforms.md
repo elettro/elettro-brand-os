@@ -73,8 +73,12 @@ pinned comment, description) and that location must exist for the account.
 - **Viewer:** fast, conversational, reacts to opinion and moment.
 - **Copy:** one sharp idea. Practical target ≤ 240 chars. A short thread only
   when the content truly has steps or a story.
-- **Links:** clickable. The brand + platform section decides whether links go
-  in the post or a reply.
+- **Links: NEVER (global rule, every brand, Dean 2026-11-07).** No URL, no
+  domain (`stashbox.com/radio`, `www.…`), no "link in bio", no "link below" in
+  any X post or reply. X charges $0.20 for a post that contains a URL against
+  $0.015 without one (13x), and it counts a bare domain as a link. A brand
+  section may not override this. The publisher also strips any link that slips
+  through, so write the caption so it still reads well without one.
 - **Hashtags:** 0–2.
 
 ## [threads] Threads

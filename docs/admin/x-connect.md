@@ -15,7 +15,9 @@ Connect + Disconnect + a hand-written text test post on `/connections`, **and** 
 (formats `post` = 1 photo, `carousel` = 2-4 photos and `video`, all `planning`; video uses X's chunked upload and is limited to 1 GB (set 2026-11-06 after a 274 MB video was refused at 256 MB) and the planner's "1-3min" duration bucket).
 X is back on Review (posts per day) and the planner plans it for every brand with a connected X account.
 Video: initialize, 4 MiB append parts read from Dropbox with Range requests, finalize, then poll STATUS (up to 4 minutes); X's own limit is 20 minutes / 8 GB. Text up to 280 weighted characters (a link counts 23), up to 2 #tags, no @mentions in automated posts, images up to 5 MB (.jpg/.png/.webp),
-alt text sent best-effort. **Cost (X pay-per-use, checked 2026-10-30): $0.015 per post, $0.20 per post with a URL.** Put a spending cap in the
+alt text sent best-effort. **NO URL POSTS (global rule, every brand, Dean 2026-11-07):** no X post carries a URL or a bare domain. Scheduled
+captions go through `stripUrls` in `services/x-lambda/index.mjs` (scheme links, `www.`, and domains such as `stashbox.com/radio` are removed),
+a hand-written post with a link is refused, and `intelligence/shared/platforms.md` tells the copywriter never to write one. **Cost (X pay-per-use, checked 2026-10-30): $0.015 per post, $0.20 per post with a URL.** Put a spending cap in the
 X Developer Console. A 402 from X shows up as "out of credits" on the post. Nothing here has run against the live X API (see "Never verified").
 
 ### Publisher AWS steps (after merge, root profile, ask Dean first)
