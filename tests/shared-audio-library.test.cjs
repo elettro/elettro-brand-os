@@ -33,7 +33,10 @@ test("allowed brands and duration are writable through bulk metadata", () => {
 test("schemas and packaging know about audio", () => {
   assert.ok(read("services/dev-api-lambda/init.sql").includes("'carousel','audio'"));
   assert.ok(read("packages/database/prisma/schema.prisma").includes("allowedBrandSlugs"));
-  assert.ok(read(".github/workflows/build-dev-api-lambda.yml").includes("shared-audio-library.mjs shared-stock-graphics.mjs document-asset-kind.mjs init.sql"));
+  // Each module must be in the zip list; their order (and neighbours) changes whenever a new module is added.
+  const workflow = read(".github/workflows/build-dev-api-lambda.yml");
+  const zipList = workflow.slice(workflow.indexOf("zip -r elettro-brand-os-dev-api.zip"));
+  for (const file of ["shared-audio-library.mjs", "shared-stock-graphics.mjs", "document-asset-kind.mjs", "init.sql"]) assert.ok(zipList.includes(` ${file} `), `${file} is missing from the dev-api zip list`);
 });
 
 test("shared-library assets honour allowedBrandSlugs in the asset list, single asset and content-pool stock view", () => {
