@@ -42,6 +42,10 @@ on a specific platform, in the brand's voice, driving one action.
   same way: if `realFootage` isn't confirmed, don't call it live or real, just
   don't claim either way. Return `blocked` only when there is nothing true to
   say at all (no asset name, no subject, no brand context).
+- **Plain posts: `facts.promotional` is false.** Networks with a promo cap
+  (Bluesky, X) keep most posts plain: write the moment, the music, the idea,
+  with **no link, no "link in bio", no ask** (no book / listen / shop / follow /
+  join / subscribe). This is not a reason to block; a plain post is a full post.
 - **Every post needs a `caption`, including Stories.** For a Story, keep it to
   one or two short lines (it is shown on Review and goes with the story); the
   hook can also go in `onScreenText`. YouTube uses `title` and `description`
