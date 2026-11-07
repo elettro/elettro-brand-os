@@ -9,7 +9,7 @@
  * `unfixable`; with pauseUnfixable it is paused (Calendar can then Remove or Resume it), otherwise left as is.
  */
 import { withClient, loadBrand } from "./planner-v2-db.mjs";
-import { carouselMates, eligibleOn, poolRejection, productKeyOf, slideSetOf, resolvePlannerSettings } from "./planner-v2.mjs";
+import { carouselMates, eligibleOn, poolRejection, productKeyOf, slideSetOf, uniquePictures, resolvePlannerSettings } from "./planner-v2.mjs";
 import { slideRange } from "./publishing-formats.mjs";
 
 /** Pure: the new slide list for one carousel, or why it cannot be made. */
@@ -24,7 +24,9 @@ export function refillSlides({ lead, current, pool, range }) {
   } else {
     ids = [lead.id, ...mates.map((a) => a.id)];
   }
-  ids = ids.slice(0, range.max);
+  // Never the same picture twice (same file name filed in two places).
+  const byId = new Map([lead, ...pool].map((a) => [a.id, a]));
+  ids = uniquePictures(ids.map((id) => byId.get(id)).filter(Boolean)).map((a) => a.id).slice(0, range.max);
   if (ids.length < range.min) return { ok: false, how, why: `only ${ids.length} matching image(s); the minimum is ${range.min}`, ids };
   return { ok: true, how, ids };
 }

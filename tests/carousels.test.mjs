@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { PUBLISHING_FORMATS, slideRange, slidesOf, isPlannable } from "../services/dev-api-lambda/publishing-formats.mjs";
-import { planWeek, resolvePlannerSettings, carouselMates, slideSetOf } from "../services/dev-api-lambda/planner-v2.mjs";
+import { planWeek, resolvePlannerSettings, carouselMates, slideSetOf, productKeyOf, uniquePictures } from "../services/dev-api-lambda/planner-v2.mjs";
 import { handlePlannerReview } from "../services/dev-api-lambda/planner-review.mjs";
 
 const json = (statusCode, body) => ({ statusCode, body });
@@ -187,4 +187,33 @@ test("the one-off refill rebuilds a mixed carousel from its lead's own set and l
   await runCarouselRefill({ brandSlug: "stashbox", mode: "apply", pauseUnfixable: true }, async () => client, json);
   assert.ok(updates.some((u) => u.sql.includes("'paused'") && u.params[0] === "p2"));
   assert.equal((await runCarouselRefill({ brandSlug: "stashbox", rawPath: "/x" }, async () => client, json)).statusCode, 403);
+});
+
+test("SolarMeister's produkt- tags count as a product (with product-link), like its product links", () => {
+  assert.equal(productKeyOf({ tags: ["produkt-anker-solix", "product-link"] }), "product:anker-solix");
+  assert.equal(productKeyOf({ tags: ["produkt-anker-solix"] }), null, "without product-link it is not a product post");
+  assert.equal(productKeyOf({ tags: ["product:tee"] }), "product:tee");
+  const a = { ...image(["gear", "produkt-anker", "product-link"]), sourcePath: "/x/a1.jpg" };
+  const b = { ...image(["gear", "produkt-anker", "product-link"]), sourcePath: "/x/a2.jpg" };
+  const c = { ...image(["gear", "produkt-zendure", "product-link"]), sourcePath: "/y/z.jpg" };
+  assert.deepEqual(carouselMates(a, [a, b, c], [a, b, c]), { how: "product", mates: [b] });
+});
+
+test("a carousel never shows the same picture twice", () => {
+  const twin = (name) => [{ ...image(["gear"]), filename: name }, { ...image(["gear"]), filename: name }];
+  const assets = [...twin("zahlen-film.jpg"), ...twin("split-sortiment.jpg"), ...twin("schlagzeilen-film.jpg"), ...twin("dach.jpg"), ...twin("speicher.jpg")];
+  assert.equal(uniquePictures(assets).length, 5);
+  const result = plan(assets, { carouselSlides: { "instagram:carousel": { min: 3, max: 6 } } });
+  for (const s of result.slots.filter((x) => x.status === "planned")) {
+    const names = s.slideIds.map((id) => assets.find((a) => a.id === id).filename);
+    assert.equal(new Set(names).size, names.length, names.join(", "));
+  }
+});
+
+test("the refill drops a repeated picture from a generic carousel", async () => {
+  const { refillSlides } = await import("../services/dev-api-lambda/carousel-refill.mjs");
+  const [z1, z2] = [{ ...image(["gear"]), filename: "zahlen-film.jpg" }, { ...image(["gear"]), filename: "zahlen-film.jpg" }];
+  const others = [{ ...image(["gear"]), filename: "a.jpg" }, { ...image(["gear"]), filename: "b.jpg" }];
+  const r = refillSlides({ lead: z1, current: [z1.id, z2.id, others[0].id, others[1].id], pool: [z1, z2, ...others], range: { min: 2, max: 6 } });
+  assert.deepEqual(r.ids, [z1.id, others[0].id, others[1].id]);
 });
