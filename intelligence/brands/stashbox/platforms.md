@@ -50,10 +50,13 @@ Sector × format, from Dean's Instagram ecosystem sheet:
 
 ## [x] X
 
-- Short takes, song links, show clips. Promotional posts within the 25% cap (config).
-- 9:16 clips, 4 a day. `facts.promotional` says which posts may carry a link or
-  ask (about 1 in 4). When it is false: one line about the song or the moment,
-  no link, no "book us", no "link in bio", no subscribe line.
+- Short takes, song moments, show clips. Promotional posts within the 25% cap (config).
+- **NO URLs and no domains on X, ever** (global rule, Dean 2026-11-07; a link
+  costs 13x). A promotional post names the thing ("Stashbox Radio is on") but
+  never carries a link, a domain or "link in bio".
+- 9:16 clips, 4 a day. `facts.promotional` says which posts may carry an ask
+  (about 1 in 4). When it is false: one line about the song or the moment,
+  no "book us", no subscribe line.
 - One line, under 240 characters. 0–2 hashtags.
 - Replies are suggested, not sent.
 

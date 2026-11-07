@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { postText, weight, complianceProblems, requestFromPost, postRequest, account, uploadImage, uploadVideo, publish, publishingTick, MAX_TEXT, CHUNK_BYTES, VIDEO_BYTE_LIMIT } from "../services/x-lambda/index.mjs";
+import { stripUrls, hasUrl, postText, weight, complianceProblems, requestFromPost, postRequest, account, uploadImage, uploadVideo, publish, publishingTick, MAX_TEXT, CHUNK_BYTES, VIDEO_BYTE_LIMIT } from "../services/x-lambda/index.mjs";
 
 const REC = { accessToken: "tok", username: "stashboxmusic", accountId: "42" };
 const PATH = "/1---elettro-brand-os/brands/stashbox/a.jpg";
@@ -135,4 +135,14 @@ test("publish with a video posts once with the processed media id", async () => 
   };
   const out = await publish(REC, { text: "Clip", paths: [PATH.replace("a.jpg", "v.mp4")], kind: "video" }, { fetchImpl, source: async () => memorySource(10) });
   assert.equal(out.url, "https://x.com/stashboxmusic/status/555");
+});
+
+test("NO URL POSTS: scheduled text is stripped of every link and domain, manual text with one is refused", () => {
+  assert.equal(stripUrls("Listen now https://stashbox.com/radio today"), "Listen now today");
+  assert.equal(stripUrls("Visit www.elettro.com or stashbox.com/radio!"), "Visit or");
+  assert.equal(postText("New show at https://stashbox.com", ["live"]), "New show at\n\n#live");
+  assert.ok(!hasUrl("Great night, see you there #stashbox @stashboxmusic"));
+  assert.ok(hasUrl("book at elettro.com") && hasUrl("http://x.co/a") && hasUrl("www.a.io"));
+  assert.equal(requestFromPost(post({ caption: "Tune in https://stashbox.com/radio" })).text.includes("http"), false);
+  assert.throws(() => postRequest({ brand: "stashbox", text: "hi https://stashbox.com" }), /URL/);
 });

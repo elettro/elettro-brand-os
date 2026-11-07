@@ -32,7 +32,7 @@ Maximal 500 Zeichen, bis zu 3 deutsche Hashtags, keine @-Erwähnungen.
 
 ## [x] X
 
-Maximal 280 Zeichen, höchstens 2 Hashtags, keine @-Erwähnungen; Link nur wenn nötig (kostet mehr).
+Maximal 280 Zeichen, höchstens 2 Hashtags, keine @-Erwähnungen. **Niemals einen Link oder eine Domain** (globale Regel für alle Marken, Dean 2026-11-07; ein Link kostet das 13-Fache).
 
 ## [substack] Substack
 
