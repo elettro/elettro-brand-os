@@ -33,7 +33,19 @@ on a specific platform, in the brand's voice, driving one action.
 - **One post, one job.** Don't stack a booking pitch, a merch plug and a
   streaming link in the same caption.
 - **Every link is a record link.** Use the URL from the subject facts verbatim.
-  If the destination needs a link and none is given, return `blocked`.
+  If no link is given, write the post without one (no "link in bio" either);
+  don't block for that.
+- **Missing details are not a reason to block. Write around them.** If the
+  facts have no venue, date, city, performers, song or show name, write a true
+  post without those details (the music, the energy, the band, the product, the
+  idea), and never guess or hint at the missing ones. Footage facts work the
+  same way: if `realFootage` isn't confirmed, don't call it live or real, just
+  don't claim either way. Return `blocked` only when there is nothing true to
+  say at all (no asset name, no subject, no brand context).
+- **Every post needs a `caption`, including Stories.** For a Story, keep it to
+  one or two short lines (it is shown on Review and goes with the story); the
+  hook can also go in `onScreenText`. YouTube uses `title` and `description`
+  instead.
 - **Prices:** only from the live product data in the input, written exactly.
   If no price is given, don't mention one.
 - **Dates and places:** only from the show record. Don't say "this weekend" or

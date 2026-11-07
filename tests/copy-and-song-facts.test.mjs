@@ -346,3 +346,16 @@ test("SolarMeister produkt-<handle> tag (with product-link) links to the shop pr
   withNote.creativeNotes = "Link: https://solarmeister-shop.de/products/other-handle.";
   assert.equal(postFacts(withNote, deSlot("produkte", "facebook"), {}, links, { language: "de" }).primaryLink, "https://solarmeister-shop.de/products/other-handle");
 });
+
+test("radio-blog posts link to the radio blog, and a record link matches with or without its trailing slash", async () => {
+  const { radioBlogLink } = await import("../services/dev-api-lambda/copywriter.mjs");
+  assert.equal(radioBlogLink({ radio: "https://stashbox.com/radio/" }), "https://stashbox.com/radio/blog/");
+  assert.equal(radioBlogLink({ radio: "https://stashbox.com/radio" }), "https://stashbox.com/radio/blog/");
+  assert.equal(radioBlogLink({ radioBlog: "https://example.com/b/", radio: "https://stashbox.com/radio/" }), "https://example.com/b/");
+  assert.equal(radioBlogLink({}), null);
+  const blogAsset = { id: "b1", filename: "stashbox-radio-blog-beyond-the-play-button-9x16.mp4", topic: "Beyond the play button", tags: ["radio-blog", "explainer"] };
+  const f = postFacts(blogAsset, { sector: "radio-blog", destination: "instagram", placement: "reel", synthetic: false }, {}, links);
+  assert.equal(f.primaryLink, "https://stashbox.com/radio/blog/");
+  const copy = { status: "ready", source: "ai", caption: "What if your music platform did more? Read it: https://stashbox.com/radio/blog", hashtags: [] };
+  assert.ok(!validateCopy(copy, { ...f, linksInCaptionAreClickable: true }).some((p) => p.startsWith("link not from records")));
+});
