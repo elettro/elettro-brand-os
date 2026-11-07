@@ -192,11 +192,27 @@ export function slideSetOf(asset) {
   const m = String(asset?.filename || "").toLowerCase().match(/^(.*?)-slide-(\d{1,3})(?:-[^.]*)?\.[a-z0-9]+$/);
   return m ? { prefix: m[1], n: Number(m[2]) } : null;
 }
-/** The product an image shows: its Shopify product id, else its `product:<handle>` tag; null for non-product images. */
+/**
+ * The product an image shows: its Shopify product id, else its `product:<handle>` tag (Stashbox), else its
+ * `produkt-<handle>` tag when it also carries `product-link` (SolarMeister, same rule as productUrlFromTags); null otherwise.
+ */
 export function productKeyOf(asset) {
   if (asset?.shopifyProductId) return `id:${asset.shopifyProductId}`;
-  const tag = tagsOf(asset).find((t) => t.startsWith("product:"));
-  return tag || null;
+  const tags = tagsOf(asset);
+  const tag = tags.find((t) => t.startsWith("product:"));
+  if (tag) return tag;
+  const produkt = tags.includes("product-link") ? tags.find((t) => t.startsWith("produkt-")) : null;
+  return produkt ? `product:${produkt.slice("produkt-".length)}` : null;
+}
+/** The same picture filed twice (e.g. in two folders) has the same file name: keep the first of each name. */
+export function uniquePictures(assets) {
+  const seen = new Set();
+  return assets.filter((a) => {
+    const key = String(a?.filename || a?.id || "").toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 /**
  * The images that belong in a carousel with `lead`, best first (Dean 2026-11-07: a carousel shows ONE product):
@@ -630,8 +646,9 @@ export function planWeek({ assets, accounts, settings, weekStart, timeZone, uses
       const build = (lead) => {
         const { how, mates } = carouselMates(lead, dayPool, sectorImages);
         // A slide set or a product's own images are used whole (up to the max); a generic mix uses the varied target.
+        // Never the same picture twice (Dean 2026-11-07: SolarMeister carousels repeated zahlen-film.jpg).
         const size = how === "generic" ? Math.min(range.max, target) : range.max;
-        return { how, ids: [lead.id, ...mates.map((a) => a.id)].slice(0, size) };
+        return { how, ids: uniquePictures([lead, ...mates]).map((a) => a.id).slice(0, size) };
       };
       let built = build(pick.asset);
       if (built.ids.length < range.min) {

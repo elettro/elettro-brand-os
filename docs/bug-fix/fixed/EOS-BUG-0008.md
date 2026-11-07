@@ -36,6 +36,10 @@ product never borrows another product's images; if the chosen lead can't reach t
 candidate that can becomes the lead, else the slot is a gap. Each result carries `carouselFill` (set/product/generic).
 Already-scheduled carousels are repaired by the IAM-only action `refill-carousel-slides-20261107` (`carousel-refill.mjs`).
 
+Follow-up (same day, SolarMeister replan): carousels could repeat one picture filed twice (`zahlen-film.jpg` x2),
+and SolarMeister's `produkt-<handle>` + `product-link` tags were not seen as products. `uniquePictures` drops repeats
+(same file name) in the planner and the refill; `productKeyOf` reads `produkt-` tags like `productUrlFromTags` does.
+
 ## Files changed
 
 - `services/dev-api-lambda/planner-v2.mjs`, `services/dev-api-lambda/carousel-refill.mjs`, `services/dev-api-lambda/index.mjs`
