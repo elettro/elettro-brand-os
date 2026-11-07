@@ -25,14 +25,14 @@ jobs:
           node-version: "24"
 
       - name: Check syntax
-        run: node --check index.mjs
+        run: node --check index.mjs && node --check metrics.mjs
 
       # Installed on the Linux runner so `sharp` brings its Linux x64 build (same reason as the AR Lambda).
       - name: Install production dependencies
         run: npm install --omit=dev --workspaces=false
 
       - name: Package Lambda
-        run: zip -qr elettro-brand-os-dev-bluesky.zip index.mjs package.json node_modules
+        run: zip -qr elettro-brand-os-dev-bluesky.zip index.mjs metrics.mjs package.json node_modules
 
       - name: Upload Lambda package
         uses: actions/upload-artifact@v4

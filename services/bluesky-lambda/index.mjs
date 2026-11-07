@@ -1,4 +1,5 @@
 import { SecretsManagerClient, GetSecretValueCommand, ListSecretsCommand, PutSecretValueCommand } from "@aws-sdk/client-secrets-manager";
+import { collectForPosts } from "./metrics.mjs";
 import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
 
 // Bluesky worker for Elettro OS. Runs outside the VPC (it needs bsky.social and the PDS hosts) and is only
@@ -410,6 +411,26 @@ export async function keepAlive(now = new Date(), deps = {}) {
   return summary;
 }
 
+// Post metrics (docs/ANALYTICS-SPEC.md phase A): public like / reply / repost counts for every published post that reached 1h / 24h / 7d / 30d.
+// No login is needed. Read only.
+const METRICS_PER_TICK = 25;
+
+/** `dryRun` collects and returns the numbers without saving anything. */
+export async function collectMetrics({ dryRun = false, limit = METRICS_PER_TICK } = {}, deps = {}) {
+  const { callApi = api, collect = collectForPosts } = deps;
+  const listed = await callApi({ action: "list-post-metrics-due-20261107", destination: "bluesky", limit });
+  if (!listed.ok) throw new Error(`list-post-metrics-due failed: ${listed.error}`);
+  const { snapshots, missing } = await collect(listed.due);
+  const out = { ok: true, due: listed.due.length, saved: 0, missing, samples: dryRun ? snapshots.slice(0, 5) : [] };
+  if (dryRun) return out;
+  for (let i = 0; i < snapshots.length; i += 100) {
+    const recorded = await callApi({ action: "record-post-metrics-20261107", items: snapshots.slice(i, i + 100) });
+    if (!recorded.ok) throw new Error(`record-post-metrics failed: ${recorded.error}`);
+    out.saved += recorded.saved;
+  }
+  return out;
+}
+
 export async function publishingTick(deps = {}) {
   const { callApi = api, getClient = oauthClient, find = account, send = publish, countdowns = moveCountdowns } = deps;
   const claimed = await callApi({ action: "claim-due-posts", destination: "bluesky", placements: PLACEMENTS, limit: POSTS_PER_TICK });
@@ -442,11 +463,18 @@ export async function handler(event = {}) {
     const refresh = await keepAlive().catch((error) => ({ ok: false, error: error?.message }));
     try {
       const tick = await publishingTick();
+      // Never lets a metrics problem (table not ready, Bluesky unreachable) hold back publishing.
+      tick.metrics = await collectMetrics().catch((error) => ({ ok: false, error: error?.message || "metrics failed" }));
       console.log("Bluesky tick", JSON.stringify(tick));
       return result(200, { ok: refresh.ok !== false, refresh, ...tick });
     } catch (error) {
       console.error("Bluesky tick failed:", error?.message);
       return result(502, { ok: false, refresh, error: error?.message || "Tick failed" });
+    }
+  }
+  if (event.action === "metrics") {
+    try { return result(200, await collectMetrics({ dryRun: event.mode !== "apply", limit: Number(event.limit) || METRICS_PER_TICK })); } catch (error) {
+      return result(502, { ok: false, error: error?.message || "Metrics failed" });
     }
   }
   if (event.action === "refresh") {

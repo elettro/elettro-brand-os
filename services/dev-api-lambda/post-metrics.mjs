@@ -21,7 +21,7 @@ const MAX_AGE_MS = 45 * 24 * 60 * 60 * 1000;
 // Brands that exist only for testing; never collected (google-review is the demo brand for Google's API reviewer).
 export const EXCLUDED_BRANDS = ["google-review"];
 // Networks with a collector. Stories are left out: their insights disappear after 24 hours, before most buckets are reached.
-export const METRIC_DESTINATIONS = ["youtube", "instagram", "facebook", "threads", "pinterest"];
+export const METRIC_DESTINATIONS = ["youtube", "instagram", "facebook", "threads", "pinterest", "bluesky", "mastodon"];
 const SKIPPED_PLACEMENTS = ["story"];
 const DEFAULT_LIMIT = 25;
 const MAX_LIMIT = 100;
@@ -107,7 +107,7 @@ export async function runPostMetricsSetup(event, connectDatabase, json) {
 }
 
 /**
- * { destination?: "youtube" | "instagram" | "facebook" | "threads" | "pinterest", limit? } — published posts of that network that reached an age bucket without a snapshot, plus every
+ * { destination?: "youtube" | "instagram" | "facebook" | "threads" | "pinterest" | "bluesky" | "mastodon", limit? } — published posts of that network that reached an age bucket without a snapshot, plus every
  * connected channel (so a worker can also check access). Read only.
  */
 export async function runListPostMetricsDue(event, connectDatabase, json, now = Date.now()) {
