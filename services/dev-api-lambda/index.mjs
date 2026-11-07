@@ -10,6 +10,7 @@ import {runSharedStockGraphicsSetup,runSharedStockGraphicsTagging,LIBRARY_GRAPHI
 import {runDocumentAssetKindSetup} from "./document-asset-kind.mjs";
 import {createBrand} from "./brand-create.mjs";
 import {runMultiCamSetup, handleMultiCam} from "./multicam.mjs";
+import {runLinkTrackingSetup, handleLinks} from "./link-tracking.mjs";
 import {handleOpsTick} from "./ops-tick.mjs";
 import { handleConnectionStatus, setPlatformMilestone, setTokenExpiry, renameSocialAccount, listSocialAccounts, feedResponse } from "./connection-status.mjs";
 import { handlePostRace } from "./post-race.mjs";
@@ -1629,6 +1630,7 @@ export const handler = async (event = {}) => {
   // IAM-only: create a brand row (dry-run unless mode:"apply").
   if(event.action === "create-brand-20261031" && !event.requestContext && !event.rawPath && !event.path) return createBrand(event,connectDatabase,json);
   // IAM-only: create the Elettro MultiCam tables (dry-run unless mode:"apply").
+  if (event.action === "setup-link-tracking-20261107" && !event.requestContext && !event.rawPath && !event.path) return runLinkTrackingSetup(event, connectDatabase, json);
   if(event.action === "setup-multicam-tables-20261101" && !event.requestContext && !event.rawPath && !event.path) return runMultiCamSetup(event,connectDatabase,json);
   const requestPath =
     event?.rawPath ||
@@ -1882,6 +1884,11 @@ export const handler = async (event = {}) => {
   // "Connect Pinterest": same handshake as TikTok; one Pinterest account per brand, refresh-token expiry as the reconnect date.
   if (requestPath === "/connections/pinterest/complete" && event?.requestContext?.http?.method === "POST") {
     return completePinterestConnect(event, parseJsonBody(event), connectDatabase, json);
+  }
+
+  // Tracked links (web /api/l/<code> and /api/link-events, via server-side proxies); same shared key.
+  if (requestPath === "/links" && event?.requestContext?.http?.method === "POST") {
+    return handleLinks(parseJsonBody(event), connectDatabase, json);
   }
 
   // Elettro MultiCam (web /multicam host page and /mc/<code> band page, via server-side proxies); same shared key.

@@ -277,3 +277,32 @@ CROSS JOIN (VALUES
 ) AS v(name,slug,timezone)
 ON CONFLICT ("organizationId","slug")
 DO UPDATE SET "name"=EXCLUDED."name","timezone"=EXCLUDED."timezone","updatedAt"=CURRENT_TIMESTAMP;
+
+-- Tracked links (2026-11-07, link-tracking.mjs; created in DEV by the IAM-only action setup-link-tracking-20261107).
+CREATE TABLE IF NOT EXISTS "TrackedLink" (
+  "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  "code" TEXT NOT NULL UNIQUE,
+  "brandId" UUID NOT NULL REFERENCES "Brand"("id") ON DELETE CASCADE,
+  "scheduledPostId" UUID REFERENCES "ScheduledPost"("id") ON DELETE SET NULL,
+  "destination" TEXT,
+  "placement" TEXT,
+  "targetUrl" TEXT NOT NULL,
+  "mode" TEXT NOT NULL DEFAULT 'short',
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS "TrackedLink_scheduledPostId_idx" ON "TrackedLink"("scheduledPostId");
+CREATE INDEX IF NOT EXISTS "TrackedLink_brandId_createdAt_idx" ON "TrackedLink"("brandId","createdAt");
+CREATE TABLE IF NOT EXISTS "LinkEvent" (
+  "id" BIGSERIAL PRIMARY KEY,
+  "linkId" UUID NOT NULL REFERENCES "TrackedLink"("id") ON DELETE CASCADE,
+  "brandId" UUID NOT NULL REFERENCES "Brand"("id") ON DELETE CASCADE,
+  "kind" TEXT NOT NULL,
+  "product" TEXT,
+  "value" NUMERIC(12,2),
+  "currency" TEXT,
+  "eventKey" TEXT UNIQUE,
+  "referrerHost" TEXT,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS "LinkEvent_linkId_kind_idx" ON "LinkEvent"("linkId","kind");
+CREATE INDEX IF NOT EXISTS "LinkEvent_brandId_createdAt_idx" ON "LinkEvent"("brandId","createdAt");

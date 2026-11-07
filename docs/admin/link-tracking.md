@@ -1,0 +1,80 @@
+# Tracked links: clicks and store events per post
+
+Built 2026-11-07 for **Stashbox (stashbox.ai)** first; SolarMeister follows once Stashbox is proven. Code:
+`services/dev-api-lambda/link-tracking.mjs`, web `apps/web/lib/link-hosts.ts`, `lib/link-tracking.ts`,
+`app/api/l/[code]`, `app/api/link-events`, `middleware.ts`, Shopify pixel `docs/admin/link-tracking/stashbox-pixel.js`.
+
+## What it does
+
+When a worker claims a post (`claim-due-posts`), a link in it to one of the brand's own sites gets a 7-character code:
+
+| Network | What happens to the link |
+|---|---|
+| Threads, Bluesky, Mastodon, Facebook, YouTube, LinkedIn (links in the caption) | replaced by `https://go.stashbox.ai/<code>` (only if the caption does not get longer) |
+| Pinterest (pin link), GMB (button) | keeps its own address, gains `?eo=<code>&utm_source=…&utm_medium=social&utm_campaign=<sector>&utm_content=<code>` (Pinterest and GMB distrust redirects; GMB's SHOP button must point at `/products/…`) |
+| X | nothing: X posts carry no URLs |
+| Instagram | nothing: caption links don't click (bio link page / promo codes are a later step) |
+
+Then, per post:
+
+1. **click**: `go.stashbox.ai/<code>` → `/api/l/<code>` → dev-api `POST /links {action:"click"}` logs it and answers the store
+   page with `?eo=<code>` + utm fields → 302. Link-preview robots (Mastodon servers fetch every link they see, Facebook,
+   Slack, Bluesky cards …) and empty user agents are logged as `preview`, never `click`.
+2. **page_view / product_view / add_to_cart / checkout_started / purchase**: the Shopify custom pixel sees `?eo=<code>`,
+   keeps it for 7 days and posts each event to `go.stashbox.ai/api/link-events` → dev-api `{action:"event"}`. Unknown codes
+   are ignored; Shopify's event id (the order id for purchases) stops double counting.
+3. Shopify itself also keeps the utm fields on the order (Analytics → Reports → Sessions/Sales by UTM), a second source.
+
+Stored: `TrackedLink` (code, brand, post, network, real address, mode `short`/`direct`) and `LinkEvent` (kind, product
+title, value, currency, referrer host, time). **No IP, user agent, name, email or address is stored.** The post's
+`scoreBreakdown.tracking` keeps `{code, mode, targetUrl, shortUrl}` and `generatedCaption` holds the caption as posted.
+
+Tracking is **off** for a brand unless `Brand.settings.linkTracking = {enabled: true, host, origins?}`; without `origins`
+it tracks links to the planner's `links.merchStore` and `links.site`. A tracking error never blocks a post (it is logged
+`[link-tracking] skipped a post` and the post goes out with its normal link).
+
+Read the numbers: dev-api `POST /links {action:"stats", brandSlug:"stashbox", days:28}` (connect key) → per-post funnel +
+totals. The Analytics page will read the same thing.
+
+## Setup (Stashbox) — order matters
+
+1. **Merge + deploy the dev-api** (`docs/admin/deploy-dev-api-lambda.md`). The web app deploys itself from `develop`.
+2. **Tables + switch on Stashbox** (IAM-only action, dry run first):
+   ```
+   aws lambda invoke --function-name elettro-brand-os-dev-api --cli-binary-format raw-in-base64-out --profile stashbox-audit --region us-east-1 \
+     --payload '{"action":"setup-link-tracking-20261107","brandSlug":"stashbox","host":"go.stashbox.ai"}' out.json && cat out.json
+   ```
+   Check `effective.origins` is `["https://stashbox.ai","https://stashbox.com"]`, then re-run with `"mode":"apply"`.
+   Until step 4 works, posts claimed after this would carry go.stashbox.ai links that do not resolve: **do step 2 last if
+   DNS is not ready**, or apply the tables now and the brand switch later (`"enabled":false`).
+3. **Route** `POST /links` on HTTP API `zkjngy7rdd` + Lambda permission (`docs/admin/new-api-route.md`):
+   ```
+   aws apigatewayv2 create-route --api-id zkjngy7rdd --route-key "POST /links" --target integrations/h25cb92 --region us-east-1 --profile stashbox-audit
+   aws lambda add-permission --function-name elettro-brand-os-dev-api --statement-id links-route --action lambda:InvokeFunction \
+     --principal apigateway.amazonaws.com --source-arn "arn:aws:execute-api:us-east-1:656260749296:zkjngy7rdd/*/*/links" --profile stashbox-audit --region us-east-1
+   ```
+   Smoke: `curl -s -X POST -d '{}' https://zkjngy7rdd.execute-api.us-east-1.amazonaws.com/links` → 401 "Connect key required".
+4. **Domain `go.stashbox.ai` on the Amplify app** `d2k28tehm1a8zw`: Amplify console → Hosting → Custom domains → Add
+   domain `stashbox.ai`, **only** the subdomain `go` → branch `develop` (do not map the root: stashbox.ai is the Shopify store).
+   Amplify shows two DNS records (an ACM validation CNAME and `go` → the Amplify CloudFront name); add both where stashbox.ai's
+   DNS is managed (check Shopify → Settings → Domains first: if Shopify manages the DNS, add them there). Wait for "Available".
+   Smoke: `curl -sI https://go.stashbox.ai/` → 302 to https://stashbox.ai; `curl -sI https://go.stashbox.ai/zzzzzzz` → 302 to
+   https://stashbox.ai (unknown code).
+5. **Shopify pixel**: stashbox.ai admin → Settings → Customer events → Add custom pixel `Elettro OS links` → paste
+   `docs/admin/link-tracking/stashbox-pixel.js` → Customer privacy: Permission "Not required" (US store, no consent banner;
+   change to "Required: Analytics" if a banner is ever added) → Save → **Connect**.
+6. **First real check**: when the next tracked Threads/Bluesky/Mastodon post goes out, open its short link on a phone,
+   view the product, add to cart (no need to buy), then `{action:"stats", brandSlug:"stashbox", days:1}` should show
+   1 click, 1 page_view, 1 product_view, 1 add_to_cart for that code.
+
+## SolarMeister later
+
+Add `"go.solarmeister-shop.de"` (or the chosen host) to `LINK_HOSTS` in `apps/web/lib/link-hosts.ts`, add that domain to
+Amplify, run the setup action with `brandSlug:"solarmeister"`, copy the pixel with its `ENDPOINT` changed to the new host.
+The pixel works for any Shopify store; nothing else changes.
+
+## Never verified (2026-11-07)
+
+Everything against live systems: the tables, the route, Amplify serving a second domain through `middleware.ts`, the
+pixel inside Shopify's sandbox (field names follow Shopify's Web Pixels API docs), and whether Pinterest/GMB accept the
+tagged links. Unit tests: `node --test tests/link-tracking.test.mjs`.
