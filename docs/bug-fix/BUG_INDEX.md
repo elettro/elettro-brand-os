@@ -4,6 +4,7 @@ Newest first. Records live in `open/` and `fixed/`; the machine-readable copy is
 
 | ID | Title | Area | Severity | Status | Verified |
 |---|---|---|---|---|---|
+| [EOS-BUG-0008](fixed/EOS-BUG-0008.md) | Product carousels mixed other products' images | Review/Planner | Medium | Fixed | No |
 | [EOS-BUG-0007](fixed/EOS-BUG-0007.md) | Amplify web build fails on a type error; nothing deploys (os.elettro.com/bugs is 404) | API/Infra | High | Fixed | No |
 | [EOS-BUG-0006](fixed/EOS-BUG-0006.md) | elettro.com/scroll freezes or "dies at #N" mid-session | Scroll Remote | High | Fixed | No |
 | [EOS-BUG-0005](fixed/EOS-BUG-0005.md) | dev-api build fails again: gmb-planner.mjs missing from the zip list, and the guard test could not see it | API/Infra | Medium | Fixed | No |
@@ -14,4 +15,4 @@ Newest first. Records live in `open/` and `fixed/`; the machine-readable copy is
 
 ## Next ID
 
-EOS-BUG-0008
+EOS-BUG-0009

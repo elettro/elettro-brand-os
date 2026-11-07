@@ -185,6 +185,59 @@ export function isSynthetic(asset, settings) {
   return hasAny(tagsOf(asset), settings.syntheticTagsAny);
 }
 
+// ---------- carousel slides ----------
+const dirOf = (path) => String(path || "").replace(/\\/g, "/").replace(/\/[^/]*$/, "").toLowerCase();
+/** `every-angle-slide-02-4x5.jpg` → { prefix: "every-angle", n: 2 }; null when the file is not part of a numbered slide set. */
+export function slideSetOf(asset) {
+  const m = String(asset?.filename || "").toLowerCase().match(/^(.*?)-slide-(\d{1,3})(?:-[^.]*)?\.[a-z0-9]+$/);
+  return m ? { prefix: m[1], n: Number(m[2]) } : null;
+}
+/**
+ * The product an image shows: its Shopify product id, else its `product:<handle>` tag (Stashbox), else its
+ * `produkt-<handle>` tag when it also carries `product-link` (SolarMeister, same rule as productUrlFromTags); null otherwise.
+ */
+export function productKeyOf(asset) {
+  if (asset?.shopifyProductId) return `id:${asset.shopifyProductId}`;
+  const tags = tagsOf(asset);
+  const tag = tags.find((t) => t.startsWith("product:"));
+  if (tag) return tag;
+  const produkt = tags.includes("product-link") ? tags.find((t) => t.startsWith("produkt-")) : null;
+  return produkt ? `product:${produkt.slice("produkt-".length)}` : null;
+}
+/** The same picture filed twice (e.g. in two folders) has the same file name: keep the first of each name. */
+export function uniquePictures(assets) {
+  const seen = new Set();
+  return assets.filter((a) => {
+    const key = String(a?.filename || a?.id || "").toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+/**
+ * The images that belong in a carousel with `lead`, best first (Dean 2026-11-07: a carousel shows ONE product):
+ *   1. "set": the lead's own numbered slide set (same folder, same name before -slide-NN), in slide order;
+ *   2. "product": other images of the same product, in folder/filename order;
+ *   3. "generic": the lead is not a product, so other non-product images of the pillar (`sectorImages`, ranked) may join.
+ * A product lead never borrows another product's images. `pool` = images this account may post that day.
+ */
+export function carouselMates(lead, pool, sectorImages = []) {
+  const others = pool.filter((a) => a.id !== lead.id && a.kind === "image");
+  const set = slideSetOf(lead);
+  if (set) {
+    const mates = others.filter((a) => dirOf(a.sourcePath) === dirOf(lead.sourcePath) && slideSetOf(a)?.prefix === set.prefix)
+      .sort((x, y) => slideSetOf(x).n - slideSetOf(y).n);
+    if (mates.length) return { how: "set", mates };
+  }
+  const product = productKeyOf(lead);
+  if (product || set) {
+    const mates = product ? others.filter((a) => productKeyOf(a) === product)
+      .sort((x, y) => String(x.sourcePath || x.filename).localeCompare(String(y.sourcePath || y.filename))) : [];
+    return { how: "product", mates };
+  }
+  return { how: "generic", mates: sectorImages.filter((a) => a.id !== lead.id && a.kind === "image" && !productKeyOf(a) && !slideSetOf(a)) };
+}
+
 export function eligibleOn(asset, ymd) {
   if (asset.eligibilityType === "one_time") {
     const from = asset.eligibleFrom ? String(asset.eligibleFrom).slice(0, 10) : null;
@@ -579,23 +632,43 @@ export function planWeek({ assets, accounts, settings, weekStart, timeZone, uses
       continue;
     }
 
-    const asset = winner.asset;
-    const song = songKeyOf(asset);
-    // A carousel is the winner plus the next-best images of the same sector (one pillar per carousel); the
-    // slide count comes from the brand's min..max range and varies slot to slot.
+    let pick = winner;
+    // A carousel shows ONE product (Dean 2026-11-07): the lead plus its own slide set, else more images of the same
+    // product. Only a non-product lead may be joined by other (non-product) images of its pillar. If the chosen lead
+    // cannot fill the minimum on its own, the next-ranked candidate that can becomes the lead.
     let slideIds = null;
+    let carouselFill = null;
     const range = slideRange(settings, slot.destination, String(slot.placement).toLowerCase());
     if (range) {
       const target = range.min + Math.floor((jitter(slot.slotId, "slides") / 3) * (range.max - range.min + 1));
-      const others = rank(sector).map((c) => c.asset.id).filter((id) => id !== asset.id);
-      slideIds = [asset.id, ...others].slice(0, Math.min(range.max, target));
-      if (slideIds.length < range.min) {
-        const reason = `Only ${slideIds.length} ${sector} image(s) passed the rules; a carousel needs at least ${range.min}`;
+      const dayPool = ctx.pool.filter((a) => eligibleOn(a, slot.ymd));
+      const sectorImages = rank(sector).map((c) => c.asset);
+      const build = (lead) => {
+        const { how, mates } = carouselMates(lead, dayPool, sectorImages);
+        // A slide set or a product's own images are used whole (up to the max); a generic mix uses the varied target.
+        // Never the same picture twice (Dean 2026-11-07: SolarMeister carousels repeated zahlen-film.jpg).
+        const size = how === "generic" ? Math.min(range.max, target) : range.max;
+        return { how, ids: uniquePictures([lead, ...mates]).map((a) => a.id).slice(0, size) };
+      };
+      let built = build(pick.asset);
+      if (built.ids.length < range.min) {
+        for (const c of ranked) {
+          if (c === pick) continue;
+          const alt = build(c.asset);
+          if (alt.ids.length >= range.min) { pick = c; built = alt; break; }
+        }
+      }
+      if (built.ids.length < range.min) {
+        const reason = `Not enough ${sector} images for a carousel: it needs at least ${range.min}, and a product carousel only uses that product's own images`;
         gaps.push({ slotId: slot.slotId, destination: slot.destination, ymd: slot.ymd, sector: slot.sector, reason });
         results.push({ ...slot, status: "gap", gap: reason, selectedBy: "rules", candidates: candidateView });
         continue;
       }
+      slideIds = built.ids;
+      carouselFill = built.how;
     }
+    const asset = pick.asset;
+    const song = songKeyOf(asset);
     for (const id of slideIds || [asset.id]) {
       const a = assetById.get(id);
       planned.push({ socialAccountId: slot.socialAccountId, assetId: id, songKey: songKeyOf(a),
@@ -604,8 +677,10 @@ export function planWeek({ assets, accounts, settings, weekStart, timeZone, uses
     if (fallbackFrom) gaps.push({ slotId: slot.slotId, destination: slot.destination, ymd: slot.ymd, sector: fallbackFrom,
       reason: `No ${fallbackFrom} clip available; filled with ${sector}` });
 
-    const curated = preferred && preferred !== candidates[0];
-    const overridden = Boolean(pref?.assetId) && !preferred;
+    // The curator's pick only counts as chosen if it is still the lead after the carousel check.
+    const curatorPick = preferred && pick === preferred ? preferred : null;
+    const curated = curatorPick && curatorPick !== candidates[0];
+    const overridden = Boolean(pref?.assetId) && !curatorPick;
     results.push({
       ...slot,
       sector,
@@ -617,16 +692,19 @@ export function planWeek({ assets, accounts, settings, weekStart, timeZone, uses
       songKey: song,
       contentGroup: asset.contentGroup || null,
       synthetic: isSynthetic(asset, settings),
-      selectedBy: preferred ? "curator" : "rules",
-      curatorReason: preferred ? curatorNote : null,
+      selectedBy: curatorPick ? "curator" : "rules",
+      curatorReason: curatorPick ? curatorNote : null,
       curatorOverridden: overridden,
-      score: winner.total,
-      breakdown: winner.breakdown,
+      score: pick.total,
+      breakdown: pick.breakdown,
+      ...(carouselFill ? { carouselFill } : {}),
       reason: [
         `${sector}${slot.exploration ? " exploration" : ""} slot`,
         song ? `song ${song}` : "no song tag",
         asset.contentGroup ? `from ${asset.contentGroup}` : null,
-        curated ? `curator pick over rules #1 (${candidates[0].asset.filename})` : `rules score ${winner.total}`,
+        curated ? `curator pick over rules #1 (${candidates[0].asset.filename})` : `rules score ${pick.total}`,
+        carouselFill ? `carousel: ${carouselFill === "set" ? "its own slide set" : carouselFill === "product" ? "same product" : "pillar images"}` : null,
+        pick !== winner && !curatorPick ? `lead moved to ${asset.filename}: the first pick had too few slides of its own product` : null,
         overridden ? "curator pick broke a rule; rules #1 used" : null,
         fallbackFrom ? `(${fallbackFrom} had no eligible clip)` : null
       ].filter(Boolean).join("; "),

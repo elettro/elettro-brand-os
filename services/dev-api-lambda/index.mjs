@@ -12,6 +12,7 @@ import {createBrand} from "./brand-create.mjs";
 import {runMultiCamSetup, handleMultiCam} from "./multicam.mjs";
 import {runLinkTrackingSetup, handleLinks} from "./link-tracking.mjs";
 import {runPostMetricsSetup, runListPostMetricsDue, runRecordPostMetrics} from "./post-metrics.mjs";
+import {runCarouselRefill} from "./carousel-refill.mjs";
 import {handleOpsTick} from "./ops-tick.mjs";
 import { handleConnectionStatus, setPlatformMilestone, setTokenExpiry, renameSocialAccount, listSocialAccounts, feedResponse } from "./connection-status.mjs";
 import { handlePostRace } from "./post-race.mjs";
@@ -1631,6 +1632,7 @@ export const handler = async (event = {}) => {
   // IAM-only: create a brand row (dry-run unless mode:"apply").
   if(event.action === "create-brand-20261031" && !event.requestContext && !event.rawPath && !event.path) return createBrand(event,connectDatabase,json);
   // IAM-only: create the Elettro MultiCam tables (dry-run unless mode:"apply").
+  if (event.action === "refill-carousel-slides-20261107" && !event.requestContext && !event.rawPath && !event.path) return runCarouselRefill(event, connectDatabase, json);
   if (event.action === "setup-link-tracking-20261107" && !event.requestContext && !event.rawPath && !event.path) return runLinkTrackingSetup(event, connectDatabase, json);
   // IAM-only post metrics (docs/ANALYTICS-SPEC.md phase A): table setup, the posts still lacking a snapshot, and saving snapshots.
   if (event.action === "setup-post-metrics-20261107" && !event.requestContext && !event.rawPath && !event.path) return runPostMetricsSetup(event, connectDatabase, json);
