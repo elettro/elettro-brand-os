@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { PUBLISHING_FORMATS, slideRange, slidesOf, isPlannable } from "../services/dev-api-lambda/publishing-formats.mjs";
-import { planWeek, resolvePlannerSettings } from "../services/dev-api-lambda/planner-v2.mjs";
+import { planWeek, resolvePlannerSettings, carouselMates, slideSetOf } from "../services/dev-api-lambda/planner-v2.mjs";
 import { handlePlannerReview } from "../services/dev-api-lambda/planner-review.mjs";
 
 const json = (statusCode, body) => ({ statusCode, body });
@@ -106,4 +106,85 @@ test("the review list reports each carousel format's current range", async () =>
   assert.deepEqual(r.body.slideRanges["threads:carousel"], { min: 4, max: 4 });
   assert.deepEqual(r.body.slideRanges["instagram:carousel"], { min: 5, max: 8 });
   assert.ok(r.body.formats.find((f) => f.destination === "tiktok" && f.placement === "carousel").slides.max === 35);
+});
+
+// Dean 2026-11-07: a Bluesky carousel for the Bauhaus pint glass also showed two tees and another glass.
+const slide = (folder, name, extraTags = []) => {
+  const a = image(["gear", ...extraTags]);
+  return { ...a, filename: name, sourcePath: `/brands/stashbox/merch/video/9x16/${folder}/${name}` };
+};
+
+test("a slide-set lead is followed by its own set, in slide order, and nothing else", () => {
+  const set = [4, 1, 6, 2, 5, 3].map((i) => slide("150-bauhaus-pint-glass", `every-angle-slide-0${i}-4x5.jpg`, ["product:bauhaus-glass"]));
+  const otherProducts = Array.from({ length: 30 }, (_, i) => slide(`tee-${i}`, `hero-poster-${i}-4x5.jpg`, [`product:tee-${i}`]));
+  const result = plan([...set, ...otherProducts], { carouselSlides: { "instagram:carousel": { min: 4, max: 8 } } });
+  const bauhaus = result.slots.find((s) => s.status === "planned" && set.some((a) => a.id === s.assetId));
+  assert.ok(bauhaus, "the set was planned");
+  const files = bauhaus.slideIds.map((id) => set.find((a) => a.id === id)?.filename);
+  assert.ok(files.every(Boolean), "only slides of the Bauhaus set");
+  const rest = files.slice(1).map((f) => slideSetOf({ filename: f }).n);
+  assert.deepEqual(rest, [...rest].sort((x, y) => x - y), "the rest follow in slide order");
+  assert.equal(bauhaus.slideIds.length, 6, "the whole set, up to the max");
+  assert.equal(bauhaus.carouselFill, "set");
+});
+
+test("a product lead with too few images of its own hands the slot to a product that has enough; products never mix", () => {
+  const lonely = [slide("tee-a", "a-1.jpg", ["product:tee-a"])];
+  const full = Array.from({ length: 5 }, (_, i) => slide("glass-b", `b-${i}.jpg`, ["product:glass-b"]));
+  const result = plan([...lonely, ...full], { carouselSlides: { "instagram:carousel": { min: 4, max: 8 } } });
+  for (const s of result.slots.filter((x) => x.status === "planned")) {
+    const keys = new Set(s.slideIds.map((id) => [...lonely, ...full].find((a) => a.id === id).tags.find((t) => t.startsWith("product:"))));
+    assert.equal(keys.size, 1, "one product per carousel");
+    assert.equal(s.carouselFill, "product");
+  }
+  assert.ok(result.slots.some((s) => s.status === "planned"), "the glass with 5 images was used");
+});
+
+test("a product never borrows generic pillar images, and a generic carousel never takes product images", () => {
+  const glass = slide("glass", "glass.jpg", ["product:glass"]);
+  const generic = Array.from({ length: 6 }, () => image(["gear"]));
+  const tagged = Array.from({ length: 3 }, (_, i) => slide(`p${i}`, `p${i}.jpg`, [`product:p${i}`]));
+  const genericLead = carouselMates(generic[0], [glass, ...generic, ...tagged], [glass, ...generic, ...tagged]);
+  assert.equal(genericLead.how, "generic");
+  assert.ok(genericLead.mates.every((a) => generic.includes(a)));
+  const productLead = carouselMates(glass, [glass, ...generic, ...tagged], [glass, ...generic, ...tagged]);
+  assert.deepEqual(productLead, { how: "product", mates: [] });
+});
+
+test("the one-off refill rebuilds a mixed carousel from its lead's own set and leaves posts that can't be fixed alone", async () => {
+  const { refillSlides, runCarouselRefill } = await import("../services/dev-api-lambda/carousel-refill.mjs");
+  const set = [1, 2, 3, 4, 5, 6].map((i) => slide("150-bauhaus", `every-angle-slide-0${i}-4x5.jpg`, ["product:bauhaus"]));
+  const tee = slide("tee", "tee.jpg", ["product:tee"]);
+  const range = { min: 2, max: 4 };
+  const mixed = [set[1].id, tee.id, set[3].id];
+  const r = refillSlides({ lead: set[1], current: mixed, pool: [...set, tee], range });
+  assert.equal(r.how, "set");
+  assert.deepEqual(r.ids, [set[1].id, set[0].id, set[2].id, set[3].id], "lead, then its set in order, up to the max");
+  assert.equal(refillSlides({ lead: tee, current: [tee.id, set[0].id], pool: [...set, tee], range }).ok, false, "a lone product can't borrow");
+
+  const json = (statusCode, body) => ({ statusCode, body });
+  const updates = [];
+  const client = {
+    async query(sql, params) {
+      if (sql.includes('FROM "Brand"')) return { rows: [{ id: "b1", slug: "stashbox", settings: { carouselSlides: { "bluesky:carousel": { min: 2, max: 4 } } } }] };
+      if (sql.includes('FROM "Asset"')) return { rows: [...set, tee] };
+      if (sql.includes('FROM "ScheduledPost" sp')) return { rows: [
+        { id: "p1", assetId: set[1].id, status: "approved", scheduledFor: "2026-11-08T23:49:00Z", slideIds: mixed, destination: "bluesky" },
+        { id: "p2", assetId: tee.id, status: "approved", scheduledFor: "2026-11-09T23:49:00Z", slideIds: [tee.id, set[0].id], destination: "bluesky" }] };
+      if (sql.startsWith("UPDATE")) { updates.push({ sql, params }); return { rowCount: 1 }; }
+      return { rows: [] };
+    },
+    async end() {}
+  };
+  const dry = await runCarouselRefill({ brandSlug: "stashbox" }, async () => client, json);
+  assert.equal(dry.body.mode, "dry-run");
+  assert.deepEqual([dry.body.refilled, dry.body.unfixable], [1, 1]);
+  assert.equal(updates.length, 0, "a dry run changes nothing");
+  await runCarouselRefill({ brandSlug: "stashbox", mode: "apply" }, async () => client, json);
+  assert.equal(updates.length, 1, "only the fixable one is rewritten; the other is left as is without pauseUnfixable");
+  assert.equal(JSON.parse(updates[0].params[1]).length, 4);
+  updates.length = 0;
+  await runCarouselRefill({ brandSlug: "stashbox", mode: "apply", pauseUnfixable: true }, async () => client, json);
+  assert.ok(updates.some((u) => u.sql.includes("'paused'") && u.params[0] === "p2"));
+  assert.equal((await runCarouselRefill({ brandSlug: "stashbox", rawPath: "/x" }, async () => client, json)).statusCode, 403);
 });
