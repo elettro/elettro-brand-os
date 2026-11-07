@@ -10,6 +10,7 @@ import { dashboardStats } from "./dashboard-stats.mjs";
 import { keyMatches } from "./youtube-connect.mjs";
 import { PLANNABLE_DESTINATIONS } from "./publishing-formats.mjs";
 import { startPlanRun, planStatusOf, selfInvoke } from "./plan-runs.mjs";
+import { trackClaimedPosts } from "./link-tracking.mjs";
 
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_POSTS_PER_WEEK = 200;
@@ -301,10 +302,13 @@ async function claimDuePosts(event, connectDatabase, json) {
       brands.set(brandId, {
         settings: resolvePlannerSettings(row?.settings), language: brandLanguage(row?.slug, row?.settings),
         today: ymdInTimeZone(new Date(), row?.timezone || "America/New_York"), location: brandLocation(row?.settings),
-        slug: row?.slug || null, keywords: row?.settings?.youtubeKeywords || null
+        slug: row?.slug || null, keywords: row?.settings?.youtubeKeywords || null, raw: row?.settings || null
       });
     }
-    const out = posts.map(({ slideIds: _slideIds, assetTags, brandId, plannedSynthetic, sector, assetTopic, ...p }) => ({
+    // Tracked links: a link to the brand's own store/site gets its post's code (Stashbox first; off unless
+    // Brand.settings.linkTracking is on). Best effort: it never stops a post from going out.
+    await trackClaimedPosts(client, posts.map((p) => Object.assign(p, { destination })), new Map([...brands].map(([id, b]) => [id, b.raw])));
+    const out = posts.map(({ slideIds: _slideIds, assetTags, brandId, plannedSynthetic, sector, assetTopic, destination: _destination, ...p }) => ({
       // Pinterest picks the brand's board; one Pinterest account serves several brands.
       ...p, brand: brands.get(brandId).slug, synthetic: plannedSynthetic === "true" || isSynthetic({ tags: assetTags }, brands.get(brandId).settings),
       language: languageOf({ tags: assetTags }, brands.get(brandId).language),
