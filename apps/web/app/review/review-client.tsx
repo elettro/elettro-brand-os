@@ -1,11 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { PublishingFormat, ReviewAccount, ReviewList, ReviewPost, TiktokCreator } from "@/lib/planner-review";
 import { AssetThumb as Thumb } from "@/components/asset-thumb";
 import { TiktokCard } from "./tiktok-card";
 import { NetworkLogo } from "@/components/network-logo";
 import { TICK_MS, countdown } from "@/lib/post-eta";
+import { PlanProgress, totals as planTotals } from "./plan-progress";
+
+// While a week is being planned the page re-reads the list this often; a finished plan shows its summary this long.
+const PLAN_POLL_MS = 5000;
+const PLAN_SUMMARY_MS = 6 * 3600000;
 
 const NETWORK: Record<string, string> = {
   instagram: "Instagram", facebook: "Facebook", tiktok: "TikTok", threads: "Threads", bluesky: "Bluesky", youtube: "YouTube",
@@ -168,6 +173,30 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
     }).catch(() => setCreatorError("Elettro OS could not reach TikTok"));
   }, [hasTiktok, brand, creator, creatorError]);
 
+  // Planning runs in the background (one run per network): poll while any week is still being planned, and say so
+  // when a week finishes, so nobody has to guess when to refresh.
+  const runningWeeks = Object.entries(list.planStatus || {}).filter(([, s]) => s.running).map(([w]) => w);
+  const anyRunning = runningWeeks.length > 0;
+  const wasRunning = useRef(new Set(runningWeeks));
+  useEffect(() => {
+    if (!anyRunning) return;
+    const t = setInterval(async () => {
+      const fresh = await act({ brand, action: "list", weekStart: list.weekStart, weeks: list.weeks }).catch(() => null);
+      if (fresh) setList(fresh as ReviewList);
+    }, PLAN_POLL_MS);
+    return () => clearInterval(t);
+  }, [anyRunning, brand, list.weekStart, list.weeks]);
+  useEffect(() => {
+    const now = new Set(runningWeeks);
+    const finished = [...wasRunning.current].filter((w) => !now.has(w) && list.planStatus?.[w]);
+    wasRunning.current = now;
+    if (!finished.length) return;
+    setNotice(finished.map((w) => {
+      const t = planTotals(list.planStatus![w]);
+      return `Week of ${w} is ready to review: ${t.posts} posts, ${t.ai} with AI captions${t.failed ? `; ${t.failed} network${t.failed === 1 ? "" : "s"} failed (replan to retry)` : ""}.`;
+    }).join(" "));
+  }, [list.planStatus]); // eslint-disable-line react-hooks/exhaustive-deps
+
   async function run(label: string, body: Record<string, unknown>, done?: string | ((result: { gmb?: { message?: string } }) => string)) {
     setBusy(label);
     setNotice(null);
@@ -311,6 +340,8 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
       const tiktokApprovable = tiktokPlanned.filter((p) => !tiktokTooLong.includes(p));
       // The week under way plans only its remaining days; the planner skips slots already past.
       const underway = w.start <= today;
+      const planStatus = list.planStatus?.[w.start];
+      const showPlanStatus = planStatus && (planStatus.running || nowMs - Date.parse(planStatus.startedAt) < PLAN_SUMMARY_MS);
       return <section key={w.start} className={`review-week${isOpen ? " open" : ""}`}>
         <header onClick={(e) => { if (!(e.target as HTMLElement).closest(".review-actions")) toggle(w.start); }}>
           <button type="button" className="review-week-toggle" aria-expanded={isOpen}>
@@ -327,13 +358,14 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
             {w.end >= today && (weekApproved || w.posts.some((p) => ["planned", "approved", "skipped", "failed"].includes(p.status))) && <button className="status-chip" disabled={!!busy}
               title="Deletes this week's posts that haven't gone out yet and un-approves the week. Published and queued posts stay."
               onClick={() => { if (window.confirm(`Reset the week of ${w.start}? Its unsent posts are deleted and the week is un-approved. Published posts stay.`)) run("week", { action: "reset-week", from: w.start, to: w.end }, `Week of ${w.start} reset. Plan it again when ready.`); }}>Reset week</button>}
-            {w.end >= today && <button className="status-chip" disabled={!!busy || !list.accounts.some((a) => a.active && a.postsPerWeek)}
-              title={list.accounts.some((a) => a.active && a.postsPerWeek) ? "" : "Set posts per day first"}
-              onClick={() => run("plan", { action: "plan", weekStart: w.start }, (r) => `Planning ${underway ? "the rest of " : ""}the week of ${w.start}.${r?.gmb?.message ? ` ${r.gmb.message}.` : ""} Refresh in a minute or two.`)}>
+            {w.end >= today && <button className="status-chip" disabled={!!busy || !!planStatus?.running || !list.accounts.some((a) => a.active && a.postsPerWeek)}
+              title={planStatus?.running ? "This week is being planned right now" : list.accounts.some((a) => a.active && a.postsPerWeek) ? "" : "Set posts per day first"}
+              onClick={() => run("plan", { action: "plan", weekStart: w.start }, (r) => `Planning ${underway ? "the rest of " : ""}the week of ${w.start}.${r?.gmb?.message ? ` ${r.gmb.message}.` : ""} Progress shows under the week; it fills in by itself.`)}>
               {underway ? (w.posts.length ? "Replan rest of week" : "Plan rest of week") : (w.posts.length ? "Replan unapproved" : "Plan this week")}
             </button>}
           </div>
         </header>
+        {showPlanStatus && <PlanProgress status={planStatus} names={NETWORK} />}
         {isOpen && tiktokToReview > 0 && <section className="card tiktok-week">
           <div className="eyebrow">TikTok this week · {tiktokToReview} post{tiktokToReview === 1 ? "" : "s"} to approve</div>
           <div className="tiktok-week-thumbs">

@@ -25,22 +25,42 @@ test("a week planned for some networks is still planned for the others, and only
   assert.deepEqual(weekToPlan(brand, planned), { weekStart: nextWeek, replace: false, destinations: ["tiktok", "youtube"] });
 });
 
-test("the tick asks the planner for just the networks missing from the week", async () => {
-  let cadenceParams;
+test("the tick starts the planner for just the networks missing from the week, one run per network", async () => {
+  const invoked = [];
   const db = async () => ({
-    async query(sql, params) {
+    async query(sql) {
       if (sql.includes('SELECT DISTINCT b."slug"')) return { rows: [{ slug: "stashbox" }] };
       if (sql.includes('FROM "Brand"')) return { rows: [{ ...brand, settings: { planner: { sectors: [{ id: "live" }] } } }] };
       if (sql.includes('SELECT DISTINCT sa."destination" FROM')) return { rows: [{ destination: "instagram" }, { destination: "youtube" }] };
       if (sql.includes('AS "week"')) return { rows: [{ destination: "instagram", week: nextWeek }] };
-      if (sql.includes('FROM "CadenceRule" cr JOIN')) { cadenceParams = params; return { rows: [] }; }
       return { rows: [], rowCount: 0 };
     },
     async end() {}
   });
-  const r = await handlePlannerOps({ action: "planner-tick" }, db, json);
-  assert.deepEqual(cadenceParams?.[1], ["youtube"]);
+  const r = await handlePlannerOps({ action: "planner-tick" }, db, json, { invoke: async (p) => { invoked.push(p); } });
+  assert.equal(r.statusCode, 202);
   assert.deepEqual(r.body.destinations, ["youtube"]);
+  assert.equal(invoked.length, 1);
+  assert.deepEqual(invoked[0].destinations, ["youtube"]);
+  assert.equal(invoked[0].replacePlanned, false);
+  assert.ok(invoked[0].runId);
+});
+
+test("the tick leaves a week alone while its networks are still being planned", async () => {
+  const invoked = [];
+  const running = { runId: "r1", startedAt: new Date().toISOString(), networks: { youtube: { state: "running", updatedAt: new Date().toISOString() } } };
+  const db = async () => ({
+    async query(sql) {
+      if (sql.includes('SELECT DISTINCT b."slug"')) return { rows: [{ slug: "stashbox" }] };
+      if (sql.includes('FROM "Brand"')) return { rows: [{ ...brand, settings: { planner: { sectors: [{ id: "live" }] }, planRuns: { [nextWeek]: running } } }] };
+      if (sql.includes('SELECT DISTINCT sa."destination" FROM')) return { rows: [{ destination: "youtube" }] };
+      return { rows: [], rowCount: 0 };
+    },
+    async end() {}
+  });
+  const r = await handlePlannerOps({ action: "planner-tick" }, db, json, { invoke: async (p) => { invoked.push(p); } });
+  assert.equal(invoked.length, 0);
+  assert.equal(r.body.planned, null);
 });
 
 test("a re-plan the page asked for wins, and replaces that week's unapproved posts on every network", () => {

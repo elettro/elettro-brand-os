@@ -32,6 +32,17 @@ So the availability API is **not** proof a model can be called: always run one r
 The Lambda env `AI_ALLOWED_MODEL_IDS` and the role policy allow both models. When 5.5 works: change `MODEL` in the script
 (or the dev-api `EPE_BEDROCK_CURATOR_MODEL_ID`) to `us.anthropic.claude-haiku-5-5`.
 
+## Load limits (2026-11-07)
+
+- The AWS account's Lambda concurrency limit is **10** in total (all functions, including the posting workers). Every
+  model call is one AI Lambda run, so planning keeps at most 3 AI calls in flight and plans one network at a time
+  (CLAUDE.md, "Planning runs one network at a time"). Asking AWS to raise the limit (Service Quotas →
+  Lambda → Concurrent executions) would allow faster planning; not requested yet.
+- Bedrock quota for Haiku 4.5 cross-region: 10,000 requests per minute (not a constraint).
+- First trial (AI on, preview of one Stashbox Instagram week, 76 slots, old code): 54 AI captions / 22 templates, 2 min 13 s,
+  and every curator call was cut off at 4000 output tokens. AI was switched back off until the chunked, one-network-at-a-time
+  planning is deployed.
+
 ## Turning it on
 
 | Setting (dev-api env) | Effect |

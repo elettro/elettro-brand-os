@@ -3,6 +3,8 @@
 import { buildGuidance } from "./intelligence.mjs";
 
 const MAX_OUTPUT_TOKENS = 4000;
+export const CURATOR_CHUNK_SLOTS = 12; // slots per curator call; ~12 decisions fit well inside MAX_OUTPUT_TOKENS
+const CURATOR_CONCURRENCY = 3; // each call is a Lambda run (AI Lambda); the AWS account allows 10 at once in total
 
 /**
  * Model call used by the curator, the copywriter and Calendar swaps. In AWS the dev-api runs inside the VPC,
@@ -26,7 +28,8 @@ export async function bedrockInvoke({ modelId, system, user }, { functionName = 
 let lambdaClient;
 async function defaultLambdaSend(input) {
   const { LambdaClient, InvokeCommand } = await import("@aws-sdk/client-lambda");
-  lambdaClient = lambdaClient || new LambdaClient({ region: process.env.AWS_REGION || "us-east-1", maxAttempts: 1 });
+  // Retries (with backoff) cover TooManyRequestsException when the account's Lambda concurrency is busy.
+  lambdaClient = lambdaClient || new LambdaClient({ region: process.env.AWS_REGION || "us-east-1", maxAttempts: 4 });
   return lambdaClient.send(new InvokeCommand(input), { abortSignal: AbortSignal.timeout(58000) });
 }
 
@@ -88,11 +91,17 @@ export function curatorInput({ brandSlug, account, weekStart, weekEnd, slots, re
  * Returns { preferences: {slotId: {assetId?, declined?, reason, gap}}, runs: [...] }.
  * Failures never block planning: that account keeps the rules picks and the error is reported.
  */
-export async function curateWeek({ plan, brandSlug, accounts, recentByAccount = {}, modelId, invoke = bedrockInvoke, intelligenceRoot }) {
+export async function curateWeek({ plan, brandSlug, accounts, recentByAccount = {}, modelId, invoke = bedrockInvoke, intelligenceRoot, chunkSize = CURATOR_CHUNK_SLOTS, concurrency = CURATOR_CONCURRENCY }) {
   const preferences = {};
-  const runs = await Promise.all(accounts.map(async (account) => {
+  // One call per CHUNK of an account's slots, not per whole week: a week of 40-80 slots made the answer longer than
+  // MAX_OUTPUT_TOKENS, the JSON was cut off and every pick was lost (2026-11-07, Haiku 4.5). Each chunk is judged on
+  // its own; planWeek() re-validates every pick, so cooldowns still hold across chunks.
+  const jobs = [];
+  for (const account of accounts) {
     const slots = plan.slots.filter((s) => s.socialAccountId === account.socialAccountId && s.candidates?.length);
-    if (!slots.length) return { socialAccountId: account.socialAccountId, destination: account.destination, skipped: "no candidates" };
+    for (let i = 0; i < slots.length; i += chunkSize) jobs.push({ account, slots: slots.slice(i, i + chunkSize) });
+  }
+  const results = await mapLimit(jobs, concurrency, async ({ account, slots }) => {
     const sectors = [...new Set(slots.map((s) => s.sector).filter(Boolean))];
     try {
       const g = buildGuidance("select_content", { brand: brandSlug, destination: account.destination, sectors }, intelligenceRoot);
@@ -118,17 +127,36 @@ export async function curateWeek({ plan, brandSlug, accounts, recentByAccount = 
           rejected += 1;
         }
       }
-      return {
-        socialAccountId: account.socialAccountId, destination: account.destination, modelId,
-        intelligenceVersion: g.intelligenceVersion, intelligenceFiles: g.hashes, guidanceTokens: g.tokens,
-        decisions: parsed.decisions.length, accepted, rejected,
+      return { account, g, decisions: parsed.decisions.length, accepted, rejected,
         weekNotes: typeof parsed.weekNotes === "string" ? parsed.weekNotes.slice(0, 600) : null,
-        notes: Array.isArray(parsed.notes) ? parsed.notes.slice(0, 10).map((n) => String(n).slice(0, 300)) : []
-      };
+        notes: Array.isArray(parsed.notes) ? parsed.notes.slice(0, 10).map((n) => String(n).slice(0, 300)) : [] };
     } catch (error) {
-      return { socialAccountId: account.socialAccountId, destination: account.destination, modelId,
-        error: error instanceof Error ? error.message : String(error) };
+      return { account, error: error instanceof Error ? error.message : String(error) };
     }
-  }));
+  });
+  // One run summary per account, as before (the planner stores it on each post), plus chunk counts.
+  const runs = accounts.map((account) => {
+    const mine = results.filter((r) => r.account === account);
+    if (!mine.length) return { socialAccountId: account.socialAccountId, destination: account.destination, skipped: "no candidates" };
+    const ok = mine.filter((r) => !r.error);
+    const base = { socialAccountId: account.socialAccountId, destination: account.destination, modelId, chunks: mine.length, failedChunks: mine.length - ok.length };
+    if (!ok.length) return { ...base, error: mine[0].error };
+    return {
+      ...base, intelligenceVersion: ok[0].g.intelligenceVersion, intelligenceFiles: ok[0].g.hashes, guidanceTokens: ok[0].g.tokens,
+      decisions: ok.reduce((n, r) => n + r.decisions, 0), accepted: ok.reduce((n, r) => n + r.accepted, 0), rejected: ok.reduce((n, r) => n + r.rejected, 0),
+      weekNotes: ok.map((r) => r.weekNotes).filter(Boolean).join(" ").slice(0, 600) || null,
+      notes: ok.flatMap((r) => r.notes).slice(0, 10),
+      ...(ok.length < mine.length ? { chunkErrors: mine.filter((r) => r.error).map((r) => r.error).slice(0, 3) } : {})
+    };
+  });
   return { preferences, runs };
+}
+
+async function mapLimit(items, limit, fn) {
+  const out = new Array(items.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) { const i = next++; out[i] = await fn(items[i], i); }
+  }));
+  return out;
 }
