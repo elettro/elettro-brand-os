@@ -305,4 +305,5 @@ CREATE TABLE IF NOT EXISTS "LinkEvent" (
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS "LinkEvent_linkId_kind_idx" ON "LinkEvent"("linkId","kind");
+ALTER TABLE "LinkEvent" ADD COLUMN IF NOT EXISTS "client" TEXT;
 CREATE INDEX IF NOT EXISTS "LinkEvent_brandId_createdAt_idx" ON "LinkEvent"("brandId","createdAt");

@@ -125,11 +125,12 @@ test("claim-due-posts hands out the short link for a tracked brand", async () =>
 test("a click is counted and answered with the tagged store address; robots count as previews", async () => {
   const link = [{ id: "l1", brandId: "b1", destination: "threads", targetUrl: "https://stashbox.ai/products/tee", sector: "merch", placement: "post" }];
   const human = fakeDb({ 'FROM "TrackedLink" tl': link });
-  const [status, body] = await recordClick(human.client, { code: "Ab3x9K7", userAgent: "Mozilla/5.0 (iPhone) Mobile Safari", referrer: "https://l.threads.net/xyz" });
+  const tap = { code: "Ab3x9K7", method: "GET", userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Version/18.0 Mobile/15E148 Safari/604.1", referrer: "https://l.threads.net/xyz", acceptLanguage: "en-US,en;q=0.9", secFetchMode: "navigate", secFetchDest: "document" };
+  const [status, body] = await recordClick(human.client, tap);
   assert.equal(status, 200);
   assert.equal(body.kind, "click");
   assert.equal(new URL(body.location).searchParams.get("eo"), "Ab3x9K7");
-  assert.deepEqual(human.queries.at(-1).values, ["l1", "b1", "click", "l.threads.net"]);
+  assert.deepEqual(human.queries.at(-1).values, ["l1", "b1", "click", "l.threads.net", "GET ios safari lang fetch:navigate"]);
   const bot = fakeDb({ 'FROM "TrackedLink" tl': link });
   assert.equal((await recordClick(bot.client, { code: "Ab3x9K7", userAgent: "Mastodon/4.3" }))[1].kind, "preview");
   assert.equal((await recordClick(fakeDb({ 'FROM "TrackedLink" tl': [] }).client, { code: "Ab3x9K7" }))[0], 404);
@@ -165,4 +166,25 @@ test("setup is IAM only, a dry run by default, and needs a host with a brand", a
   assert.equal(apply.statusCode, 200);
   assert.ok(db.queries.some((q) => q.text.includes('CREATE TABLE IF NOT EXISTS "LinkEvent"')));
   assert.ok(db.queries.some((q) => q.text.includes('UPDATE "Brand"') && q.values[1] === JSON.stringify({ enabled: true, host: "go.stashbox.ai" })));
+});
+
+test("only a real page open counts as a click: HEAD, prefetch, no languages and link checkers do not", async () => {
+  const { isHumanOpen } = await import("../services/dev-api-lambda/link-tracking.mjs");
+  const phone = { method: "GET", userAgent: "Mozilla/5.0 (iPhone) AppleWebKit Mobile Safari/604.1", acceptLanguage: "en-US", secFetchMode: "navigate", secFetchDest: "document" };
+  assert.equal(isHumanOpen(phone), true);
+  assert.equal(isHumanOpen({ ...phone, secFetchMode: "", secFetchDest: "" }), true, "older Safari sends no sec-fetch headers");
+  assert.equal(isHumanOpen({ ...phone, method: "HEAD" }), false);
+  assert.equal(isHumanOpen({ ...phone, purpose: "prefetch" }), false);
+  assert.equal(isHumanOpen({ ...phone, acceptLanguage: "" }), false, "scanners rarely send languages");
+  assert.equal(isHumanOpen({ ...phone, secFetchMode: "no-cors", secFetchDest: "image" }), false);
+  assert.equal(isHumanOpen({ ...phone, userAgent: "Mozilla/5.0 (compatible; Bluesky Cardyb/1.1)" }), false);
+});
+
+test("the events list shows each event with its client label", async () => {
+  const { linkEvents } = await import("../services/dev-api-lambda/link-tracking.mjs");
+  const db = fakeDb({ 'FROM "LinkEvent" e': [{ createdAt: "t", kind: "click", referrerHost: null, client: "GET ios safari lang fetch:navigate" }] });
+  const [status, body] = await linkEvents(db.client, { code: "Ab3x9K7" });
+  assert.equal(status, 200);
+  assert.equal(body.events.length, 1);
+  assert.equal((await linkEvents(db.client, { code: "bad" }))[0], 400);
 });
