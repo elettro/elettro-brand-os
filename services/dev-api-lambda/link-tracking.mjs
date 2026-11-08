@@ -320,7 +320,7 @@ async function featuredToday(client, brandId, merchStore, now = new Date()) {
 
 /** An asset's file-style title as a product name: "Megalophobia Geometric Tee #7 - Every Angle 2" becomes "Megalophobia Geometric Tee". */
 export function productName(title) {
-  const t = String(title || "").split(/\s+[–—-]\s+/)[0].replace(/\s*#\d+\s*$/, "").replace(/\s+/g, " ").trim();
+  const t = String(title || "").split(/\s+[–—·•|-]\s+/)[0].replace(/\s*#\d+\s*$/, "").replace(/\s+/g, " ").trim();
   return t.slice(0, 90) || null;
 }
 
