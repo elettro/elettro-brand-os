@@ -363,8 +363,8 @@ export async function bioPage(client, body, { makeCode = newCode, now = new Date
   }
   const rows = (await client.query(
     `SELECT sp."id", sp."scoreBreakdown"->'copy'->>'primaryLink' AS "link", a."title", a."filename"
-     FROM "ScheduledPost" sp JOIN "Asset" a ON a."id" = sp."assetId"
-     WHERE sp."brandId" = $1 AND sp."destination" = 'instagram' AND sp."status" = 'published' AND a."kind" = 'image'
+     FROM "ScheduledPost" sp JOIN "SocialAccount" sa ON sa."id" = sp."socialAccountId" JOIN "Asset" a ON a."id" = sp."assetId"
+     WHERE sp."brandId" = $1 AND sa."destination" = 'instagram' AND sp."status" = 'published' AND a."kind" = 'image'
        AND sp."scoreBreakdown"->'copy'->>'primaryLink' IS NOT NULL
      ORDER BY sp."scheduledFor" DESC LIMIT 60`, [brand.id])).rows;
   const seen = new Set();
