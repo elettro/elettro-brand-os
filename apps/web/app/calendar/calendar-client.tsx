@@ -52,7 +52,7 @@ async function act<T = { ok: boolean; error?: string }>(body: Record<string, unk
   return data as T;
 }
 
-const STAT_NETWORKS = ["youtube", "instagram", "facebook", "threads", "pinterest", "bluesky", "mastodon"];
+const STAT_NETWORKS = ["youtube", "instagram", "facebook", "threads", "pinterest", "bluesky", "mastodon", "linkedin"];
 const STAT_ORDER: CalendarStatKey[] = ["views", "reach", "likes", "comments", "shares", "saves", "linkClicks", "watchTimeSeconds", "avgViewDurationSeconds", "followsGained"];
 const STAT_LABEL: Record<CalendarStatKey, string> = { views: "Views", reach: "Reach", saves: "Saves", linkClicks: "Link clicks", likes: "Likes", comments: "Comments", shares: "Shares", watchTimeSeconds: "Watch time", avgViewDurationSeconds: "Avg. view", followsGained: "New subscribers" };
 const STAT_AGE: Record<CalendarStats["asOf"], string> = { "1h": "about 1 hour", "24h": "about 1 day", "7d": "about 7 days", "30d": "about 30 days" };

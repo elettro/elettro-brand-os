@@ -21,7 +21,7 @@ const MAX_AGE_MS = 45 * 24 * 60 * 60 * 1000;
 // Brands that exist only for testing; never collected (google-review is the demo brand for Google's API reviewer).
 export const EXCLUDED_BRANDS = ["google-review"];
 // Networks with a collector. Stories are left out: their insights disappear after 24 hours, before most buckets are reached.
-export const METRIC_DESTINATIONS = ["youtube", "instagram", "facebook", "threads", "pinterest", "bluesky", "mastodon"];
+export const METRIC_DESTINATIONS = ["youtube", "instagram", "facebook", "threads", "pinterest", "bluesky", "mastodon", "linkedin"];
 const SKIPPED_PLACEMENTS = ["story"];
 const DEFAULT_LIMIT = 25;
 const MAX_LIMIT = 100;
@@ -107,7 +107,7 @@ export async function runPostMetricsSetup(event, connectDatabase, json) {
 }
 
 /**
- * { destination?: "youtube" | "instagram" | "facebook" | "threads" | "pinterest" | "bluesky" | "mastodon", limit? } — published posts of that network that reached an age bucket without a snapshot, plus every
+ * { destination?: "youtube" | "instagram" | "facebook" | "threads" | "pinterest" | "bluesky" | "mastodon" | "linkedin", limit? } — published posts of that network that reached an age bucket without a snapshot, plus every
  * connected channel (so a worker can also check access). Read only.
  */
 export async function runListPostMetricsDue(event, connectDatabase, json, now = Date.now()) {
@@ -122,6 +122,7 @@ export async function runListPostMetricsDue(event, connectDatabase, json, now = 
       `SELECT b."slug" AS "brand", sa."accountName", sa."externalAccountId" AS "channelId"
        FROM "SocialAccount" sa JOIN "Brand" b ON b."id" = sa."brandId"
        WHERE sa."destination" = $1 AND sa."externalAccountId" IS NOT NULL AND sa."status" = 'active' AND b."slug" <> ALL($2::text[])
+         AND ($1 <> 'linkedin' OR sa."externalAccountId" LIKE 'urn:li:organization:%')
        ORDER BY b."slug"`, [destination, EXCLUDED_BRANDS])).rows;
     const rows = (await client.query(
       `SELECT pl."id" AS "ledgerId", pl."externalPostId" AS "videoId", pl."publishedAt", pl."placement"::text AS "placement", pl."externalUrl", sa."externalAccountId" AS "channelId", b."slug" AS "brand",
@@ -132,6 +133,7 @@ export async function runListPostMetricsDue(event, connectDatabase, json, now = 
        LEFT JOIN "PostMetric" pm ON pm."ledgerId" = pl."id"
        WHERE pl."destination" = $1 AND pl."externalPostId" IS NOT NULL AND sa."externalAccountId" IS NOT NULL
          AND pl."publishedAt" >= $2::timestamp AND b."slug" <> ALL($3::text[]) AND COALESCE(pl."placement"::text, '') <> ALL($4::text[])
+         AND ($1 <> 'linkedin' OR sa."externalAccountId" LIKE 'urn:li:organization:%')
        GROUP BY pl."id", sa."externalAccountId", b."slug"
        ORDER BY pl."publishedAt"`, [destination, new Date(now - MAX_AGE_MS).toISOString(), EXCLUDED_BRANDS, SKIPPED_PLACEMENTS])).rows;
     const due = [];

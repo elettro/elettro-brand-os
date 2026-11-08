@@ -119,13 +119,13 @@ test("the Threads worker saves what it collects", async () => {
 });
 
 test("dev-api: due list takes each collected network, skips Stories, refuses the rest", async () => {
-  assert.deepEqual(METRIC_DESTINATIONS, ["youtube", "instagram", "facebook", "threads", "pinterest", "bluesky", "mastodon"]);
+  assert.deepEqual(METRIC_DESTINATIONS, ["youtube", "instagram", "facebook", "threads", "pinterest", "bluesky", "mastodon", "linkedin"]);
   const seen = [];
   const connect = async () => ({ query: async (sql, params) => { seen.push([sql, params]); return { rows: [] }; }, end: async () => {} });
   for (const destination of METRIC_DESTINATIONS) assert.equal((await runListPostMetricsDue({ destination }, connect, json, NOW)).statusCode, 200);
   assert.equal((await runListPostMetricsDue({ destination: "tiktok" }, connect, json, NOW)).statusCode, 400);
   const ledger = seen.filter(([sql]) => /FROM "PublicationLedger"/.test(sql)).at(-1);
-  assert.equal(ledger[1][0], "mastodon");
+  assert.equal(ledger[1][0], "linkedin");
   assert.ok(ledger[1].some((p) => Array.isArray(p) && p.includes("story")));
   assert.match(ledger[0], /COALESCE\(pl\."placement"::text, ''\) <> ALL/);
 });
