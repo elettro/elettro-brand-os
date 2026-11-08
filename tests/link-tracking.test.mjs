@@ -201,7 +201,7 @@ function bioClient({ posts }) {
     links,
     async query(sql, params = []) {
       if (/FROM "Brand"/.test(sql)) return { rows: [{ id: "b1", settings: bioSettings }] };
-      if (/FROM "ScheduledPost" sp JOIN "Asset"/.test(sql)) return { rows: posts };
+      if (/FROM "ScheduledPost" sp JOIN "SocialAccount" sa/.test(sql)) return { rows: posts };
       if (/FROM "TrackedLink" WHERE "scheduledPostId"/.test(sql)) return { rows: links.filter((l) => l.postId === params[0]).slice(0, 1) };
       if (/FROM "TrackedLink" WHERE "brandId"/.test(sql)) return { rows: links.filter((l) => !l.postId && l.placement === params[1]).slice(0, 1) };
       if (/^INSERT INTO "TrackedLink"/.test(sql.trim())) {
