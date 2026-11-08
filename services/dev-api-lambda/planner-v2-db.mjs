@@ -352,7 +352,7 @@ async function planWeekInner(event, connectDatabase, json, { modelId = process.e
            slot.curatorReason ? `${slot.curatorReason} (${slot.reason})` : slot.reason,
            JSON.stringify({
              plannerVersion: PLANNER_VERSION, weightsVersion: `v${settings.weights?.version || 1}`, weekStart, sector: slot.sector, sectorFallbackFrom: slot.sectorFallbackFrom,
-             exploration: slot.exploration, songKey: slot.songKey, syntheticDisclosure: slot.synthetic,
+             exploration: slot.exploration, timeTest: slot.timeTest || null, songKey: slot.songKey, syntheticDisclosure: slot.synthetic,
              selectedBy: slot.selectedBy, curatorOverridden: slot.curatorOverridden, score: slot.score, breakdown: slot.breakdown,
              candidateIds: (slot.candidates || []).map((c) => c.assetId),
              ...(slot.slideIds ? { slideIds: slot.slideIds } : {}),

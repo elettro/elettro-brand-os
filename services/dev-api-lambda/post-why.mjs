@@ -46,10 +46,10 @@ export function whyOf(scoreBreakdown) {
     .sort((a, b) => b.points - a.points);
   const words = reasonWords(s.breakdown);
   const boosted = Number(s.breakdown.performance) > 0;
-  const tags = [boosted ? "boosted" : "rules-only", ...(s.exploration ? ["exploring"] : [])];
+  const tags = [boosted ? "boosted" : "rules-only", ...(s.exploration ? ["exploring"] : []), ...(s.timeTest ? ["time-test"] : [])];
   return {
     tags, parts, score: Number.isFinite(Number(s.score)) ? round1(s.score) : null,
-    sector: s.sector || null, exploration: Boolean(s.exploration),
+    sector: s.sector || null, exploration: Boolean(s.exploration), timeTest: s.timeTest || null,
     selectedBy: s.selectedBy || "rules", curatorOverridden: Boolean(s.curatorOverridden),
     plannerVersion: s.plannerVersion || null, weightsVersion: s.weightsVersion || "v1",
     summary: words.length ? `${words[0].charAt(0).toUpperCase()}${words.slice(0, 3).join(", ").slice(1)}.` : "Picked by the planner's rules."
