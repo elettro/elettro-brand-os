@@ -115,3 +115,36 @@ export async function collectForPost(destination, item, accessToken, call) {
   const source = `${destination}-insights`;
   return item.buckets.map((ageBucket) => ({ ledgerId: item.ledgerId, ageBucket, source, metrics: snapshot.metrics, raw: snapshot.raw }));
 }
+
+// Verification (2026-11-08): the stored snapshot next to the live number from the network, for a post that is at least a day old. The fields
+// are the normalized ones; only those either side has are listed. Read only.
+const COMPARE_FIELDS = ["views", "reach", "likes", "comments", "shares", "saves", "linkClicks"];
+export function compareSnapshot(row, live) {
+  const stored = {};
+  const now = {};
+  const differs = [];
+  for (const field of COMPARE_FIELDS) {
+    const a = row[field] === null || row[field] === undefined ? null : Number(row[field]);
+    const b = live?.[field] === null || live?.[field] === undefined ? null : Number(live[field]);
+    if (a === null && b === null) continue;
+    stored[field] = a;
+    now[field] = b;
+    if (a !== b) differs.push(field);
+  }
+  const hours = Math.round((Date.parse(row.capturedAt) - Date.parse(row.publishedAt)) / 360000) / 10;
+  return { url: row.externalUrl || row.externalPostId, brand: row.brand, placement: row.placement, publishedAt: row.publishedAt, bucket: row.ageBucket, takenAfterHours: Number.isFinite(hours) ? hours : null, stored, live: now, differs };
+}
+
+/** The newest snapshot of each post that is at least a day old, newest posts first, up to `limit`. */
+export function postsToVerify(rows, limit = 6, now = Date.now()) {
+  const seen = new Set();
+  const out = [];
+  for (const row of rows || []) {
+    if (seen.has(row.ledgerId) || row.placement === "story") continue;
+    if (now - Date.parse(row.publishedAt) < 24 * 3600000) continue;
+    seen.add(row.ledgerId);
+    out.push(row);
+    if (out.length >= limit) break;
+  }
+  return out;
+}

@@ -1,6 +1,6 @@
 import { SecretsManagerClient, GetSecretValueCommand, ListSecretsCommand, PutSecretValueCommand } from "@aws-sdk/client-secrets-manager";
 import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
-import { collectForPage } from "./metrics.mjs";
+import { collectForPage, compareSnapshot, postsToVerify } from "./metrics.mjs";
 
 // LinkedIn publishing worker for Elettro OS. Runs outside the VPC (it needs api.linkedin.com) and is
 // only invoked directly through IAM: no HTTP route points at it. Way in:
@@ -492,6 +492,25 @@ export async function collectMetrics({ dryRun = false, limit = METRICS_PER_TICK 
   return out;
 }
 
+/** Stored numbers next to live ones for a few older company-page posts. Read only; saves nothing. */
+export async function verifyMetrics({ limit = 6 } = {}, deps = {}) {
+  const { callApi = api, find = account, call: callOverride } = deps;
+  const listed = await callApi({ action: "list-post-metrics-20261108", destination: "linkedin", limit: 100 });
+  if (!listed.ok) throw new Error(`list-post-metrics failed: ${listed.error}`);
+  const out = [];
+  for (const row of postsToVerify(listed.rows, limit)) {
+    try {
+      const record = await find(row.channelId);
+      const call = callOverride || (async (path) => (await linkedin(record.accessToken, "GET", path, null, "share statistics")).body);
+      const page = await collectForPage(row.channelId, [{ ledgerId: row.ledgerId, postId: row.externalPostId, buckets: ["1h"] }], call);
+      out.push(page.snapshots[0] ? compareSnapshot(row, page.snapshots[0].metrics) : { url: row.externalUrl, error: "LinkedIn returned no statistics for this post" });
+    } catch (error) {
+      out.push({ url: row.externalUrl, error: String(error?.message || error).slice(0, 200) });
+    }
+  }
+  return out;
+}
+
 export async function publishingTick(deps = {}) {
   const { callApi = api, publishOne = async (post) => publish(await account(post.channelId), post), loginOk = hasValidLogin } = deps;
   // An expired login means every post that comes due would fail; leave them approved until it is reconnected.
@@ -530,6 +549,9 @@ export async function handler(event = {}) {
       console.error("LinkedIn tick failed:", error?.message);
       return result(502, { ok: false, error: error?.message || "Tick failed" });
     }
+  }
+  if (event.action === "verify") {
+    try { return result(200, { ok: true, results: await verifyMetrics({ limit: Number(event.limit) || 6 }) }); } catch (error) { return result(502, { ok: false, error: error?.message || "Verify failed" }); }
   }
   if (event.action === "metrics") {
     try { return result(200, await collectMetrics({ dryRun: event.mode !== "apply", limit: Number(event.limit) || METRICS_PER_TICK })); } catch (error) {
