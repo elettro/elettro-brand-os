@@ -1,6 +1,6 @@
 import { SecretsManagerClient, GetSecretValueCommand, ListSecretsCommand } from "@aws-sdk/client-secrets-manager";
 import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
-import { collectForPost } from "./metrics.mjs";
+import { collectForPost, compareSnapshot, postsToVerify } from "./metrics.mjs";
 
 // Meta (Facebook Page + Instagram) publishing worker for Elettro OS. Runs outside the VPC (it needs
 // graph.facebook.com) and is only invoked directly through IAM: no HTTP route points at it. Way in:
@@ -328,6 +328,26 @@ export async function collectMetrics({ dryRun = false, limit = METRICS_PER_TICK 
   return out;
 }
 
+/** Stored numbers next to live ones for a few older posts per network. Read only; saves nothing. */
+export async function verifyMetrics({ limit = 6 } = {}, deps = {}) {
+  const { callApi = api, call = graph, find = tokenRecord } = deps;
+  const out = [];
+  for (const destination of DESTINATIONS) {
+    const listed = await callApi({ action: "list-post-metrics-20261108", destination, limit: 100 });
+    if (!listed.ok) throw new Error(`list-post-metrics failed: ${listed.error}`);
+    for (const row of postsToVerify(listed.rows, limit)) {
+      try {
+        const record = await find(destination, row.channelId);
+        const snapshots = await collectForPost(destination, { ledgerId: row.ledgerId, postId: row.externalPostId, placement: row.placement, buckets: ["1h"] }, record.pageAccessToken, call);
+        out.push({ destination, ...compareSnapshot(row, snapshots[0].metrics) });
+      } catch (error) {
+        out.push({ destination, url: row.externalUrl, error: String(error?.message || error).slice(0, 200) });
+      }
+    }
+  }
+  return out;
+}
+
 export async function publishingTick(deps = {}) {
   const { callApi = api, publish = publishPost } = deps;
   const tick = { missed: 0, stuck: 0, published: [], errors: [] };
@@ -366,6 +386,9 @@ export async function handler(event = {}) {
     tick.metrics = await collectMetrics().catch((error) => ({ ok: false, error: error?.message || "metrics failed" }));
     console.log("Meta tick", JSON.stringify(tick));
     return result(tick.errors.length ? 502 : 200, { ok: !tick.errors.length, ...tick });
+  }
+  if (event.action === "verify") {
+    try { return result(200, { ok: true, results: await verifyMetrics({ limit: Number(event.limit) || 6 }) }); } catch (error) { return result(502, { ok: false, error: error?.message || "Verify failed" }); }
   }
   if (event.action === "metrics") {
     try { return result(200, await collectMetrics({ dryRun: event.mode !== "apply", limit: Number(event.limit) || METRICS_PER_TICK })); } catch (error) {

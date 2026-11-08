@@ -192,10 +192,10 @@ export async function runListPostMetrics(event, connectDatabase, json) {
   try {
     client = await connectDatabase();
     const rows = (await client.query(
-      `SELECT b."slug" AS "brand", pl."destination", pl."placement"::text AS "placement", pl."id" AS "ledgerId", pl."externalPostId", pl."externalUrl", pl."publishedAt",
+      `SELECT b."slug" AS "brand", pl."destination", pl."placement"::text AS "placement", pl."id" AS "ledgerId", pl."externalPostId", pl."externalUrl", pl."publishedAt", sa."externalAccountId" AS "channelId",
               pm."ageBucket", pm."capturedAt", pm."source", pm."views", pm."likes", pm."comments", pm."shares", pm."reach", pm."saves", pm."linkClicks",
               pm."watchTimeSeconds", pm."avgViewDurationSeconds", pm."followsGained", pm."raw"
-       FROM "PostMetric" pm JOIN "PublicationLedger" pl ON pl."id" = pm."ledgerId" JOIN "Brand" b ON b."id" = pl."brandId"
+       FROM "PostMetric" pm JOIN "PublicationLedger" pl ON pl."id" = pm."ledgerId" JOIN "Brand" b ON b."id" = pl."brandId" LEFT JOIN "SocialAccount" sa ON sa."id" = pl."socialAccountId"
        WHERE ($1::text IS NULL OR b."slug" = $1) AND ($2::text IS NULL OR pl."destination" = $2)
          AND ($3::text IS NULL OR pl."id"::text = $3) AND ($4::text IS NULL OR pl."externalPostId" = $4)
        ORDER BY pl."publishedAt" DESC, pm."capturedAt" DESC LIMIT $5`,

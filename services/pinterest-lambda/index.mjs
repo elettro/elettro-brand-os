@@ -1,6 +1,6 @@
 import { SecretsManagerClient, GetSecretValueCommand, ListSecretsCommand, PutSecretValueCommand } from "@aws-sdk/client-secrets-manager";
 import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
-import { collectForPin } from "./metrics.mjs";
+import { collectForPin, compareSnapshot, postsToVerify } from "./metrics.mjs";
 
 // Pinterest worker for Elettro OS. Runs outside the VPC (it needs api.pinterest.com) and is only
 // invoked directly through IAM: no HTTP route points at it. Ways in:
@@ -302,6 +302,25 @@ export async function collectMetrics({ dryRun = false, limit = METRICS_PER_TICK 
   return out;
 }
 
+/** Stored numbers next to live ones for a few older pins. Read only; saves nothing. */
+export async function verifyMetrics({ limit = 4 } = {}, deps = {}) {
+  const { callApi = api, find = account, call: callOverride } = deps;
+  const listed = await callApi({ action: "list-post-metrics-20261108", destination: "pinterest", limit: 100 });
+  if (!listed.ok) throw new Error(`list-post-metrics failed: ${listed.error}`);
+  const out = [];
+  for (const row of postsToVerify(listed.rows, limit)) {
+    try {
+      const record = await find(row.channelId);
+      const call = callOverride || ((method, path) => pinterest(record.accessToken, method, path));
+      const snapshots = await collectForPin({ ledgerId: row.ledgerId, postId: row.externalPostId, placement: row.placement, publishedAt: row.publishedAt, buckets: ["1h"] }, call);
+      out.push(compareSnapshot(row, snapshots[0].metrics));
+    } catch (error) {
+      out.push({ url: row.externalUrl, error: String(error?.message || error).slice(0, 200) });
+    }
+  }
+  return out;
+}
+
 async function publishingTick() {
   const claimed = await api({ action: "claim-due-posts", destination: "pinterest", placements: PLACEMENTS, limit: POSTS_PER_TICK });
   if (!claimed.ok) throw new Error(`claim-due-posts failed: ${claimed.error}`);
@@ -336,6 +355,9 @@ export async function handler(event = {}) {
       console.error("Pinterest tick failed:", error?.message);
       return result(502, { ok: false, refresh, error: error?.message || "Tick failed" });
     }
+  }
+  if (event.action === "verify") {
+    try { return result(200, { ok: true, results: await verifyMetrics({ limit: Number(event.limit) || 4 }) }); } catch (error) { return result(502, { ok: false, error: error?.message || "Verify failed" }); }
   }
   if (event.action === "metrics") {
     try { return result(200, await collectMetrics({ dryRun: event.mode !== "apply", limit: Number(event.limit) || METRICS_PER_TICK })); } catch (error) {
