@@ -1318,3 +1318,9 @@ code {
 .an-why dl div { display: flex; justify-content: space-between; gap: 8px; }
 .an-why dt { color: var(--muted); }
 .an-why dd { margin: 0; }
+.an-dot { display: inline-block; width: 10px; height: 10px; border-radius: 99px; margin: 6px 10px 0 0; flex: 0 0 auto; background: var(--muted); align-self: flex-start; }
+.an-dot.ok { background: var(--success); }
+.an-dot.stale { background: var(--warn); }
+.an-list li > div:first-child > div { min-width: 0; }
+.an-gap { color: var(--warn); font-weight: 600; }
+.an-sub { margin: 10px 0 0; font-size: 15px; }

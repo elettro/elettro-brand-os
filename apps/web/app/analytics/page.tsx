@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { authenticated, session } from "@/lib/cognito-auth";
 import { brandConfigs } from "@/lib/brand-config";
 import { reviewCall } from "@/lib/planner-review";
-import { ANALYTICS_BRANDS, NETWORK_NAMES, WHY_LABELS, fmt, measuredLabel, watchTime, type BrandAnalytics, type AnalyticsNetwork } from "@/lib/analytics";
+import { ANALYTICS_BRANDS, COVERAGE, NETWORK_NAMES, WHY_LABELS, ago, fmt, measuredLabel, watchTime, type BrandAnalytics, type AnalyticsNetwork } from "@/lib/analytics";
 
 // Analytics v1 (Dean, 2026-11-08): owner only (clients never see it), counts and rankings only. Posts are compared within one network,
 // ranked by that network's main number with clicks beside it ("sort by clicks" flips it). Grading against each account's normal and
@@ -30,6 +30,25 @@ async function load(brand: string, days: number, sort: string, summary: boolean)
 function Ready({ n }: { n: AnalyticsNetwork["ready"] }) {
   const pct = Math.min(100, Math.round((n.onTime7d / n.of) * 100));
   return <span className="an-ready"><span className="an-bar" aria-hidden="true"><span style={{ width: `${pct}%` }} /></span>{n.onTime7d}/{n.of}</span>;
+}
+
+// What is coming in per network: when its newest snapshot was saved and how many posts still wait for one. A network whose time
+// stops moving (an expired login, a broken worker) shows up here. `staleHours`: older than this is shown amber.
+function StatsComingIn({ latest, waiting, staleHours }: { latest: Record<string, string | null>; waiting: Record<string, number>; staleHours: number }) {
+  return <section className="card an-section" aria-labelledby="an-cov">
+    <h2 id="an-cov">Stats coming in</h2>
+    <p className="muted">What each network gives us, when its newest numbers arrived, and how many posts still wait for their first snapshot. Networks without stats still post; they just aren't measured.</p>
+    <ul className="an-list">{COVERAGE.map((c) => {
+      const at = latest[c.id] || null;
+      const old = at ? (Date.now() - Date.parse(at)) / 3600000 > staleHours : false;
+      const state = !c.collected ? "off" : !at ? "none" : old ? "stale" : "ok";
+      const label = state === "off" ? c.why : state === "none" ? "no snapshots yet" : `${old ? "quiet · " : ""}last ${ago(at)}`;
+      return <li key={c.id}>
+        <div><span className={`an-dot ${state}`} aria-hidden="true" /><div><strong>{NETWORK_NAMES[c.id] || c.id}</strong><div className="muted">{c.gives}</div></div></div>
+        <div className="an-num">{label}{c.collected && waiting[c.id] ? ` · ${waiting[c.id]} waiting` : ""}</div>
+      </li>;
+    })}</ul>
+  </section>;
 }
 
 export default async function AnalyticsPage({ searchParams }: { searchParams: Promise<Params> }) {
@@ -101,6 +120,15 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
           })}</tbody>
         </table></div>
       </section>
+      {(() => {
+        const latest: Record<string, string | null> = {};
+        const waiting: Record<string, number> = {};
+        for (const a of ok) for (const n of a.networks) {
+          waiting[n.destination] = (waiting[n.destination] || 0) + n.waiting;
+        }
+        for (const a of ok) for (const [d, at] of Object.entries(a.lastSnapshots || {})) if (!latest[d] || at > latest[d]!) latest[d] = at;
+        return <StatsComingIn latest={latest} waiting={waiting} staleHours={6} />;
+      })()}
       <section className="card an-section" aria-labelledby="an-top">
         <h2 id="an-top">Top post on each network</h2>
         <p className="muted">Any brand, ranked by {sort === "clicks" ? "clicks" : "the network's own main number"} at the latest snapshot.</p>
@@ -136,6 +164,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
       </table></div>
     </section>
 
+    <StatsComingIn latest={data.lastSnapshots || {}} waiting={Object.fromEntries(nets.map((n) => [n.destination, n.waiting]))} staleHours={24} />
     {net && <>
       <section className="card an-section" aria-labelledby="an-top">
         <h2 id="an-top">Top posts · {NETWORK_NAMES[net.destination] || net.destination}</h2>
@@ -187,5 +216,38 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
       </div>
     </>}
     {!net && <p className="card" style={{ marginTop: 16 }}>Nothing published in the last {days} days.</p>}
+    <div className="an-two">
+      {data.pillarMix && <section className="card an-section" aria-labelledby="an-mix">
+        <h2 id="an-mix">Pillar mix · all networks</h2>
+        <p className="muted">The share each pillar should get (planner settings) next to what was actually published in the last {days} days ({data.pillarMix.posts} posts placed by the planner). A big gap usually means the pillar ran out of usable assets.</p>
+        <div className="an-scroll"><table className="an-table" style={{ minWidth: 420 }}>
+          <thead><tr><th scope="col">Pillar</th><th scope="col">Planned</th><th scope="col">Published</th><th scope="col">Posts</th></tr></thead>
+          <tbody>{data.pillarMix.rows.map((r) => {
+            const gap = r.target !== null && r.actual !== null ? r.actual - r.target : null;
+            return <tr key={r.slug}>
+              <th scope="row">{r.label}</th>
+              <td>{r.target === null ? "—" : `${r.target}%`}</td>
+              <td className={gap !== null && Math.abs(gap) >= 8 ? "an-gap" : undefined}>{r.actual === null ? "—" : `${r.actual}%`}{gap !== null && Math.abs(gap) >= 8 ? ` (${gap > 0 ? "+" : ""}${gap})` : ""}</td>
+              <td>{r.posts}</td>
+            </tr>;
+          })}</tbody>
+        </table></div>
+      </section>}
+      {data.pool && <section className="card an-section" aria-labelledby="an-pool">
+        <h2 id="an-pool">Make more of this</h2>
+        <p className="muted">What the planner can use per pillar today: ready now, and resting (posted in the last {data.pool.cooldownDays} days). From the planner's own data, no analytics needed.</p>
+        <ul className="an-list">{data.pool.pillars.map((r) => <li key={r.slug}>
+          <div><strong>{r.label}</strong>{r.low && <span className="an-chip late" style={{ marginLeft: 8 }}>running low</span>}</div>
+          <div className="an-num">{r.ready} ready · {r.resting} resting{r.nextFree ? ` · next free ${r.nextFree}` : ""}</div>
+        </li>)}</ul>
+        {data.pool.windows.length > 0 && <>
+          <h3 className="an-sub">Windows opening in the next 45 days</h3>
+          <ul className="an-list">{data.pool.windows.map((w) => <li key={w.opens}>
+            <strong>Opens {w.opens}</strong>
+            <div className="an-num">{w.approved} approved{w.waiting ? <> · <span className="an-gap">{w.waiting} still waiting for approval</span></> : ""}</div>
+          </li>)}</ul>
+        </>}
+      </section>}
+    </div>
   </main>;
 }
