@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   newCode, CODE_PATTERN, isBot, trackingConfig, taggedUrl, planPostLink, trackClaimedPosts,
-  recordClick, recordEvent, handleLinks, runLinkTrackingSetup
+  recordClick, recordEvent, handleLinks, runLinkTrackingSetup, bioConfig, bioPage, bioImage
 } from "../services/dev-api-lambda/link-tracking.mjs";
 import { handlePlannerOps } from "../services/dev-api-lambda/planner-ops.mjs";
 
@@ -187,4 +187,84 @@ test("the events list shows each event with its client label", async () => {
   assert.equal(status, 200);
   assert.equal(body.events.length, 1);
   assert.equal((await linkEvents(db.client, { code: "bad" }))[0], 400);
+});
+
+// ---------- Instagram bio-link page ----------
+
+const bioSettings = { ...settings, linkTracking: { ...settings.linkTracking, bio: { enabled: true, title: "Stashbox", buttons: [
+  { key: "shop", label: "Shop", url: "https://stashbox.ai" }, { key: "bad", label: "Nope", url: "http://insecure.example" }] } } };
+
+// A tiny fake database: TrackedLink rows in memory, the brand row and the Instagram posts are canned.
+function bioClient({ posts }) {
+  const links = [];
+  return {
+    links,
+    async query(sql, params = []) {
+      if (/FROM "Brand"/.test(sql)) return { rows: [{ id: "b1", settings: bioSettings }] };
+      if (/FROM "ScheduledPost" sp JOIN "Asset"/.test(sql)) return { rows: posts };
+      if (/FROM "TrackedLink" WHERE "scheduledPostId"/.test(sql)) return { rows: links.filter((l) => l.postId === params[0]).slice(0, 1) };
+      if (/FROM "TrackedLink" WHERE "brandId"/.test(sql)) return { rows: links.filter((l) => !l.postId && l.placement === params[1]).slice(0, 1) };
+      if (/^INSERT INTO "TrackedLink"/.test(sql.trim())) {
+        const [code, , postId, destination, placement, targetUrl] = params;
+        if (links.some((l) => l.code === code)) return { rowCount: 0 };
+        links.push({ code, postId, destination, placement, targetUrl }); return { rowCount: 1 };
+      }
+      if (/^UPDATE "TrackedLink"/.test(sql.trim())) { links.find((l) => l.code === params[0]).targetUrl = params[1]; return { rowCount: 1 }; }
+      throw new Error("unexpected query: " + sql.slice(0, 60));
+    }
+  };
+}
+
+test("the bio page is off unless the brand turns it on, and drops unsafe buttons", () => {
+  assert.equal(bioConfig(settings), null);
+  assert.equal(bioConfig({ linkTracking: { bio: { enabled: false } } }), null);
+  const c = bioConfig(bioSettings);
+  assert.deepEqual(c.buttons, [{ key: "shop", label: "Shop", url: "https://stashbox.ai" }]);
+  assert.equal(c.max, 6);
+});
+
+test("bio tiles are the newest Instagram posts, one per product page, each a tracked short link", async () => {
+  const posts = [
+    { id: "p3", link: "https://stashbox.ai/products/tee?x=1", title: "Tee", filename: "tee.jpg" },
+    { id: "p2", link: "https://stashbox.ai/products/tee", title: "Tee again", filename: "tee2.jpg" },
+    { id: "p1", link: "https://open.spotify.com/artist/abc", title: "Spotify", filename: "s.jpg" },
+    { id: "p0", link: "https://stashbox.ai/products/glass", title: null, filename: "pint-glass_01.jpg" }];
+  const client = bioClient({ posts });
+  const [status, page] = await bioPage(client, { brandSlug: "stashbox" });
+  assert.equal(status, 200);
+  assert.equal(page.buttons.length, 1);
+  assert.deepEqual(page.tiles.map((t) => t.title), ["Tee", "pint glass 01"]);
+  for (const t of page.tiles) assert.match(t.code, CODE_PATTERN);
+  // The same call again reuses the codes: a tile keeps its code, so its click counts stay with the post.
+  const [, again] = await bioPage(client, { brandSlug: "stashbox" });
+  assert.deepEqual(again.tiles.map((t) => t.code), page.tiles.map((t) => t.code));
+  assert.equal(again.buttons[0].code, page.buttons[0].code);
+  assert.equal(client.links.length, 3);
+  assert.ok(client.links.every((l) => l.destination === "instagram"));
+});
+
+test("a brand without a bio page answers 404; a bad slug answers 400", async () => {
+  const off = { async query(sql) { return /FROM "Brand"/.test(sql) ? { rows: [{ id: "b1", settings }] } : { rows: [] }; } };
+  assert.equal((await bioPage(off, { brandSlug: "stashbox" }))[0], 404);
+  assert.equal((await bioPage(off, { brandSlug: "Bad Slug" }))[0], 400);
+});
+
+test("a bio picture is only served for a tile code", async () => {
+  const client = { async query(sql, params) { return { rows: params[0] === "Ab3x9K7" ? [{ sourcePath: "/brands/stashbox/image/a.jpg" }] : [] }; } };
+  assert.deepEqual(await bioImage(client, { code: "Ab3x9K7" }), [200, { ok: true, path: "/brands/stashbox/image/a.jpg" }]);
+  assert.equal((await bioImage(client, { code: "Zz9x9K7" }))[0], 404);
+  assert.equal((await bioImage(client, { code: "../etc" }))[0], 404);
+});
+
+test("re-running setup without a bio keeps the page's setup", async () => {
+  const stored = { settings: bioSettings };
+  const client = {
+    async query(sql) {
+      if (/information_schema/.test(sql)) return { rows: [] };
+      if (/FROM "Brand"/.test(sql)) return { rows: [{ id: "b1", settings: stored.settings }] };
+      return { rows: [] };
+    }
+  };
+  const [, out] = [0, JSON.parse((await runLinkTrackingSetup({ brandSlug: "stashbox", host: "go.stashbox.ai" }, async () => client, (c, b) => ({ statusCode: c, body: JSON.stringify(b) }))).body)];
+  assert.equal(out.after.bio.title, "Stashbox");
 });
