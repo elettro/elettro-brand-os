@@ -343,7 +343,10 @@ async function uploadVideo(token, request, deps) {
 export async function pdfFromImages(buffers) {
   const { PDFDocument } = await import("pdf-lib");
   const pdf = await PDFDocument.create();
-  for (const bytes of buffers) {
+  for (const input of buffers) {
+    // pdf-lib reads JPEG bytes from the start of the underlying ArrayBuffer and ignores a Buffer's offset into Node's shared pool, so a
+    // small Buffer (like a test fixture) can fail with "SOI not found in JPEG" depending on what was allocated before it. Own copy, offset 0.
+    const bytes = new Uint8Array(input);
     const isPng = bytes[0] === 0x89 && bytes[1] === 0x50;
     const image = isPng ? await pdf.embedPng(bytes) : await pdf.embedJpg(bytes);
     // Pages are 1080 points wide (LinkedIn shows documents at screen size); the image keeps full resolution inside.
