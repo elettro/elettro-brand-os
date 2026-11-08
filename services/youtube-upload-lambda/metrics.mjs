@@ -30,7 +30,7 @@ export function analyticsUrl({ videoId, publishedAt, now = Date.now() }) {
 
 const num = (value) => (value === undefined || value === null || value === "" || !Number.isFinite(Number(value)) ? null : Number(value));
 
-/** One metrics object out of a Data API `statistics` answer and an Analytics report; Analytics wins where it has a row. */
+/** One metrics object: public counters from the Data API `statistics` answer; watch time, average view, shares and subscribers from the Analytics report. */
 export function snapshotFrom(statistics, report) {
   const stats = statistics?.items?.[0]?.statistics || {};
   const headers = (report?.columnHeaders || []).map((h) => h.name);
@@ -38,9 +38,12 @@ export function snapshotFrom(statistics, report) {
   const at = (name) => (row && headers.includes(name) ? num(row[headers.indexOf(name)]) : null);
   const minutes = at("estimatedMinutesWatched");
   const metrics = {
-    views: at("views") ?? num(stats.viewCount),
-    likes: at("likes") ?? num(stats.likeCount),
-    comments: at("comments") ?? num(stats.commentCount),
+    // Views, likes and comments are the PUBLIC counters (what the video page shows), so a number can be checked on the page. Analytics counts
+    // differently (a comment since deleted or held for review still counts; on 2026-11-08 it said 3 where the page said 0), so it only fills
+    // them in when the Data API gave nothing.
+    views: num(stats.viewCount) ?? at("views"),
+    likes: num(stats.likeCount) ?? at("likes"),
+    comments: num(stats.commentCount) ?? at("comments"),
     shares: at("shares"),
     watchTimeSeconds: minutes === null ? null : Math.round(minutes * 60),
     avgViewDurationSeconds: at("averageViewDuration"),

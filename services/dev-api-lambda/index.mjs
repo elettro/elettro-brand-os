@@ -11,7 +11,7 @@ import {runDocumentAssetKindSetup} from "./document-asset-kind.mjs";
 import {createBrand} from "./brand-create.mjs";
 import {runMultiCamSetup, handleMultiCam} from "./multicam.mjs";
 import {runLinkTrackingSetup, handleLinks} from "./link-tracking.mjs";
-import {runPostMetricsSetup, runListPostMetricsDue, runRecordPostMetrics, runListPostMetrics} from "./post-metrics.mjs";
+import {runPostMetricsSetup, runListPostMetricsDue, runRecordPostMetrics, runListPostMetrics, runRecomputeYoutubeMetrics} from "./post-metrics.mjs";
 import {runCarouselRefill} from "./carousel-refill.mjs";
 import {handleOpsTick} from "./ops-tick.mjs";
 import { handleConnectionStatus, setPlatformMilestone, setTokenExpiry, renameSocialAccount, listSocialAccounts, feedResponse } from "./connection-status.mjs";
@@ -1638,6 +1638,7 @@ export const handler = async (event = {}) => {
   if (event.action === "setup-post-metrics-20261107" && !event.requestContext && !event.rawPath && !event.path) return runPostMetricsSetup(event, connectDatabase, json);
   if (event.action === "list-post-metrics-due-20261107" && !event.requestContext && !event.rawPath && !event.path) return runListPostMetricsDue(event, connectDatabase, json);
   if (event.action === "list-post-metrics-20261108" && !event.requestContext && !event.rawPath && !event.path) return runListPostMetrics(event, connectDatabase, json);
+  if (event.action === "recompute-youtube-metrics-20261108" && !event.requestContext && !event.rawPath && !event.path) return runRecomputeYoutubeMetrics(event, connectDatabase, json);
   if (event.action === "record-post-metrics-20261107" && !event.requestContext && !event.rawPath && !event.path) return runRecordPostMetrics(event, connectDatabase, json);
   if(event.action === "setup-multicam-tables-20261101" && !event.requestContext && !event.rawPath && !event.path) return runMultiCamSetup(event,connectDatabase,json);
   const requestPath =

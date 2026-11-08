@@ -41,14 +41,20 @@ const assetCard = (r) => ({ id: r.assetId, filename: r.filename, kind: r.kind, s
 const METRIC_FIELDS = ["views", "likes", "comments", "shares", "watchTimeSeconds", "avgViewDurationSeconds", "followsGained", "reach", "saves", "linkClicks"];
 
 /** The latest PostMetric snapshot as the Calendar's `stats`: the age it was taken at plus only the numbers that exist (a missing number is never shown as 0). */
-export function statsFromMetric(row) {
+export function statsFromMetric(row, publishedAt = null) {
   if (!row) return null;
   const metrics = {};
   for (const field of METRIC_FIELDS) {
     const value = row[field];
     if (value !== null && value !== undefined && Number.isFinite(Number(value))) metrics[field] = Number(value);
   }
-  return Object.keys(metrics).length ? { asOf: row.ageBucket, source: row.source, metrics } : null;
+  if (!Object.keys(metrics).length) return null;
+  // The age label (1h, 24h, 7d, 30d) is only the bucket the snapshot filled. A post collected late (the first run caught up on a backlog) has its
+  // buckets filled by one snapshot taken days later, so the real distance from publishing is what the panel must say.
+  const taken = Date.parse(row.capturedAt);
+  const published = Date.parse(publishedAt);
+  const takenAfterHours = Number.isFinite(taken) && Number.isFinite(published) && taken >= published ? Math.round((taken - published) / 360000) / 10 : null;
+  return { asOf: row.ageBucket, source: row.source, ...(takenAfterHours !== null ? { takenAfterHours } : {}), metrics };
 }
 
 export async function calendarMonth(client, brand, body, now = new Date()) {
@@ -83,7 +89,7 @@ export async function calendarMonth(client, brand, body, now = new Date()) {
   if (published.length) {
     try {
       const rows = (await client.query(`
-        SELECT DISTINCT ON ("ledgerId") "ledgerId", "ageBucket", "source", ${METRIC_FIELDS.map((f) => `"${f}"`).join(", ")}
+        SELECT DISTINCT ON ("ledgerId") "ledgerId", "ageBucket", "capturedAt", "source", ${METRIC_FIELDS.map((f) => `"${f}"`).join(", ")}
         FROM "PostMetric" WHERE "ledgerId" = ANY($1::uuid[])
         ORDER BY "ledgerId", CASE "ageBucket" WHEN '30d' THEN 4 WHEN '7d' THEN 3 WHEN '24h' THEN 2 ELSE 1 END DESC`, [published.map((p) => p.id)])).rows;
       for (const row of rows) metricByLedger.set(row.ledgerId, row);
@@ -118,7 +124,7 @@ export async function calendarMonth(client, brand, body, now = new Date()) {
       carousel: Array.isArray(p.scoreBreakdown?.slideIds) && p.scoreBreakdown.slideIds.length > 0,
       custom: p.scoreBreakdown?.custom || null, tiktok: null, passedOver: false, editable: false,
       // The latest PostMetric snapshot (YouTube, Instagram, Facebook, Threads); null until one exists.
-      stats: statsFromMetric(metricByLedger.get(p.id))
+      stats: statsFromMetric(metricByLedger.get(p.id), p.publishedAt)
     }))
   ].sort((a, b) => a.at.localeCompare(b.at) || a.destination.localeCompare(b.destination));
 
