@@ -1,5 +1,6 @@
 "use client";
 
+import { WhyThisPost } from "@/components/why-this-post";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CalendarMonth, CalendarPost, CalendarStatKey, CalendarStats } from "@/lib/planner-review";
 import { AssetThumb as Thumb } from "@/components/asset-thumb";
@@ -289,6 +290,7 @@ export function CalendarClient({ initial, brandName }: { initial: CalendarMonth;
           {post.caption ? <p className="cal-caption">{post.caption}</p> : <p className="muted">No caption on file.</p>}
           {post.hashtags.length > 0 && <p className="cal-tags">{post.hashtags.map(tag).join(" ")}</p>}
           {post.externalUrl && <p><a href={post.externalUrl} target="_blank" rel="noreferrer">View live post on {NETWORK[post.destination] || post.destination} ↗</a></p>}
+          <WhyThisPost why={post.why} />
           {post.kind === "published" && <div className="cal-stats">
             <div className="cal-stats-head">Stats</div>
             {post.stats ? <>
