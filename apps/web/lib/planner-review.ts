@@ -34,7 +34,7 @@ export type ReviewCustom = { kind: "text" | "link" | "poll"; question?: string; 
 // The planner's stored reasons for a pick (services/dev-api-lambda/post-why.mjs); null for posts the planner did not pick.
 export type PostWhy = {
   tags: string[]; parts: Array<{ key: string; label: string; points: number }>; score: number | null; sector: string | null;
-  exploration: boolean; selectedBy: string; curatorOverridden: boolean; plannerVersion: string | null; weightsVersion: string; summary: string;
+  exploration: boolean; timeTest?: { band: string; movedFrom: string } | null; selectedBy: string; curatorOverridden: boolean; plannerVersion: string | null; weightsVersion: string; summary: string;
 };
 export type ReviewPost = {
   id: string; destination: string; accountName: string; placement: string; scheduledFor: string; status: string;

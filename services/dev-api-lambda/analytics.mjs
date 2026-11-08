@@ -24,7 +24,7 @@ const BUCKET_HOURS = { "1h": 1, "24h": 24, "7d": 168, "30d": 720 };
 export const GRADE_AT = 30;
 const HOUR = 3600000;
 const PERIODS = [7, 28, 90];
-const TIME_BANDS = [[9, 12, "9 am – noon"], [12, 15, "noon – 3 pm"], [15, 18, "3 pm – 6 pm"], [18, 21, "6 pm – 9 pm"]];
+const TIME_BANDS = [[6, 9, "6 – 9 am (test)"], [9, 12, "9 am – noon"], [12, 15, "noon – 3 pm"], [15, 18, "3 pm – 6 pm"], [18, 21, "6 pm – 9 pm"], [21, 24, "9 pm – midnight (test)"]];
 
 const num = (value) => (value === null || value === undefined || value === "" || !Number.isFinite(Number(value)) ? null : Number(value));
 

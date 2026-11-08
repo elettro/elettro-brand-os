@@ -15,7 +15,7 @@ export const SHRINK_K = 10;
 export const MIN_NORMAL_POSTS = 10;
 const DAY = 864e5;
 const BUCKETS = ["1h", "24h", "7d", "30d"];
-const TIME_BANDS = [[9, 12, "9-12"], [12, 15, "12-15"], [15, 18, "15-18"], [18, 21, "18-21"]];
+const TIME_BANDS = [[6, 9, "6-9"], [9, 12, "9-12"], [12, 15, "12-15"], [15, 18, "15-18"], [18, 21, "18-21"], [21, 24, "21-24"]];
 
 export function lengthBucket(ms) {
   const s = Number(ms) / 1000;
@@ -26,7 +26,7 @@ export function lengthBucket(ms) {
 function band(iso, timeZone) {
   const h = Number(new Intl.DateTimeFormat("en-US", { timeZone, hour: "numeric", hourCycle: "h23" }).format(new Date(iso))) % 24;
   const b = TIME_BANDS.find(([from, to]) => h >= from && h < to);
-  return b ? b[2] : "outside 9-21";
+  return b ? b[2] : "other";
 }
 
 export const log2Lift = (value, normal) => Math.log2((value + 1) / (normal + 1));

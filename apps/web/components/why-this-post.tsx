@@ -2,7 +2,7 @@ import type { PostWhy } from "@/lib/planner-review";
 
 // "Why this post?" (2026-11-08): the planner's stored reasons for a pick (services/dev-api-lambda/post-why.mjs), shown on Review and
 // Calendar. Collapsed by default; tags stay visible. Until results feed the planner every pick is "rules only", weights v1.
-const TAG_LABEL: Record<string, string> = { "rules-only": "Rules only", exploring: "Exploring", boosted: "Results boost" };
+const TAG_LABEL: Record<string, string> = { "rules-only": "Rules only", exploring: "Exploring", boosted: "Results boost", "time-test": "Time test" };
 
 export function WhyThisPost({ why, analyticsHref }: { why: PostWhy | null | undefined; analyticsHref?: string }) {
   if (!why) return null;
@@ -18,6 +18,7 @@ export function WhyThisPost({ why, analyticsHref }: { why: PostWhy | null | unde
     </dl>}
     <p className="muted why-foot">
       {why.sector ? `Pillar: ${why.sector.replace(/[-_]+/g, " ")}. ` : ""}
+      {why.timeTest ? `Time test: moved from ${why.timeTest.movedFrom} into the ${why.timeTest.band} test band. ` : ""}
       {why.selectedBy === "curator" ? "Chosen by the AI curator from the planner's shortlist. " : ""}
       Planner weights {why.weightsVersion}. Approvals, date windows, cooldowns and format rules were checked first and are never changed by analytics.
       {analyticsHref && <> <a href={analyticsHref}>See the numbers</a></>}

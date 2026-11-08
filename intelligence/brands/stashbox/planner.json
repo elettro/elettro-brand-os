@@ -274,6 +274,25 @@
     ],
     "promotionalMaxShare": {
       "x": 0.25
+    },
+    "timeTests": {
+      "enabled": true,
+      "share": 0.2,
+      "destinations": [
+        "youtube",
+        "instagram",
+        "facebook"
+      ],
+      "bands": [
+        {
+          "from": "06:00",
+          "to": "09:00"
+        },
+        {
+          "from": "21:00",
+          "to": "23:59"
+        }
+      ]
     }
   },
   "accounts": [

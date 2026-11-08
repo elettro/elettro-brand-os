@@ -485,6 +485,44 @@ export function separateSlots(slotLists, tzOf, profileOf = (d) => timeProfileOf(
 }
 
 /** Deterministic smooth weighted round-robin: sector order that tracks the shares. */
+/**
+ * Time tests (Dean, 2026-11-08): on the networks listed in `settings.timeTests`, about `share` (default 20%) of an account's slots move
+ * out of the normal window into test bands next to it (default 6-9 am and 9 pm-midnight, the brand's own clock), taking turns between
+ * bands. Exploration slots are never moved, so a slot tests one thing at a time; a slot whose new time has already passed stays put.
+ * The analytics compare the bands (performance.mjs time bands). Pure: changes `slots` in place and returns how many moved.
+ */
+export function applyTimeTests(slots, account, timeTests, timeZone, now = new Date()) {
+  const tt = timeTests && typeof timeTests === "object" ? timeTests : null;
+  if (!tt || !tt.enabled) return 0;
+  const destination = String(account.destination).toLowerCase();
+  if (!(tt.destinations || []).map((d) => String(d).toLowerCase()).includes(destination)) return 0;
+  const bands = (Array.isArray(tt.bands) && tt.bands.length ? tt.bands : [{ from: "06:00", to: "09:00" }, { from: "21:00", to: "23:59" }])
+    .filter((b) => /^\d{2}:\d{2}$/.test(b.from) && /^\d{2}:\d{2}$/.test(b.to) && b.from < b.to);
+  if (!bands.length) return 0;
+  const flags = explorationFlags(slots.length, Math.min(0.5, Math.max(0, Number(tt.share ?? 0.2))));
+  let owed = 0;
+  let moved = 0;
+  slots.forEach((slot, i) => {
+    if (flags[i]) owed += 1;
+    if (!owed || slot.exploration) return;
+    const band = bands[moved % bands.length];
+    const toMin = (hhmm) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
+    const from = toMin(band.from);
+    const span = Math.max(1, toMin(band.to) - from);
+    let minute = from + Math.floor((jitter(slot.slotId, "time-test") / 3) * span);
+    while (!goodMinute(minute) && minute < from + span) minute += 1;
+    const local = hhmmOf(Math.min(minute, from + span - 1));
+    const at = localDateTimeToUtc(slot.ymd, local, account.timezone || timeZone);
+    if (at.getTime() <= now.getTime()) return;
+    slot.timeTest = { band: `${band.from}-${band.to}`, movedFrom: slot.localTime };
+    slot.localTime = local;
+    slot.scheduledFor = at.toISOString();
+    owed -= 1;
+    moved += 1;
+  });
+  return moved;
+}
+
 export function sectorSequence(count, shares) {
   const entries = shares.filter((s) => s.share > 0);
   const totalShare = entries.reduce((sum, s) => sum + s.share, 0);
@@ -548,6 +586,7 @@ export function planWeek({ assets, accounts, settings, weekStart, timeZone, uses
     const rate = settings.exploration[String(account.destination).toLowerCase()] ?? settings.exploration.default ?? 0;
     const explore = explorationFlags(slots.length, rate);
     slots.forEach((slot, i) => { slot.sector = sequence[i]; slot.exploration = explore[i]; });
+    applyTimeTests(slots, account, settings.timeTests, tzByAccount.get(account.socialAccountId) || timeZone, now);
     return { account, pool, bySector, active, slots };
   });
 
