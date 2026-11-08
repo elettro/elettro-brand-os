@@ -24,6 +24,7 @@
  */
 import { queueCustomPost } from "./linkedin-custom.mjs";
 import { calendarMonth, replanSlot } from "./calendar.mjs";
+import { brandAnalytics } from "./analytics.mjs";
 import { holidayList, holidayEdit, holidaySkip, holidaySwap, holidayApprove } from "./holidays.mjs";
 import { timingSafeEqual } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -403,6 +404,8 @@ export async function handlePlannerReview(event, body, connectDatabase, json, de
     // The Calendar page (calendar.mjs): one month, and Swap = a whole new post for one slot.
     calendar: (c, b) => calendarMonth(c, b, body, deps.now),
     "replan-slot": (c, b) => replanSlot(c, b, body, deps),
+    // Analytics page (analytics.mjs): counts and rankings from the PostMetric snapshots, read only. The web page is owner-only.
+    analytics: (c, b) => brandAnalytics(c, b, body, deps.now),
     // Holidays (holidays.mjs): Halloween drafts per brand; approving puts them in the date's plan.
     "holiday-list": (c, b) => holidayList(c, b, body, deps.now),
     "holiday-edit": (c, b) => holidayEdit(c, b, body),
