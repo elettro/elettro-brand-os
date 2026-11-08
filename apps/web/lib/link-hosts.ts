@@ -2,8 +2,8 @@
 
 // Short-link host → the brand's home page (where a bad or unknown link lands). Add SolarMeister here when it goes on.
 // Kept in step with Brand.settings.linkTracking.host (set by the dev-api action setup-link-tracking-20261107).
-export const LINK_HOSTS: Record<string, { brand: string; home: string }> = {
-  "go.stashbox.ai": { brand: "stashbox", home: "https://stashbox.ai" }
+export const LINK_HOSTS: Record<string, { brand: string; home: string; bio?: boolean }> = {
+  "go.stashbox.ai": { brand: "stashbox", home: "https://stashbox.ai", bio: true }
 };
 export const FALLBACK_HOME = "https://elettro.com";
 

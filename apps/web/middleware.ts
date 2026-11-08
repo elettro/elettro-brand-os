@@ -16,6 +16,11 @@ export function middleware(request: NextRequest) {
   if (linkHost) {
     const code = path.slice(1);
     if (LINK_CODE.test(code)) return NextResponse.rewrite(new URL(`/api/l/${code}`, request.url));
+    // The Instagram bio-link page (go.stashbox.ai/bio) and its tile pictures; only on hosts that have one.
+    if (LINK_HOSTS[linkHost].bio) {
+      if (path === "/bio") return NextResponse.rewrite(new URL("/link-bio", request.url));
+      if (path === "/link-bio" || /^\/api\/bio-img\/[^/]+$/.test(path)) return NextResponse.next();
+    }
     if (path === "/api/link-events" || /^\/api\/l\/[^/]+$/.test(path) || path.startsWith("/_next/")) return NextResponse.next();
     return NextResponse.redirect(LINK_HOSTS[linkHost].home, 302);
   }

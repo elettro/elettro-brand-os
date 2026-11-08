@@ -53,7 +53,7 @@ const AR_SECTION: NavSection = { label: "AR", items: [
 ] };
 
 // Pages that stand alone (sign-in errors) keep no frame.
-const BARE = ["/auth", "/welcome", "/mc/"];
+const BARE = ["/auth", "/welcome", "/mc/", "/bio", "/link-bio"];
 
 const BRANDS = [{ id: "all", name: "All brands", timezone: "" }, ...brandConfigs.map(({ id, name, timezone }) => ({ id, name, timezone }))];
 

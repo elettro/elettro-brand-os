@@ -13,7 +13,7 @@ When a worker claims a post (`claim-due-posts`), a link in it to one of the bran
 | Threads, Bluesky, Mastodon, Facebook, YouTube, LinkedIn (links in the caption) | replaced by `https://go.stashbox.ai/<code>` (only if the caption does not get longer) |
 | Pinterest (pin link), GMB (button) | keeps its own address, gains `?eo=<code>&utm_source=…&utm_medium=social&utm_campaign=<sector>&utm_content=<code>` (Pinterest and GMB distrust redirects; GMB's SHOP button must point at `/products/…`) |
 | X | nothing: X posts carry no URLs |
-| Instagram | nothing: caption links don't click (bio link page / promo codes are a later step) |
+| Instagram | nothing in the caption (it can't click); the **bio-link page** `go.stashbox.ai/bio` carries the tracked links (see below) |
 
 Then, per post:
 
@@ -67,6 +67,32 @@ totals. The Analytics page will read the same thing.
 6. **First real check**: when the next tracked Threads/Bluesky/Mastodon post goes out, open its short link on a phone,
    view the product, add to cart (no need to buy), then `{action:"stats", brandSlug:"stashbox", days:1}` should show
    1 click, 1 page_view, 1 product_view, 1 add_to_cart for that code.
+
+## Instagram bio-link page (2026-11-08, Stashbox first; not deployed: not verified)
+
+Instagram captions cannot hold clickable links, so the profile's one link points at `https://go.stashbox.ai/bio`. The page is plain
+server-rendered HTML (`apps/web/app/link-bio/page.tsx`, no client script, so it opens fast in Instagram's in-app browser). Middleware
+rewrites `/bio` on a link host that has `bio: true` in `LINK_HOSTS`; `/` on the host still goes to the store.
+
+- **Buttons**: set in `Brand.settings.linkTracking.bio.buttons` (`{key, label, url}`, https only, max 4; first one is the orange primary). Each gets
+  a `TrackedLink` with `scheduledPostId` NULL and `placement = "bio:<key>"` (a changed `url` updates the same code).
+- **Tiles**: the brand's newest **published Instagram posts** whose `scoreBreakdown.copy.primaryLink` is on one of its tracked origins, one tile per
+  product page (query string dropped; newest post wins), up to `bio.max` (default 6, 2-12). Each post gets one `TrackedLink` (destination
+  `instagram`), made the first time the page is built and reused forever, so a tile's clicks stay with its post and show in `{action:"stats"}`
+  next to every other network. A tap goes `/<code>` → `/api/l/<code>` → the product page with `?eo=<code>&utm_source=instagram…`, so the
+  Shopify pixel funnel works the same.
+- **Pictures**: `/api/bio-img/<code>` asks the dev-api (`bio-image`) for the Dropbox path of that tile's asset and fetches the Dropbox thumbnail with the
+  connect key. Only a code that belongs to a published Instagram post answers; anything else is 404. Cached a day in the browser.
+- **API**: `POST /links {action:"bio", brandSlug}` and `{action:"bio-image", code}` (connect key, same route as the rest).
+- **Cost**: a page view is one Lambda call plus a few reads; the first view of a new post adds one insert. No new AWS resource.
+- **Caption convention**: nothing writes "link in bio" into Instagram captions yet. That is a planner copy change (not built).
+
+Turn it on (after the dev-api deploy; re-running keeps the other settings, and keeps `bio` if you omit it):
+```
+aws lambda invoke --function-name elettro-brand-os-dev-api --cli-binary-format raw-in-base64-out --profile stashbox-audit --region us-east-1   --payload '{"action":"setup-link-tracking-20261107","brandSlug":"stashbox","host":"go.stashbox.ai","bio":{"enabled":true,"title":"Stashbox","tagline":"Live band, music and merch","buttons":[{"key":"shop","label":"Shop the Stashbox store","url":"https://stashbox.ai"}]}}' out.json && cat out.json
+```
+(dry run first, then add `"mode":"apply"`). Smoke: `curl -s https://go.stashbox.ai/bio` shows the page; tap a tile on a phone and check
+`{action:"events", code}`. SolarMeister gets the same page once its host exists (add `bio: true` to its `LINK_HOSTS` entry).
 
 ## SolarMeister later
 

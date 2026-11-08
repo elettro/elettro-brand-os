@@ -185,13 +185,15 @@ const cleanText = (v, max) => (typeof v === "string" && v.trim() ? v.trim().slic
 
 export async function handleLinks(body, connectDatabase, json) {
   const action = body?.action;
-  if (!["click", "event", "stats", "events"].includes(action)) return json(400, { ok: false, error: "Unknown action" });
+  if (!["click", "event", "stats", "events", "bio", "bio-image"].includes(action)) return json(400, { ok: false, error: "Unknown action" });
   let client;
   try {
     client = await connectDatabase();
     if (action === "click") return json(...await recordClick(client, body));
     if (action === "event") return json(...await recordEvent(client, body));
     if (action === "events") return json(...await linkEvents(client, body));
+    if (action === "bio") return json(...await bioPage(client, body));
+    if (action === "bio-image") return json(...await bioImage(client, body));
     return json(...await linkStats(client, body));
   } catch (error) {
     console.error("[links] failed", action, error);
@@ -272,6 +274,86 @@ export async function linkStats(client, body) {
   return [200, { ok: true, brand: slug, days, links: posts.length, totals, posts }];
 }
 
+// ---------- Instagram bio-link page (go.<brand host>/): tiles for the brand's latest Instagram posts ----------
+
+/** The page's setup from Brand.settings.linkTracking.bio, or null when it is off. */
+export function bioConfig(rawSettings) {
+  const b = rawSettings?.linkTracking?.bio;
+  if (!b || b.enabled !== true) return null;
+  const buttons = (Array.isArray(b.buttons) ? b.buttons : [])
+    .map((x) => ({ key: String(x?.key || "").toLowerCase().replace(/[^a-z0-9-]+/g, "-").slice(0, 30), label: cleanText(x?.label, 60), url: String(x?.url || "") }))
+    .filter((x) => x.key && x.label && /^https:\/\//.test(x.url) && originOf(x.url)).slice(0, 4);
+  return {
+    title: cleanText(b.title, 60), tagline: cleanText(b.tagline, 120), buttons,
+    max: Math.min(12, Math.max(2, Number(b.max) || 6)), heading: cleanText(b.heading, 60)
+  };
+}
+
+/** A code for (post, destination) or (button placement): reuse the one that exists, else make it. */
+async function codeFor(client, { brandId, postId = null, placement = null, destination, targetUrl, makeCode = newCode }) {
+  const existing = postId
+    ? (await client.query(`SELECT "code" FROM "TrackedLink" WHERE "scheduledPostId" = $1 ORDER BY "createdAt" LIMIT 1`, [postId])).rows[0]
+    : (await client.query(`SELECT "code", "targetUrl" FROM "TrackedLink" WHERE "brandId" = $1 AND "scheduledPostId" IS NULL AND "placement" = $2 LIMIT 1`, [brandId, placement])).rows[0];
+  if (existing) {
+    if (!postId && existing.targetUrl !== targetUrl) await client.query(`UPDATE "TrackedLink" SET "targetUrl" = $2 WHERE "code" = $1`, [existing.code, targetUrl]);
+    return existing.code;
+  }
+  for (let i = 0; i < 5; i++) {
+    const code = makeCode();
+    const r = await client.query(
+      `INSERT INTO "TrackedLink" ("code", "brandId", "scheduledPostId", "destination", "placement", "targetUrl", "mode")
+       VALUES ($1, $2, $3, $4, $5, $6, 'short') ON CONFLICT ("code") DO NOTHING`, [code, brandId, postId, destination, placement, targetUrl]);
+    if (r.rowCount === 1) return code;
+  }
+  throw new Error("could not make a link code");
+}
+
+/**
+ * What the bio page shows: the buttons set in Brand.settings.linkTracking.bio, then the brand's newest published Instagram
+ * posts that link to one of its own sites (one tile per target page, newest post wins). Every button and tile is a tracked
+ * short link, so a tap is counted per post exactly like a link in a caption. Public via the web app; stores no visitor data.
+ */
+export async function bioPage(client, body, { makeCode = newCode } = {}) {
+  const slug = String(body?.brandSlug || "");
+  if (!/^[a-z0-9-]{1,60}$/.test(slug)) return [400, { ok: false, error: "brandSlug is required" }];
+  const brand = (await client.query(`SELECT "id", "settings" FROM "Brand" WHERE "slug" = $1`, [slug])).rows[0];
+  const config = brand && trackingConfig(brand.settings);
+  const bio = brand && bioConfig(brand.settings);
+  if (!config || !bio) return [404, { ok: false, error: "No bio page for this brand" }];
+  const buttons = [];
+  for (const b of bio.buttons) {
+    buttons.push({ label: b.label, code: await codeFor(client, { brandId: brand.id, placement: `bio:${b.key}`, destination: "instagram", targetUrl: b.url, makeCode }) });
+  }
+  const rows = (await client.query(
+    `SELECT sp."id", sp."scoreBreakdown"->'copy'->>'primaryLink' AS "link", a."title", a."filename"
+     FROM "ScheduledPost" sp JOIN "Asset" a ON a."id" = sp."assetId"
+     WHERE sp."brandId" = $1 AND sp."destination" = 'instagram' AND sp."status" = 'published' AND a."kind" = 'image'
+       AND sp."scoreBreakdown"->'copy'->>'primaryLink' IS NOT NULL
+     ORDER BY sp."scheduledFor" DESC LIMIT 60`, [brand.id])).rows;
+  const seen = new Set();
+  const tiles = [];
+  for (const r of rows) {
+    if (tiles.length >= bio.max) break;
+    let target;
+    try { target = new URL(r.link); target.search = ""; target.hash = ""; } catch { continue; }
+    if (!config.origins.includes(target.origin.toLowerCase()) || seen.has(target.toString())) continue;
+    seen.add(target.toString());
+    const code = await codeFor(client, { brandId: brand.id, postId: r.id, destination: "instagram", targetUrl: String(r.link), makeCode });
+    tiles.push({ code, title: cleanText(r.title, 90) || String(r.filename || "").replace(/\.[a-z0-9]+$/i, "").replace(/[-_]+/g, " ").slice(0, 90) });
+  }
+  return [200, { ok: true, brand: slug, title: bio.title, tagline: bio.tagline, heading: bio.heading, buttons, tiles }];
+}
+
+/** The Dropbox path of a bio tile's picture, for the web app's thumbnail proxy. Only tiles of an Instagram post qualify. */
+export async function bioImage(client, body) {
+  const code = String(body?.code || "");
+  if (!CODE_PATTERN.test(code)) return [404, { ok: false, error: "Unknown tile" }];
+  const row = (await client.query(
+    `SELECT a."sourcePath" FROM "TrackedLink" tl JOIN "ScheduledPost" sp ON sp."id" = tl."scheduledPostId" JOIN "Asset" a ON a."id" = sp."assetId"
+     WHERE tl."code" = $1 AND tl."destination" = 'instagram' AND a."kind" = 'image'`, [code])).rows[0];
+  return row?.sourcePath ? [200, { ok: true, path: row.sourcePath }] : [404, { ok: false, error: "No picture" }];
+}
+
 // ---------- database setup (IAM only): setup-link-tracking-20261107 ----------
 
 export const LINK_TABLES_SQL = [
@@ -317,7 +399,8 @@ export async function runLinkTrackingSetup(event, connectDatabase, json) {
   const host = event.host ? String(event.host).toLowerCase() : null;
   if (slug && (!host || !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(host))) return json(400, { ok: false, error: "host (e.g. go.stashbox.ai) is required with brandSlug" });
   const origins = Array.isArray(event.origins) ? event.origins.map(originOf).filter(Boolean) : null;
-  const setting = slug ? { enabled: event.enabled !== false, host, ...(origins?.length ? { origins } : {}) } : null;
+  const bioSetting = event.bio && typeof event.bio === "object" ? event.bio : undefined;
+  const setting = slug ? { enabled: event.enabled !== false, host, ...(origins?.length ? { origins } : {}), ...(bioSetting ? { bio: bioSetting } : {}) } : null;
   let client;
   try {
     client = await connectDatabase();
@@ -326,6 +409,8 @@ export async function runLinkTrackingSetup(event, connectDatabase, json) {
     const brand = slug ? (await client.query(`SELECT "id", "settings" FROM "Brand" WHERE "slug" = $1`, [slug])).rows[0] : null;
     if (slug && !brand) return json(404, { ok: false, error: `No brand ${slug}` });
     const before = brand ? brand.settings?.linkTracking ?? null : undefined;
+    // A re-run without `bio` keeps the page's setup (the setting is replaced as a whole).
+    if (setting && !setting.bio && before?.bio) setting.bio = before.bio;
     const effective = brand ? trackingConfig({ ...brand.settings, linkTracking: setting }) : undefined;
     if (mode !== "apply") return json(200, { ok: true, mode, note: "Dry run; nothing changed", existing, statements: LINK_TABLES_SQL.length, brand: slug, before, after: setting, effective });
     await client.query("BEGIN");
