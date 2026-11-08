@@ -38,6 +38,9 @@ export default async function LinkBioPage() {
       if (data?.ok) bio = data;
     } catch (error) { console.error("Bio page failed", error instanceof Error ? error.name : "UnknownError"); }
   }
+  // The grid is two columns: show at most 4 tiles and never an odd one out (3 tiles show 2 until a 4th product has a post).
+  const tiles = (bio?.tiles || []).slice(0, 4);
+  tiles.length -= tiles.length % 2;
   const song = bio?.songSource && entry ? await songOfTheDay(entry.brand, bio.songSource) : null;
   if (!bio || !entry) {
     return <main className="bio"><p className="bio-tagline">Nothing here yet.</p><style>{css}</style></main>;
@@ -67,9 +70,9 @@ export default async function LinkBioPage() {
           </a>
         </>
       ) : null}
-      {bio.tiles?.length ? <h2>{bio.heading || "From our latest posts"}</h2> : null}
+      {tiles.length ? <h2>{bio.heading || "From our latest posts"}</h2> : null}
       <div className="bio-grid">
-        {(bio.tiles || []).map((t) => (
+        {tiles.map((t) => (
           <a key={t.code} className="bio-tile" href={`/${t.code}`}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={`/api/bio-img/${t.code}`} alt={t.title} loading="lazy" width={400} height={400} />
