@@ -9,6 +9,8 @@
  * Reached through the planner-review route as action "analytics" (brand-scoped, connect key), so no new API route is needed.
  */
 
+import { addDaysToYmd, eligibleOn, resolvePlannerSettings, sectorsOf, ymdInTimeZone } from "./planner-v2.mjs";
+
 export const MAIN_METRIC = {
   youtube: "views", instagram: "views", facebook: "views", threads: "views",
   pinterest: "views", linkedin: "views", bluesky: "likes", mastodon: "likes"
@@ -103,7 +105,7 @@ export function summarize(posts, readiness, { timeZone = "America/New_York", sor
     const r = ready.get(destination) || { account: null, onTime7d: 0 };
     networks.push({
       destination, mainLabel: MAIN_LABEL[destination] || "views",
-      posts: list.length, stories: list.length - measurable.length, measured: measured.length,
+      posts: list.length, stories: list.length - measurable.length, measured: measured.length, waiting: measurable.length - measured.length,
       total: sum(MAIN_METRIC[destination] || "views"), typical: median(measured.map((p) => p.main)),
       likes: has("likes") ? sum("likes") : null, comments: has("comments") ? sum("comments") : null, shares: has("shares") ? sum("shares") : null,
       clicks: has("clicks") ? sum("clicks") : null,
@@ -159,9 +161,85 @@ export async function brandAnalytics(client, brand, body = {}, now = new Date())
      LEFT JOIN "PostMetric" pm ON pm."ledgerId" = pl."id" AND pm."ageBucket" = '7d'
      WHERE sa."brandId" = $1 AND sa."status" = 'active'
      GROUP BY sa."id", sa."destination", sa."accountName"`, [brand.id])).rows;
-  const summary = summarize(rows.map(shapePost), readiness, { timeZone: brand.timezone || "America/New_York", sort, top: body.summary ? 1 : 10 });
+  const lastSnapshots = Object.fromEntries((await client.query(
+    `SELECT pl."destination", MAX(pm."capturedAt") AS "at" FROM "PostMetric" pm JOIN "PublicationLedger" pl ON pl."id" = pm."ledgerId"
+     WHERE pl."brandId" = $1 GROUP BY pl."destination"`, [brand.id])).rows.map((r) => [r.destination, new Date(r.at).toISOString()]));
+  const shaped = rows.map(shapePost);
+  const summary = summarize(shaped, readiness, { timeZone: brand.timezone || "America/New_York", sort, top: body.summary ? 1 : 10 });
+  for (const n of summary.networks) n.lastSnapshotAt = lastSnapshots[n.destination] || null;
   if (body.summary) {
     for (const n of summary.networks) { delete n.pillars; delete n.times; }
+    return { code: 200, body: { ok: true, brand: brand.slug, days, sort, generatedAt: now.toISOString(), lastSnapshots, ...summary } };
   }
-  return { code: 200, body: { ok: true, brand: brand.slug, days, sort, generatedAt: now.toISOString(), ...summary } };
+  const settings = resolvePlannerSettings(brand.settings);
+  const timeZone = brand.timezone || "America/New_York";
+  const assets = (await client.query(
+    `SELECT "id","tags","contentGroup","approvalStatus","eligibilityType","eligibleFrom","eligibleUntil","annualFromMmdd","annualUntilMmdd"
+     FROM "Asset" WHERE "brandId" = $1 AND "ingestStatus" = 'ready' AND "retiredAt" IS NULL`, [brand.id])).rows;
+  const lastUsed = new Map((await client.query(
+    `SELECT "assetId", MAX("publishedAt") AS "at" FROM "PublicationLedger" WHERE "brandId" = $1 AND "assetId" IS NOT NULL GROUP BY "assetId"`,
+    [brand.id])).rows.map((r) => [r.assetId, new Date(r.at).toISOString().slice(0, 10)]));
+  return { code: 200, body: {
+    ok: true, brand: brand.slug, days, sort, generatedAt: now.toISOString(), lastSnapshots, ...summary,
+    pillarMix: pillarMix(settings.sectors, shaped),
+    pool: poolHealth(assets, lastUsed, settings, ymdInTimeZone(now, timeZone))
+  } };
+}
+
+/** Planned share per pillar (planner settings) next to the share actually published in the period (posts the planner placed in a pillar). */
+export function pillarMix(sectors, posts) {
+  const placed = posts.filter((p) => p.pillar && !p.story);
+  const counts = new Map();
+  for (const p of placed) counts.set(p.pillar, (counts.get(p.pillar) || 0) + 1);
+  const total = placed.length;
+  const rows = (sectors || []).map((sec) => ({
+    slug: sec.slug, label: pillarLabel(sec.slug), target: Math.round((Number(sec.share) || 0) * 100),
+    actual: total ? Math.round(((counts.get(sec.slug) || 0) / total) * 100) : null, posts: counts.get(sec.slug) || 0
+  }));
+  // A pillar posts were placed in that is no longer in the settings still shows, with no target.
+  for (const [slug, n] of counts) if (!rows.some((r) => r.slug === slug)) rows.push({ slug, label: pillarLabel(slug), target: null, actual: Math.round((n / total) * 100), posts: n });
+  return { posts: total, rows };
+}
+
+/** Next date (on or after today, within `days`) an asset becomes eligible, or null when it already is or never will be in that time. */
+export function opensWithin(asset, today, days) {
+  if (eligibleOn(asset, today)) return null;
+  for (let i = 1; i <= days; i++) {
+    const ymd = addDaysToYmd(today, i);
+    if (eligibleOn(asset, ymd)) return ymd;
+  }
+  return null;
+}
+
+/**
+ * What the planner can use, per pillar: ready now, resting (used within the asset cooldown) and when the first resting one is free again.
+ * "Low" when fewer ready than max(minPoolForSector, 5). Plus seasonal windows opening in the next `days` days and how many of their
+ * assets still wait for approval. From the planner's own data; no analytics involved.
+ */
+export function poolHealth(assets, lastUsed, settings, today, days = 45) {
+  const cooldown = Number(settings.cooldowns?.assetDays) || 30;
+  const low = Math.max(Number(settings.minPoolForSector) || 0, 5);
+  const bySector = new Map((settings.sectors || []).map((sec) => [sec.slug, { ready: 0, resting: 0, nextFree: null }]));
+  const windows = new Map();
+  for (const a of assets) {
+    if (a.approvalStatus === "approved" && eligibleOn(a, today)) {
+      const used = lastUsed.get(a.id);
+      const free = used ? addDaysToYmd(String(used).slice(0, 10), cooldown) : null;
+      for (const slug of sectorsOf(a, settings)) {
+        const row = bySector.get(slug);
+        if (!row) continue;
+        if (free && free > today) { row.resting += 1; if (!row.nextFree || free < row.nextFree) row.nextFree = free; } else row.ready += 1;
+      }
+    }
+    const opens = opensWithin(a, today, days);
+    if (opens) {
+      if (!windows.has(opens)) windows.set(opens, { opens, approved: 0, waiting: 0 });
+      windows.get(opens)[a.approvalStatus === "approved" ? "approved" : "waiting"] += 1;
+    }
+  }
+  return {
+    cooldownDays: cooldown,
+    pillars: [...bySector.entries()].map(([slug, r]) => ({ slug, label: pillarLabel(slug), ...r, low: r.ready < low })),
+    windows: [...windows.values()].sort((a, b) => a.opens.localeCompare(b.opens))
+  };
 }

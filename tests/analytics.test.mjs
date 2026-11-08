@@ -83,3 +83,57 @@ test("the review route answers action analytics only with the connect key", asyn
   const denied = await handlePlannerReview({ headers: {} }, { brand: "stashbox", action: "analytics" }, async () => { throw new Error("no"); }, json);
   assert.equal(denied.statusCode, 401);
 });
+
+test("pillar mix: planned share from the settings next to the share actually published; an unlisted pillar still shows", async () => {
+  const { pillarMix } = await import("../services/dev-api-lambda/analytics.mjs");
+  const sectors = [{ slug: "live-shows", share: 0.28 }, { slug: "merch", share: 0.2 }];
+  const posts = [
+    shapePost(row({ id: "1", sector: "live-shows" })), shapePost(row({ id: "2", sector: "live-shows" })),
+    shapePost(row({ id: "3", sector: "old-pillar" })), shapePost(row({ id: "4", sector: null })),
+    shapePost(row({ id: "5", sector: "merch", placement: "story" }))
+  ];
+  const mix = pillarMix(sectors, posts);
+  assert.equal(mix.posts, 3);
+  assert.deepEqual(mix.rows.map((r) => [r.slug, r.target, r.actual, r.posts]), [["live-shows", 28, 67, 2], ["merch", 20, 0, 0], ["old-pillar", null, 33, 1]]);
+  assert.deepEqual(pillarMix(sectors, []).rows[0].actual, null);
+});
+
+test("pool health: ready vs resting per pillar, running low, and seasonal windows with assets still waiting for approval", async () => {
+  const { poolHealth, opensWithin } = await import("../services/dev-api-lambda/analytics.mjs");
+  const settings = { cooldowns: { assetDays: 30 }, minPoolForSector: 3, sectors: [{ slug: "live-shows", match: { tagsAny: ["live"] } }, { slug: "merch", match: { tagsAny: ["merch"] } }] };
+  const a = (id, tags, over = {}) => ({ id, tags, approvalStatus: "approved", eligibilityType: "always", ...over });
+  const assets = [
+    ...Array.from({ length: 6 }, (_, i) => a(`l${i}`, ["live"])),
+    a("m1", ["merch"]), a("m2", ["merch"]),
+    a("x1", ["merch"], { eligibilityType: "annual", annualFromMmdd: 1201, annualUntilMmdd: 1226 }),
+    a("x2", ["merch"], { eligibilityType: "annual", annualFromMmdd: 1201, annualUntilMmdd: 1226, approvalStatus: "pending" })
+  ];
+  const lastUsed = new Map([["l0", "2026-11-01"], ["l1", "2026-10-01"]]);
+  const pool = poolHealth(assets, lastUsed, settings, "2026-11-08");
+  const live = pool.pillars.find((p) => p.slug === "live-shows");
+  assert.deepEqual([live.ready, live.resting, live.nextFree, live.low], [5, 1, "2026-12-01", false]);
+  const merch = pool.pillars.find((p) => p.slug === "merch");
+  assert.deepEqual([merch.ready, merch.low], [2, true]);
+  assert.deepEqual(pool.windows, [{ opens: "2026-12-01", approved: 1, waiting: 1 }]);
+  assert.equal(opensWithin(assets[0], "2026-11-08", 45), null);
+  assert.equal(opensWithin(assets[8], "2026-10-01", 45), null);
+});
+
+test("brandAnalytics detail adds last snapshot times, pillar mix and pool; summary mode keeps last snapshots only", async () => {
+  const client = { query: async (sql) => {
+    if (/MAX\(pm\."capturedAt"\)/.test(sql)) return { rows: [{ destination: "youtube", at: "2026-11-08T11:45:00Z" }] };
+    if (/FROM "PublicationLedger" pl/.test(sql) && !/COUNT/.test(sql)) return { rows: [row()] };
+    return { rows: [] };
+  } };
+  const brand = { id: "b1", slug: "stashbox", timezone: "America/New_York", settings: { planner: { sectors: [{ slug: "live-shows", share: 0.5, match: { tagsAny: ["live"] } }] } } };
+  const now = new Date("2026-11-08T12:00:00Z");
+  const full = await brandAnalytics(client, brand, {}, now);
+  assert.equal(full.body.lastSnapshots.youtube, "2026-11-08T11:45:00.000Z");
+  assert.equal(full.body.networks[0].lastSnapshotAt, "2026-11-08T11:45:00.000Z");
+  assert.equal(full.body.networks[0].waiting, 0);
+  assert.equal(full.body.pillarMix.rows[0].target, 50);
+  assert.ok(Array.isArray(full.body.pool.pillars));
+  const summary = await brandAnalytics(client, brand, { summary: true }, now);
+  assert.equal(summary.body.pool, undefined);
+  assert.equal(summary.body.lastSnapshots.youtube, "2026-11-08T11:45:00.000Z");
+});

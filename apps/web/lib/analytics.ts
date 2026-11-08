@@ -9,7 +9,7 @@ export type AnalyticsPost = {
 };
 
 export type AnalyticsNetwork = {
-  destination: string; mainLabel: string; posts: number; stories: number; measured: number; total: number; typical: number | null;
+  destination: string; mainLabel: string; posts: number; stories: number; measured: number; waiting: number; total: number; typical: number | null; lastSnapshotAt: string | null;
   likes: number | null; comments: number | null; shares: number | null; clicks: number | null;
   ready: { account: string | null; onTime7d: number; of: number };
   top: AnalyticsPost[];
@@ -21,6 +21,9 @@ export type BrandAnalytics = {
   ok: boolean; error?: string; brand: string; days: number; sort: "main" | "clicks"; generatedAt: string;
   totals: { posts: number; measured: number; waiting: number; clicks: number; readyAccounts: number; accounts: number; closest: { destination: string; accountName: string; onTime7d: number } | null };
   networks: AnalyticsNetwork[];
+  lastSnapshots: Record<string, string>;
+  pillarMix?: { posts: number; rows: Array<{ slug: string; label: string; target: number | null; actual: number | null; posts: number }> };
+  pool?: { cooldownDays: number; pillars: Array<{ slug: string; label: string; ready: number; resting: number; nextFree: string | null; low: boolean }>; windows: Array<{ opens: string; approved: number; waiting: number }> };
 };
 
 // The brands the page covers: the active brands with publishing (Google Review is the API reviewer's demo brand; Dean Palermo, Rompe and Reggae.Land are inactive).
@@ -53,4 +56,28 @@ export function measuredLabel(p: AnalyticsPost) {
   const h = p.takenAfterHours;
   const age = h < 1 ? "under an hour" : h < 48 ? `${Math.round(h)} hour${Math.round(h) === 1 ? "" : "s"}` : `${Math.round(h / 24)} days`;
   return p.onTime ? `${age} · on time` : `caught up · ${age}`;
+}
+
+// What each network gives us, for the "Stats coming in" panel. Checked against the networks on 2026-11-08.
+export const COVERAGE: Array<{ id: string; gives: string; collected: boolean; why?: string }> = [
+  { id: "youtube", gives: "views, likes, comments (public counts), watch time, average view, shares, new subscribers", collected: true },
+  { id: "instagram", gives: "views, reach, likes, comments, shares, saves; Reels watch time", collected: true },
+  { id: "facebook", gives: "views, reach, reactions; photo posts give no comments or shares", collected: true },
+  { id: "threads", gives: "views, likes, replies, reposts + quotes", collected: true },
+  { id: "pinterest", gives: "impressions, saves, link clicks; video watch time", collected: true },
+  { id: "linkedin", gives: "company pages: impressions, likes, comments, shares, clicks", collected: true },
+  { id: "bluesky", gives: "likes, replies, reposts (no views exist)", collected: true },
+  { id: "mastodon", gives: "favourites, replies, boosts (no views exist)", collected: true },
+  { id: "tiktok", gives: "views, likes, comments, shares", collected: false, why: "needs a second app review" },
+  { id: "x", gives: "impressions, engagements", collected: false, why: "off: every read costs money" },
+  { id: "gmb", gives: "no per-post numbers exist", collected: false, why: "not possible" }
+];
+
+/** "12 min ago", "3 h ago", "2 days ago". */
+export function ago(iso: string | null, now = Date.now()) {
+  if (!iso) return null;
+  const min = Math.max(0, Math.round((now - Date.parse(iso)) / 60000));
+  if (min < 60) return `${min} min ago`;
+  if (min < 48 * 60) return `${Math.round(min / 60)} h ago`;
+  return `${Math.round(min / 1440)} days ago`;
 }
