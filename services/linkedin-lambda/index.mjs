@@ -1,5 +1,6 @@
 import { SecretsManagerClient, GetSecretValueCommand, ListSecretsCommand, PutSecretValueCommand } from "@aws-sdk/client-secrets-manager";
 import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
+import { collectForPage } from "./metrics.mjs";
 
 // LinkedIn publishing worker for Elettro OS. Runs outside the VPC (it needs api.linkedin.com) and is
 // only invoked directly through IAM: no HTTP route points at it. Way in:
@@ -454,6 +455,40 @@ export async function publish(record, post, deps = {}) {
   return { postId: urn, permalink: `https://www.linkedin.com/feed/update/${urn}/` };
 }
 
+// Post metrics (docs/ANALYTICS-SPEC.md phase A): lifetime organic statistics for every company-page post that reached 1h / 24h / 7d / 30d.
+// Read only. The due list holds company-page posts only; a personal profile has no statistics API we can use.
+const METRICS_PER_TICK = 20;
+
+/** `dryRun` collects and returns the numbers without saving anything. */
+export async function collectMetrics({ dryRun = false, limit = METRICS_PER_TICK } = {}, deps = {}) {
+  const { callApi = api, find = account, call: callOverride } = deps;
+  const listed = await callApi({ action: "list-post-metrics-due-20261107", destination: "linkedin", limit });
+  if (!listed.ok) throw new Error(`list-post-metrics-due failed: ${listed.error}`);
+  const out = { ok: true, due: listed.due.length, saved: 0, missing: [], failures: [], samples: [] };
+  const byPage = new Map();
+  for (const due of listed.due) byPage.set(due.channelId, [...(byPage.get(due.channelId) || []), due]);
+  const snapshots = [];
+  for (const [orgUrn, items] of byPage) {
+    try {
+      const record = await find(orgUrn);
+      const call = callOverride || (async (path) => (await linkedin(record.accessToken, "GET", path, null, "share statistics")).body);
+      const page = await collectForPage(orgUrn, items, call);
+      snapshots.push(...page.snapshots);
+      out.missing.push(...page.missing);
+    } catch (error) {
+      console.error("Metrics failed:", orgUrn, error?.message);
+      out.failures.push({ page: orgUrn, error: error?.message || "failed" });
+    }
+  }
+  if (dryRun) { out.samples = snapshots.slice(0, 5); return out; }
+  for (let i = 0; i < snapshots.length; i += 100) {
+    const recorded = await callApi({ action: "record-post-metrics-20261107", items: snapshots.slice(i, i + 100) });
+    if (!recorded.ok) throw new Error(`record-post-metrics failed: ${recorded.error}`);
+    out.saved += recorded.saved;
+  }
+  return out;
+}
+
 export async function publishingTick(deps = {}) {
   const { callApi = api, publishOne = async (post) => publish(await account(post.channelId), post), loginOk = hasValidLogin } = deps;
   // An expired login means every post that comes due would fail; leave them approved until it is reconnected.
@@ -484,11 +519,18 @@ export async function handler(event = {}) {
   if (event.source === "aws.events" || event.action === "tick") {
     try {
       const tick = await publishingTick();
+      // Never lets a metrics problem (table not ready, a login without statistics access) hold back publishing.
+      tick.metrics = await collectMetrics().catch((error) => ({ ok: false, error: error?.message || "metrics failed" }));
       console.log("LinkedIn tick", JSON.stringify(tick));
       return result(200, { ok: !tick.skipped, ...tick });
     } catch (error) {
       console.error("LinkedIn tick failed:", error?.message);
       return result(502, { ok: false, error: error?.message || "Tick failed" });
+    }
+  }
+  if (event.action === "metrics") {
+    try { return result(200, await collectMetrics({ dryRun: event.mode !== "apply", limit: Number(event.limit) || METRICS_PER_TICK })); } catch (error) {
+      return result(502, { ok: false, error: error?.message || "Metrics failed" });
     }
   }
   return result(400, { ok: false, error: "Unknown action" });
