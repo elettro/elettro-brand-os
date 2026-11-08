@@ -135,7 +135,9 @@ export async function runListPostMetricsDue(event, connectDatabase, json, now = 
          AND pl."publishedAt" >= $2::timestamp AND b."slug" <> ALL($3::text[]) AND COALESCE(pl."placement"::text, '') <> ALL($4::text[])
          AND ($1 <> 'linkedin' OR sa."externalAccountId" LIKE 'urn:li:organization:%')
        GROUP BY pl."id", sa."externalAccountId", b."slug"
-       ORDER BY pl."publishedAt"`, [destination, new Date(now - MAX_AGE_MS).toISOString(), EXCLUDED_BRANDS, SKIPPED_PLACEMENTS])).rows;
+       ORDER BY pl."publishedAt" DESC`, [destination, new Date(now - MAX_AGE_MS).toISOString(), EXCLUDED_BRANDS, SKIPPED_PLACEMENTS])).rows;
+    // Newest first: a post the network never answers for (deleted, or one LinkedIn stopped returning) stays due forever, and must not use up the
+    // limit ahead of the posts that can be measured.
     const due = [];
     for (const row of rows) {
       const buckets = dueBuckets(row.publishedAt, row.captured, now);
