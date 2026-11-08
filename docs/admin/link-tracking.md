@@ -68,7 +68,11 @@ totals. The Analytics page will read the same thing.
    view the product, add to cart (no need to buy), then `{action:"stats", brandSlug:"stashbox", days:1}` should show
    1 click, 1 page_view, 1 product_view, 1 add_to_cart for that code.
 
-## Instagram bio-link page (2026-11-08, Stashbox first; not deployed: not verified)
+## Short-link host: go.stashbox.com (2026-11-08)
+
+Dean wants the public links on `stashbox.com`, not `.ai`. `go.stashbox.com` is a second Amplify domain on the same app (only the `go` subdomain, branch `develop`, manual configuration; DNS is at Namecheap like `stashbox.ai`: two records, the ACM validation CNAME and `go` → the CloudFront name Amplify shows) and a second `LINK_HOSTS` entry (unknown codes go to `https://stashbox.com`). `Brand.settings.linkTracking.host` is a single value: set it to `go.stashbox.com` with the setup action so **new** caption links use it. `go.stashbox.ai` stays in `LINK_HOSTS` and on Amplify: every link already posted, and the Shopify pixel's `ENDPOINT` (invisible to visitors), keep working. The bio page lives on both hosts; the Instagram link is `https://go.stashbox.com/bio`.
+
+## Instagram bio-link page (2026-11-08, Stashbox first)
 
 Instagram captions cannot hold clickable links, so the profile's one link points at `https://go.stashbox.ai/bio`. The page is plain
 server-rendered HTML (`apps/web/app/link-bio/page.tsx`, no client script, so it opens fast in Instagram's in-app browser). Middleware
