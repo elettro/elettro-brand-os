@@ -74,8 +74,9 @@ Instagram captions cannot hold clickable links, so the profile's one link points
 server-rendered HTML (`apps/web/app/link-bio/page.tsx`, no client script, so it opens fast in Instagram's in-app browser). Middleware
 rewrites `/bio` on a link host that has `bio: true` in `LINK_HOSTS`; `/` on the host still goes to the store.
 
-- **Buttons**: set in `Brand.settings.linkTracking.bio.buttons` (`{key, label, url}`, https only, max 4; first one is the orange primary). Each gets
+- **Buttons**: set in `Brand.settings.linkTracking.bio.buttons` (`{key, label, url}`, https only, max 8, any site; first one is the orange primary). Each gets
   a `TrackedLink` with `scheduledPostId` NULL and `placement = "bio:<key>"` (a changed `url` updates the same code).
+- **Featured product** (`bio.featuredProduct: {enabled, label}`): one Stashbox product per day (same all day, new tomorrow), chosen from approved, ready image assets tagged `product:<handle>`, linking straight to `<merchStore>/products/<handle>` with its own code (placement `bio:featured:<handle>`), so each product's taps are counted separately. Pictures tagged `blank`, `plain`, `back`, `back-view`, `mockup-blank` or `no-design` are never used (no blank garments); **check the first pick by eye before launch** (the tags may not cover every blank photo).
 - **Tiles**: the brand's newest **published Instagram posts** whose `scoreBreakdown.copy.primaryLink` is on one of its tracked origins, one tile per
   product page (query string dropped; newest post wins), up to `bio.max` (default 6, 2-12). Each post gets one `TrackedLink` (destination
   `instagram`), made the first time the page is built and reused forever, so a tile's clicks stay with its post and show in `{action:"stats"}`
@@ -89,7 +90,7 @@ rewrites `/bio` on a link host that has `bio: true` in `LINK_HOSTS`; `/` on the 
 
 Turn it on (after the dev-api deploy; re-running keeps the other settings, and keeps `bio` if you omit it):
 ```
-aws lambda invoke --function-name elettro-brand-os-dev-api --cli-binary-format raw-in-base64-out --profile stashbox-audit --region us-east-1   --payload '{"action":"setup-link-tracking-20261107","brandSlug":"stashbox","host":"go.stashbox.ai","bio":{"enabled":true,"title":"Stashbox","tagline":"Live band, music and merch","buttons":[{"key":"shop","label":"Shop the Stashbox store","url":"https://stashbox.ai"}]}}' out.json && cat out.json
+aws lambda invoke --function-name elettro-brand-os-dev-api --cli-binary-format raw-in-base64-out --profile stashbox-audit --region us-east-1   --payload '{"action":"setup-link-tracking-20261107","brandSlug":"stashbox","host":"go.stashbox.ai","bio":{"enabled":true,"title":"Stashbox","tagline":"Live band, music and merch","featuredProduct":{"enabled":true,"label":"Featured product"},"buttons":[{"key":"radio","label":"Stream Stashbox Music Videos","url":"https://stashbox.com/radio"},{"key":"youtube","label":"Watch Stashbox on YouTube","url":"https://youtube.com/@stashboxband"},{"key":"booking","label":"Book a show","url":"https://stashbox.com/booking"},{"key":"merch","label":"Shop Merch","url":"https://stashbox.ai"},{"key":"elettro","label":"Websites & Tech by Elettro","url":"https://elettro.com"},{"key":"os","label":"OS.Elettro.com: Social Media Dream Solution","url":"https://os.elettro.com"},{"key":"ar","label":"Stashbox AR","url":"https://elettro.com/ar"}]}}' out.json && cat out.json
 ```
 (dry run first, then add `"mode":"apply"`). Smoke: `curl -s https://go.stashbox.ai/bio` shows the page; tap a tile on a phone and check
 `{action:"events", code}`. SolarMeister gets the same page once its host exists (add `bio: true` to its `LINK_HOSTS` entry).
