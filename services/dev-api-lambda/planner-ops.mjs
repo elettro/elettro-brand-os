@@ -4,6 +4,7 @@
 //     planner-tick     plan the next unplanned week, or a week the page asked to re-plan (one per call)
 //     claim-due-posts  hand out approved posts whose time has come, marked 'publishing'
 //     finish-post      record the outcome: 'published' + a PublicationLedger row, or 'failed'
+import { weeklyChangesCheck } from "./planner-changes.mjs";
 import { withClient, loadBrand, weekWindow, approvePlannerWeek } from "./planner-v2-db.mjs";
 import { addDaysToYmd, brandLanguage, isSynthetic, languageOf, resolvePlannerSettings, ymdInTimeZone } from "./planner-v2.mjs";
 import { dashboardStats } from "./dashboard-stats.mjs";
@@ -197,6 +198,13 @@ export function weekToPlan(brand, plannedByDestination) {
 
 export async function plannerTick(connectDatabase, json, deps = {}) {
   return withClient(connectDatabase, json, "planner-tick", async (client) => {
+    // Sunday-night results check (planner-changes.mjs). Never allowed to stop planning; a missing table just means not set up yet.
+    try {
+      const checked = await (deps.weeklyCheck || weeklyChangesCheck)(client, deps.now || new Date());
+      if (checked.length) console.log("[planner-tick] weekly changes check", JSON.stringify(checked));
+    } catch (error) {
+      console.error("[planner-tick] weekly changes check failed", error?.message);
+    }
     const brands = (await client.query(
       `SELECT DISTINCT b."slug" FROM "Brand" b
        JOIN "SocialAccount" sa ON sa."brandId" = b."id" AND sa."status" = 'active'

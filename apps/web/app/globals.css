@@ -1346,3 +1346,4 @@ code {
 .an-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .an-note { margin: 0; color: var(--accent); }
 .an-list li > .an-change { align-items: flex-start; }
+.an-good { color: var(--success); font-weight: 600; }
