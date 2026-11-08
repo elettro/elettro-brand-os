@@ -25,6 +25,7 @@
 import { queueCustomPost } from "./linkedin-custom.mjs";
 import { calendarMonth, replanSlot } from "./calendar.mjs";
 import { brandAnalytics } from "./analytics.mjs";
+import { whyOf } from "./post-why.mjs";
 import { holidayList, holidayEdit, holidaySkip, holidaySwap, holidayApprove } from "./holidays.mjs";
 import { timingSafeEqual } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -125,6 +126,7 @@ async function listPosts(client, brand, body) {
       sector: p.scoreBreakdown?.sector || null, copyStatus: p.scoreBreakdown?.copy?.status || null,
       tiktok: p.scoreBreakdown?.tiktok || null,
       custom: p.scoreBreakdown?.custom || null,
+      why: whyOf(p.scoreBreakdown),
       failureReason: p.status === "failed" ? p.scoreBreakdown?.publish?.error || null : null,
       captionStale: Boolean(p.scoreBreakdown?.swappedFrom) && !p.scoreBreakdown?.captionEditedAfterSwap,
       asset: assetCard({ id: p.assetId, filename: p.filename, kind: p.kind, sourcePath: p.sourcePath, title: p.title, durationMs: p.durationMs }),

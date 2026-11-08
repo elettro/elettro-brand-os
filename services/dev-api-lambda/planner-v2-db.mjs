@@ -351,7 +351,7 @@ async function planWeekInner(event, connectDatabase, json, { modelId = process.e
           [brand.id, slot.socialAccountId, slot.assetId, slot.placement, slot.scheduledFor,
            slot.curatorReason ? `${slot.curatorReason} (${slot.reason})` : slot.reason,
            JSON.stringify({
-             plannerVersion: PLANNER_VERSION, weekStart, sector: slot.sector, sectorFallbackFrom: slot.sectorFallbackFrom,
+             plannerVersion: PLANNER_VERSION, weightsVersion: "v1", weekStart, sector: slot.sector, sectorFallbackFrom: slot.sectorFallbackFrom,
              exploration: slot.exploration, songKey: slot.songKey, syntheticDisclosure: slot.synthetic,
              selectedBy: slot.selectedBy, curatorOverridden: slot.curatorOverridden, score: slot.score, breakdown: slot.breakdown,
              candidateIds: (slot.candidates || []).map((c) => c.assetId),

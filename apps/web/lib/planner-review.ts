@@ -31,11 +31,16 @@ export type TiktokCreator = {
 export type ReviewAsset = { id: string; filename: string; kind: string; sourcePath: string | null; title: string | null; durationMs: number | null };
 // A hand-written LinkedIn text, link or poll post (the details the writer saved; a poll or link has no media of its own).
 export type ReviewCustom = { kind: "text" | "link" | "poll"; question?: string; options?: string[]; duration?: string; url?: string; title?: string; description?: string };
+// The planner's stored reasons for a pick (services/dev-api-lambda/post-why.mjs); null for posts the planner did not pick.
+export type PostWhy = {
+  tags: string[]; parts: Array<{ key: string; label: string; points: number }>; score: number | null; sector: string | null;
+  exploration: boolean; selectedBy: string; curatorOverridden: boolean; plannerVersion: string | null; weightsVersion: string; summary: string;
+};
 export type ReviewPost = {
   id: string; destination: string; accountName: string; placement: string; scheduledFor: string; status: string;
   title: string | null; caption: string | null; hashtags: string[]; reason: string | null; sector: string | null;
   copyStatus: string | null; captionStale: boolean; asset: ReviewAsset; candidates: ReviewAsset[];
-  tiktok: TiktokSettings | null; failureReason: string | null; custom?: ReviewCustom | null;
+  tiktok: TiktokSettings | null; failureReason: string | null; custom?: ReviewCustom | null; why?: PostWhy | null;
 };
 export type ReviewAccount = { socialAccountId: string; destination: string; accountName: string; externalAccountId: string | null; publishingMode: string; placement: string | null; postsPerWeek: number | null; active: boolean | null };
 // live: approved posts auto-publish · planning: planned, publisher not built · review: waiting on the network's app review
@@ -71,7 +76,7 @@ export type CalendarPost = {
   status: "approved" | "paused" | "queued" | "publishing" | "processing" | "published";
   destination: string; accountName: string; placement: string; at: string;
   title: string | null; caption: string | null; hashtags: string[]; asset: ReviewAsset; externalUrl: string | null;
-  carousel: boolean; custom: ReviewCustom | null; tiktok: TiktokSettings | null;
+  carousel: boolean; custom: ReviewCustom | null; tiktok: TiktokSettings | null; why?: PostWhy | null;
   passedOver: boolean; editable: boolean;
   // Latest stats snapshot (YouTube so far): taken 1h / 24h / 7d / 30d after publishing, only numbers that exist. null until one exists.
   stats: CalendarStats | null;

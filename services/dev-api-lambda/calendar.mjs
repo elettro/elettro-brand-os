@@ -12,6 +12,7 @@
  * Remove (status "removed"), Pause ("paused"), Resume ("approved"), Edit (edit + reschedule) reuse the
  * Review actions; the publisher only claims "approved" posts, so paused and removed posts never go out.
  */
+import { whyOf } from "./post-why.mjs";
 import { addDaysToYmd, ymdInTimeZone, localDateTimeToUtc, resolvePlannerSettings, poolRejection, eligibleOn,
   sectorsOf, meetsSectorRequirements, songKeyOf, isSynthetic } from "./planner-v2.mjs";
 import { writeWeekCopy } from "./copywriter.mjs";
@@ -108,7 +109,7 @@ export async function calendarMonth(client, brand, body, now = new Date()) {
         title: p.generatedTitle, caption: p.generatedCaption, hashtags: p.generatedHashtags || [],
         asset: assetCard(p), externalUrl: null,
         carousel: Array.isArray(p.scoreBreakdown?.slideIds) && p.scoreBreakdown.slideIds.length > 0,
-        custom: p.scoreBreakdown?.custom || null, tiktok: p.scoreBreakdown?.tiktok || null,
+        custom: p.scoreBreakdown?.custom || null, why: whyOf(p.scoreBreakdown), tiktok: p.scoreBreakdown?.tiktok || null,
         // Paused posts whose time came are "passed over": they stay on their day, never sent late.
         passedOver: p.status === "paused" && passed,
         // Only approved/paused posts not yet due (with the 15-minute lead) can still be changed.
@@ -122,7 +123,7 @@ export async function calendarMonth(client, brand, body, now = new Date()) {
       title: p.generatedTitle || null, caption: p.generatedCaption || null, hashtags: p.generatedHashtags || [],
       asset: assetCard(p), externalUrl: p.externalUrl || null, method: p.method,
       carousel: Array.isArray(p.scoreBreakdown?.slideIds) && p.scoreBreakdown.slideIds.length > 0,
-      custom: p.scoreBreakdown?.custom || null, tiktok: null, passedOver: false, editable: false,
+      custom: p.scoreBreakdown?.custom || null, why: whyOf(p.scoreBreakdown), tiktok: null, passedOver: false, editable: false,
       // The latest PostMetric snapshot (YouTube, Instagram, Facebook, Threads); null until one exists.
       stats: statsFromMetric(metricByLedger.get(p.id), p.publishedAt)
     }))

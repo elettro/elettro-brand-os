@@ -5,6 +5,7 @@ import type { PublishingFormat, ReviewAccount, ReviewList, ReviewPost, TiktokCre
 import { AssetThumb as Thumb } from "@/components/asset-thumb";
 import { TiktokCard } from "./tiktok-card";
 import { NetworkLogo } from "@/components/network-logo";
+import { WhyThisPost } from "@/components/why-this-post";
 import { TICK_MS, countdown } from "@/lib/post-eta";
 import { PlanProgress, totals as planTotals } from "./plan-progress";
 
@@ -438,6 +439,7 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
                 {p.custom?.kind === "poll" && <p className="review-caption"><b>{p.custom.question}</b> {(p.custom.options || []).join(" · ")} <span className="muted">({p.custom.duration})</span></p>}
                 {p.custom?.kind === "link" && <p className="review-caption"><b>{p.custom.title}</b> <a href={p.custom.url} target="_blank" rel="noreferrer">{p.custom.url}</a></p>}
                 {!p.custom && <p className="muted review-file">{p.asset.title || p.asset.filename}{p.sector ? ` · ${p.sector}` : ""}</p>}
+                <WhyThisPost why={p.why} />
                 {reviewable(p) && p.destination === "tiktok" && p.status !== "skipped" && tiktokOpen === p.id && <TiktokCard post={p} creator={creator} creatorError={creatorError} busy={!!busy}
                   onApprove={async (settings) => { await run(p.id, { action: "tiktok-approve", id: p.id, ...settings }, "Approved for TikTok with these settings."); setTiktokOpen(null); }} />}
                 {reviewable(p) && <div className="review-actions">
