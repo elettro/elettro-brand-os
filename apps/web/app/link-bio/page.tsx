@@ -61,10 +61,9 @@ body{background:#0e0d12!important}
 .bio h2{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#9b94a8;margin:24px 0 10px}
 .bio-btn{display:block;text-align:center;padding:14px;border-radius:14px;background:#1a1822;color:#f4efe6;border:1px solid #2e2a3a;font-weight:700;text-decoration:none;margin-bottom:10px}
 .bio-btn.primary{background:#ff8a3d;color:#1b1208;border-color:#ff8a3d}
-.bio-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.bio-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:start}
 .bio-tile{background:#1a1822;border:1px solid #2e2a3a;border-radius:14px;overflow:hidden;text-decoration:none;color:#f4efe6;display:block}
-.bio-tile img{display:block;width:100%;aspect-ratio:1;object-fit:cover;background:#26232f}
-.bio-tile.feature img{aspect-ratio:4/3}
-.bio-tile.feature{margin-bottom:2px}
+.bio-tile img{display:block;width:100%;height:auto;background:#26232f}
+.bio-tile.feature{margin-bottom:2px;max-width:320px;margin-left:auto;margin-right:auto}
 .bio-tile span{display:block;padding:9px 10px 11px;font-size:13px;line-height:1.25}
 `;

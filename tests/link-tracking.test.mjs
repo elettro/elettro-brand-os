@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   newCode, CODE_PATTERN, isBot, trackingConfig, taggedUrl, planPostLink, trackClaimedPosts,
-  recordClick, recordEvent, handleLinks, runLinkTrackingSetup, bioConfig, bioPage, bioImage, pickFeatured
+  recordClick, recordEvent, handleLinks, runLinkTrackingSetup, bioConfig, bioPage, bioImage, pickFeatured, productName
 } from "../services/dev-api-lambda/link-tracking.mjs";
 import { handlePlannerOps } from "../services/dev-api-lambda/planner-ops.mjs";
 
@@ -300,4 +300,12 @@ test("a bio page with the feature on gets a featured tile with its own tracked l
   const link = client.links.find((l) => l.code === page.featured.code);
   assert.equal(link.targetUrl, "https://stashbox.ai/products/night-nurse-tee");
   assert.equal(link.placement, "bio:featured:night-nurse-tee");
+});
+
+test("asset-style titles become plain product names", () => {
+  assert.equal(productName("Megalophobia Geometric Tee #7 — Every Angle 2"), "Megalophobia Geometric Tee");
+  assert.equal(productName("Round Rug Blue Man #1 — Hero Poster"), "Round Rug Blue Man");
+  assert.equal(productName("St. Pete Tee #16 - Hero Poster"), "St. Pete Tee");
+  assert.equal(productName("Bauhaus Pint Glass"), "Bauhaus Pint Glass");
+  assert.equal(productName(""), null);
 });

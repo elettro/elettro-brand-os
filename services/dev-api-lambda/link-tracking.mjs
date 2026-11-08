@@ -318,6 +318,12 @@ async function featuredToday(client, brandId, merchStore, now = new Date()) {
   return pick ? { ...pick, url: `${root}/products/${pick.handle}` } : null;
 }
 
+/** An asset's file-style title as a product name: "Megalophobia Geometric Tee #7 - Every Angle 2" becomes "Megalophobia Geometric Tee". */
+export function productName(title) {
+  const t = String(title || "").split(/\s+[–—-]\s+/)[0].replace(/\s*#\d+\s*$/, "").replace(/\s+/g, " ").trim();
+  return t.slice(0, 90) || null;
+}
+
 /** A code for (post, destination) or (button placement): reuse the one that exists, else make it. */
 async function codeFor(client, { brandId, postId = null, placement = null, destination, targetUrl, makeCode = newCode }) {
   const existing = postId
@@ -357,7 +363,7 @@ export async function bioPage(client, body, { makeCode = newCode, now = new Date
   if (bio.featured) {
     const pick = await featuredToday(client, brand.id, brand.settings?.planner?.links?.merchStore, now);
     if (pick && config.origins.includes(new URL(pick.url).origin.toLowerCase())) {
-      featured = { label: bio.featured.label, title: cleanText(pick.title, 90) || pick.handle.replace(/-/g, " "),
+      featured = { label: bio.featured.label, title: productName(pick.title) || pick.handle.replace(/-/g, " "),
         code: await codeFor(client, { brandId: brand.id, placement: `bio:featured:${pick.handle}`, destination: "instagram", targetUrl: pick.url, makeCode }) };
     }
   }
@@ -376,7 +382,7 @@ export async function bioPage(client, body, { makeCode = newCode, now = new Date
     if (!config.origins.includes(target.origin.toLowerCase()) || seen.has(target.toString())) continue;
     seen.add(target.toString());
     const code = await codeFor(client, { brandId: brand.id, postId: r.id, destination: "instagram", targetUrl: String(r.link), makeCode });
-    tiles.push({ code, title: cleanText(r.title, 90) || String(r.filename || "").replace(/\.[a-z0-9]+$/i, "").replace(/[-_]+/g, " ").slice(0, 90) });
+    tiles.push({ code, title: productName(r.title) || String(r.filename || "").replace(/\.[a-z0-9]+$/i, "").replace(/[-_]+/g, " ").slice(0, 90) });
   }
   return [200, { ok: true, brand: slug, title: bio.title, tagline: bio.tagline, heading: bio.heading, buttons, featured, tiles }];
 }
