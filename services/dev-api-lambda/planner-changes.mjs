@@ -43,7 +43,9 @@ export const PLANNER_CHANGE_SQL = [
     "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE ("brandId", "key")
   )`,
-  `CREATE INDEX IF NOT EXISTS "PlannerChange_brand_status_idx" ON "PlannerChange"("brandId", "status")`
+  `CREATE INDEX IF NOT EXISTS "PlannerChange_brand_status_idx" ON "PlannerChange"("brandId", "status")`,
+  // Added 2026-11-08 with the weekly grading of approved changes; re-running setup adds it to an existing table.
+  `ALTER TABLE "PlannerChange" ADD COLUMN IF NOT EXISTS "outcome" JSONB`
 ];
 
 /** ISO week key (Monday) for a date, e.g. 2026-11-09. */
@@ -102,9 +104,10 @@ export async function refreshChanges(client, brand, now = new Date()) {
   const week = weekKey(now);
   const accounts = await brandPerformance(client, brand, now);
   const candidates = winnerCandidates(accounts);
+  const graded = await gradeApproved(client, brand, accounts, now);
   const existing = new Map((await client.query(`SELECT * FROM "PlannerChange" WHERE "brandId" = $1`, [brand.id])).rows.map((r) => [r.key, r]));
   let open = [...existing.values()].filter((r) => r.status === "proposed").length;
-  const result = { week, candidates: candidates.length, watching: 0, proposed: 0 };
+  const result = { week, candidates: candidates.length, watching: 0, proposed: 0, graded };
   for (const c of candidates) {
     const row = existing.get(c.key);
     if (!row) {
@@ -132,10 +135,52 @@ export async function refreshChanges(client, brand, now = new Date()) {
   return result;
 }
 
+// Grading an approved change (Dean, 2026-11-08: "helped / no change / hurt", hurt twice proposes Undo). A winner boost is judged by
+// the boosted asset's own posts published after approval, on any account, against each account's normal: the average lift at 7 days
+// (else 1 day) of 1.1x or more = helped, 0.9x or less = hurt, between = no clear difference. No such post yet = waiting (the home
+// account's cooldown often keeps a rerun 30 days away). This says whether the asset kept doing well, not that the boost caused it.
+export const HELPED_AT = 1.1;
+export const HURT_AT = 0.9;
+
+export function gradeChange(change, accounts, now = new Date()) {
+  const since = Date.parse(change.decidedAt);
+  const assetId = change.payload?.assetId;
+  const posts = [];
+  for (const acc of accounts) {
+    for (const p of acc.posts || []) {
+      if (p.assetId !== assetId || Date.parse(p.publishedAt) < since) continue;
+      posts.push({ ...p, account: acc.account });
+    }
+  }
+  const pick = (bucket) => posts.filter((p) => p.bucket === bucket);
+  const used = pick("7d").length ? pick("7d") : pick("24h");
+  const history = Array.isArray(change.outcome?.history) ? change.outcome.history : [];
+  if (!used.length) return { label: "waiting", posts: 0, lift: null, bucket: null, checkedAt: now.toISOString(), history, undoSuggested: false };
+  const avg = used.reduce((s, p) => s + Math.log2(p.lift), 0) / used.length;
+  const lift = Math.round(2 ** avg * 100) / 100;
+  const label = lift >= HELPED_AT ? "helped" : lift <= HURT_AT ? "hurt" : "no clear difference";
+  const next = [...history, label].slice(-6);
+  return { label, posts: used.length, lift, bucket: used[0].bucket, checkedAt: now.toISOString(), history: next,
+    undoSuggested: next.length >= 2 && next.at(-1) === "hurt" && next.at(-2) === "hurt" };
+}
+
+/** Grades every approved change of the brand against the computed performance and stores the outcome. */
+export async function gradeApproved(client, brand, accounts, now = new Date()) {
+  const approved = (await client.query(`SELECT "id","payload","decidedAt","outcome" FROM "PlannerChange" WHERE "brandId" = $1 AND "status" = 'approved'`, [brand.id])).rows;
+  const graded = { helped: 0, hurt: 0, "no clear difference": 0, waiting: 0, undoSuggested: 0 };
+  for (const change of approved) {
+    const outcome = gradeChange(change, accounts, now);
+    graded[outcome.label] += 1;
+    if (outcome.undoSuggested) graded.undoSuggested += 1;
+    await client.query(`UPDATE "PlannerChange" SET "outcome" = $2, "updatedAt" = CURRENT_TIMESTAMP WHERE "id" = $1`, [change.id, JSON.stringify(outcome)]);
+  }
+  return graded;
+}
+
 /** Review action "changes": the brand's changes (newest first) and its current weights version. */
 export async function listChanges(client, brand) {
   const rows = (await client.query(
-    `SELECT "id","kind","title","detail","evidence","status","weekKey","seenWeeks","skips","mutedUntil","weightsVersion","decidedAt","createdAt"
+    `SELECT "id","kind","title","detail","evidence","status","weekKey","seenWeeks","skips","mutedUntil","weightsVersion","decidedAt","createdAt","outcome"
      FROM "PlannerChange" WHERE "brandId" = $1 ORDER BY CASE "status" WHEN 'proposed' THEN 0 WHEN 'approved' THEN 1 WHEN 'watching' THEN 2 ELSE 3 END, "updatedAt" DESC LIMIT 100`,
     [brand.id])).rows;
   const weights = brand.settings?.plannerWeights || {};
@@ -214,4 +259,30 @@ export async function runRefreshChanges(event, connectDatabase, json) {
   } finally {
     if (client) await client.end?.();
   }
+}
+
+/**
+ * The scheduled weekly check (called from the planner tick every 15 minutes): for each brand, once its own clock says Sunday 10 pm or
+ * later, run refreshChanges (watch / propose / grade) once for the coming week. Marked in Brand.settings.changesCheckedWeek. A brand
+ * that fails is retried on the next tick; a failure never stops planning.
+ */
+export async function weeklyChangesCheck(client, now = new Date()) {
+  const brands = (await client.query(`SELECT "id","slug","timezone","settings" FROM "Brand" WHERE "status" = 'active'`)).rows;
+  const ran = [];
+  for (const brand of brands) {
+    const tz = brand.timezone || "America/New_York";
+    const parts = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "short", hour: "numeric", hourCycle: "h23" })
+      .formatToParts(now).map((x) => [x.type, x.value]));
+    if (parts.weekday !== "Sun" || Number(parts.hour) < 22) continue;
+    const week = weekKey(new Date(now.getTime() + 864e5));
+    if (brand.settings?.changesCheckedWeek === week) continue;
+    try {
+      const result = await refreshChanges(client, brand, now);
+      await client.query(`UPDATE "Brand" SET "settings" = jsonb_set(COALESCE("settings",'{}'::jsonb), '{changesCheckedWeek}', to_jsonb($2::text)), "updatedAt" = CURRENT_TIMESTAMP WHERE "id" = $1`, [brand.id, week]);
+      ran.push({ brand: brand.slug, ...result });
+    } catch (error) {
+      console.error("[weekly-changes-check] failed for", brand.slug, error?.message);
+    }
+  }
+  return ran;
 }
