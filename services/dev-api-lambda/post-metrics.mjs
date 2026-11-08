@@ -208,3 +208,33 @@ export async function runListPostMetrics(event, connectDatabase, json) {
     if (client) await client.end?.();
   }
 }
+
+/**
+ * { mode?: "apply" } — YouTube snapshots made before 2026-11-08 took views, likes and comments from the Analytics API, which counts differently
+ * from the public counters. Each row kept both raw answers, so this resets those three columns to the public Data API numbers in `raw.statistics`.
+ * Dry run unless mode is "apply"; rows without raw statistics are left alone.
+ */
+export async function runRecomputeYoutubeMetrics(event, connectDatabase, json) {
+  if (!iamOnly(event)) return json(403, { ok: false, error: "Direct IAM invocation required" });
+  const mode = event.mode === "apply" ? "apply" : "dry-run";
+  let client;
+  try {
+    client = await connectDatabase();
+    const where = `pm."source" = 'analytics' AND pl."destination" = 'youtube' AND pm."raw" #>> '{statistics,viewCount}' IS NOT NULL
+        AND (pm."views" IS DISTINCT FROM COALESCE((pm."raw" #>> '{statistics,viewCount}')::int, pm."views")
+          OR pm."likes" IS DISTINCT FROM COALESCE((pm."raw" #>> '{statistics,likeCount}')::int, pm."likes")
+          OR pm."comments" IS DISTINCT FROM COALESCE((pm."raw" #>> '{statistics,commentCount}')::int, pm."comments"))`;
+    const found = (await client.query(`SELECT count(*)::int AS n FROM "PostMetric" pm JOIN "PublicationLedger" pl ON pl."id" = pm."ledgerId" WHERE ${where}`)).rows[0].n;
+    if (mode !== "apply") return json(200, { ok: true, mode, wouldChange: found });
+    const done = await client.query(
+      `UPDATE "PostMetric" pm SET "views" = COALESCE((pm."raw" #>> '{statistics,viewCount}')::int, pm."views"), "likes" = COALESCE((pm."raw" #>> '{statistics,likeCount}')::int, pm."likes"),
+              "comments" = COALESCE((pm."raw" #>> '{statistics,commentCount}')::int, pm."comments")
+       FROM "PublicationLedger" pl WHERE pl."id" = pm."ledgerId" AND ${where}`);
+    return json(200, { ok: true, mode, changed: done.rowCount });
+  } catch (error) {
+    console.error("[post-metrics-recompute] failed", error);
+    return json(500, { ok: false, error: error instanceof Error ? error.message : "recompute failed" });
+  } finally {
+    if (client) await client.end?.();
+  }
+}

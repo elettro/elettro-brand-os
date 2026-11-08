@@ -87,15 +87,18 @@ test("report URLs: one video from its publish day, or the channel for 28 days", 
   assert.match(statisticsUrl("abc123"), /part=statistics&id=abc123/);
 });
 
-test("snapshotFrom prefers Analytics, converts minutes to seconds and falls back to Data API counts", () => {
-  const statistics = { items: [{ statistics: { viewCount: "40", likeCount: "5", commentCount: "2" } }] };
+test("snapshotFrom takes the public counters from the Data API and the rest from Analytics, falling back when the Data API has nothing", () => {
+  const statistics = { items: [{ statistics: { viewCount: "40", likeCount: "5", commentCount: "0" } }] };
   const headers = ["views", "estimatedMinutesWatched", "averageViewDuration", "likes", "comments", "shares", "subscribersGained"].map((name) => ({ name }));
-  const both = snapshotFrom(statistics, { columnHeaders: headers, rows: [[38, 12.5, 20, 4, 1, 3, 2]] });
+  // 2026-11-08: Analytics said 3 comments where the video page (Data API) said 0; the page's number wins.
+  const both = snapshotFrom(statistics, { columnHeaders: headers, rows: [[38, 12.5, 20, 4, 3, 3, 2]] });
   assert.equal(both.source, "analytics");
-  assert.deepEqual(both.metrics, { views: 38, likes: 4, comments: 1, shares: 3, watchTimeSeconds: 750, avgViewDurationSeconds: 20, followsGained: 2 });
+  assert.deepEqual(both.metrics, { views: 40, likes: 5, comments: 0, shares: 3, watchTimeSeconds: 750, avgViewDurationSeconds: 20, followsGained: 2 });
   const only = snapshotFrom(statistics, { columnHeaders: headers, rows: [] });
   assert.equal(only.source, "statistics");
   assert.deepEqual([only.metrics.views, only.metrics.likes, only.metrics.shares, only.metrics.watchTimeSeconds], [40, 5, null, null]);
+  const noPublic = snapshotFrom({ items: [{ statistics: {} }] }, { columnHeaders: headers, rows: [[38, 12.5, 20, 4, 3, 3, 2]] });
+  assert.deepEqual([noPublic.metrics.views, noPublic.metrics.likes, noPublic.metrics.comments], [38, 4, 3]);
 });
 
 test("collectForVideo keeps the Data API numbers when Analytics is refused, and nothing for a missing video", async (t) => {

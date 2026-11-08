@@ -55,6 +55,14 @@ async function act<T = { ok: boolean; error?: string }>(body: Record<string, unk
 const STAT_NETWORKS = ["youtube", "instagram", "facebook", "threads", "pinterest", "bluesky", "mastodon", "linkedin"];
 const STAT_ORDER: CalendarStatKey[] = ["views", "reach", "likes", "comments", "shares", "saves", "linkClicks", "watchTimeSeconds", "avgViewDurationSeconds", "followsGained"];
 const STAT_LABEL: Record<CalendarStatKey, string> = { views: "Views", reach: "Reach", saves: "Saves", linkClicks: "Link clicks", likes: "Likes", comments: "Comments", shares: "Shares", watchTimeSeconds: "Watch time", avgViewDurationSeconds: "Avg. view", followsGained: "New subscribers" };
+// How long after posting the snapshot was really taken; falls back to the bucket's name for older API builds that do not send it.
+function takenAfter(stats: CalendarStats): string {
+  const hours = stats.takenAfterHours;
+  if (hours === undefined) return STAT_AGE[stats.asOf];
+  if (hours < 1) return "under an hour";
+  if (hours < 48) return `${Math.round(hours)} hour${Math.round(hours) === 1 ? "" : "s"}`;
+  return `${Math.round(hours / 24)} days`;
+}
 const STAT_AGE: Record<CalendarStats["asOf"], string> = { "1h": "about 1 hour", "24h": "about 1 day", "7d": "about 7 days", "30d": "about 30 days" };
 // Watch time reads as 2h 14m, an average view as 0:21, everything else as a plain number.
 function statValue(key: CalendarStatKey, value: number): string {
@@ -285,7 +293,7 @@ export function CalendarClient({ initial, brandName }: { initial: CalendarMonth;
             <div className="cal-stats-head">Stats</div>
             {post.stats ? <>
               <dl>{STAT_ORDER.filter((k) => post.stats!.metrics[k] !== undefined).map((k) => <div key={k}><dt>{STAT_LABEL[k]}</dt><dd>{statValue(k, post.stats!.metrics[k] as number)}</dd></div>)}</dl>
-              <p className="muted">Taken {STAT_AGE[post.stats.asOf]} after posting, not live counts.</p>
+              <p className="muted">Taken {takenAfter(post.stats)} after posting, not live counts.</p>
             </> : STAT_NETWORKS.includes(post.destination)
               ? <p className="muted">{post.placement === "story" ? "Stories are not measured." : "Numbers appear about an hour after posting."}</p>
               : <p className="muted">Stats are not collected for {NETWORK[post.destination] || post.destination} yet.</p>}
