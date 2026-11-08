@@ -1,5 +1,6 @@
 import { headers } from "next/headers";
 import { LINK_HOSTS, linksCall } from "@/lib/link-tracking";
+import { pickSong } from "@/lib/bio-song";
 
 // Instagram bio-link page (go.stashbox.ai/bio, rewritten here by middleware.ts). Public, no login, no client script:
 // every button and tile is a plain link to the brand's tracked short link (/<code>), so a tap is counted per post.
@@ -7,7 +8,24 @@ import { LINK_HOSTS, linksCall } from "@/lib/link-tracking";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Links", robots: { index: false, follow: false } };
 
-type Bio = { ok?: boolean; title?: string | null; tagline?: string | null; heading?: string | null; buttons?: { label: string; code: string }[]; featured?: { label: string; title: string; code: string } | null; featuredSong?: { label: string; title: string; code: string; image: string | null } | null; tiles?: { code: string; title: string }[] };
+type Bio = { ok?: boolean; title?: string | null; tagline?: string | null; heading?: string | null; buttons?: { label: string; code: string }[]; featured?: { label: string; title: string; code: string } | null; songSource?: { label: string; catalogUrl: string; baseUrl: string } | null; tiles?: { code: string; title: string }[] };
+
+type Song = { label: string; title: string; code: string; image: string | null };
+
+// Today's song: the public Radio catalog is read here (the dev-api has no internet route), then the dev-api issues the tracked link.
+// Any failure just leaves the song out; the rest of the page still loads.
+async function songOfTheDay(brand: string, source: { label: string; catalogUrl: string }): Promise<Song | null> {
+  try {
+    const response = await fetch(source.catalogUrl, { next: { revalidate: 600 }, signal: AbortSignal.timeout(6000) });
+    const pick = response.ok ? pickSong((await response.json())?.songs, new Date().toISOString().slice(0, 10)) : null;
+    if (!pick) return null;
+    const { data } = await linksCall<{ ok?: boolean; code?: string }>({ action: "bio-song", brandSlug: brand, key: pick.key });
+    return data?.ok && data.code ? { label: source.label, title: pick.title, code: data.code, image: pick.image } : null;
+  } catch (error) {
+    console.error("Bio song failed", error instanceof Error ? error.name : "UnknownError");
+    return null;
+  }
+}
 
 export default async function LinkBioPage() {
   const h = await headers();
@@ -20,6 +38,7 @@ export default async function LinkBioPage() {
       if (data?.ok) bio = data;
     } catch (error) { console.error("Bio page failed", error instanceof Error ? error.name : "UnknownError"); }
   }
+  const song = bio?.songSource && entry ? await songOfTheDay(entry.brand, bio.songSource) : null;
   if (!bio || !entry) {
     return <main className="bio"><p className="bio-tagline">Nothing here yet.</p><style>{css}</style></main>;
   }
@@ -28,13 +47,13 @@ export default async function LinkBioPage() {
       <h1>{bio.title || entry.brand}</h1>
       {bio.tagline ? <p className="bio-tagline">{bio.tagline}</p> : null}
       {(bio.buttons || []).map((b, i) => <a key={b.code} className={i === 0 ? "bio-btn primary" : "bio-btn"} href={`/${b.code}`}>{b.label}</a>)}
-      {bio.featuredSong ? (
+      {song ? (
         <>
-          <h2>{bio.featuredSong.label}</h2>
-          <a className="bio-tile song" href={`/${bio.featuredSong.code}`}>
+          <h2>{song.label}</h2>
+          <a className="bio-tile song" href={`/${song.code}`}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            {bio.featuredSong.image ? <img src={bio.featuredSong.image} alt={bio.featuredSong.title} width={400} height={400} /> : null}
-            <span>{bio.featuredSong.title}<small>Listen on Stashbox Radio</small></span>
+            {song.image ? <img src={song.image} alt={song.title} width={400} height={400} /> : null}
+            <span>{song.title}<small>Listen on Stashbox Radio</small></span>
           </a>
         </>
       ) : null}
