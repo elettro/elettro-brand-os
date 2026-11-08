@@ -2,8 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   newCode, CODE_PATTERN, isBot, trackingConfig, taggedUrl, planPostLink, trackClaimedPosts,
-  recordClick, recordEvent, handleLinks, runLinkTrackingSetup, bioConfig, bioPage, bioImage, pickFeatured, productName, pickSong
+  recordClick, recordEvent, handleLinks, runLinkTrackingSetup, bioConfig, bioPage, bioImage, pickFeatured, productName, bioSong
 } from "../services/dev-api-lambda/link-tracking.mjs";
+import { pickSong } from "../apps/web/lib/bio-song.ts";
 import { handlePlannerOps } from "../services/dev-api-lambda/planner-ops.mjs";
 
 const json = (statusCode, body) => ({ statusCode, body });
@@ -318,31 +319,33 @@ const catalog = [
   { song_key: "hidden-one", display_title: "Hidden", public_visibility: "hidden" },
   { song_key: "bad key!", display_title: "Bad" }];
 
-test("the featured song is one visible catalog song per day, linking straight to it", () => {
+test("the day's song is one visible catalog song, the same all day, never hidden or malformed", () => {
   assert.equal(pickSong([], "2026-11-08"), null);
   const day = pickSong(catalog, "2026-11-08");
   assert.deepEqual(pickSong(catalog, "2026-11-08"), day);
-  assert.match(day.url, /^https:\/\/stashbox\.com\/radio\/\?song=(im-waiting-001b-stashbox|tangled-stashbox)$/);
+  assert.ok(["im-waiting-001b-stashbox", "tangled-stashbox"].includes(day.key));
   const seen = new Set(Array.from({ length: 12 }, (_, i) => pickSong(catalog, `2026-11-${10 + i}`).key));
   assert.deepEqual([...seen].sort(), ["im-waiting-001b-stashbox", "tangled-stashbox"], "hidden and malformed songs are never picked; the pick rotates");
   const tangled = pickSong([catalog[1]], "2026-11-08");
   assert.equal(tangled.image, null, "a non-https picture is dropped");
 });
 
-test("a bio page with the song feature on gets a song tile with its own tracked link", async () => {
+test("the song tile: the page is told where the catalog is, and the dev-api issues the code for the picked song", async () => {
   const on = { ...bioSettings, planner: { ...bioSettings.planner, sources: { radioSongsUrl: "https://radio.example/songs", radioBaseUrl: "https://stashbox.com/radio/" } },
     linkTracking: { ...bioSettings.linkTracking, bio: { ...bioSettings.linkTracking.bio, featuredSong: { enabled: true, label: "Song of the day" } } } };
   const client = bioClient({ posts: [] });
   const base = client.query.bind(client);
   client.query = async (sql, params = []) => /FROM "Brand"/.test(sql) ? { rows: [{ id: "b1", settings: on }] } : base(sql, params);
-  const realFetch = globalThis.fetch;
-  globalThis.fetch = async () => ({ ok: true, json: async () => ({ songs: [catalog[0]] }) });
-  try {
-    const [, page] = await bioPage(client, { brandSlug: "stashbox" }, { now: new Date("2026-11-08T12:00:00Z") });
-    assert.equal(page.featuredSong.title, "I'm Waiting");
-    assert.equal(page.featuredSong.label, "Song of the day");
-    const link = client.links.find((l) => l.code === page.featuredSong.code);
-    assert.equal(link.targetUrl, "https://stashbox.com/radio/?song=im-waiting-001b-stashbox");
-    assert.equal(link.placement, "bio:song:im-waiting-001b-stashbox");
-  } finally { globalThis.fetch = realFetch; }
+  const [, page] = await bioPage(client, { brandSlug: "stashbox" });
+  assert.deepEqual(page.songSource, { label: "Song of the day", catalogUrl: "https://radio.example/songs", baseUrl: "https://stashbox.com/radio/" });
+  const [status, out] = await bioSong(client, { brandSlug: "stashbox", key: "im-waiting-001b-stashbox" });
+  assert.equal(status, 200);
+  const link = client.links.find((l) => l.code === out.code);
+  assert.equal(link.targetUrl, "https://stashbox.com/radio/?song=im-waiting-001b-stashbox");
+  assert.equal(link.placement, "bio:song:im-waiting-001b-stashbox");
+  // The same song again keeps its code; a bad key is refused; a brand without the feature is refused.
+  assert.equal((await bioSong(client, { brandSlug: "stashbox", key: "im-waiting-001b-stashbox" }))[1].code, out.code);
+  assert.equal((await bioSong(client, { brandSlug: "stashbox", key: "../x" }))[0], 400);
+  const off = { query: async (sql) => /FROM "Brand"/.test(sql) ? { rows: [{ id: "b1", settings: bioSettings }] } : { rows: [] } };
+  assert.equal((await bioSong(off, { brandSlug: "stashbox", key: "tangled-stashbox" }))[0], 404);
 });

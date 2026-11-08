@@ -16,7 +16,6 @@
  * Everything here is best effort: a tracking failure never stops a post from publishing.
  */
 import { randomInt } from "node:crypto";
-import { fetchRadioCatalog } from "./song-facts.mjs";
 
 // No 0/O, 1/l/I: a code may be read aloud or retyped.
 const ALPHABET = "23456789abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ";
@@ -186,7 +185,7 @@ const cleanText = (v, max) => (typeof v === "string" && v.trim() ? v.trim().slic
 
 export async function handleLinks(body, connectDatabase, json) {
   const action = body?.action;
-  if (!["click", "event", "stats", "events", "bio", "bio-image"].includes(action)) return json(400, { ok: false, error: "Unknown action" });
+  if (!["click", "event", "stats", "events", "bio", "bio-image", "bio-song"].includes(action)) return json(400, { ok: false, error: "Unknown action" });
   let client;
   try {
     client = await connectDatabase();
@@ -195,6 +194,7 @@ export async function handleLinks(body, connectDatabase, json) {
     if (action === "events") return json(...await linkEvents(client, body));
     if (action === "bio") return json(...await bioPage(client, body));
     if (action === "bio-image") return json(...await bioImage(client, body));
+    if (action === "bio-song") return json(...await bioSong(client, body));
     return json(...await linkStats(client, body));
   } catch (error) {
     console.error("[links] failed", action, error);
@@ -304,28 +304,6 @@ const FEATURED_SQL = `
 
 const dayHash = (text) => { let h = 2166136261; for (const c of String(text)) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; } return h; };
 
-/** Pure: today's featured song out of the Stashbox Radio catalog: one visible song per day (same all day, new tomorrow). */
-export function pickSong(catalog, day, radioBase = "https://stashbox.com/radio/") {
-  const songs = (Array.isArray(catalog) ? catalog : []).filter((x) => x && (x.public_visibility || "visible") === "visible"
-    && /^[A-Za-z0-9][A-Za-z0-9_-]{0,100}$/.test(String(x.song_key || "")) && cleanText(x.display_title || x.song_name, 90));
-  if (!songs.length) return null;
-  const song = songs.sort((a, b) => dayHash(`song${day}${a.song_key}`) - dayHash(`song${day}${b.song_key}`))[0];
-  let url;
-  try { url = new URL(radioBase); } catch { return null; }
-  url.searchParams.set("song", song.song_key);
-  const art = String(song.resolved_artwork_url || song.song_artwork_url || "");
-  return { key: song.song_key, title: cleanText(song.display_title || song.song_name, 90), url: url.toString(), image: /^https:\/\//.test(art) ? art : null };
-}
-
-// The catalog is public and changes rarely: one fetch per ten minutes per warm Lambda, not one per page view.
-let catalogCache = { at: 0, url: "", songs: [] };
-async function radioCatalog(url, now = Date.now()) {
-  if (catalogCache.url === url && now - catalogCache.at < 600000) return catalogCache.songs;
-  const songs = await fetchRadioCatalog(url, { timeoutMs: 4000 });
-  catalogCache = { at: now, url, songs };
-  return songs;
-}
-
 /** Pure: today's featured product out of the candidates: one product per day (same pick all day, new pick tomorrow), then its steadiest picture. */
 export function pickFeatured(rows, day) {
   const handles = [...new Set(rows.map((r) => r.handle).filter((h) => /^[a-z0-9][a-z0-9-]*$/.test(h)))].sort();
@@ -393,15 +371,11 @@ export async function bioPage(client, body, { makeCode = newCode, now = new Date
         code: await codeFor(client, { brandId: brand.id, placement: `bio:featured:${pick.handle}`, destination: "instagram", targetUrl: pick.url, makeCode }) };
     }
   }
-  let song = null;
+  // The dev-api runs in the VPC with no route to the internet, so it cannot read the public Radio catalog. The web app does
+  // (it picks the day's song and asks for its code with {action:"bio-song"}); here it is only told where the catalog is.
   const sources = brand.settings?.planner?.sources;
-  if (bio.featuredSong && sources?.radioSongsUrl) {
-    try {
-      const pick = pickSong(await radioCatalog(sources.radioSongsUrl), now.toISOString().slice(0, 10), sources.radioBaseUrl || undefined);
-      if (pick) song = { label: bio.featuredSong.label, title: pick.title, image: pick.image,
-        code: await codeFor(client, { brandId: brand.id, placement: `bio:song:${pick.key}`, destination: "instagram", targetUrl: pick.url, makeCode }) };
-    } catch (error) { console.error("[links] featured song skipped", error instanceof Error ? error.message : error); }
-  }
+  const songSource = bio.featuredSong && sources?.radioSongsUrl
+    ? { label: bio.featuredSong.label, catalogUrl: sources.radioSongsUrl, baseUrl: sources.radioBaseUrl || "https://stashbox.com/radio/" } : null;
   const rows = (await client.query(
     `SELECT sp."id", sp."scoreBreakdown"->'copy'->>'primaryLink' AS "link", a."title", a."filename"
      FROM "ScheduledPost" sp JOIN "SocialAccount" sa ON sa."id" = sp."socialAccountId" JOIN "Asset" a ON a."id" = sp."assetId"
@@ -419,7 +393,26 @@ export async function bioPage(client, body, { makeCode = newCode, now = new Date
     const code = await codeFor(client, { brandId: brand.id, postId: r.id, destination: "instagram", targetUrl: String(r.link), makeCode });
     tiles.push({ code, title: productName(r.title) || String(r.filename || "").replace(/\.[a-z0-9]+$/i, "").replace(/[-_]+/g, " ").slice(0, 90) });
   }
-  return [200, { ok: true, brand: slug, title: bio.title, tagline: bio.tagline, heading: bio.heading, buttons, featuredSong: song, featured, tiles }];
+  return [200, { ok: true, brand: slug, title: bio.title, tagline: bio.tagline, heading: bio.heading, buttons, songSource, featured, tiles }];
+}
+
+/**
+ * The web app picked today's song from the public Radio catalog and asks for its tracked link. The address is built here from
+ * the brand's own Radio setting and the song key (never taken from the caller), so a code can only point at that Radio.
+ */
+export async function bioSong(client, body, { makeCode = newCode } = {}) {
+  const slug = String(body?.brandSlug || "");
+  const key = String(body?.key || "");
+  if (!/^[a-z0-9-]{1,60}$/.test(slug) || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,100}$/.test(key)) return [400, { ok: false, error: "brandSlug and a song key are required" }];
+  const brand = (await client.query(`SELECT "id", "settings" FROM "Brand" WHERE "slug" = $1`, [slug])).rows[0];
+  const bio = brand && bioConfig(brand.settings);
+  const base = brand?.settings?.planner?.sources?.radioBaseUrl || "https://stashbox.com/radio/";
+  if (!bio?.featuredSong) return [404, { ok: false, error: "No featured song for this brand" }];
+  let url;
+  try { url = new URL(base); } catch { return [404, { ok: false, error: "No radio address" }]; }
+  url.searchParams.set("song", key);
+  const code = await codeFor(client, { brandId: brand.id, placement: `bio:song:${key}`, destination: "instagram", targetUrl: url.toString(), makeCode });
+  return [200, { ok: true, code }];
 }
 
 /** The Dropbox path of a bio tile's picture, for the web app's thumbnail proxy. Only tiles of an Instagram post qualify. */
