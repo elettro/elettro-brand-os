@@ -254,3 +254,17 @@ test("the Bluesky and Mastodon workers save what they collect; a dry run saves n
   assert.equal((await masto.collectMetrics({}, { callApi: mk(due), collect: async (item) => snap(item) })).saved, 1);
   assert.equal((await masto.collectMetrics({ dryRun: true }, { callApi: mk(due), collect: async () => { throw new Error("gone"); } })).failures.length, 1);
 });
+
+test("the due list is newest first, so a post the network never answers for cannot hold up newer ones", async () => {
+  const seen = [];
+  const connect = async () => ({ query: async (sql) => { seen.push(sql); return { rows: [] }; }, end: async () => {} });
+  await runListPostMetricsDue({ destination: "linkedin" }, connect, json, NOW);
+  const ledger = seen.find((sql) => /FROM "PublicationLedger"/.test(sql));
+  assert.match(ledger, /ORDER BY pl\."publishedAt" DESC/);
+  // And the limit is applied after the buckets are worked out, to the newest first.
+  const rows = [30, 10, 5].map((hours, i) => ({ ledgerId: `l${i}`, videoId: `v${i}`, publishedAt: new Date(NOW - hours * HOUR), channelId: "c", brand: "stashbox", captured: [], placement: "post" }));
+  const newestFirst = [...rows].reverse();
+  const answer = await runListPostMetricsDue({ destination: "linkedin", limit: 1 }, async () => ({ query: async (sql) => (/FROM "SocialAccount" sa JOIN/.test(sql) ? { rows: [] } : { rows: newestFirst }), end: async () => {} }), json, NOW);
+  assert.equal(answer.body.due.length, 1);
+  assert.equal(answer.body.due[0].videoId, "v2");
+});
