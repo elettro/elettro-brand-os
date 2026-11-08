@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   newCode, CODE_PATTERN, isBot, trackingConfig, taggedUrl, planPostLink, trackClaimedPosts,
-  recordClick, recordEvent, handleLinks, runLinkTrackingSetup, bioConfig, bioPage, bioImage, pickFeatured, productName
+  recordClick, recordEvent, handleLinks, runLinkTrackingSetup, bioConfig, bioPage, bioImage, pickFeatured, productName, pickSong
 } from "../services/dev-api-lambda/link-tracking.mjs";
 import { handlePlannerOps } from "../services/dev-api-lambda/planner-ops.mjs";
 
@@ -310,4 +310,39 @@ test("asset-style titles become plain product names", () => {
   assert.equal(productName("Round Rug Blue Man #1 · Hero Poster"), "Round Rug Blue Man");
   assert.equal(productName("Bauhaus Pint Glass"), "Bauhaus Pint Glass");
   assert.equal(productName(""), null);
+});
+
+const catalog = [
+  { song_key: "im-waiting-001b-stashbox", display_title: "I'm Waiting", resolved_artwork_url: "https://cdn.example/a.jpg" },
+  { song_key: "tangled-stashbox", display_title: "Tangled", song_artwork_url: "http://insecure.example/b.jpg" },
+  { song_key: "hidden-one", display_title: "Hidden", public_visibility: "hidden" },
+  { song_key: "bad key!", display_title: "Bad" }];
+
+test("the featured song is one visible catalog song per day, linking straight to it", () => {
+  assert.equal(pickSong([], "2026-11-08"), null);
+  const day = pickSong(catalog, "2026-11-08");
+  assert.deepEqual(pickSong(catalog, "2026-11-08"), day);
+  assert.match(day.url, /^https:\/\/stashbox\.com\/radio\/\?song=(im-waiting-001b-stashbox|tangled-stashbox)$/);
+  const seen = new Set(Array.from({ length: 12 }, (_, i) => pickSong(catalog, `2026-11-${10 + i}`).key));
+  assert.deepEqual([...seen].sort(), ["im-waiting-001b-stashbox", "tangled-stashbox"], "hidden and malformed songs are never picked; the pick rotates");
+  const tangled = pickSong([catalog[1]], "2026-11-08");
+  assert.equal(tangled.image, null, "a non-https picture is dropped");
+});
+
+test("a bio page with the song feature on gets a song tile with its own tracked link", async () => {
+  const on = { ...bioSettings, planner: { ...bioSettings.planner, sources: { radioSongsUrl: "https://radio.example/songs", radioBaseUrl: "https://stashbox.com/radio/" } },
+    linkTracking: { ...bioSettings.linkTracking, bio: { ...bioSettings.linkTracking.bio, featuredSong: { enabled: true, label: "Song of the day" } } } };
+  const client = bioClient({ posts: [] });
+  const base = client.query.bind(client);
+  client.query = async (sql, params = []) => /FROM "Brand"/.test(sql) ? { rows: [{ id: "b1", settings: on }] } : base(sql, params);
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: true, json: async () => ({ songs: [catalog[0]] }) });
+  try {
+    const [, page] = await bioPage(client, { brandSlug: "stashbox" }, { now: new Date("2026-11-08T12:00:00Z") });
+    assert.equal(page.featuredSong.title, "I'm Waiting");
+    assert.equal(page.featuredSong.label, "Song of the day");
+    const link = client.links.find((l) => l.code === page.featuredSong.code);
+    assert.equal(link.targetUrl, "https://stashbox.com/radio/?song=im-waiting-001b-stashbox");
+    assert.equal(link.placement, "bio:song:im-waiting-001b-stashbox");
+  } finally { globalThis.fetch = realFetch; }
 });

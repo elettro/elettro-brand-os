@@ -16,6 +16,7 @@
  * Everything here is best effort: a tracking failure never stops a post from publishing.
  */
 import { randomInt } from "node:crypto";
+import { fetchRadioCatalog } from "./song-facts.mjs";
 
 // No 0/O, 1/l/I: a code may be read aloud or retyped.
 const ALPHABET = "23456789abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ";
@@ -286,7 +287,8 @@ export function bioConfig(rawSettings) {
   return {
     title: cleanText(b.title, 60), tagline: cleanText(b.tagline, 120), buttons,
     max: Math.min(12, Math.max(2, Number(b.max) || 6)), heading: cleanText(b.heading, 60),
-    featured: b.featuredProduct?.enabled === true ? { label: cleanText(b.featuredProduct.label, 40) || "Featured product" } : null
+    featured: b.featuredProduct?.enabled === true ? { label: cleanText(b.featuredProduct.label, 40) || "Featured product" } : null,
+    featuredSong: b.featuredSong?.enabled === true ? { label: cleanText(b.featuredSong.label, 40) || "Featured song" } : null
   };
 }
 
@@ -300,11 +302,35 @@ const FEATURED_SQL = `
     AND a."retiredAt" IS NULL AND a."sourcePath" IS NOT NULL
     AND NOT EXISTS (SELECT 1 FROM unnest(a."tags") y WHERE lower(y) = ANY($2::text[]))`;
 
+const dayHash = (text) => { let h = 2166136261; for (const c of String(text)) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; } return h; };
+
+/** Pure: today's featured song out of the Stashbox Radio catalog: one visible song per day (same all day, new tomorrow). */
+export function pickSong(catalog, day, radioBase = "https://stashbox.com/radio/") {
+  const songs = (Array.isArray(catalog) ? catalog : []).filter((x) => x && (x.public_visibility || "visible") === "visible"
+    && /^[A-Za-z0-9][A-Za-z0-9_-]{0,100}$/.test(String(x.song_key || "")) && cleanText(x.display_title || x.song_name, 90));
+  if (!songs.length) return null;
+  const song = songs.sort((a, b) => dayHash(`song${day}${a.song_key}`) - dayHash(`song${day}${b.song_key}`))[0];
+  let url;
+  try { url = new URL(radioBase); } catch { return null; }
+  url.searchParams.set("song", song.song_key);
+  const art = String(song.resolved_artwork_url || song.song_artwork_url || "");
+  return { key: song.song_key, title: cleanText(song.display_title || song.song_name, 90), url: url.toString(), image: /^https:\/\//.test(art) ? art : null };
+}
+
+// The catalog is public and changes rarely: one fetch per ten minutes per warm Lambda, not one per page view.
+let catalogCache = { at: 0, url: "", songs: [] };
+async function radioCatalog(url, now = Date.now()) {
+  if (catalogCache.url === url && now - catalogCache.at < 600000) return catalogCache.songs;
+  const songs = await fetchRadioCatalog(url, { timeoutMs: 4000 });
+  catalogCache = { at: now, url, songs };
+  return songs;
+}
+
 /** Pure: today's featured product out of the candidates: one product per day (same pick all day, new pick tomorrow), then its steadiest picture. */
 export function pickFeatured(rows, day) {
   const handles = [...new Set(rows.map((r) => r.handle).filter((h) => /^[a-z0-9][a-z0-9-]*$/.test(h)))].sort();
   if (!handles.length) return null;
-  const hash = (text) => { let h = 2166136261; for (const c of text) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; } return h; };
+  const hash = dayHash;
   const handle = handles.sort((a, b) => hash(day + a) - hash(day + b))[0];
   const picture = rows.filter((r) => r.handle === handle).sort((a, b) => hash(a.id) - hash(b.id))[0];
   return { handle, title: picture.title, assetId: picture.id, path: picture.sourcePath };
@@ -367,6 +393,15 @@ export async function bioPage(client, body, { makeCode = newCode, now = new Date
         code: await codeFor(client, { brandId: brand.id, placement: `bio:featured:${pick.handle}`, destination: "instagram", targetUrl: pick.url, makeCode }) };
     }
   }
+  let song = null;
+  const sources = brand.settings?.planner?.sources;
+  if (bio.featuredSong && sources?.radioSongsUrl) {
+    try {
+      const pick = pickSong(await radioCatalog(sources.radioSongsUrl), now.toISOString().slice(0, 10), sources.radioBaseUrl || undefined);
+      if (pick) song = { label: bio.featuredSong.label, title: pick.title, image: pick.image,
+        code: await codeFor(client, { brandId: brand.id, placement: `bio:song:${pick.key}`, destination: "instagram", targetUrl: pick.url, makeCode }) };
+    } catch (error) { console.error("[links] featured song skipped", error instanceof Error ? error.message : error); }
+  }
   const rows = (await client.query(
     `SELECT sp."id", sp."scoreBreakdown"->'copy'->>'primaryLink' AS "link", a."title", a."filename"
      FROM "ScheduledPost" sp JOIN "SocialAccount" sa ON sa."id" = sp."socialAccountId" JOIN "Asset" a ON a."id" = sp."assetId"
@@ -384,7 +419,7 @@ export async function bioPage(client, body, { makeCode = newCode, now = new Date
     const code = await codeFor(client, { brandId: brand.id, postId: r.id, destination: "instagram", targetUrl: String(r.link), makeCode });
     tiles.push({ code, title: productName(r.title) || String(r.filename || "").replace(/\.[a-z0-9]+$/i, "").replace(/[-_]+/g, " ").slice(0, 90) });
   }
-  return [200, { ok: true, brand: slug, title: bio.title, tagline: bio.tagline, heading: bio.heading, buttons, featured, tiles }];
+  return [200, { ok: true, brand: slug, title: bio.title, tagline: bio.tagline, heading: bio.heading, buttons, featuredSong: song, featured, tiles }];
 }
 
 /** The Dropbox path of a bio tile's picture, for the web app's thumbnail proxy. Only tiles of an Instagram post qualify. */
