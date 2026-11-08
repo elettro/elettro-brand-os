@@ -7,7 +7,7 @@ import { LINK_HOSTS, linksCall } from "@/lib/link-tracking";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Links", robots: { index: false, follow: false } };
 
-type Bio = { ok?: boolean; title?: string | null; tagline?: string | null; heading?: string | null; buttons?: { label: string; code: string }[]; featured?: { label: string; title: string; code: string } | null; tiles?: { code: string; title: string }[] };
+type Bio = { ok?: boolean; title?: string | null; tagline?: string | null; heading?: string | null; buttons?: { label: string; code: string }[]; featured?: { label: string; title: string; code: string } | null; featuredSong?: { label: string; title: string; code: string; image: string | null } | null; tiles?: { code: string; title: string }[] };
 
 export default async function LinkBioPage() {
   const h = await headers();
@@ -28,6 +28,16 @@ export default async function LinkBioPage() {
       <h1>{bio.title || entry.brand}</h1>
       {bio.tagline ? <p className="bio-tagline">{bio.tagline}</p> : null}
       {(bio.buttons || []).map((b, i) => <a key={b.code} className={i === 0 ? "bio-btn primary" : "bio-btn"} href={`/${b.code}`}>{b.label}</a>)}
+      {bio.featuredSong ? (
+        <>
+          <h2>{bio.featuredSong.label}</h2>
+          <a className="bio-tile song" href={`/${bio.featuredSong.code}`}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            {bio.featuredSong.image ? <img src={bio.featuredSong.image} alt={bio.featuredSong.title} width={400} height={400} /> : null}
+            <span>{bio.featuredSong.title}<small>Listen on Stashbox Radio</small></span>
+          </a>
+        </>
+      ) : null}
       {bio.featured ? (
         <>
           <h2>{bio.featured.label}</h2>
@@ -64,6 +74,8 @@ body{background:#0e0d12!important}
 .bio-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:start}
 .bio-tile{background:#1a1822;border:1px solid #2e2a3a;border-radius:14px;overflow:hidden;text-decoration:none;color:#f4efe6;display:block}
 .bio-tile img{display:block;width:100%;height:auto;background:#26232f}
+.bio-tile.song{margin-bottom:2px;max-width:320px;margin-left:auto;margin-right:auto}
+.bio-tile small{display:block;color:#9b94a8;font-size:12px;margin-top:3px}
 .bio-tile.feature{margin-bottom:2px;max-width:320px;margin-left:auto;margin-right:auto}
 .bio-tile span{display:block;padding:9px 10px 11px;font-size:13px;line-height:1.25}
 `;
