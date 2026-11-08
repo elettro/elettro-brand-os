@@ -28,7 +28,7 @@ const NAV: NavSection[] = [
     { label: "Connections", href: "/connections" }
   ] },
   { label: "Intelligence", items: [
-    { label: "Analytics" }
+    { label: "Analytics", href: "/analytics" }
   ] },
   { label: "Settings", items: [
     { label: "Brands" },
@@ -61,7 +61,7 @@ const BRANDS = [{ id: "all", name: "All brands", timezone: "" }, ...brandConfigs
 // each follow-up that opens a page for clients flips it to "active" here.
 const CLIENT_NAV: Record<string, "active" | "soon" | "hidden"> = {
   "/": "active", "/ar": "active", "/ar/qr": "active", "/ar/sets": "active", "/review": "active", "/calendar": "active", "/assets": "active", "/content-pool": "active", "/connections": "active",
-  "/collections": "hidden", "/multicam": "hidden", "/holidays": "hidden", "/ai-gateway": "hidden", "/planner": "hidden", "/admin/estimate-builder": "hidden", "/bugs": "hidden"
+  "/collections": "hidden", "/multicam": "hidden", "/holidays": "hidden", "/ai-gateway": "hidden", "/planner": "hidden", "/admin/estimate-builder": "hidden", "/bugs": "hidden", "/analytics": "hidden"
 };
 
 // Who is signed in: owner sees everything; a client sees only the listed brands.
