@@ -57,7 +57,7 @@ function fakeDb(rows = [], brandSettings = {}) {
     if (q.includes('FROM "PostMetric" pm')) return { rows: db.snapshots };
     if (q.startsWith('SELECT * FROM "PlannerChange" WHERE "brandId" = $1') && !q.includes("FOR UPDATE")) return { rows: db.rows };
     if (q.startsWith('INSERT INTO "PlannerChange"')) {
-      db.rows.push({ id: "c" + (db.rows.length + 1), key: params[1], status: "watching", weekKey: params[7], evidence: JSON.parse(params[6]), payload: JSON.parse(params[5]), skips: 0 });
+      db.rows.push({ id: "c" + (db.rows.length + 1), key: params[1], status: "watching", weekKey: params[7], evidence: JSON.parse(params[6]), payload: JSON.parse(params[5]), skips: 0, createdAt: db.now });
       return { rowCount: 1 };
     }
     if (q.includes("SET \"status\" = 'proposed'")) {
@@ -85,10 +85,13 @@ test("weekly check: a new winner is watched first and proposed only when it hold
     ageBucket: "24h", capturedAt: "2026-11-02T16:00:00Z", views: value, likes: 0 });
   db.snapshots = [snap(0, 900), ...Array.from({ length: 11 }, (_, i) => snap(i + 1, 20))];
   const brand = { id: "b1", slug: "stashbox", timezone: "America/New_York", settings: {} };
+  db.now = "2026-11-04T12:00:00Z";
   const first = await refreshChanges(db.client, brand, new Date("2026-11-04T12:00:00Z"));
   assert.deepEqual([first.watching, first.proposed], [1, 0]);
   const again = await refreshChanges(db.client, brand, new Date("2026-11-05T12:00:00Z"));
   assert.deepEqual([again.watching, again.proposed], [0, 0], "same week: no promotion");
+  const tooSoon = await refreshChanges(db.client, brand, new Date("2026-11-09T12:00:00Z"));
+  assert.equal(tooSoon.proposed, 0, "a new calendar week only 5 days later is not enough");
   const next = await refreshChanges(db.client, brand, new Date("2026-11-11T12:00:00Z"));
   assert.equal(next.proposed, 1);
   assert.equal(db.rows[0].status, "proposed");

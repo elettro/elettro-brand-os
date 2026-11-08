@@ -18,6 +18,8 @@ export const MAX_PROPOSALS = 8;
 const WINNER_LIFT = 1.25;
 const MUTE_AFTER_SKIPS = 3;
 const MUTE_DAYS = 30;
+// "Holds up" = still qualifies at least this long after it was first seen (a new calendar week alone can be one day later).
+export const MIN_WATCH_DAYS = 6;
 
 export const PLANNER_CHANGE_SQL = [
   `CREATE TABLE IF NOT EXISTS "PlannerChange" (
@@ -115,6 +117,7 @@ export async function refreshChanges(client, brand, now = new Date()) {
     }
     if (row.weekKey === week || ["approved", "undone", "proposed"].includes(row.status)) continue;
     if (row.mutedUntil && new Date(row.mutedUntil) > now) continue;
+    if (row.status === "watching" && now.getTime() - new Date(row.createdAt).getTime() < MIN_WATCH_DAYS * 864e5) continue;
     // Seen again in a later week: it held up. Watching or skipped → proposed (skipped ones only if the finding got stronger).
     const stronger = Number(c.evidence.lift) > Number(row.evidence?.lift || 0);
     if (row.status === "skipped" && !stronger) continue;
