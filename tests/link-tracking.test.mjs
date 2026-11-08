@@ -306,6 +306,8 @@ test("asset-style titles become plain product names", () => {
   assert.equal(productName("Megalophobia Geometric Tee #7 — Every Angle 2"), "Megalophobia Geometric Tee");
   assert.equal(productName("Round Rug Blue Man #1 — Hero Poster"), "Round Rug Blue Man");
   assert.equal(productName("St. Pete Tee #16 - Hero Poster"), "St. Pete Tee");
+  assert.equal(productName("Megalophobia Geometric Tee #7 · Every Angle 2"), "Megalophobia Geometric Tee");
+  assert.equal(productName("Round Rug Blue Man #1 · Hero Poster"), "Round Rug Blue Man");
   assert.equal(productName("Bauhaus Pint Glass"), "Bauhaus Pint Glass");
   assert.equal(productName(""), null);
 });
