@@ -179,3 +179,32 @@ export async function runRecordPostMetrics(event, connectDatabase, json) {
     if (client) await client.end?.();
   }
 }
+
+/**
+ * { brand?, destination?, ledgerId?, externalPostId?, limit? (default 20, max 100) } — the saved snapshots, newest post first, with the raw answers
+ * they were made from and the post's identity, so a number on the Calendar can be checked against the network. Read only.
+ */
+export async function runListPostMetrics(event, connectDatabase, json) {
+  if (!iamOnly(event)) return json(403, { ok: false, error: "Direct IAM invocation required" });
+  const limit = Math.min(100, Math.max(1, Number(event.limit) || 20));
+  const clean = (value) => (value === undefined || value === null || value === "" ? null : String(value));
+  let client;
+  try {
+    client = await connectDatabase();
+    const rows = (await client.query(
+      `SELECT b."slug" AS "brand", pl."destination", pl."placement"::text AS "placement", pl."id" AS "ledgerId", pl."externalPostId", pl."externalUrl", pl."publishedAt",
+              pm."ageBucket", pm."capturedAt", pm."source", pm."views", pm."likes", pm."comments", pm."shares", pm."reach", pm."saves", pm."linkClicks",
+              pm."watchTimeSeconds", pm."avgViewDurationSeconds", pm."followsGained", pm."raw"
+       FROM "PostMetric" pm JOIN "PublicationLedger" pl ON pl."id" = pm."ledgerId" JOIN "Brand" b ON b."id" = pl."brandId"
+       WHERE ($1::text IS NULL OR b."slug" = $1) AND ($2::text IS NULL OR pl."destination" = $2)
+         AND ($3::text IS NULL OR pl."id"::text = $3) AND ($4::text IS NULL OR pl."externalPostId" = $4)
+       ORDER BY pl."publishedAt" DESC, pm."capturedAt" DESC LIMIT $5`,
+      [clean(event.brand), clean(event.destination), clean(event.ledgerId), clean(event.externalPostId), limit])).rows;
+    return json(200, { ok: true, count: rows.length, rows });
+  } catch (error) {
+    console.error("[post-metrics-list] failed", error);
+    return json(500, { ok: false, error: error instanceof Error ? error.message : "list failed" });
+  } finally {
+    if (client) await client.end?.();
+  }
+}
