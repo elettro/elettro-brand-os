@@ -12,6 +12,7 @@ import {createBrand} from "./brand-create.mjs";
 import {runMultiCamSetup, handleMultiCam} from "./multicam.mjs";
 import {runLinkTrackingSetup, handleLinks} from "./link-tracking.mjs";
 import { runPerformance } from "./performance.mjs";
+import { runPlannerChangesSetup, runRefreshChanges } from "./planner-changes.mjs";
 import {runPostMetricsSetup, runListPostMetricsDue, runRecordPostMetrics, runListPostMetrics, runRecomputeYoutubeMetrics} from "./post-metrics.mjs";
 import {runCarouselRefill} from "./carousel-refill.mjs";
 import {handleOpsTick} from "./ops-tick.mjs";
@@ -1640,6 +1641,8 @@ export const handler = async (event = {}) => {
   if (event.action === "list-post-metrics-due-20261107" && !event.requestContext && !event.rawPath && !event.path) return runListPostMetricsDue(event, connectDatabase, json);
   if (event.action === "list-post-metrics-20261108" && !event.requestContext && !event.rawPath && !event.path) return runListPostMetrics(event, connectDatabase, json);
   if (event.action === "recompute-youtube-metrics-20261108" && !event.requestContext && !event.rawPath && !event.path) return runRecomputeYoutubeMetrics(event, connectDatabase, json);
+  if (event.action === "setup-planner-changes-20261108" && !event.requestContext && !event.rawPath && !event.path) return runPlannerChangesSetup(event, connectDatabase, json);
+  if (event.action === "refresh-planner-changes-20261108" && !event.requestContext && !event.rawPath && !event.path) return runRefreshChanges(event, connectDatabase, json);
   if (event.action === "performance-20261108" && !event.requestContext && !event.rawPath && !event.path) return runPerformance(event, connectDatabase, json);
   if (event.action === "record-post-metrics-20261107" && !event.requestContext && !event.rawPath && !event.path) return runRecordPostMetrics(event, connectDatabase, json);
   if(event.action === "setup-multicam-tables-20261101" && !event.requestContext && !event.rawPath && !event.path) return runMultiCamSetup(event,connectDatabase,json);

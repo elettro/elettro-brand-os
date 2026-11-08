@@ -1339,3 +1339,10 @@ code {
 .why-parts dd.neg { color: var(--danger); }
 .why-parts .why-total { border-top: 1px solid var(--line); padding-top: 4px; }
 .why-foot { margin: 4px 0 0; font-size: 12px; }
+.an-head-row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; }
+.an-change { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1 1 360px; }
+.an-change .an-chip { align-self: flex-start; }
+.an-change p { margin: 0; }
+.an-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.an-note { margin: 0; color: var(--accent); }
+.an-list li > .an-change { align-items: flex-start; }

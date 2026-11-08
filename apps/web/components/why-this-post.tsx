@@ -2,7 +2,7 @@ import type { PostWhy } from "@/lib/planner-review";
 
 // "Why this post?" (2026-11-08): the planner's stored reasons for a pick (services/dev-api-lambda/post-why.mjs), shown on Review and
 // Calendar. Collapsed by default; tags stay visible. Until results feed the planner every pick is "rules only", weights v1.
-const TAG_LABEL: Record<string, string> = { "rules-only": "Rules only", exploring: "Exploring" };
+const TAG_LABEL: Record<string, string> = { "rules-only": "Rules only", exploring: "Exploring", boosted: "Results boost" };
 
 export function WhyThisPost({ why, analyticsHref }: { why: PostWhy | null | undefined; analyticsHref?: string }) {
   if (!why) return null;
