@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   newCode, CODE_PATTERN, isBot, trackingConfig, taggedUrl, planPostLink, trackClaimedPosts,
-  recordClick, recordEvent, handleLinks, runLinkTrackingSetup, bioConfig, bioPage, bioImage
+  recordClick, recordEvent, handleLinks, runLinkTrackingSetup, bioConfig, bioPage, bioImage, pickFeatured
 } from "../services/dev-api-lambda/link-tracking.mjs";
 import { handlePlannerOps } from "../services/dev-api-lambda/planner-ops.mjs";
 
@@ -250,7 +250,10 @@ test("a brand without a bio page answers 404; a bad slug answers 400", async () 
 });
 
 test("a bio picture is only served for a tile code", async () => {
-  const client = { async query(sql, params) { return { rows: params[0] === "Ab3x9K7" ? [{ sourcePath: "/brands/stashbox/image/a.jpg" }] : [] }; } };
+  const client = { async query(sql, params) {
+    if (/"placement" LIKE 'bio:featured/.test(sql)) return { rows: [] };
+    return { rows: params[0] === "Ab3x9K7" ? [{ sourcePath: "/brands/stashbox/image/a.jpg" }] : [] };
+  } };
   assert.deepEqual(await bioImage(client, { code: "Ab3x9K7" }), [200, { ok: true, path: "/brands/stashbox/image/a.jpg" }]);
   assert.equal((await bioImage(client, { code: "Zz9x9K7" }))[0], 404);
   assert.equal((await bioImage(client, { code: "../etc" }))[0], 404);
@@ -267,4 +270,34 @@ test("re-running setup without a bio keeps the page's setup", async () => {
   };
   const [, out] = [0, JSON.parse((await runLinkTrackingSetup({ brandSlug: "stashbox", host: "go.stashbox.ai" }, async () => client, (c, b) => ({ statusCode: c, body: JSON.stringify(b) }))).body)];
   assert.equal(out.after.bio.title, "Stashbox");
+});
+
+test("the featured product is one per day, the same all day, and never a bad handle", () => {
+  const rows = [
+    { id: "a1", handle: "night-nurse-tee", title: "Night Nurse Tee", sourcePath: "/p/a1.jpg" },
+    { id: "a2", handle: "night-nurse-tee", title: "Night Nurse Tee", sourcePath: "/p/a2.jpg" },
+    { id: "b1", handle: "bauhaus-pint-glass", title: "Pint Glass", sourcePath: "/p/b1.jpg" },
+    { id: "c1", handle: "Bad Handle!", title: "x", sourcePath: "/p/c1.jpg" }];
+  assert.equal(pickFeatured([], "2026-11-08"), null);
+  const day = pickFeatured(rows, "2026-11-08");
+  assert.deepEqual(pickFeatured(rows, "2026-11-08"), day);
+  assert.ok(["night-nurse-tee", "bauhaus-pint-glass"].includes(day.handle));
+  const seen = new Set(["2026-11-08", "2026-11-09", "2026-11-10", "2026-11-11", "2026-11-12", "2026-11-13"].map((d) => pickFeatured(rows, d).handle));
+  assert.equal(seen.size, 2, "the pick rotates over the days");
+});
+
+test("a bio page with the feature on gets a featured tile with its own tracked link", async () => {
+  const on = { ...bioSettings, linkTracking: { ...bioSettings.linkTracking, bio: { ...bioSettings.linkTracking.bio, featuredProduct: { enabled: true } } } };
+  const client = bioClient({ posts: [] });
+  const base = client.query.bind(client);
+  client.query = async (sql, params = []) => {
+    if (/FROM "Brand"/.test(sql)) return { rows: [{ id: "b1", settings: on }] };
+    if (/lower\(x\) AS tag/.test(sql)) return { rows: [{ id: "a1", handle: "night-nurse-tee", title: "Night Nurse Tee", sourcePath: "/p/a1.jpg" }] };
+    return base(sql, params);
+  };
+  const [, page] = await bioPage(client, { brandSlug: "stashbox" }, { now: new Date("2026-11-08T12:00:00Z") });
+  assert.equal(page.featured.title, "Night Nurse Tee");
+  const link = client.links.find((l) => l.code === page.featured.code);
+  assert.equal(link.targetUrl, "https://stashbox.ai/products/night-nurse-tee");
+  assert.equal(link.placement, "bio:featured:night-nurse-tee");
 });

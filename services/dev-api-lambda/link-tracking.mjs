@@ -282,11 +282,40 @@ export function bioConfig(rawSettings) {
   if (!b || b.enabled !== true) return null;
   const buttons = (Array.isArray(b.buttons) ? b.buttons : [])
     .map((x) => ({ key: String(x?.key || "").toLowerCase().replace(/[^a-z0-9-]+/g, "-").slice(0, 30), label: cleanText(x?.label, 60), url: String(x?.url || "") }))
-    .filter((x) => x.key && x.label && /^https:\/\//.test(x.url) && originOf(x.url)).slice(0, 4);
+    .filter((x) => x.key && x.label && /^https:\/\//.test(x.url) && originOf(x.url)).slice(0, 8);
   return {
     title: cleanText(b.title, 60), tagline: cleanText(b.tagline, 120), buttons,
-    max: Math.min(12, Math.max(2, Number(b.max) || 6)), heading: cleanText(b.heading, 60)
+    max: Math.min(12, Math.max(2, Number(b.max) || 6)), heading: cleanText(b.heading, 60),
+    featured: b.featuredProduct?.enabled === true ? { label: cleanText(b.featuredProduct.label, 40) || "Featured product" } : null
   };
+}
+
+// A product asset is one that carries its Shopify handle in a `product:<handle>` tag. Tags that mark a blank or back-view garment
+// (Dean's rule: never show a blank tee) keep a picture out of the feature.
+const BLANK_TAGS = ["blank", "plain", "back", "back-view", "mockup-blank", "no-design"];
+const FEATURED_SQL = `
+  SELECT a."id", a."title", a."sourcePath", substr(t.tag, 9) AS "handle"
+  FROM "Asset" a CROSS JOIN LATERAL (SELECT lower(x) AS tag FROM unnest(a."tags") x WHERE lower(x) LIKE 'product:%') t
+  WHERE a."brandId" = $1 AND a."kind" = 'image' AND a."approvalStatus" = 'approved' AND a."ingestStatus" = 'ready'
+    AND a."retiredAt" IS NULL AND a."sourcePath" IS NOT NULL
+    AND NOT EXISTS (SELECT 1 FROM unnest(a."tags") y WHERE lower(y) = ANY($2::text[]))`;
+
+/** Pure: today's featured product out of the candidates: one product per day (same pick all day, new pick tomorrow), then its steadiest picture. */
+export function pickFeatured(rows, day) {
+  const handles = [...new Set(rows.map((r) => r.handle).filter((h) => /^[a-z0-9][a-z0-9-]*$/.test(h)))].sort();
+  if (!handles.length) return null;
+  const hash = (text) => { let h = 2166136261; for (const c of text) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619) >>> 0; } return h; };
+  const handle = handles.sort((a, b) => hash(day + a) - hash(day + b))[0];
+  const picture = rows.filter((r) => r.handle === handle).sort((a, b) => hash(a.id) - hash(b.id))[0];
+  return { handle, title: picture.title, assetId: picture.id, path: picture.sourcePath };
+}
+
+async function featuredToday(client, brandId, merchStore, now = new Date()) {
+  let root;
+  try { root = new URL(merchStore).origin; } catch { return null; }
+  const rows = (await client.query(FEATURED_SQL, [brandId, BLANK_TAGS])).rows;
+  const pick = pickFeatured(rows, now.toISOString().slice(0, 10));
+  return pick ? { ...pick, url: `${root}/products/${pick.handle}` } : null;
 }
 
 /** A code for (post, destination) or (button placement): reuse the one that exists, else make it. */
@@ -313,7 +342,7 @@ async function codeFor(client, { brandId, postId = null, placement = null, desti
  * posts that link to one of its own sites (one tile per target page, newest post wins). Every button and tile is a tracked
  * short link, so a tap is counted per post exactly like a link in a caption. Public via the web app; stores no visitor data.
  */
-export async function bioPage(client, body, { makeCode = newCode } = {}) {
+export async function bioPage(client, body, { makeCode = newCode, now = new Date() } = {}) {
   const slug = String(body?.brandSlug || "");
   if (!/^[a-z0-9-]{1,60}$/.test(slug)) return [400, { ok: false, error: "brandSlug is required" }];
   const brand = (await client.query(`SELECT "id", "settings" FROM "Brand" WHERE "slug" = $1`, [slug])).rows[0];
@@ -323,6 +352,14 @@ export async function bioPage(client, body, { makeCode = newCode } = {}) {
   const buttons = [];
   for (const b of bio.buttons) {
     buttons.push({ label: b.label, code: await codeFor(client, { brandId: brand.id, placement: `bio:${b.key}`, destination: "instagram", targetUrl: b.url, makeCode }) });
+  }
+  let featured = null;
+  if (bio.featured) {
+    const pick = await featuredToday(client, brand.id, brand.settings?.planner?.links?.merchStore, now);
+    if (pick && config.origins.includes(new URL(pick.url).origin.toLowerCase())) {
+      featured = { label: bio.featured.label, title: cleanText(pick.title, 90) || pick.handle.replace(/-/g, " "),
+        code: await codeFor(client, { brandId: brand.id, placement: `bio:featured:${pick.handle}`, destination: "instagram", targetUrl: pick.url, makeCode }) };
+    }
   }
   const rows = (await client.query(
     `SELECT sp."id", sp."scoreBreakdown"->'copy'->>'primaryLink' AS "link", a."title", a."filename"
@@ -341,13 +378,21 @@ export async function bioPage(client, body, { makeCode = newCode } = {}) {
     const code = await codeFor(client, { brandId: brand.id, postId: r.id, destination: "instagram", targetUrl: String(r.link), makeCode });
     tiles.push({ code, title: cleanText(r.title, 90) || String(r.filename || "").replace(/\.[a-z0-9]+$/i, "").replace(/[-_]+/g, " ").slice(0, 90) });
   }
-  return [200, { ok: true, brand: slug, title: bio.title, tagline: bio.tagline, heading: bio.heading, buttons, tiles }];
+  return [200, { ok: true, brand: slug, title: bio.title, tagline: bio.tagline, heading: bio.heading, buttons, featured, tiles }];
 }
 
 /** The Dropbox path of a bio tile's picture, for the web app's thumbnail proxy. Only tiles of an Instagram post qualify. */
 export async function bioImage(client, body) {
   const code = String(body?.code || "");
   if (!CODE_PATTERN.test(code)) return [404, { ok: false, error: "Unknown tile" }];
+  // The featured product's tile: the picture of the product named in the link's placement (same pick as the page).
+  const feat = (await client.query(
+    `SELECT "brandId", "placement" FROM "TrackedLink" WHERE "code" = $1 AND "scheduledPostId" IS NULL AND "placement" LIKE 'bio:featured:%'`, [code])).rows[0];
+  if (feat) {
+    const handle = String(feat.placement).slice("bio:featured:".length);
+    const pick = pickFeatured((await client.query(FEATURED_SQL, [feat.brandId, BLANK_TAGS])).rows.filter((r) => r.handle === handle), "");
+    return pick?.path ? [200, { ok: true, path: pick.path }] : [404, { ok: false, error: "No picture" }];
+  }
   const row = (await client.query(
     `SELECT a."sourcePath" FROM "TrackedLink" tl JOIN "ScheduledPost" sp ON sp."id" = tl."scheduledPostId" JOIN "Asset" a ON a."id" = sp."assetId"
      WHERE tl."code" = $1 AND tl."destination" = 'instagram' AND a."kind" = 'image'`, [code])).rows[0];

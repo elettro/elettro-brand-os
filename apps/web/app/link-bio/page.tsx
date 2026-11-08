@@ -7,7 +7,7 @@ import { LINK_HOSTS, linksCall } from "@/lib/link-tracking";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Links", robots: { index: false, follow: false } };
 
-type Bio = { ok?: boolean; title?: string | null; tagline?: string | null; heading?: string | null; buttons?: { label: string; code: string }[]; tiles?: { code: string; title: string }[] };
+type Bio = { ok?: boolean; title?: string | null; tagline?: string | null; heading?: string | null; buttons?: { label: string; code: string }[]; featured?: { label: string; title: string; code: string } | null; tiles?: { code: string; title: string }[] };
 
 export default async function LinkBioPage() {
   const h = await headers();
@@ -28,6 +28,16 @@ export default async function LinkBioPage() {
       <h1>{bio.title || entry.brand}</h1>
       {bio.tagline ? <p className="bio-tagline">{bio.tagline}</p> : null}
       {(bio.buttons || []).map((b, i) => <a key={b.code} className={i === 0 ? "bio-btn primary" : "bio-btn"} href={`/${b.code}`}>{b.label}</a>)}
+      {bio.featured ? (
+        <>
+          <h2>{bio.featured.label}</h2>
+          <a className="bio-tile feature" href={`/${bio.featured.code}`}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={`/api/bio-img/${bio.featured.code}`} alt={bio.featured.title} width={400} height={400} />
+            <span>{bio.featured.title}</span>
+          </a>
+        </>
+      ) : null}
       {bio.tiles?.length ? <h2>{bio.heading || "From our latest posts"}</h2> : null}
       <div className="bio-grid">
         {(bio.tiles || []).map((t) => (
@@ -54,5 +64,7 @@ body{background:#0e0d12!important}
 .bio-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .bio-tile{background:#1a1822;border:1px solid #2e2a3a;border-radius:14px;overflow:hidden;text-decoration:none;color:#f4efe6;display:block}
 .bio-tile img{display:block;width:100%;aspect-ratio:1;object-fit:cover;background:#26232f}
+.bio-tile.feature img{aspect-ratio:4/3}
+.bio-tile.feature{margin-bottom:2px}
 .bio-tile span{display:block;padding:9px 10px 11px;font-size:13px;line-height:1.25}
 `;
