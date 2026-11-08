@@ -48,8 +48,26 @@ export function resolvePlannerSettings(brandSettings) {
     exploration: { ...DEFAULT_PLANNER_SETTINGS.exploration, ...(raw.exploration || {}) },
     cooldowns: { ...DEFAULT_PLANNER_SETTINGS.cooldowns, ...(raw.cooldowns || {}) },
     // Carousel slide ranges set from Review live beside the planner block so a reseed never wipes them.
-    carouselSlides: (brandSettings && typeof brandSettings === "object" && brandSettings.carouselSlides) || {}
+    carouselSlides: (brandSettings && typeof brandSettings === "object" && brandSettings.carouselSlides) || {},
+    // Approved results boosts (planner-changes.mjs), versioned; v1 = rules only. Lives beside the planner block like carouselSlides.
+    weights: normalizeWeights(brandSettings && typeof brandSettings === "object" ? brandSettings.plannerWeights : null)
   };
+}
+
+export const MAX_PERFORMANCE_POINTS = 20;
+export function normalizeWeights(raw) {
+  const boosts = Array.isArray(raw?.boosts) ? raw.boosts.filter((b) => b && b.assetId && Number.isFinite(Number(b.points))) : [];
+  return { version: Number(raw?.version) || 1, boosts };
+}
+
+/** Points an approved boost gives this asset on this account: its own points on the account it won on, cross-post points elsewhere; capped. */
+export function boostFor(weights, socialAccountId, assetId) {
+  let total = 0;
+  for (const b of weights?.boosts || []) {
+    if (b.assetId !== assetId) continue;
+    total += b.homeAccountId === socialAccountId ? Number(b.points) || 0 : Number(b.crossPoints) || 0;
+  }
+  return Math.max(-MAX_PERFORMANCE_POINTS, Math.min(MAX_PERFORMANCE_POINTS, total));
 }
 
 // ---------- dates (same conventions as index.mjs) ----------
@@ -592,6 +610,9 @@ export function planWeek({ assets, accounts, settings, weekStart, timeZone, uses
           : 0,
         tiebreak: round2(jitter(asset.id, slot.slotId))
       };
+      // Results feed in only through boosts Dean approved (planner-changes.mjs); the part is left out when it is zero.
+      const performance = boostFor(settings.weights, slot.socialAccountId, asset.id);
+      if (performance) breakdown.performance = performance;
       return { total: round2(Object.values(breakdown).reduce((s, v) => s + v, 0)), breakdown };
     };
 

@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { authenticated, session } from "@/lib/cognito-auth";
 import { brandConfigs } from "@/lib/brand-config";
 import { reviewCall } from "@/lib/planner-review";
+import { ChangesPanel, type ChangesList } from "./changes-panel";
 import { ANALYTICS_BRANDS, COVERAGE, NETWORK_NAMES, WHY_LABELS, ago, fmt, measuredLabel, watchTime, type BrandAnalytics, type AnalyticsNetwork } from "@/lib/analytics";
 
 // Analytics v1 (Dean, 2026-11-08): owner only (clients never see it), counts and rankings only. Posts are compared within one network,
@@ -141,11 +142,14 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
   }
 
   const data = await load(brand, days, sort, false);
+  let changes: ChangesList | null = null;
+  try { changes = (await reviewCall<ChangesList>({ brand, action: "changes" })).data; } catch { changes = null; }
   if ("failed" in data) return <main className="main">{header}<p className="card" style={{ marginTop: 16 }}>Could not load analytics: {(data as { failed: string }).failed}</p></main>;
   const nets = data.networks;
   const net = nets.find((n) => n.destination === params.net) || nets[0];
   return <main className="main">
     {header}
+    <ChangesPanel brand={brand} initial={changes} />
     <section className="card an-section" aria-labelledby="an-net">
       <h2 id="an-net">By network</h2>
       <p className="muted">Each row uses that network's own main number. "Typical post" is the median, so one hit doesn't skew it. {fmt(data.totals.posts)} posts, {fmt(data.totals.measured)} measured.</p>

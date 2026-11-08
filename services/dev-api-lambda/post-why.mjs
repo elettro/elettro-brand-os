@@ -8,7 +8,7 @@
  */
 
 export const WHY_PARTS = {
-  freshness: "Freshness", priority: "Priority", newBatch: "New batch", balance: "Pillar balance", exploration: "Exploration",
+  performance: "Results boost", freshness: "Freshness", priority: "Priority", newBatch: "New batch", balance: "Pillar balance", exploration: "Exploration",
   ready: "Ready tag", durationFit: "Length fits", songVariety: "Song variety", groupVariety: "Group variety", tiebreak: "Tie-break"
 };
 
@@ -18,6 +18,7 @@ const round1 = (n) => Math.round(Number(n) * 10) / 10;
 export function reasonWords(breakdown) {
   const b = breakdown || {};
   const words = [];
+  if (b.performance > 0) words.push("beat this account's normal before (a boost you approved)");
   if (b.freshness >= 40) words.push("never posted on this account");
   else if (b.freshness > 0) words.push(`rested ${Math.round(b.freshness)} days past its cooldown`);
   if (b.priority >= 40) words.push("hero priority");
@@ -44,7 +45,8 @@ export function whyOf(scoreBreakdown) {
     .map(([key, v]) => ({ key, label: WHY_PARTS[key] || key, points: round1(v) }))
     .sort((a, b) => b.points - a.points);
   const words = reasonWords(s.breakdown);
-  const tags = ["rules-only", ...(s.exploration ? ["exploring"] : [])];
+  const boosted = Number(s.breakdown.performance) > 0;
+  const tags = [boosted ? "boosted" : "rules-only", ...(s.exploration ? ["exploring"] : [])];
   return {
     tags, parts, score: Number.isFinite(Number(s.score)) ? round1(s.score) : null,
     sector: s.sector || null, exploration: Boolean(s.exploration),
