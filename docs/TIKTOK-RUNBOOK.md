@@ -64,7 +64,7 @@ posting flow was checked against TikTok's content-sharing guidelines:
 - The TikTok card now plays the exact video before approval (`/api/tiktok/preview`, a short-lived Dropbox link; owner
   or a user in the brand's group, video assets of that brand only).
 - The worker refuses a direct post longer than the creator's `max_video_post_duration_sec` (`checkDuration`), as well as the card.
-- **Per-post approval for outside client brands** (`TIKTOK_PER_POST_BRANDS` in `apps/web/lib/tiktok-brand-flow.ts`:
-  solarmeister, neckermann-strom): Review hides the week-wide "Approve all N TikTok posts" box for them, so each TikTok
+- **Per-post approval for the outside client brand** (`TIKTOK_PER_POST_BRANDS` in `apps/web/lib/tiktok-brand-flow.ts`:
+  neckermann-strom only): Review hides the week-wide "Approve all N TikTok posts" box for it, so each TikTok
   post is approved from its own TikTok settings. Other brands keep the week box.
 - Already compliant: nickname shown, no default privacy, Comment/Duet/Stitch unchecked, commercial-content disclosure, consent line, nothing added to the caption.
