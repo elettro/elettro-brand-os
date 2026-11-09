@@ -4,6 +4,7 @@ import { canAccessBrand, visibleBrands } from "@/lib/brand-access";
 import { brandConfigs } from "@/lib/brand-config";
 import { REVIEW_BRANDS, type ReviewList, reviewCall } from "@/lib/planner-review";
 import { ReviewClient } from "./review-client";
+import { TIKTOK_PER_POST_BRANDS } from "@/lib/tiktok-brand-flow";
 
 export default async function ReviewPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const who = await session();
@@ -28,7 +29,9 @@ export default async function ReviewPage({ searchParams }: { searchParams: Promi
   return <main className="main">
     <div className="eyebrow">Publishing · Review</div>
     <h1>Review</h1>
-    <p className="muted">This week and the next two months of posts on every network. Click a week&apos;s strip to open or close it. Approve week once and every post in it goes out at its time, including posts added to that week later; skip, fix a caption or swap a clip only where you want to. TikTok posts are approved together in each week&apos;s TikTok box, where you choose TikTok&apos;s settings once, as TikTok requires. Nothing posts until it is approved.</p>
+    <p className="muted">This week and the next two months of posts on every network. Click a week&apos;s strip to open or close it. Approve week once and every post in it goes out at its time, including posts added to that week later; skip, fix a caption or swap a clip only where you want to. {TIKTOK_PER_POST_BRANDS.includes(brand)
+      ? <>TikTok posts are approved one at a time: open a post&apos;s TikTok settings, preview the video and choose its settings, as TikTok requires.</>
+      : <>TikTok posts are approved together in each week&apos;s TikTok box, where you choose TikTok&apos;s settings once, as TikTok requires.</>} Nothing posts until it is approved.</p>
     <nav className="review-brands" aria-label="Brand">
       {brands.map((b) => <a key={b.id} href={`/review?brand=${b.id}`} className={b.id === brand ? "active" : undefined}>{b.name}</a>)}
     </nav>
