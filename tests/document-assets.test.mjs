@@ -61,3 +61,13 @@ test("a PDF is only plannable by a placement that lists document", () => {
   assert.equal(poolRejection(pdf, { destination: "linkedin", placement: "document" }, withDocs), null);
   assert.equal(poolRejection({ kind: "video", filename: "a.mp4", tags: [] }, reel, settings), null);
 });
+
+test("a TikTok video slot only takes videos, even when the brand pool allows images", () => {
+  const settings = resolvePlannerSettings({ planner: { pool: { kinds: ["image", "video"] }, placements: {} } });
+  const tiktokVideo = { destination: "tiktok", placement: "video" };
+  const base = { tags: [], allowedDestinations: [], excludedDestinations: [] };
+  assert.equal(poolRejection({ ...base, kind: "image", aspectRatioLabel: "4x5" }, tiktokVideo, settings), "kind");
+  assert.equal(poolRejection({ ...base, kind: "video", aspectRatioLabel: "9x16" }, tiktokVideo, settings), null);
+  // Other networks keep the brand pool.
+  assert.equal(poolRejection({ ...base, kind: "image", aspectRatioLabel: "4x5" }, { destination: "threads", placement: "post" }, settings), null);
+});
