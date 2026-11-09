@@ -45,6 +45,8 @@ export function TiktokCard({ post, creator, creatorError, busy, onApprove, actio
   preview?: { brand: string; assetId: string };
 }) {
   const saved = post.tiktok;
+  // The approver chooses: post it live now (Direct Post) or send it to their TikTok drafts to finish in TikTok.
+  const [sendTo, setSendTo] = useState<"live" | "draft">(saved?.sendTo === "draft" ? "draft" : "live");
   const [privacyLevel, setPrivacy] = useState(saved?.privacyLevel || "");
   const [allowComment, setComment] = useState(saved?.allowComment ?? false);
   const [allowDuet, setDuet] = useState(saved?.allowDuet ?? false);
@@ -59,7 +61,7 @@ export function TiktokCard({ post, creator, creatorError, busy, onApprove, actio
   const tooLong = creator.maxVideoPostDurationSec && post.asset.durationMs
     ? post.asset.durationMs / 1000 > creator.maxVideoPostDurationSec : false;
   const disclosureIncomplete = disclose && !yourBrand && !brandedContent;
-  const ready = Boolean(privacyLevel) && !disclosureIncomplete && !tooLong;
+  const ready = sendTo === "draft" ? !tooLong : Boolean(privacyLevel) && !disclosureIncomplete && !tooLong;
 
   return <div className="tiktok-card">
     <div className="tiktok-account">
@@ -68,6 +70,12 @@ export function TiktokCard({ post, creator, creatorError, busy, onApprove, actio
     </div>
     {preview && <VideoPreview brand={preview.brand} assetId={preview.assetId} />}
     {tooLong && <p className="review-warn">This clip is longer than the {creator.maxVideoPostDurationSec}s TikTok allows for this account. Swap the clip.</p>}
+    <fieldset className="tiktok-sendto" style={{ border: 0, padding: 0, margin: "8px 0" }}>
+      <legend className="muted">What should happen when this post is approved?</legend>
+      <label><input type="radio" name="tiktok-sendto" checked={sendTo === "live"} onChange={() => setSendTo("live")} /> Post live now <span className="muted">— publishes to the TikTok profile</span></label>{" "}
+      <label><input type="radio" name="tiktok-sendto" checked={sendTo === "draft"} onChange={() => setSendTo("draft")} /> Send to my TikTok drafts <span className="muted">— finish and post it in the TikTok app</span></label>
+    </fieldset>
+    {sendTo === "live" && <>
     <label className="tiktok-field">Who can view this video
       <select value={privacyLevel} onChange={(e) => setPrivacy(e.target.value)}>
         <option value="" disabled>Choose…</option>
@@ -89,14 +97,18 @@ export function TiktokCard({ post, creator, creatorError, busy, onApprove, actio
       {disclosureIncomplete && <p className="review-warn">You need to indicate if your content promotes yourself, a third party, or both.</p>}
       {(yourBrand || brandedContent) && <p className="muted tiktok-label">Your video will be labeled “{brandedContent ? "Paid partnership" : "Promotional content"}”.</p>}
     </div>}
+    </>}
+    {sendTo === "draft" && <p className="muted">The video goes to the drafts of the connected TikTok account. Nothing is posted: you choose who can view it, comments, Duet and Stitch, and post it yourself in the TikTok app.</p>}
     <p className="muted tiktok-consent">
       By posting, you agree to TikTok&apos;s{" "}
-      {brandedContent && <><a href="https://www.tiktok.com/legal/page/global/bc-policy/en" target="_blank" rel="noreferrer">Branded Content Policy</a> and{" "}</>}
+      {sendTo === "live" && brandedContent && <><a href="https://www.tiktok.com/legal/page/global/bc-policy/en" target="_blank" rel="noreferrer">Branded Content Policy</a> and{" "}</>}
       <a href="https://www.tiktok.com/legal/page/global/music-usage-confirmation/en" target="_blank" rel="noreferrer">Music Usage Confirmation</a>.
-      {" "}After it posts, TikTok may take a few minutes to process the video before it appears on the profile.
+      {" "}{sendTo === "live" ? "After it posts, TikTok may take a few minutes to process the video before it appears on the profile." : "TikTok may take a few minutes to process the video before it appears in your drafts."}
     </p>
     <div className="review-actions">
-      <button className="status-chip" disabled={busy || !ready} onClick={() => onApprove({
+      <button className="status-chip" disabled={busy || !ready} onClick={() => onApprove(sendTo === "draft" ? {
+        sendTo: "draft", privacyLevel: "", allowComment: false, allowDuet: false, allowStitch: false, yourBrand: false, brandedContent: false, disclose: false
+      } : {
         privacyLevel, allowComment: allowComment && !creator.commentDisabled, allowDuet: allowDuet && !creator.duetDisabled,
         allowStitch: allowStitch && !creator.stitchDisabled, yourBrand, brandedContent, disclose
       })}>{actionLabel || (post.status === "approved" ? "Update TikTok settings" : "Approve for TikTok")}</button>

@@ -263,6 +263,8 @@ const PRIVACY_LEVELS = ["PUBLIC_TO_EVERYONE", "MUTUAL_FOLLOW_FRIENDS", "FOLLOWER
 // console test a private post with interactions on.
 export function manualSettings(event) {
   const s = event.settings && typeof event.settings === "object" ? event.settings : null;
+  // A draft needs no posting settings: the creator picks them in TikTok when finishing it.
+  if (s?.sendTo === "draft") return { sendTo: "draft" };
   if (!s) return { privacyLevel: String(event.privacyLevel || "SELF_ONLY"), allowComment: true, allowDuet: true, allowStitch: true };
   if (!PRIVACY_LEVELS.includes(s.privacyLevel)) throw new Error("Choose who can view this TikTok post");
   const settings = {
@@ -437,7 +439,8 @@ export function requestFromPost(post, mode) {
   const tags = (post.hashtags || []).map((h) => String(h).replace(/^#/, "").trim()).filter(Boolean);
   const caption = [post.caption, tags.map((t) => `#${t}`).join(" ")].map((p) => String(p || "").trim()).filter(Boolean).join("\n\n");
   return {
-    ...postRequest({ brand: "planner", dropboxPath: post.dropboxPath, caption: caption.slice(0, 2200), mode }),
+    // The approver's choice wins: "Send to my TikTok drafts" is a draft even after the audit passes.
+    ...postRequest({ brand: "planner", dropboxPath: post.dropboxPath, caption: caption.slice(0, 2200), mode: post.tiktok?.sendTo === "draft" ? "draft" : mode }),
     openId: String(post.channelId || ""), settings: post.tiktok || null, aigc: post.synthetic === true
   };
 }

@@ -320,3 +320,13 @@ test("reschedule moves one unsent post, and only to a sensible time", async () =
   const gone = await handlePlannerReview(event, { brand: "stashbox", action: "reschedule", id, scheduledFor: soon }, async () => fakeClient(), json);
   assert.equal(gone.statusCode, 404);
 });
+
+test("tiktokSettings: 'Send to my TikTok drafts' needs no privacy choice and stores none", async () => {
+  const { tiktokSettings } = await import("../services/dev-api-lambda/planner-review.mjs");
+  const s = tiktokSettings({ sendTo: "draft" });
+  assert.equal(s.sendTo, "draft");
+  assert.equal(s.privacyLevel, "");
+  assert.equal(s.allowComment, false);
+  // A live post still has to choose who can view it.
+  assert.throws(() => tiktokSettings({ sendTo: "live" }), /who can view/);
+});

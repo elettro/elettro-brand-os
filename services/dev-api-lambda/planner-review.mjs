@@ -255,6 +255,11 @@ async function swapAsset(client, brand, body) {
 // TikTok's posting rules: the creator picks who can view (no default), interactions and the
 // commercial content disclosure; branded content (a paid partnership) can't be private.
 export function tiktokSettings(body) {
+  // "Send to my TikTok drafts": the creator finishes and posts it in TikTok, which asks for the privacy and
+  // interaction choices itself, so none are stored. Anything else (or nothing) is a live Direct Post.
+  if (body?.sendTo === "draft") {
+    return { sendTo: "draft", privacyLevel: "", allowComment: false, allowDuet: false, allowStitch: false, yourBrand: false, brandedContent: false };
+  }
   const privacyLevel = String(body?.privacyLevel || "");
   if (!TIKTOK_PRIVACY.includes(privacyLevel)) throw new Error("Choose who can view this TikTok post");
   const settings = {

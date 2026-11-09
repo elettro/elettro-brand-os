@@ -5,13 +5,15 @@ import { DEV_ORIGIN } from "@/lib/cognito-auth";
 // Sandbox and production have different client keys, so both key and secret come from
 // Secrets Manager (elettro-brand-os-dev/tiktok-oauth, plain JSON {"clientKey","clientSecret"}).
 export const TIKTOK_CALLBACK = DEV_ORIGIN + "/api/connections/tiktok/callback";
-// Only what the app review demo shows working: the account card (basic + profile for the
-// username) and direct posting. Stats and video list (analytics) and video.upload (inbox drafts)
-// come back in a later review once Elettro OS uses them on screen.
+// What the app review demo shows working: the account card (basic + profile for the username),
+// direct posting, and the approver's option to send a video to their TikTok drafts (video.upload).
+// Stats and video list (analytics) come back in a later review once Elettro OS uses them on screen.
 export const TIKTOK_SCOPES = [
   "user.info.basic",
   "user.info.profile",
-  "video.publish"
+  "video.publish",
+  // "Send to my TikTok drafts": the approver may send a video to their drafts instead of posting it live.
+  "video.upload"
 ];
 export const TIKTOK_STATE_COOKIE = "elettro_dev_tiktok_state";
 // Stashbox (@stashboxmusic) first. SolarMeister (@solarmeistershop, private) is the account for

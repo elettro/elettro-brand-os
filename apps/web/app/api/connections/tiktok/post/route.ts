@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
     const asset = await brandAsset(brand, String(body.assetId || ""));
     if (asset.kind !== "video") return fail("TikTok posts here are videos; pick a video");
     const posted = await tiktokWorker<{ publishId?: string; handle?: string; status?: string }>({
-      action: "post", brand, mode: "direct", dropboxPath: asset.sourcePath, caption, settings: body.settings || {},
+      action: "post", brand, mode: (body.settings as { sendTo?: string } | undefined)?.sendTo === "draft" ? "draft" : "direct", dropboxPath: asset.sourcePath, caption, settings: body.settings || {},
       durationSec: asset.durationMs ? asset.durationMs / 1000 : undefined
     });
     if (!posted.ok || !posted.publishId) return fail(posted.error || "TikTok post failed", 502);
