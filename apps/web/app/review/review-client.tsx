@@ -91,6 +91,16 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
   const brand = list.brand;
   // Outside client brands approve TikTok posts one by one; the week-wide TikTok box is hidden for them.
   const perPostTiktok = TIKTOK_PER_POST_BRANDS.includes(brand);
+  // A finished plan summary ("Ready to review: 89 posts") can be closed; remembered per run in this browser.
+  const [dismissedRuns, setDismissedRuns] = useState<string[]>([]);
+  useEffect(() => { try { setDismissedRuns(JSON.parse(localStorage.getItem("review-plan-dismissed") || "[]")); } catch { /* private window: nothing remembered */ } }, []);
+  function dismissRun(runId: string) {
+    setDismissedRuns((now) => {
+      const next = [...now, runId].slice(-50);
+      try { localStorage.setItem("review-plan-dismissed", JSON.stringify(next)); } catch { /* private window: closes for this visit only */ }
+      return next;
+    });
+  }
 
   const fmtDay = (iso: string) => new Date(iso).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: tz });
   const fmtTime = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: tz });
@@ -345,7 +355,7 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
       // The week under way plans only its remaining days; the planner skips slots already past.
       const underway = w.start <= today;
       const planStatus = list.planStatus?.[w.start];
-      const showPlanStatus = planStatus && (planStatus.running || nowMs - Date.parse(planStatus.startedAt) < PLAN_SUMMARY_MS);
+      const showPlanStatus = planStatus && (planStatus.running || (nowMs - Date.parse(planStatus.startedAt) < PLAN_SUMMARY_MS && !dismissedRuns.includes(planStatus.runId)));
       return <section key={w.start} className={`review-week${isOpen ? " open" : ""}`}>
         <header onClick={(e) => { if (!(e.target as HTMLElement).closest(".review-actions")) toggle(w.start); }}>
           <button type="button" className="review-week-toggle" aria-expanded={isOpen}>
@@ -369,7 +379,7 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
             </button>}
           </div>
         </header>
-        {showPlanStatus && <PlanProgress status={planStatus} names={NETWORK} />}
+        {showPlanStatus && <PlanProgress status={planStatus} names={NETWORK} onDismiss={() => dismissRun(planStatus.runId)} />}
         {isOpen && tiktokToReview > 0 && !perPostTiktok && <section className="card tiktok-week">
           <div className="eyebrow">TikTok this week · {tiktokToReview} post{tiktokToReview === 1 ? "" : "s"} to approve</div>
           <div className="tiktok-week-thumbs">

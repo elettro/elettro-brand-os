@@ -23,7 +23,7 @@ export function totals(status: PlanWeekStatus) {
   };
 }
 
-export function PlanProgress({ status, names }: { status: PlanWeekStatus; names: Record<string, string> }) {
+export function PlanProgress({ status, names, onDismiss }: { status: PlanWeekStatus; names: Record<string, string>; onDismiss?: () => void }) {
   const entries = Object.entries(status.networks).sort(([a], [b]) => a.localeCompare(b));
   const pct = status.total ? Math.round((status.finished / status.total) * 100) : 0;
   const t = totals(status);
@@ -32,6 +32,8 @@ export function PlanProgress({ status, names }: { status: PlanWeekStatus; names:
       <strong>{status.running ? `Planning… ${status.finished} of ${status.total} networks` : `Ready to review: ${t.posts} posts, ${t.ai} AI captions`}</strong>
       {!status.running && t.failed > 0 && <span className="plan-progress-warn">{t.failed} network{t.failed === 1 ? "" : "s"} failed, replan to retry</span>}
       {status.source === "tick" && <span className="muted">started by the automatic planner</span>}
+      {/* A finished run's summary can be closed; a running one cannot. */}
+      {!status.running && onDismiss && <button type="button" className="status-chip" style={{ marginLeft: "auto" }} aria-label="Close this summary" title="Close this summary" onClick={onDismiss}>×</button>}
     </div>
     <div className="plan-progress-bar" aria-hidden="true"><span style={{ width: `${pct}%` }} /></div>
     <ul className="plan-progress-nets">
