@@ -408,7 +408,7 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
               <div className="review-body">
                 <div className="review-meta">
                   <b>{NETWORK[p.destination] || p.destination}</b> · {p.placement} · {fmtTime(p.scheduledFor)}
-                  <span className={`review-status ${p.status}`}>{p.status === "planned" ? "to review" : p.status}</span>
+                  <span className={`review-status ${p.status}`}>{p.status === "planned" ? "to review" : p.status === "published" && p.destination === "tiktok" && p.tiktok?.sendTo === "draft" ? "sent to TikTok drafts" : p.status}</span>
                 </div>
                 {(p.status === "approved" || p.status === "planned") && (() => {
                   const at = new Date(p.scheduledFor).getTime();
