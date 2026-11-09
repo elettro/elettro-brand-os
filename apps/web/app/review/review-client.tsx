@@ -8,6 +8,7 @@ import { NetworkLogo } from "@/components/network-logo";
 import { WhyThisPost } from "@/components/why-this-post";
 import { TICK_MS, countdown } from "@/lib/post-eta";
 import { PlanProgress, totals as planTotals } from "./plan-progress";
+import { TIKTOK_PER_POST_BRANDS } from "@/lib/tiktok-brand-flow";
 
 // While a week is being planned the page re-reads the list this often; a finished plan shows its summary this long.
 const PLAN_POLL_MS = 5000;
@@ -88,6 +89,8 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
   const [tiktokOpen, setTiktokOpen] = useState<string | null>(null);
   const tz = list.timeZone;
   const brand = list.brand;
+  // Outside client brands approve TikTok posts one by one; the week-wide TikTok box is hidden for them.
+  const perPostTiktok = TIKTOK_PER_POST_BRANDS.includes(brand);
 
   const fmtDay = (iso: string) => new Date(iso).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: tz });
   const fmtTime = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: tz });
@@ -353,9 +356,9 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
           <span className="muted">{w.posts.length ? `${approved} approved · ${planned} to review · ${skipped} skipped` : "Nothing planned yet"}</span>
           <div className="review-actions">
             {planned > tiktokToReview && <button className="status-chip" disabled={!!busy}
-              title="Approves every network's posts this week; posts added to the week later are approved too. TikTok posts are approved together from the week's TikTok box."
+              title={`Approves every network's posts this week; posts added to the week later are approved too. TikTok posts are approved ${perPostTiktok ? "one at a time, from each post's TikTok settings" : "together from the week's TikTok box"}.`}
               onClick={() => run("week", { action: "approve-range", from: w.start, to: w.end },
-                `Week of ${w.start} approved: every post goes out at its time, including any added later.${tiktokToReview ? ` Approve the ${tiktokToReview} TikTok post${tiktokToReview === 1 ? "" : "s"} in the week's TikTok box.` : ""}`)}>Approve week</button>}
+                `Week of ${w.start} approved: every post goes out at its time, including any added later.${tiktokToReview ? ` Approve the ${tiktokToReview} TikTok post${tiktokToReview === 1 ? "" : "s"} ${perPostTiktok ? "one at a time from each post's TikTok settings" : "in the week's TikTok box"}.` : ""}`)}>Approve week</button>}
             {w.end >= today && (weekApproved || w.posts.some((p) => ["planned", "approved", "skipped", "failed"].includes(p.status))) && <button className="status-chip" disabled={!!busy}
               title="Deletes this week's posts that haven't gone out yet and un-approves the week. Published and queued posts stay."
               onClick={() => { if (window.confirm(`Reset the week of ${w.start}? Its unsent posts are deleted and the week is un-approved. Published posts stay.`)) run("week", { action: "reset-week", from: w.start, to: w.end }, `Week of ${w.start} reset. Plan it again when ready.`); }}>Reset week</button>}
@@ -367,7 +370,7 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
           </div>
         </header>
         {showPlanStatus && <PlanProgress status={planStatus} names={NETWORK} />}
-        {isOpen && tiktokToReview > 0 && <section className="card tiktok-week">
+        {isOpen && tiktokToReview > 0 && !perPostTiktok && <section className="card tiktok-week">
           <div className="eyebrow">TikTok this week · {tiktokToReview} post{tiktokToReview === 1 ? "" : "s"} to approve</div>
           <div className="tiktok-week-thumbs">
             {tiktokPlanned.map((p) => <span key={p.id} title={`${fmtDay(p.scheduledFor)} ${fmtTime(p.scheduledFor)} · ${p.asset.title || p.asset.filename}`}>
@@ -440,7 +443,7 @@ export function ReviewClient({ initial }: { initial: ReviewList }) {
                 {p.custom?.kind === "link" && <p className="review-caption"><b>{p.custom.title}</b> <a href={p.custom.url} target="_blank" rel="noreferrer">{p.custom.url}</a></p>}
                 {!p.custom && <p className="muted review-file">{p.asset.title || p.asset.filename}{p.sector ? ` · ${p.sector}` : ""}</p>}
                 <WhyThisPost why={p.why} />
-                {reviewable(p) && p.destination === "tiktok" && p.status !== "skipped" && tiktokOpen === p.id && <TiktokCard post={p} creator={creator} creatorError={creatorError} busy={!!busy}
+                {reviewable(p) && p.destination === "tiktok" && p.status !== "skipped" && tiktokOpen === p.id && <TiktokCard post={p} creator={creator} creatorError={creatorError} busy={!!busy} preview={{ brand, assetId: p.asset.id }}
                   onApprove={async (settings) => { await run(p.id, { action: "tiktok-approve", id: p.id, ...settings }, "Approved for TikTok with these settings."); setTiktokOpen(null); }} />}
                 {reviewable(p) && <div className="review-actions">
                   {p.status !== "approved" && p.destination !== "tiktok" && <button className="status-chip" disabled={!!busy} onClick={() => run(p.id, { action: "set-status", ids: [p.id], status: "approved" })}>Approve</button>}

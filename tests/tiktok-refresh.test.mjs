@@ -203,3 +203,12 @@ test("a carousel post hosts the images, then makes one content/init call with th
   });
   assert.deepEqual(calls, ["/post/publish/creator_info/query/", "/post/publish/content/init/"]);
 });
+
+test("a clip longer than the account's TikTok limit is refused on the server", async () => {
+  const { checkDuration } = await import("../services/tiktok-lambda/index.mjs");
+  assert.throws(() => checkDuration({ max_video_post_duration_sec: 60 }, 61), /allows up to 60s/);
+  assert.doesNotThrow(() => checkDuration({ max_video_post_duration_sec: 60 }, 60));
+  // No limit from TikTok, or no length known: nothing to compare, so it is allowed.
+  assert.doesNotThrow(() => checkDuration({}, 600));
+  assert.doesNotThrow(() => checkDuration({ max_video_post_duration_sec: 60 }, null));
+});

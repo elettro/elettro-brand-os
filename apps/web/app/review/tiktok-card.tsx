@@ -16,9 +16,33 @@ const PRIVACY: Record<string, string> = {
 // TikTok's Content Posting rules, shown before every TikTok approval: the account it posts to,
 // who can view (no default), comments/duet/stitch, the commercial content disclosure and the
 // consent line. Approving sends these settings with the post.
-export function TiktokCard({ post, creator, creatorError, busy, onApprove, actionLabel }: {
+// TikTok requires a preview of the content that will be posted: a playable copy of the exact video,
+// loaded on request through a short-lived link.
+function VideoPreview({ brand, assetId }: { brand: string; assetId: string }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  async function load() {
+    setLoading(true); setError(null);
+    try {
+      const r = await fetch(`/api/tiktok/preview?brand=${encodeURIComponent(brand)}&assetId=${encodeURIComponent(assetId)}`);
+      const data = await r.json().catch(() => ({})) as { ok?: boolean; url?: string; error?: string };
+      if (!r.ok || !data.ok || !data.url) throw Error(data.error || `HTTP ${r.status}`);
+      setUrl(data.url);
+    } catch (e) { setError(e instanceof Error ? e.message : "Preview failed"); } finally { setLoading(false); }
+  }
+  if (url) return <video className="tiktok-preview" src={url} controls playsInline preload="metadata" style={{ maxWidth: 220, maxHeight: 390, borderRadius: 8 }} />;
+  return <div className="tiktok-preview-box">
+    <button type="button" className="status-chip" disabled={loading} onClick={load}>{loading ? "Loading preview…" : "Preview the video that will be posted"}</button>
+    {error && <p className="review-warn">{error}</p>}
+  </div>;
+}
+
+export function TiktokCard({ post, creator, creatorError, busy, onApprove, actionLabel, preview }: {
   post: TiktokCardPost; creator: TiktokCreator | null; creatorError: string | null; busy: boolean;
   onApprove: (settings: TiktokSettings & { disclose: boolean }) => void; actionLabel?: string;
+  // Single posts pass their brand and video so the card can play it; the week's shared card has no single video.
+  preview?: { brand: string; assetId: string };
 }) {
   const saved = post.tiktok;
   const [privacyLevel, setPrivacy] = useState(saved?.privacyLevel || "");
@@ -42,6 +66,7 @@ export function TiktokCard({ post, creator, creatorError, busy, onApprove, actio
       {creator.avatarUrl && <img src={creator.avatarUrl} alt="" width={28} height={28} />}
       <span>Posting to <b>{creator.nickname || creator.username}</b>{creator.username && <span className="muted"> @{creator.username}</span>}</span>
     </div>
+    {preview && <VideoPreview brand={preview.brand} assetId={preview.assetId} />}
     {tooLong && <p className="review-warn">This clip is longer than the {creator.maxVideoPostDurationSec}s TikTok allows for this account. Swap the clip.</p>}
     <label className="tiktok-field">Who can view this video
       <select value={privacyLevel} onChange={(e) => setPrivacy(e.target.value)}>
