@@ -212,3 +212,12 @@ test("a clip longer than the account's TikTok limit is refused on the server", a
   assert.doesNotThrow(() => checkDuration({}, 600));
   assert.doesNotThrow(() => checkDuration({ max_video_post_duration_sec: 60 }, null));
 });
+
+test("an approver who picks 'Send to my TikTok drafts' gets a draft even in direct mode, with no posting settings needed", () => {
+  const draft = { sendTo: "draft" };
+  assert.deepEqual(manualSettings({ settings: draft }), { sendTo: "draft" });
+  const post = { dropboxPath: "/1---elettro-brand-os/brands/neckermann-strom/video/a.mp4", caption: "Hallo", hashtags: [], channelId: "x", tiktok: draft };
+  assert.equal(requestFromPost(post, "direct").mode, "draft");
+  // Without the choice the tick mode decides, as before.
+  assert.equal(requestFromPost({ ...post, tiktok: { privacyLevel: "SELF_ONLY" } }, "direct").mode, "direct");
+});

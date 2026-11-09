@@ -23,7 +23,8 @@ export type HolidayDraft = {
 };
 export type HolidayList = { ok: boolean; error?: string; brand: string; holiday: string; name: string; date: string; timeZone: string; destinations: string[]; drafts: HolidayDraft[]; choices: ReviewAsset[] };
 
-export type TiktokSettings = { privacyLevel: string; allowComment: boolean; allowDuet: boolean; allowStitch: boolean; yourBrand: boolean; brandedContent: boolean };
+// sendTo "draft": the video goes to the creator's TikTok drafts (video.upload) and they finish it in TikTok; absent = live Direct Post.
+export type TiktokSettings = { sendTo?: "live" | "draft"; privacyLevel: string; allowComment: boolean; allowDuet: boolean; allowStitch: boolean; yourBrand: boolean; brandedContent: boolean };
 export type TiktokCreator = {
   username: string | null; nickname: string | null; avatarUrl: string | null; privacyLevelOptions: string[];
   commentDisabled: boolean; duetDisabled: boolean; stitchDisabled: boolean; maxVideoPostDurationSec: number | null;

@@ -50,9 +50,9 @@ If it's missing: start the Lambda builds with `gh workflow run <workflow>.yml --
 
 ## Scopes
 
-The first app review requests only what the demo shows working: `user.info.basic`, `user.info.profile` (username on
+The first app review requested only what the demo showed working: `user.info.basic`, `user.info.profile` (username on
 the account card) and `video.publish` (direct posts). `user.info.stats` and `video.list` (analytics) and
-`video.upload` (inbox drafts) go into a later review together with a screen that uses them. Changing
+`video.upload` is requested again from 2026-11-09: the approver chooses "Post live now" or "Send to my TikTok drafts" on the TikTok card, so the demo shows both. The analytics scopes go into a later review together with a screen that uses them. Changing
 `TIKTOK_SCOPES` (apps/web/lib/tiktok-connect.ts) changes TikTok's consent screen; accounts keep the scopes they
 granted until they reconnect.
 
@@ -68,3 +68,7 @@ posting flow was checked against TikTok's content-sharing guidelines:
   neckermann-strom only): Review hides the week-wide "Approve all N TikTok posts" box for it, so each TikTok
   post is approved from its own TikTok settings. Other brands keep the week box.
 - Already compliant: nickname shown, no default privacy, Comment/Duet/Stitch unchecked, commercial-content disclosure, consent line, nothing added to the caption.
+
+## Live or drafts choice (2026-11-09)
+
+The TikTok card has a choice per post: **Post live now** (Direct Post, `video.publish`, needs who-can-view, interactions and disclosure) or **Send to my TikTok drafts** (`video.upload`; TikTok asks for those settings when the creator finishes it). It is stored as `ScheduledPost.scoreBreakdown.tiktok.sendTo = "draft"` (absent = live); the worker sends a draft whenever that is set, even when `TIKTOK_TICK_MODE=direct`. Accounts connected before this change must reconnect once to grant `video.upload`. Photo carousels are unchanged.
