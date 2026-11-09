@@ -26,7 +26,9 @@ export const DEFAULT_PLANNER_SETTINGS = {
   // (2:3 is Pinterest's ideal, 4:5 and 1:1 also work) and 9:16 clips as video Pins.
   placements: {
     "pinterest:pin": { kinds: ["image"], aspectRatios: ["2x3", "4x5", "1x1"] },
-    "pinterest:video": { kinds: ["video"], aspectRatios: ["9x16"], maxDurationBucket: "1-3min", preferredDurationBuckets: ["15-30s", "30-60s"] }
+    "pinterest:video": { kinds: ["video"], aspectRatios: ["9x16"], maxDurationBucket: "1-3min", preferredDurationBuckets: ["15-30s", "30-60s"] },
+    // A TikTok video post is a video, never a still (a brand pool that allows images used to put a PNG in a TikTok video slot).
+    "tiktok:video": { kinds: ["video"] }
   },
   sectors: [],
   minPoolForSector: 3,
