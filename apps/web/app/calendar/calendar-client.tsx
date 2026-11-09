@@ -77,7 +77,7 @@ function statValue(key: CalendarStatKey, value: number): string {
 
 // What a post's badge says.
 function stateOf(p: CalendarPost): { key: string; label: string } {
-  if (p.status === "published") return { key: "published", label: "Published" };
+  if (p.status === "published") return p.destination === "tiktok" && p.tiktok?.sendTo === "draft" ? { key: "published", label: "Sent to TikTok drafts" } : { key: "published", label: "Published" };
   if (p.status === "paused") return p.passedOver ? { key: "passed", label: "Passed over" } : { key: "paused", label: "Paused" };
   if (p.status === "approved") return new Date(p.at).getTime() < Date.now() ? { key: "sending", label: "Sending" } : { key: "approved", label: "Approved" };
   return { key: "sending", label: "Sending now" };
