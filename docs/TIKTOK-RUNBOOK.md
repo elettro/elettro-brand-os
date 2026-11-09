@@ -55,3 +55,16 @@ the account card) and `video.publish` (direct posts). `user.info.stats` and `vid
 `video.upload` (inbox drafts) go into a later review together with a screen that uses them. Changing
 `TIKTOK_SCOPES` (apps/web/lib/tiktok-connect.ts) changes TikTok's consent screen; accounts keep the scopes they
 granted until they reconnect.
+
+## Direct Post audit UX (2026-11-09)
+
+After the Direct Post audit was rejected ("personal use or internal company use", reference 20261028172418) the
+posting flow was checked against TikTok's content-sharing guidelines:
+
+- The TikTok card now plays the exact video before approval (`/api/tiktok/preview`, a short-lived Dropbox link; owner
+  or a user in the brand's group, video assets of that brand only).
+- The worker refuses a direct post longer than the creator's `max_video_post_duration_sec` (`checkDuration`), as well as the card.
+- **Per-post approval for outside client brands** (`TIKTOK_PER_POST_BRANDS` in `apps/web/lib/tiktok-brand-flow.ts`:
+  solarmeister, neckermann-strom): Review hides the week-wide "Approve all N TikTok posts" box for them, so each TikTok
+  post is approved from its own TikTok settings. Other brands keep the week box.
+- Already compliant: nickname shown, no default privacy, Comment/Duet/Stitch unchecked, commercial-content disclosure, consent line, nothing added to the caption.

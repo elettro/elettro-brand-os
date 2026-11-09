@@ -64,7 +64,7 @@ export function TiktokPost({ brand }: { brand: string }) {
       <label className="muted" htmlFor={`tiktok-${brand}-caption`}>Caption</label>
       <textarea id={`tiktok-${brand}-caption`} rows={3} maxLength={2200} value={caption} onChange={(e) => setCaption(e.target.value)} />
       <TiktokCard post={{ tiktok: null, status: "planned", asset: { durationMs: asset.durationMs } }} creator={creator} creatorError={creatorError}
-        busy={busy} actionLabel={busy ? step || "Working…" : "Post to TikTok"} onApprove={(settings) => send(settings)} />
+        busy={busy} preview={{ brand, assetId: asset.id }} actionLabel={busy ? step || "Working…" : "Post to TikTok"} onApprove={(settings) => send(settings)} />
     </>}
     {result?.done && <p className="card">{result.done}{result.profile && <> <a href={result.profile} target="_blank" rel="noreferrer">Open the profile</a></>}</p>}
     {result?.error && <p className="card">TikTok post not sent: {result.error}</p>}

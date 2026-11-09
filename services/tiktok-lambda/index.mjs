@@ -247,6 +247,16 @@ export function postInfo(settings, caption, override = PRIVACY_OVERRIDE) {
   };
 }
 
+// TikTok's creator_info limit on video length for this account. The Review card already blocks a
+// longer clip; this refuses it again on the server so a call that skips the card cannot send it.
+export function checkDuration(creator, durationSec) {
+  const max = Number(creator?.max_video_post_duration_sec);
+  const length = Number(durationSec);
+  if (Number.isFinite(max) && max > 0 && Number.isFinite(length) && length > max) {
+    throw new Error(`This clip is ${Math.round(length)}s; TikTok allows up to ${max}s for this account`);
+  }
+}
+
 const PRIVACY_LEVELS = ["PUBLIC_TO_EVERYONE", "MUTUAL_FOLLOW_FRIENDS", "FOLLOWER_OF_CREATOR", "SELF_ONLY"];
 
 // A manual post: the TikTok card's choices from the Connections page ({ settings }), or for a bare
@@ -324,6 +334,7 @@ async function postVideo(request) {
   if (request.mode === "direct") {
     // TikTok requires a fresh creator_info query before every direct post.
     const creator = await tiktok("/post/publish/creator_info/query/", account.accessToken);
+    checkDuration(creator, request.durationSec);
     const post_info = postInfo(request.settings, request.caption);
     if (!(creator.privacy_level_options || []).includes(post_info.privacy_level)) {
       throw new Error(`TikTok does not allow ${post_info.privacy_level} for ${account.username || account.openId} (options: ${(creator.privacy_level_options || []).join(", ")})`);
@@ -483,7 +494,7 @@ export async function handler(event = {}) {
     let request;
     try { request = postRequest(event); } catch (error) { return result(400, { ok: false, error: error.message }); }
     try {
-      const posted = await postVideo({ ...request, settings: manualSettings(event) });
+      const posted = await postVideo({ ...request, durationSec: Number(event.durationSec) || null, settings: manualSettings(event) });
       console.log("TikTok post", JSON.stringify(posted));
       return result(200, { ok: true, ...posted });
     } catch (error) {
