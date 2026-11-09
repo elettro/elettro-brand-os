@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { DEV_ORIGIN, authenticated, serverSetting, unseal } from "@/lib/cognito-auth";
+import { DEV_ORIGIN, authenticatedFor, serverSetting, unseal } from "@/lib/cognito-auth";
 import { TIKTOK_CALLBACK, TIKTOK_STATE_COOKIE, tiktokApp } from "@/lib/tiktok-connect";
 export const runtime = "nodejs";
 
@@ -53,10 +53,11 @@ async function profile(accessToken: string, openId: string) {
 }
 
 export async function GET(request: NextRequest) {
-  if (!(await authenticated())) return done({ error: "Log in to Elettro OS first" });
   const sealed = await unseal(request.cookies.get(TIKTOK_STATE_COOKIE)?.value);
   const [state, brand] = (sealed || "").split("|");
   if (!state || state !== request.nextUrl.searchParams.get("state")) return done({ error: "The connect link expired; try again" });
+  // Owner, or a user in this brand's Cognito group; the brand comes from the sealed state set at Connect.
+  if (!(await authenticatedFor(brand || ""))) return done({ error: "Log in to Elettro OS first" });
   const denied = request.nextUrl.searchParams.get("error");
   if (denied) return done({ brand, error: denied === "access_denied" ? "TikTok access was not granted" : request.nextUrl.searchParams.get("error_description") || denied });
   const code = request.nextUrl.searchParams.get("code") || "";
