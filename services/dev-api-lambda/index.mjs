@@ -15,6 +15,7 @@ import { runPerformance } from "./performance.mjs";
 import { runSetTimeTests } from "./time-tests.mjs";
 import { runPlannerChangesSetup, runRefreshChanges } from "./planner-changes.mjs";
 import {runPostMetricsSetup, runListPostMetricsDue, runRecordPostMetrics, runListPostMetrics, runRecomputeYoutubeMetrics} from "./post-metrics.mjs";
+import {runResetAssetCooldown} from "./reset-asset-cooldown.mjs";
 import {runCarouselRefill} from "./carousel-refill.mjs";
 import {handleOpsTick} from "./ops-tick.mjs";
 import { handleConnectionStatus, setPlatformMilestone, setTokenExpiry, renameSocialAccount, listSocialAccounts, feedResponse } from "./connection-status.mjs";
@@ -1641,6 +1642,7 @@ export const handler = async (event = {}) => {
   if (event.action === "setup-post-metrics-20261107" && !event.requestContext && !event.rawPath && !event.path) return runPostMetricsSetup(event, connectDatabase, json);
   if (event.action === "list-post-metrics-due-20261107" && !event.requestContext && !event.rawPath && !event.path) return runListPostMetricsDue(event, connectDatabase, json);
   if (event.action === "list-post-metrics-20261108" && !event.requestContext && !event.rawPath && !event.path) return runListPostMetrics(event, connectDatabase, json);
+  if (event.action === "reset-asset-cooldown-20261109" && !event.requestContext && !event.rawPath && !event.path) return runResetAssetCooldown(event, connectDatabase, json);
   if (event.action === "recompute-youtube-metrics-20261108" && !event.requestContext && !event.rawPath && !event.path) return runRecomputeYoutubeMetrics(event, connectDatabase, json);
   if (event.action === "setup-planner-changes-20261108" && !event.requestContext && !event.rawPath && !event.path) return runPlannerChangesSetup(event, connectDatabase, json);
   if (event.action === "refresh-planner-changes-20261108" && !event.requestContext && !event.rawPath && !event.path) return runRefreshChanges(event, connectDatabase, json);
