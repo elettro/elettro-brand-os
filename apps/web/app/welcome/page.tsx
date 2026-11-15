@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { SheetGallery } from "./gallery";
 import { HeroCarousel } from "./hero-carousel";
+import { DashboardShowcase } from "./dashboard-showcase";
+import "./dashboard-showcase.css";
 
 export const metadata: Metadata = {
   title: "Elettro OS | Create once. Publish everywhere.",
@@ -57,6 +59,7 @@ export default function Welcome() {
       <header className="pub-top">
         <a className="pub-brand" href="#top" aria-label="Elettro OS home"><img src="/brand/elettro-logo-white.png" alt="Elettro" width="407" height="161" /><span>OS</span></a>
         <nav className="pub-nav" aria-label="Elettro OS">
+          <a href="#live-proof">Live dashboards</a>
           <a href="#platforms">Platforms</a>
           <a href="#features">Features</a>
           <a href="#how">How it works</a>
@@ -83,6 +86,20 @@ export default function Welcome() {
             <p className="pub-note">Elettro OS is not open to the public. Access is by invitation.</p>
           </div>
           <HeroCarousel />
+        </section>
+
+        <section id="live-proof" className="pub-section pub-showcase">
+          <div className="pub-showcase-head">
+            <div>
+              <p className="pub-showcase-eyebrow">Proof in public / Explore the technology</p>
+              <h2>We don't simply promise the posts. We show you the results.</h2>
+              <p className="pub-sub">
+                Explore the Elettro Dash: publishing activity, multi-brand connections, prepared media, AR scans, and interactive engagements. See the system at work.
+              </p>
+            </div>
+            <a href="https://elettro.com/dash/" target="_blank" rel="noopener noreferrer">See the live dashboard ↗</a>
+          </div>
+          <DashboardShowcase />
         </section>
 
         <section id="platforms" className="pub-section">
