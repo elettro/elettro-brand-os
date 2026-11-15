@@ -7,7 +7,7 @@ Dean Palermo, Rompe (added 2026-10-31), plus `google-review`, an isolated demo b
     Dropbox library → ingest + metadata → approval → Content Pool → planner → platform treatment
       → scheduled publish → PublicationLedger → analytics
 
-State as of 2026-11-01: code re-audited that day against the merged PRs; AWS facts last checked 2026-10-29 (read-only) and 2026-10-31. Everything below
+State as of 2026-11-15: code re-audited that day against the merged PRs (through #432); AWS facts last checked 2026-10-29 (read-only) and 2026-10-31. Everything below
 that can drift (status, Lambda list, schedules) is marked **verify**: re-check it against the code or AWS before relying on it.
 See section 7 for how this file is kept current.
 
@@ -51,7 +51,7 @@ EventBridge, every 15 min ──> platform worker Lambda ──> network API
   brands whose `brand-<id>` Cognito group they belong to (`apps/web/lib/brand-access.ts`, PR #181). Client accounts get Assets (view),
   Content Pool, Connections, Review and Calendar for their own brands only. It reaches the API through `apps/web/lib/dev-api.ts`
   (`BRAND_OS_API_BASE_URL`). Amplify build config lives in the Amplify console, not the repo.
-- **dev-api Lambda** `services/dev-api-lambda` (a ~1.9k-line `index.mjs` plus about 38 modules): `planner-v2*.mjs` (plan a week),
+- **dev-api Lambda** `services/dev-api-lambda` (a ~2.0k-line `index.mjs` plus about 59 modules): `planner-v2*.mjs` (plan a week),
   `planner-ops.mjs` (claim-due-posts / finish-post / planner-tick), `planner-review.mjs`, `publishing-formats.mjs`
   (**source of truth** for which network/placement is live), `*-connect.mjs` (OAuth connect per network),
   `copywriter.mjs` / `curator.mjs` / `intelligence.mjs` (AI picks and copy), `connection-status.mjs` (feeds the
@@ -70,7 +70,7 @@ EventBridge, every 15 min ──> platform worker Lambda ──> network API
   Personal"; the Dean Palermo brand; tokens last 60 days with no refresh, so with an expired login the tick skips and leaves posts approved). Its Lambda `elettro-brand-os-dev-linkedin` and tick rule exist (checked 2026-10-29); connect +
   test-post code is in dev-api/web. Company-page connect and posting are built (PR for 2026-10-29, steps in `docs/admin/connect-linkedin-page.md`);
   not live until the AWS steps there are done and one page post has published. Development tier was granted 2026-10-29; its limits are unknown.
-  `gmb` is **not created in AWS yet** (no Lambda, no tick rule).
+  `gmb` was created in AWS 2026-11-04 (Lambda + 15-minute tick rule, see Google Business Profile in section 4).
 - **Elettro AR** (WebAR; plan in `docs/ar/ELETTRO-AR-PLAN.md`, setup in `docs/ar/AWS-SETUP.md`): `services/ar-lambda` is the admin API
   (Lambda Function URL, outside the VPC, **no Postgres**, DynamoDB + S3 + CloudFront only; same `x-elettro-connect-key`). It is fully separate from the Publishing Engine:
   AR PRs must not edit the dev-api, the worker Lambdas, the schedules or the schema. Public pages and manifests are served by CloudFront at `ar.elettro.com`, not by the Lambda.
@@ -128,7 +128,7 @@ EventBridge, every 15 min ──> platform worker Lambda ──> network API
 | Piece | AWS name |
 |---|---|
 | API | `elettro-brand-os-dev-api` (+ HTTP API) |
-| Workers | `elettro-brand-os-dev-{threads,tiktok,pinterest,youtube-upload,meta,linkedin}` (all exist; `bluesky` since 2026-10-29; `gmb` is built in code but not yet created) |
+| Workers | `elettro-brand-os-dev-{threads,tiktok,pinterest,youtube-upload,meta,linkedin}` (all exist; also `bluesky`, `mastodon`, `x`, `snapchat`, `substack` and `gmb`, see section 2/4 for creation dates; AWS not re-verified 2026-11-15) |
 | Dropbox | `elettro-brand-os-dev-{dropbox-sync,dropbox-upload}` |
 | AI relay | `elettro-brand-os-dev-ai` + role `elettro-brand-os-dev-ai-role` (Bedrock Haiku 5.5 + 4.5 only); dev-api inline policy `ElettroBrandOSDevInvokeAi` (created 2026-11-07) |
 | Runtime | all Lambdas `nodejs24.x`; dev-api 256 MB / 300 s (checked 2026-11-07) |
@@ -139,7 +139,7 @@ EventBridge, every 15 min ──> platform worker Lambda ──> network API
 | Secrets | Secrets Manager prefix `elettro-brand-os-dev/` (app secrets `*-oauth`; per-account tokens under `<platform>/<id>`) |
 | AR (created 2026-10-26) | Lambda `elettro-ar-dev-api`, DynamoDB `elettro-ar-dev`, bucket `elettro-ar-dev-media`, CloudFront for `ar.elettro.com`, role `elettro-ar-dev-api-role` |
 | Scroll relay (created 2026-11-03, wss://l7pixcmace.execute-api.us-east-1.amazonaws.com/dev) | WebSocket API `elettro-scroll-dev-ws` (stage `dev`), Lambda `elettro-scroll-dev-relay`, DynamoDB `elettro-scroll-dev`, role `elettro-scroll-dev-relay-role` (`scripts/scroll-relay-setup.sh`) |
-| Schedules | EventBridge, all `rate(15 minutes)`, all ENABLED (checked 2026-10-29): `elettro-brand-os-dev-threads-refresh`, `…-tiktok-refresh`, `…-youtube-tick`, `…-meta-tick`, `…-linkedin-tick`, and **`elettro-pinterest-tick`** (different name pattern). `…-bluesky-tick` exists since 2026-10-29. No gmb tick exists yet. |
+| Schedules | EventBridge, all `rate(15 minutes)`, all ENABLED (checked 2026-10-29): `elettro-brand-os-dev-threads-refresh`, `…-tiktok-refresh`, `…-youtube-tick`, `…-meta-tick`, `…-linkedin-tick`, and **`elettro-pinterest-tick`** (different name pattern). `…-bluesky-tick` exists since 2026-10-29; ticks for mastodon, x, snapchat, substack and gmb are recorded in section 4 (not re-verified in AWS 2026-11-15). |
 
 
 (**verify** with `aws lambda list-functions` / `aws events list-rules`.)
@@ -197,8 +197,8 @@ Amplify auto-builds the web app from `develop`. After a merge, do the PR's "AWS 
 ## 5. Running and testing
 
 - Tests are plain Node: `node --test tests/<file>` (CI runs an explicit list in `.github/workflows/ci.yml`; add yours there).
-  As of 2026-11-01 six test files are **not** in that list, so CI never runs them: `ai-mcp-dropbox-identity`, `ai-mcp-file-hosts`,
-  `library-publications`, `list-social-accounts`, `meta-connect`, `post-race` (`planner-review` and `calendar` were added with the Calendar PR). Run them by hand until they are wired in.
+  As of 2026-11-15 eight test files are **not** in that list, so CI never runs them: `ai-mcp-dropbox-identity`, `ai-mcp-file-hosts`,
+  `asset-feed`, `dropbox-credentials`, `library-publications`, `list-social-accounts`, `meta-connect`, `post-race`. Run them by hand until they are wired in.
   The Python patch-safety test: `python3 -m unittest discover -s tests -p "test_lambda_patch.py"`.
 - Local web dev: `npm install` then `npm run dev` (workspace `@elettro/web`). It talks to the live DEV API by default.
 - There is no local DB or local Lambda harness. Planner changes can be exercised with
@@ -234,7 +234,7 @@ something here that's wrong, fix it, or tell Dean if you can't verify the fix.
 - **At the end of any session that touched AWS, a network's status, brands, routes or deploy steps**, re-read the matching section here and fix it
   before finishing, even if the PR did not need it.
 - When a fact here is found wrong, fix it immediately and note the date. When it cannot be checked, say "not verified" instead of leaving it.
-- Do a full audit (code, AWS read-only, merged PRs since the last audit) at least every two weeks. **Last full audit: 2026-11-01** (code, workflows, tests and docs re-checked against merged PRs #263-#293; AWS-only facts were not re-verified this run and still carry their 2026-10-29/31 dates).
+- Do a full audit (code, AWS read-only, merged PRs since the last audit) at least every two weeks. **Last full audit: 2026-11-15** (code, workflows, tests, brands, pages, publishing formats, bug records and docs re-checked against merged PRs through #432; AWS-only facts were not re-verified this run (no AWS access) and still carry their earlier dates).
   `gh pr list -R elettro/elettro-brand-os --state merged --search "merged:>=<last audit date>"` lists what changed.
 - Procedures belong in `docs/admin/`, bug history in `docs/bug-fix/`; this file stays the map.
 
