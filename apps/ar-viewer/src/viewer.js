@@ -3,11 +3,16 @@ import { renderForm, renderCalculator, renderScratch } from "/viewer/sheet.js";
 
 const $ = (id) => document.getElementById(id);
 
-// On-screen log for phones (no console): add ?debug=1 to the address. Errors always show.
+// On-screen diagnostics are opt-in (?debug=1). Browser extensions and wallet
+// injections also trigger window error events; do not show those errors to visitors.
+// Real app failures still use the splash error state and 8th Wall runtime error UI.
 const CALIBRATE = new URLSearchParams(location.search).has("calibrate");
 const DEBUG = new URLSearchParams(location.search).has("debug");
-function dbg(text, force) {
-  if (!DEBUG && !force) return;
+function dbg(text, force = false) {
+  // Retain forced diagnostics for remote developer inspection without putting
+  // them over the camera or Start button on production visits.
+  if (force && !DEBUG) console.warn("[Elettro AR] " + text);
+  if (!DEBUG) return;
   let el = $("dbg");
   if (!el) { el = document.createElement("pre"); el.id = "dbg"; el.style.cssText = "position:fixed;left:0;right:0;top:0;z-index:99;margin:0;padding:8px;font:11px ui-monospace,monospace;background:#000c;color:#9f9;white-space:pre-wrap;pointer-events:none;max-height:45vh;overflow:hidden"; document.body.append(el); }
   el.textContent += text + "\n";
