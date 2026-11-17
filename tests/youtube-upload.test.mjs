@@ -81,3 +81,10 @@ test("with no planner title the asset title, then the filename, is used", () => 
   assert.equal(uploadFromPost({ assetTitle: "Dirty Bird", filename: "x.mp4" }, "private").title, "Dirty Bird");
   assert.equal(uploadFromPost({ filename: "stashbox-dirty-bird-9x16.mp4" }, "private").title, "stashbox-dirty-bird-9x16");
 });
+
+test("photos are refused before upload (YouTube abandons them)", async () => {
+  const { assertVideoFile } = await import("../services/youtube-upload-lambda/index.mjs");
+  assert.doesNotThrow(() => assertVideoFile("/brands/x/video/clip-9x16.MP4"));
+  assert.throws(() => assertVideoFile("/brands/x/image/split-sortiment.jpg"), /video files only/);
+  assert.throws(() => assertVideoFile("/brands/x/image/27_ziegeldach_4x3.png"), /video files only/);
+});

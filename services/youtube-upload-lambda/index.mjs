@@ -168,7 +168,15 @@ async function sendChunks(session, file) {
   throw new Error("YouTube never confirmed the upload");
 }
 
+// YouTube accepts only video files; a photo sent here is "Processing abandoned" and still counts as published.
+export function assertVideoFile(path) {
+  if (!/\.(mp4|mov|m4v|webm|mkv|avi|mpg|mpeg|wmv|3gp)$/i.test(String(path || ""))) {
+    throw new Error(`YouTube takes video files only, not ${String(path || "").split("/").pop() || "this file"}`);
+  }
+}
+
 async function uploadVideo(request) {
+  assertVideoFile(request.dropboxPath);
   const [accessToken, file] = await Promise.all([googleAccessToken(request.channelId), dropboxFile(request.dropboxPath)]);
   const session = await startSession(accessToken, request, file.size);
   const video = await sendChunks(session, file);
