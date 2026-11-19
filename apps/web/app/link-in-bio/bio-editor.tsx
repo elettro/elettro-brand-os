@@ -2,12 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { brandConfigs } from "@/lib/brand-config";
+import { LINK_HOSTS } from "@/lib/link-hosts";
 import "./link-in-bio.css";
 
 type BioLink = { id: string; title: string; url: string; enabled: boolean };
 type BioPage = { heading: string; description: string; accent: string; links: BioLink[] };
 const suggestions: Record<string, string> = {
-  stashbox: "go.stashbox.com",
   solarmeister: "go.solarmeister-shop.de",
   "neckermann-strom": "go.neckermann-strom.de"
 };
@@ -56,7 +56,9 @@ export default function BioEditor({ allowedBrands, initialBrand }: { allowedBran
     [next[index],next[destination]]=[next[destination],next[index]];
     change({...page,links:next});
   };
-  const hostname = suggestions[brand] ?? "go." + brand.replace(/[^a-z0-9-]/g,"") + ".example.com";
+  const configuredHosts = Object.entries(LINK_HOSTS).filter(([, config]) => config.brand === brand && config.bio).map(([host]) => host);
+  const hostname = configuredHosts[0] ?? suggestions[brand] ?? "go." + brand.replace(/[^a-z0-9-]/g,"") + ".example.com";
+  const isConfigured = configuredHosts.length > 0;
   return <div className="bio-shell">\n    <main className="bio-main">
       <header className="bio-topbar">
         <div><span className="bio-eyebrow">BRAND EXPERIENCE</span><h1>Link In Bio</h1><p>Build the page first. Connect a custom domain later.</p></div>
@@ -65,7 +67,7 @@ export default function BioEditor({ allowedBrands, initialBrand }: { allowedBran
           <button className="bio-primary" onClick={save}>Save draft</button>
         </div>
       </header>
-      <div className="bio-banner"><strong>Review mode</strong> · Editor preview only. Drafts persist in this browser, not in the shared Elettro OS database. No live URL, DNS connection, or publishing is configured. {saved ? "All edits saved." : "Unsaved changes."}</div>
+      <div className="bio-banner"><strong>Review mode</strong> · Editor preview only. Drafts persist in this browser, not in the shared Elettro OS database. Edits here do not modify existing live links, DNS, or publishing. {saved ? "All edits saved." : "Unsaved changes."}</div>
       {message && <p className="bio-message" role="status">{message}</p>}
       <div className="bio-tabs"><button className={tab==="editor"?"active":""} onClick={()=>setTab("editor")}>Page editor</button><button className={tab==="dns"?"active":""} onClick={()=>setTab("dns")}>Domain & DNS setup</button></div>
       {tab==="editor" ? <div className="bio-layout">
@@ -100,14 +102,16 @@ export default function BioEditor({ allowedBrands, initialBrand }: { allowedBran
         </section>
       </div> : <div className="bio-dns-grid">
         <section className="bio-panel">
-          <h2>Custom domain</h2><p className="bio-status">Not connected</p>
-          <p>Suggested branded address</p><div className="bio-domain">{hostname}</div>
-          {!suggestions[brand] && <p className="bio-error">Example placeholder only. Confirm your brand domain before using this hostname.</p>}
-          <h3>DNS record to create later</h3>
-          <table><tbody><tr><th>Type</th><td>CNAME</td></tr><tr><th>Name / host</th><td>go</td></tr><tr><th>Points to / value</th><td>Pending hosting configuration</td></tr><tr><th>TTL</th><td>Provider default</td></tr></tbody></table>
-          <p className="bio-caption">Do not add a DNS record until the exact hosting destination is provided and verified.</p>
+          <h2>Custom domain</h2><p className="bio-status">{isConfigured ? "Configured in Elettro OS" : "Not configured in Elettro OS"}</p>
+          <p>{isConfigured ? "Existing public domain" : "Suggested branded address"}</p><div className="bio-domain">{hostname}</div>
+          {isConfigured && <><p><a href={"https://" + hostname + "/bio"} target="_blank" rel="noreferrer">Open existing Link In Bio page</a></p>{configuredHosts.length > 1 && <p>Additional configured hosts: {configuredHosts.slice(1).join(", ")}</p>}</>}
+          {isConfigured && <p className="bio-caption">Host and bio routing are confirmed in the application configuration. DNS propagation, HTTPS certificate health and live reachability have not been independently verified by this editor.</p>}
+          {!isConfigured && !suggestions[brand] && <p className="bio-error">Example placeholder only. Confirm your brand domain before using this hostname.</p>}
+          <h3>{isConfigured ? "Existing domain details" : "DNS record to create later"}</h3>
+          <table><tbody><tr><th>Type</th><td>CNAME</td></tr><tr><th>Name / host</th><td>go</td></tr><tr><th>Points to / value</th><td>{isConfigured ? "Existing AWS Amplify mapping (exact DNS target not retrieved)" : "Pending hosting configuration"}</td></tr><tr><th>TTL</th><td>Provider default</td></tr></tbody></table>
+          <p className="bio-caption">{isConfigured ? "Do not change the existing DNS record. This editor does not manage DNS." : "Do not add a DNS record until the exact hosting destination is provided and verified."}</p>
         </section>
-        <section className="bio-panel"><h2>Activation checklist</h2><ol><li>Build and save the page as a draft.</li><li>Confirm the brand's desired go subdomain.</li><li>Configure the public page hosting and get its verified CNAME destination.</li><li>Add the CNAME at your domain DNS provider.</li><li>Verify DNS, connect the host, and confirm HTTPS/SSL.</li><li>Publish the page after a final review.</li></ol><h3>Domain status</h3><p>DNS: Not checked</p><p>SSL: Not configured</p><p>Publishing: Not configured</p><p className="bio-caption">Live DNS checking and one-click publishing are future integration tasks, not simulated success states.</p></section>
+        <section className="bio-panel"><h2>{isConfigured ? "Existing setup and next steps" : "Activation checklist"}</h2>{isConfigured ? <p>The domain is already configured in Elettro OS. Preserve its routing. Editing a draft here will not update the live page.</p> : <ol><li>Build and save the page as a draft.</li><li>Confirm the brand's desired go subdomain.</li><li>Configure the public page hosting and get its verified CNAME destination.</li><li>Add the CNAME at your domain DNS provider.</li><li>Verify DNS, connect the host, and confirm HTTPS/SSL.</li><li>Publish the page after a final review.</li></ol>}<h3>Domain status</h3><p>Application host mapping: {isConfigured ? "Configured" : "Not configured"}</p><p>DNS: Not independently verified</p><p>SSL: Not independently verified</p><p>Link in Bio route: {isConfigured ? "Configured" : "Not configured"}</p><p className="bio-caption">Live health checks and editor publishing are not implemented. These are not live DNS or certificate test results.</p></section>
       </div>}
     </main>
   </div>;
