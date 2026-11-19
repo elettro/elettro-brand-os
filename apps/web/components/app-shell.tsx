@@ -17,6 +17,7 @@ const NAV: NavSection[] = [
     { label: "Dashboard", href: "/" },
     { label: "Assets", href: "/assets" },
     { label: "Content Pool", href: "/content-pool" },
+    { label: "Link In Bio", href: "/link-in-bio" },
     { label: "Collections", href: "/collections" },
     { label: "Upload", href: "/epe-upload" },
     { label: "MultiCam", href: "/multicam" }
@@ -60,7 +61,7 @@ const BRANDS = [{ id: "all", name: "All brands", timezone: "" }, ...brandConfigs
 // What a user who is not the owner (a client) sees in the rail. Pages not listed show greyed as "soon";
 // each follow-up that opens a page for clients flips it to "active" here.
 const CLIENT_NAV: Record<string, "active" | "soon" | "hidden"> = {
-  "/": "active", "/ar": "active", "/ar/qr": "active", "/ar/sets": "active", "/review": "active", "/calendar": "active", "/assets": "active", "/content-pool": "active", "/connections": "active",
+  "/": "active", "/ar": "active", "/ar/qr": "active", "/ar/sets": "active", "/review": "active", "/calendar": "active", "/assets": "active", "/content-pool": "active", "/link-in-bio": "active", "/connections": "active",
   "/collections": "hidden", "/multicam": "hidden", "/holidays": "hidden", "/ai-gateway": "hidden", "/planner": "hidden", "/admin/estimate-builder": "hidden", "/bugs": "hidden", "/analytics": "hidden"
 };
 
