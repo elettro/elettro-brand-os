@@ -21,6 +21,7 @@ export default function DashboardPage() {
           <Link className="nav-item active" href="/">Dashboard</Link>
           <Link className="nav-item" href="/assets">Assets</Link>
           <Link className="nav-item" href="/content-pool">Content Pool</Link>
+          <Link className="nav-item" href="/link-in-bio">Link In Bio</Link>
           <a className="nav-item" href="#">Calendar</a>
         </div>
 
