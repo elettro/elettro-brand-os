@@ -1,0 +1,233 @@
+{
+  "note": "Seed for Brand.settings.planner of Therasbox (The Ras Box music promos). Built 2026-11-23 from the tags on its 45 ready assets (30 song-promo videos, 15 release posters). Posts 7 days a week, 09:00-21:00 America/New_York, all networks (Dean 261123). Settings only: posts per day per network are set on Review (0 = skipped). Loaded into DEV with: {\"action\":\"configure-planner-brand\",\"brandSlug\":\"therasbox\",\"settings\":<settings>,\"accounts\":[]}",
+  "settings": {
+    "version": 1,
+    "pool": {
+      "kinds": [
+        "image",
+        "video"
+      ],
+      "excludeTagsAny": [
+        "no-audio",
+        "silent-audio",
+        "no-music"
+      ]
+    },
+    "placements": {},
+    "sectors": [
+      {
+        "slug": "song-promos",
+        "priority": 1,
+        "share": 0.75,
+        "match": {
+          "tagsAny": [
+            "song-promo"
+          ]
+        }
+      },
+      {
+        "slug": "release-posters",
+        "priority": 2,
+        "share": 0.25,
+        "match": {
+          "tagsAny": [
+            "release-poster"
+          ]
+        }
+      }
+    ],
+    "minPoolForSector": 1,
+    "exploration": {
+      "default": 0.1
+    },
+    "cooldowns": {
+      "assetDays": 7,
+      "songDays": 0,
+      "productDays": 3
+    },
+    "newBatchBoostDays": 14,
+    "syntheticTagsAny": [],
+    "readyTagsAny": [],
+    "candidatesPerSlot": 5,
+    "curator": {
+      "enabled": false
+    },
+    "copy": {
+      "enabled": true,
+      "task": "write_copy",
+      "concurrency": 4
+    },
+    "postingTimes": {
+      "instagram": {
+        "start": "09:00",
+        "end": "21:00",
+        "days": [
+          "mon",
+          "tue",
+          "wed",
+          "thu",
+          "fri",
+          "sat",
+          "sun"
+        ]
+      },
+      "facebook": {
+        "start": "09:00",
+        "end": "21:00",
+        "days": [
+          "mon",
+          "tue",
+          "wed",
+          "thu",
+          "fri",
+          "sat",
+          "sun"
+        ]
+      },
+      "threads": {
+        "start": "09:00",
+        "end": "21:00",
+        "days": [
+          "mon",
+          "tue",
+          "wed",
+          "thu",
+          "fri",
+          "sat",
+          "sun"
+        ]
+      },
+      "tiktok": {
+        "start": "09:00",
+        "end": "21:00",
+        "days": [
+          "mon",
+          "tue",
+          "wed",
+          "thu",
+          "fri",
+          "sat",
+          "sun"
+        ]
+      },
+      "youtube": {
+        "start": "09:00",
+        "end": "21:00",
+        "days": [
+          "mon",
+          "tue",
+          "wed",
+          "thu",
+          "fri",
+          "sat",
+          "sun"
+        ]
+      },
+      "pinterest": {
+        "start": "09:00",
+        "end": "21:00",
+        "days": [
+          "mon",
+          "tue",
+          "wed",
+          "thu",
+          "fri",
+          "sat",
+          "sun"
+        ]
+      },
+      "linkedin": {
+        "start": "09:00",
+        "end": "21:00",
+        "days": [
+          "mon",
+          "tue",
+          "wed",
+          "thu",
+          "fri",
+          "sat",
+          "sun"
+        ]
+      },
+      "bluesky": {
+        "start": "09:00",
+        "end": "21:00",
+        "days": [
+          "mon",
+          "tue",
+          "wed",
+          "thu",
+          "fri",
+          "sat",
+          "sun"
+        ]
+      },
+      "mastodon": {
+        "start": "09:00",
+        "end": "21:00",
+        "days": [
+          "mon",
+          "tue",
+          "wed",
+          "thu",
+          "fri",
+          "sat",
+          "sun"
+        ]
+      },
+      "substack": {
+        "start": "09:00",
+        "end": "21:00",
+        "days": [
+          "mon",
+          "tue",
+          "wed",
+          "thu",
+          "fri",
+          "sat",
+          "sun"
+        ]
+      },
+      "snapchat": {
+        "start": "09:00",
+        "end": "21:00",
+        "days": [
+          "mon",
+          "tue",
+          "wed",
+          "thu",
+          "fri",
+          "sat",
+          "sun"
+        ]
+      },
+      "x": {
+        "start": "09:00",
+        "end": "21:00",
+        "days": [
+          "mon",
+          "tue",
+          "wed",
+          "thu",
+          "fri",
+          "sat",
+          "sun"
+        ]
+      },
+      "reddit": {
+        "start": "09:00",
+        "end": "21:00",
+        "days": [
+          "mon",
+          "tue",
+          "wed",
+          "thu",
+          "fri",
+          "sat",
+          "sun"
+        ]
+      }
+    }
+  },
+  "accounts": []
+}
