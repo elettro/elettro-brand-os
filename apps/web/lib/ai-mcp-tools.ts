@@ -82,7 +82,7 @@ export function toolsForClient(identity:McpIdentity){
     : t.action==="register_existing_asset"
       ? {readOnlyHint:false,destructiveHint:false,idempotentHint:true}
       : {readOnlyHint:false,destructiveHint:true,idempotentHint:false},
-   inputSchema:{...t.inputSchema,properties:{...t.inputSchema.properties,brandSlug:{...brandSlug,enum:identity.brandSlugs}}}
+   inputSchema:{...t.inputSchema,properties:{...t.inputSchema.properties,brandSlug:{...brandSlug,enum:t.permission==="assets:register"?identity.brandSlugs.filter(slug=>slug!=="creative-assets"):identity.brandSlugs}}}
   };
  });
 }

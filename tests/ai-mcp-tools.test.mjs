@@ -177,11 +177,11 @@ test("ChatGPT fileParam accepts canonical objects and serialized authorized file
 
 test("ChatGPT file-parameter schemas and read/write scope separation",()=>{
  const reader={clientId:"chatgpt_oauth",brandSlugs:["stashbox","elettro"],permissions:["assets:read","folders:read"]};
- const writer={...reader,permissions:["assets:read","folders:read","assets:write","folders:write","assets:upload"]};
+ const writer={...reader,permissions:["assets:read","folders:read","assets:write","folders:write","assets:upload","assets:register"]};
  const readTools=toolsForClient(reader);
  const writeTools=toolsForClient(writer);
  assert.equal(readTools.length,7);
- assert.equal(writeTools.length,11); // arbitrary registration intentionally excluded
+ assert.equal(writeTools.length,13);
  const preview=readTools.find(t=>t.name==="elettro_prepare_file_intake");
  const upload=writeTools.find(t=>t.name==="elettro_save_chat_file_to_dropbox");
  assert.ok(preview);
@@ -199,7 +199,8 @@ test("ChatGPT file-parameter schemas and read/write scope separation",()=>{
  }
  assert.equal(findAuthorizedTool("elettro_save_chat_file_to_dropbox",reader),undefined);
  assert.ok(findAuthorizedTool("elettro_save_chat_file_to_dropbox",writer));
- assert.equal(findAuthorizedTool("elettro_register_brand_asset",writer),undefined);
+ assert.ok(findAuthorizedTool("elettro_register_existing_brand_asset",writer));
+ assert.equal(findAuthorizedTool("elettro_register_existing_brand_asset",reader),undefined);
  const claude={...writer,clientId:"claude_code",permissions:["assets:read","folders:read"]};
  assert.equal(toolsForClient(claude).length,6);
  assert.equal(findAuthorizedTool("elettro_prepare_file_intake",claude),undefined);

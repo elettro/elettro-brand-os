@@ -1,6 +1,6 @@
 import { connectKeyHeaders } from "@/lib/dev-api-key";
 import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
-import { gatewayBrandConfigs } from "@/lib/brand-config";
+import { gatewayBrandConfigs, SHARED_LIBRARY_ID } from "@/lib/brand-config";
 
 /**
  * Elettro AI Gateway V1: shared, provider-neutral actions.
@@ -370,6 +370,8 @@ export async function executeAiGateway(input: unknown): Promise<Dict> {
     if(!/\.(png|jpe?g|webp|gif|mp4|mov|m4v|webm|pdf)$/i.test(path))
       throw new GatewayError(400,"Only image, video or PDF files are supported");
     if (action === "register_existing_asset") {
+      if (config.id === SHARED_LIBRARY_ID)
+        throw new GatewayError(403,"Registration requires a brand Dropbox path");
       if (command.confirmed !== true)
         throw new GatewayError(400,"Explicit confirmation required to register an asset");
       const metadata=command.metadata===undefined?{}:metadataPatch(command.metadata);

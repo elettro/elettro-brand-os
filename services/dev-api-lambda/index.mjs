@@ -1549,7 +1549,7 @@ async function completeDropboxUpload(event, registerExisting = false){
   const body=parseJsonBody(event);
   const brandSlug=String(body.brandSlug||"").trim().toLowerCase();
   const root=DROPBOX_BRAND_ROOTS.find(([slug])=>slug===brandSlug)?.[1];
-  if(!root) return json(400,{ok:false,error:"Invalid brand"});
+  if(!root || (registerExisting && brandSlug===LIBRARY_SLUG)) return json(400,{ok:false,error:"Invalid brand"});
   const path=String(body.path||"").replace(/\\/g,"/");
   if(!path.toLowerCase().startsWith(root.toLowerCase()+"/")) return json(403,{ok:false,error:"File outside brand root"});
   const metadata=body.metadata&&typeof body.metadata==="object"?body.metadata:{};
