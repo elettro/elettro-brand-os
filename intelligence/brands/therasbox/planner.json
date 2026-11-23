@@ -42,7 +42,7 @@
     },
     "cooldowns": {
       "assetDays": 7,
-      "songDays": 0,
+      "songDays": 3,
       "productDays": 3
     },
     "newBatchBoostDays": 14,
