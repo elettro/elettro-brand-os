@@ -18,6 +18,25 @@ export function assertDropboxFileId(id) {
   return id;
 }
 
+// Also used by read-only preflight. Scope the catalog checks to this Asset
+// table so a similarly named object on another table cannot enable writes.
+export async function getDropboxIdentityGuard(client) {
+  const result = await client.query(`
+    SELECT EXISTS (
+      SELECT 1 FROM pg_index i
+      WHERE i.indrelid = '"Asset"'::regclass
+        AND i.indexrelid = to_regclass('"Asset_dropbox_global_canonical_id_uq"')
+        AND i.indisunique AND i.indisvalid AND i.indisready AND i.indimmediate
+    ) AS "uniquenessIndexValid", EXISTS (
+      SELECT 1 FROM pg_constraint c
+      WHERE c.conrelid = '"Asset"'::regclass
+        AND c.conname = 'Asset_dropbox_identity_integrity_ck'
+        AND c.contype = 'c' AND c.convalidated
+    ) AS "identityCheckValidated"
+  `);
+  return result.rows[0];
+}
+
 export async function lockDropboxIdentity(client, id) {
   assertDropboxFileId(id);
   // Advisory lock serializes upgraded writers for this ID until COMMIT/ROLLBACK.
@@ -29,7 +48,7 @@ export async function findDropboxAsset(client, id, expectedBrandId) {
   assertDropboxFileId(id);
   if (!expectedBrandId) throw new DropboxIdentityConflict("Brand must be resolved before Dropbox lookup");
   const lookup = await client.query(`
-    SELECT "id", "brandId", "filename", "ingestStatus", "approvalStatus",
+    SELECT "id", "brandId", "filename", "ingestStatus", "approvalStatus", "enrichmentStatus",
            "retiredAt", "sourceFileId", "sourceExternalId"
     FROM "Asset"
     WHERE "sourceType" = 'dropbox'

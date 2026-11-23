@@ -1,6 +1,6 @@
 import { connectKeyHeaders } from "@/lib/dev-api-key";
 import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
-import { gatewayBrandConfigs } from "@/lib/brand-config";
+import { gatewayBrandConfigs, SHARED_LIBRARY_ID } from "@/lib/brand-config";
 
 /**
  * Elettro AI Gateway V1: shared, provider-neutral actions.
@@ -157,19 +157,15 @@ async function dropboxCall<T>(token: string, endpoint: string, body: Dict): Prom
 }
 
 
-/**
- * Confirm duplicate status against the registry BEFORE calling its upload
- * completion action. Registration by an existing Dropbox ID must not reset
- * a previously Ready or Approved asset back to Raw.
- */
+// Read-only identity checks use the full registry, including retired assets.
 type RegistrationRecord = {
   id: string; brandSlug: string; filename: string;
   sourcePath?: string; sourceUrl?: string; sourceFileId?: string; sourceExternalId?: string;
   ingestStatus?: string; approvalStatus?: string;
 };
 async function registrationCandidates(
-  brandSlug: string, _path: string, dropboxFileId: string
-): Promise<{existing?: RegistrationRecord; uncertain: RegistrationRecord[]; inventoryComplete: boolean}> {
+  brandSlug: string, dropboxFileId: string
+): Promise<{existing?: RegistrationRecord; uncertain: RegistrationRecord[]; inventoryComplete: boolean; uniquenessEnforced: boolean}> {
   // This endpoint queries the entire database by immutable Dropbox ID.
   // The legacy GET /assets endpoint contains only the latest 500 records
   // and MUST NOT be used to authorize asset registration.
@@ -188,7 +184,8 @@ async function registrationCandidates(
   const entries=lookup.matches as unknown[];
   if(count<0 || count>1 || count!==entries.length)
     throw new GatewayError(409, "Conflicting registrations for this Dropbox file ID; manual review required");
-  if(count===0)return {inventoryComplete:true,uncertain:[]};
+  const uniquenessEnforced=lookup.uniquenessIndexValid===true && lookup.identityCheckValidated===true;
+  if(count===0)return {inventoryComplete:true,uncertain:[],uniquenessEnforced};
   const recordData=record(entries[0]);
   const sourceFileId=recordData.sourceFileId;
   const sourceExternalId=recordData.sourceExternalId;
@@ -214,7 +211,7 @@ async function registrationCandidates(
     ...(typeof recordData.ingestStatus==="string"?{ingestStatus:recordData.ingestStatus}:{}),
     ...(typeof recordData.approvalStatus==="string"?{approvalStatus:recordData.approvalStatus}:{})
   };
-  return {existing,uncertain:[],inventoryComplete:true};
+  return {existing,uncertain:[],inventoryComplete:true,uniquenessEnforced};
 }
 
 export const AI_GATEWAY_ACTIONS = [
@@ -296,7 +293,7 @@ export async function executeAiGateway(input: unknown): Promise<Dict> {
       throw new GatewayError(409,"Asset contains conflicting Dropbox IDs; manual review required");
     const dropboxFileId=linkedIds[0];
     // This is a DB-only check. No Dropbox token request or mutation is needed.
-    const lookup=await registrationCandidates(config.id,"",dropboxFileId);
+    const lookup=await registrationCandidates(config.id,dropboxFileId);
     const matched=lookup.existing;
     const verified=!!matched&&matched.id===id;
     return {ok:true,brandSlug:config.id,assetId:id,
@@ -372,48 +369,50 @@ export async function executeAiGateway(input: unknown): Promise<Dict> {
     const path=folderPath(command.path,config.dropboxRoot,false);
     if(!/\.(png|jpe?g|webp|gif|mp4|mov|m4v|webm|pdf)$/i.test(path))
       throw new GatewayError(400,"Only image, video or PDF files are supported");
-    if(action==="register_existing_asset"&&command.confirmed!==true)
-      throw new GatewayError(400,"Explicit confirmation required to register an asset");
-    const metadata=command.metadata===undefined?{}:metadataPatch(command.metadata);
+    if (action === "register_existing_asset") {
+      if (config.id === SHARED_LIBRARY_ID)
+        throw new GatewayError(403,"Registration requires a brand Dropbox path");
+      if (command.confirmed !== true)
+        throw new GatewayError(400,"Explicit confirmation required to register an asset");
+      const metadata=command.metadata===undefined?{}:metadataPatch(command.metadata);
+      const response=await fetch(API_BASE+"/assets/bulk-update",{
+        method:"POST",headers:await connectKeyHeaders({"content-type":"application/json"}),
+        body:JSON.stringify({action:"register-existing-dropbox-asset",brandSlug:config.id,path,metadata,confirmed:true}),
+        cache:"no-store",signal:AbortSignal.timeout(30000)
+      });
+      const result=await response.json().catch(()=>null);
+      if (response.status===409) throw new GatewayError(409,"Dropbox asset identity conflict. Review the existing registration.");
+      if (response.status===503) throw new GatewayError(503,"Dropbox registration is unavailable. Check backend and identity migration readiness.");
+      if (!response.ok || result?.ok!==true || (result.created!==0 && result.created!==1))
+        throw new GatewayError(502,"Elettro registry did not confirm Dropbox registration");
+      const asset=sanitizedAsset(result.asset);
+      const id=assetId(asset.id);
+      const created=result.created===1;
+      return {ok:true,alreadyRegistered:!created,assetId:id,dropboxFileId:result.dropboxFileId,
+        brandSlug:config.id,path:result.path,ingestStatus:asset.ingestStatus,
+        enrichmentStatus:asset.enrichmentStatus,approvalStatus:asset.approvalStatus,
+        metadataUpdated:created && Object.keys(metadata).length>0};
+    }
     const token=await dropboxToken();
     const file=await dropboxCall<{".tag"?:string;id?:string;path_display?:string}>(token,"get_metadata",{path});
     if(file[".tag"]!=="file"||!file.id)
       throw new GatewayError(400,"Selected Dropbox path is not a file");
     const resolved=file.path_display||path;
-    const registry=await registrationCandidates(config.id,resolved,file.id);
+    const registry=await registrationCandidates(config.id,file.id);
     const existing=registry.existing;
-    if(action==="inspect_brand_registration"){
-      return {ok:true,brandSlug:config.id,path:resolved,dropboxFileId:file.id,
-        registrationStatus:existing?"registered":"not_found",
-        asset:existing?{
-          id:existing.id,filename:existing.filename,
-          ingestStatus:existing.ingestStatus,approvalStatus:existing.approvalStatus
-        }:null,
-        uncertainMatches:registry.uncertain.map(a=>({id:a.id,filename:a.filename})),
-        safeToRegister:false,
-        inventoryComplete:registry.inventoryComplete,
-        note:existing?"Immutable Dropbox ID matched an existing brand asset. No registration performed.":
-          "Authoritative database-wide lookup found no matching Dropbox ID. Creation is still paused pending atomic uniqueness enforcement. No files or records modified."};
-    }
-    if(registry.uncertain.length)
-      throw new GatewayError(409,"Registration blocked: potential existing asset cannot be conclusively matched by Dropbox ID");
-    if(existing){
-      // Important: do NOT call complete-dropbox-upload for an already indexed file.
-      // Doing so with mode raw could change eligibility of a Ready asset.
-      if(Object.keys(metadata).length){
-        await executeAiGateway({action:"update_asset_metadata",brandSlug:config.id,
-          assetId:existing.id,metadata,confirmed:true});
-      }
-      return {ok:true,alreadyRegistered:true,assetId:existing.id,
-        dropboxFileId:file.id,brandSlug:config.id,ingestStatus:existing.ingestStatus,
-        approvalStatus:existing.approvalStatus,metadataUpdated:Object.keys(metadata).length>0,
-        message:"Existing asset reused. Registration was skipped to preserve its publishing state."};
-    }
-    // The global lookup now proves whether an ID exists, but read-then-insert
-    // alone is not race-safe. Keep creation disabled until the database
-    // enforces global uniqueness across BOTH Dropbox source columns.
-    throw new GatewayError(409,
-      "New AI registration is paused until atomic Dropbox-ID uniqueness enforcement is available");
+    const safeToRegister=!existing && registry.uniquenessEnforced;
+    return {ok:true,brandSlug:config.id,path:resolved,dropboxFileId:file.id,
+      registrationStatus:existing?"registered":"not_found",
+      asset:existing?{
+        id:existing.id,filename:existing.filename,
+        ingestStatus:existing.ingestStatus,approvalStatus:existing.approvalStatus
+      }:null,
+      uncertainMatches:registry.uncertain.map(a=>({id:a.id,filename:a.filename})),
+      safeToRegister,
+      inventoryComplete:registry.inventoryComplete,
+      note:existing?"Immutable Dropbox ID matched an existing brand asset. No registration performed.":
+        safeToRegister?"No registration matched this Dropbox ID. The database uniqueness guard is active.":
+          "No registration matched this Dropbox ID. Creation requires the database identity migration."};
   }
 
   if(action==="rename_folder"||action==="move_folder"){

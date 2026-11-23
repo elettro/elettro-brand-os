@@ -27,7 +27,7 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { randomUUID } from "node:crypto";
 import pg from "pg";
 import { LambdaClient, InvokeCommand } from "@aws-sdk/client-lambda";
-import { withDropboxIdentityTransaction, DropboxIdentityConflict } from "./dropbox-identity.mjs";
+import { withDropboxIdentityTransaction, findDropboxAsset, getDropboxIdentityGuard, DropboxIdentityConflict } from "./dropbox-identity.mjs";
 import { handler as existingHandler } from "./db-main.mjs";
 import { gateHttp } from "./api-gate.mjs";
 import { handleDropboxUploadSession } from "./dropbox-upload-session.mjs";
@@ -1543,23 +1543,31 @@ async function browseDropboxFolders(event) {
 
 // DEV: Confirm a Dropbox file by its server-retrieved ID, then register it in Brand OS.
 // Never trust a client-supplied file ID or size; Dropbox is the authority.
-async function completeDropboxUpload(event){
+async function completeDropboxUpload(event, registerExisting = false){
  let client;
  try {
   const body=parseJsonBody(event);
   const brandSlug=String(body.brandSlug||"").trim().toLowerCase();
   const root=DROPBOX_BRAND_ROOTS.find(([slug])=>slug===brandSlug)?.[1];
-  if(!root) return json(400,{ok:false,error:"Invalid brand"});
+  if(!root || (registerExisting && brandSlug===LIBRARY_SLUG)) return json(400,{ok:false,error:"Invalid brand"});
   const path=String(body.path||"").replace(/\\/g,"/");
   if(!path.toLowerCase().startsWith(root.toLowerCase()+"/")) return json(403,{ok:false,error:"File outside brand root"});
   const metadata=body.metadata&&typeof body.metadata==="object"?body.metadata:{};
   const mode=body.mode==="raw"?"raw":"ready";
+  if (registerExisting && body.confirmed!==true)
+    return json(400,{ok:false,error:"Explicit confirmation required"});
+  if (registerExisting && path.slice(1).split("/").some(part => !part || part==="." || part===".." || part.includes("\0")))
+    return json(400,{ok:false,error:"Unsafe Dropbox path"});
   if(!process.env.DROPBOX_SYNC_FUNCTION_NAME)return json(503,{ok:false,error:"Dropbox sync Lambda unavailable"});
   const response=await lambdaInvoker.send(new InvokeCommand({FunctionName:process.env.DROPBOX_SYNC_FUNCTION_NAME,InvocationType:"RequestResponse",Payload:Buffer.from(JSON.stringify({action:"verify-brand-upload",brand:brandSlug,path}))}));
   if(response.FunctionError)return json(502,{ok:false,error:"Dropbox verification Lambda failed"});
   const verification=JSON.parse(Buffer.from(response.Payload||[]).toString("utf8"));
   if(verification.statusCode!==200)return verification;
   const verified=JSON.parse(verification.body||"{}");
+  if (registerExisting && (typeof verified.path !== "string" ||
+      verified.path.toLowerCase() !== path.toLowerCase())) {
+    return json(409,{ok:false,error:"Dropbox resolved a different file path"});
+  }
   const filename=String(verified.name||"");
   const kind=assetKindFromName(filename);
   if(!verified.id||!kind)return json(400,{ok:false,error:"Dropbox file cannot be registered"});
@@ -1568,25 +1576,57 @@ async function completeDropboxUpload(event){
   const brandId=brand.rows[0]?.id;
   if(!brandId)return json(404,{ok:false,error:"Active brand not found"});
   return await withDropboxIdentityTransaction(client, verified.id, brandId, async (existing) => {
-  if(existing)return json(200,{ok:true,created:0,alreadyRegistered:true,asset:existing,path:verified.path,dropboxFileId:verified.id});
-  const approvalStatus=metadata.sendToApprovalQueue?"needs_review":"approved";
-  const eligibilityMode=metadata.eligibilityMode==="window"?"window":"evergreen";
-  const repeatAnnually=Boolean(metadata.repeatAnnually);
-  let eligibilityType="evergreen",eligibleFrom=null,eligibleUntil=null,annualFromMmdd=null,annualUntilMmdd=null;
-  if(eligibilityMode==="window"&&repeatAnnually){eligibilityType="annual";annualFromMmdd=mmddFromDateString(metadata.windowStart);annualUntilMmdd=mmddFromDateString(metadata.windowEnd);}
-  else if(eligibilityMode==="window"){eligibilityType="one_time";eligibleFrom=metadata.windowStart||null;eligibleUntil=metadata.windowEnd||null;}
-  const result=await client.query(`INSERT INTO "Asset" (
-    "brandId","sourceType","sourceExternalId","sourceUrl","sourcePath","sourcePathLower","sourceMetadata","filename","mimeType","fileSizeBytes","kind","ingestStatus","enrichmentStatus","approvalStatus","topic","creativeFamily","creatorNote","priority","eligibilityType","eligibleFrom","eligibleUntil","annualFromMmdd","annualUntilMmdd","allowedDestinations","firstApprovedAt","updatedAt")
-    VALUES ($1,'dropbox',$2,$3,$3,lower($3),$4::jsonb,$5,$6,$7,$8::"AssetKind",$9::"IngestStatus",$10::"EnrichmentStatus",$11::"ApprovalStatus",$12,$13,$14,$15,$16::"EligibilityType",$17::date,$18::date,$19,$20,$21,CASE WHEN $11='approved' AND $9='ready' THEN CURRENT_TIMESTAMP ELSE NULL END,CURRENT_TIMESTAMP)
-    ON CONFLICT DO NOTHING RETURNING "id","filename","ingestStatus","approvalStatus"`,[
-     brandId,verified.id,verified.path,JSON.stringify({dropboxFileId:verified.id,rev:verified.rev,contentHash:verified.contentHash,source:"direct_dropbox",path:verified.path}),filename,
-     kind==="document"?"application/pdf":kind==="image"?"image/"+filename.split(".").pop().toLowerCase():"video/"+filename.split(".").pop().toLowerCase(),String(verified.size),kind,
-     mode==="raw"?"raw":"ready",mode==="raw"?"pending":"reviewed",approvalStatus,
-     String(metadata.topic||"").trim()||null,String(metadata.creativeFamily||"").trim()||null,String(metadata.creatorNote||"").trim()||null,String(metadata.priority||"normal"),eligibilityType,eligibleFrom,eligibleUntil,annualFromMmdd,annualUntilMmdd,uploadDestinationNames(metadata.allowedDestinations)
-  ]);
-  if(!result.rows[0])return json(409,{ok:false,error:"Asset insert did not return a row; check for existing duplicate"});
-  return json(200,{ok:true,created:1,asset:result.rows[0],path:verified.path,dropboxFileId:verified.id,mode});
- });
+    const reuse = (asset) => json(200,{ok:true,created:0,alreadyRegistered:true,asset,path:verified.path,dropboxFileId:verified.id});
+    if (existing) return reuse(existing);
+
+    const mimeType = kind==="document"?"application/pdf":kind+"/"+filename.split(".").pop().toLowerCase();
+    const sourceMetadata = JSON.stringify({
+      dropboxFileId:verified.id,rev:verified.rev,contentHash:verified.contentHash,
+      source:"direct_dropbox",path:verified.path
+    });
+    let result;
+    if (registerExisting) {
+      const guard = await getDropboxIdentityGuard(client);
+      if (!guard.uniquenessIndexValid || !guard.identityCheckValidated) {
+        return json(503,{ok:false,error:"Dropbox identity migration is required before creating assets"});
+      }
+      const fields = normalizeBulkMetadata(metadata);
+      result = await client.query(`INSERT INTO "Asset" (
+        "brandId","sourceType","sourceExternalId","sourceUrl","sourcePath","sourcePathLower","sourceMetadata",
+        "filename","mimeType","fileSizeBytes","kind","ingestStatus","enrichmentStatus","approvalStatus",
+        "title","topic","contentGroup","creativeFamily","creativeNotes","tags","priority","updatedAt")
+        VALUES ($1,'dropbox',$2,$3,$3,lower($3),$4::jsonb,$5,$6,$7,$8::"AssetKind",'raw','pending','needs_review',
+                $9,$10,$11,$12,$13,$14,$15,CURRENT_TIMESTAMP)
+        ON CONFLICT ((COALESCE("sourceExternalId", "sourceFileId"))) WHERE "sourceType" = 'dropbox'
+        DO NOTHING RETURNING "id","filename","ingestStatus","approvalStatus","enrichmentStatus"`,[
+        brandId,verified.id,verified.path,sourceMetadata,filename,mimeType,String(verified.size),kind,
+        fields.title ?? null,fields.topic ?? null,fields.contentGroup ?? null,fields.creativeFamily ?? null,
+        fields.creativeNotes ?? null,fields.tags ?? [],fields.priority ?? "normal"
+      ]);
+    } else {
+      const approvalStatus=metadata.sendToApprovalQueue?"needs_review":"approved";
+      const eligibilityMode=metadata.eligibilityMode==="window"?"window":"evergreen";
+      const repeatAnnually=Boolean(metadata.repeatAnnually);
+      let eligibilityType="evergreen",eligibleFrom=null,eligibleUntil=null,annualFromMmdd=null,annualUntilMmdd=null;
+      if(eligibilityMode==="window"&&repeatAnnually){eligibilityType="annual";annualFromMmdd=mmddFromDateString(metadata.windowStart);annualUntilMmdd=mmddFromDateString(metadata.windowEnd);}
+      else if(eligibilityMode==="window"){eligibilityType="one_time";eligibleFrom=metadata.windowStart||null;eligibleUntil=metadata.windowEnd||null;}
+      result=await client.query(`INSERT INTO "Asset" (
+        "brandId","sourceType","sourceExternalId","sourceUrl","sourcePath","sourcePathLower","sourceMetadata","filename","mimeType","fileSizeBytes","kind","ingestStatus","enrichmentStatus","approvalStatus","topic","creativeFamily","creatorNote","priority","eligibilityType","eligibleFrom","eligibleUntil","annualFromMmdd","annualUntilMmdd","allowedDestinations","firstApprovedAt","updatedAt")
+        VALUES ($1,'dropbox',$2,$3,$3,lower($3),$4::jsonb,$5,$6,$7,$8::"AssetKind",$9::"IngestStatus",$10::"EnrichmentStatus",$11::"ApprovalStatus",$12,$13,$14,$15,$16::"EligibilityType",$17::date,$18::date,$19,$20,$21,CASE WHEN $11='approved' AND $9='ready' THEN CURRENT_TIMESTAMP ELSE NULL END,CURRENT_TIMESTAMP)
+        ON CONFLICT DO NOTHING RETURNING "id","filename","ingestStatus","approvalStatus","enrichmentStatus"`,[
+         brandId,verified.id,verified.path,sourceMetadata,filename,
+         mimeType,String(verified.size),kind,
+         mode==="raw"?"raw":"ready",mode==="raw"?"pending":"reviewed",approvalStatus,
+         String(metadata.topic||"").trim()||null,String(metadata.creativeFamily||"").trim()||null,String(metadata.creatorNote||"").trim()||null,String(metadata.priority||"normal"),eligibilityType,eligibleFrom,eligibleUntil,annualFromMmdd,annualUntilMmdd,uploadDestinationNames(metadata.allowedDestinations)
+      ]);
+    }
+    if (!result.rows[0]) {
+      const concurrent = await findDropboxAsset(client,verified.id,brandId);
+      if (concurrent) return reuse(concurrent);
+      return json(409,{ok:false,error:"Asset insert collided with an unrelated constraint"});
+    }
+    return json(200,{ok:true,created:1,asset:result.rows[0],path:verified.path,dropboxFileId:verified.id,mode:registerExisting?"raw":mode});
+  });
  }catch(error){console.error("[complete-dropbox-upload] failed",error);return json(error instanceof DropboxIdentityConflict ? 409 : 500,{ok:false,error:error instanceof Error?error.message:"Dropbox registration failed"});}
  finally{if(client){try{await client.end();}catch{}}}
 }
@@ -1923,6 +1963,7 @@ export const handler = async (event = {}) => {
   const dropboxAction = event.action || routedBody.action;
   if(dropboxAction === "move-brand-folder") return moveBrandFolder(routedBody,connectDatabase,json);
   if (dropboxAction === "complete-dropbox-upload") return completeDropboxUpload(event);
+  if (dropboxAction === "register-existing-dropbox-asset") return completeDropboxUpload(event, true);
   if (["create-brand-folder", "prepare-brand-upload"].includes(dropboxAction)) return proxyDropboxWrite(event);
   if (dropboxAction === "dropbox-list-folders") return browseDropboxFolders(event);
 

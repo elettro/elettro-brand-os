@@ -116,6 +116,8 @@ export async function POST(request:NextRequest){
   const args=call.arguments as Record<string,unknown>;
   try{
    requireMcpScope(identity,tool.permission,args.brandSlug);
+   if (tool.name==="elettro_register_existing_brand_asset" && args.metadata===undefined)
+    throw new GatewayError(400,"Metadata is required");
    // Action and Dropbox scope are server-owned: caller cannot override them.
    const result=tool.action==="batch_update_asset_metadata"
     ? await batchUpdateAssetMetadata(args)

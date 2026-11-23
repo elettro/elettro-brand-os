@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { SecretsManagerClient, GetSecretValueCommand } from "@aws-sdk/client-secrets-manager";
 import pg from "pg";
-import { withDropboxIdentityTransaction, findDropboxAsset, DropboxIdentityConflict, dropboxCredentials } from "./dropbox-identity.mjs";
+import { withDropboxIdentityTransaction, findDropboxAsset, getDropboxIdentityGuard, DropboxIdentityConflict, dropboxCredentials } from "./dropbox-identity.mjs";
 import { brandFilter, includeShared, SHARED_LIBRARY_SLUG } from "./api-gate.mjs";
 
 const { Client } = pg;
@@ -482,20 +482,10 @@ export const handler = async (event = {}) => {
         )
         SELECT COUNT(*)::int AS "duplicateDropboxIds" FROM collisions
       `);
-      const integrity = await client.query(`
-        SELECT
-          COALESCE((SELECT i.indisvalid AND i.indisunique AND i.indisready
-                    FROM pg_class c JOIN pg_index i ON i.indexrelid = c.oid
-                    WHERE c.relname = 'Asset_dropbox_global_canonical_id_uq'
-                    LIMIT 1), FALSE) AS "uniquenessIndexValid",
-          COALESCE((SELECT c.convalidated
-                    FROM pg_constraint c
-                    WHERE c.conname = 'Asset_dropbox_identity_integrity_ck'
-                    LIMIT 1), FALSE) AS "identityCheckValidated"
-      `);
+      const integrity = await getDropboxIdentityGuard(client);
       return json(200, {
         ok: true, readOnly: true, auditVersion: 2,
-        ...totals.rows[0], ...duplicates.rows[0], ...integrity.rows[0],
+        ...totals.rows[0], ...duplicates.rows[0], ...integrity,
         note: "This audit does not create indexes or modify database records."
       });
     }
@@ -560,6 +550,7 @@ export const handler = async (event = {}) => {
           ok: true, lookupComplete: true, lookupVersion: 2,
           dropboxFileId, queryBrandSlug: brandSlug,
           matchCount,
+          ...(await getDropboxIdentityGuard(client)),
           matches: lookup.rows.map(({ matchCount: _count, ...asset }) => asset)
         });
       }

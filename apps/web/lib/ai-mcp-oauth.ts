@@ -125,14 +125,13 @@ export async function authorizeChatGptOauth(header:string):Promise<McpIdentity>{
  if(!isVerifiedCognitoOwner(user,claims.sub,expected))
   throw new McpAuthorizationError(403,"ChatGPT owner identity denied");
 
- // Only a signed token with the explicit new custom write scope can enable
- // controlled metadata, folder, and staged upload tools. Publishing and
- // arbitrary registration remain excluded regardless of supplied scopes.
+ // Only a verified owner token with the explicit write scope can use
+ // metadata, folder, staged upload, and existing-file registration tools.
  return {
   clientId:"chatgpt_oauth",
   brandSlugs:brandConfigs.map((brand):string=>brand.id).concat(SHARED_LIBRARY_ID),
   permissions:claims.scope.split(" ").includes(MCP_OAUTH_WRITE_SCOPE)
-   ? ["assets:read","folders:read","assets:write","folders:write","assets:upload"]
+   ? ["assets:read","folders:read","assets:write","folders:write","assets:upload","assets:register"]
    : ["assets:read","folders:read"]
  };
 }

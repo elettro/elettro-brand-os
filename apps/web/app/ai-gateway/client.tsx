@@ -254,7 +254,6 @@ export function AiGatewayLabClient(){
     </pre>
     <p className="muted" style={{fontSize:12}}>
      This is a read-only preflight result, not an end-to-end registration write test.
-     New AI registrations remain paused until a full-database Dropbox-ID lookup is available.
     </p>
    </div>}
   </section>
@@ -293,7 +292,6 @@ export function AiGatewayLabClient(){
     </pre>
     <p className="muted" style={{fontSize:12}}>
      This is an authoritative lookup, not a registration-write test.
-     New AI registration remains disabled until atomic uniqueness is enforced at the database level.
     </p>
    </div>}
   </section>
