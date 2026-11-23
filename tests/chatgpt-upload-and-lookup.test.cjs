@@ -227,3 +227,56 @@ test('existing-file registration sends validated metadata to the atomic backend 
   metadata:args.metadata,confirmed:true
  });
 });
+
+test('MCP HTTP lists registration for scoped writers and dispatches an approved brand request',async()=>{
+ const writer={clientId:'chatgpt_private',brandSlugs:['therasbox'],permissions:['assets:read','assets:register']};
+ const reader={...writer,permissions:['assets:read']};
+ const calls=[];
+ const g=load('apps/web/lib/ai-gateway.ts',{
+  '@aws-sdk/client-secrets-manager':secretsMock,
+  '@/lib/brand-config':{gatewayBrandConfigs:[{id:'therasbox',dropboxRoot:'/1---elettro-brand-os/brands/therasbox'}]}
+ },{fetch:async(_url,options)=>{
+  calls.push(JSON.parse(options.body));
+  return json({ok:true,created:1,dropboxFileId:'id:videofile01',asset:{
+   id:ELETTRO_ASSET.id,ingestStatus:'raw',enrichmentStatus:'pending',approvalStatus:'needs_review'
+  }});
+ }});
+ const unusedModules=['ai-mcp-claude-upload','ai-gateway-batch','ai-mcp-intake','ai-mcp-upload','ar-gateway'];
+ const route=load('apps/web/app/api/mcp/route.ts',{
+  ...Object.fromEntries(unusedModules.map(name=>['@/lib/'+name,{}])),
+  '@/lib/cognito-auth':{},
+  '@/lib/ai-mcp-oauth':{},
+  '@/lib/ai-mcp-errors':{mcpErrorText},
+  '@/lib/ai-mcp-auth':{
+   authorizeMcp:async token=>token==='Bearer writer'?writer:reader,
+   requireMcpScope(identity,permission,brand){
+    assert.ok(identity.permissions.includes(permission));
+    assert.ok(identity.brandSlugs.includes(brand));
+   },
+   McpAuthorizationError:class extends Error {}
+  },
+  '@/lib/ai-mcp-tools':load('apps/web/lib/ai-mcp-tools.ts'),
+  '@/lib/ai-gateway':g
+ },{console:{info(){},error(){},warn(){}}});
+ const rpc=async(token,method,params)=>{
+  const response=await route.POST(new Request('https://local.test/api/mcp',{
+   method:'POST',headers:{authorization:'Bearer '+token,'content-type':'application/json'},
+   body:JSON.stringify({jsonrpc:'2.0',id:1,method,params})
+  }));
+  assert.equal(response.status,200);
+  return response.json();
+ };
+ const name='elettro_register_existing_brand_asset';
+ assert.ok((await rpc('writer','tools/list')).result.tools.some(tool=>tool.name===name));
+ assert.ok(!(await rpc('reader','tools/list')).result.tools.some(tool=>tool.name===name));
+ const args={brandSlug:'therasbox',confirmed:true,
+  path:'/1---elettro-brand-os/brands/therasbox/videos/9x16/song-promo-40sec/01_Cereal_Milk_WITH_AUDIO.mp4'};
+ assert.equal((await rpc('reader','tools/call',{name,arguments:args})).error.code,-32601);
+ assert.equal((await rpc('writer','tools/call',{name,arguments:args})).result.isError,true);
+ assert.equal(calls.length,0);
+ const reply=await rpc('writer','tools/call',{name,arguments:{...args,metadata:{title:'Cereal Milk'}}});
+ assert.equal(reply.result.isError,false);
+ assert.equal(reply.result.structuredContent.assetId,ELETTRO_ASSET.id);
+ assert.equal(reply.result.structuredContent.approvalStatus,'needs_review');
+ assert.equal(calls[0].metadata.title,'Cereal Milk');
+});
