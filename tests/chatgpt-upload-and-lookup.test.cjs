@@ -193,3 +193,37 @@ test('result builders: only uploadComplete is ok, and failures carry no success 
  for(const step of ['metadata','global_identity','dropbox_location'])
   assertNotSuccess(results.verificationFailed(file,ASSET_ID,step));
 });
+
+test('existing-file registration sends validated metadata to the atomic backend and returns its asset ID',async()=>{
+ const calls=[];
+ const g=load('apps/web/lib/ai-gateway.ts',{
+  '@aws-sdk/client-secrets-manager':secretsMock,
+  '@/lib/brand-config':{gatewayBrandConfigs:[{id:'therasbox',dropboxRoot:'/1---elettro-brand-os/brands/therasbox'}]}
+ },{fetch:async(url,options)=>{
+  calls.push([url,JSON.parse(options.body)]);
+  const created=calls.length===1?1:0;
+  return json({ok:true,created,dropboxFileId:'id:testposter01',asset:{
+   id:ELETTRO_ASSET.id,ingestStatus:'raw',enrichmentStatus:'pending',approvalStatus:'needs_review'
+  }});
+ }});
+ const args={action:'register_existing_asset',brandSlug:'therasbox',
+  path:'/1---elettro-brand-os/brands/therasbox/images/9x16/group1/trainwreck-poster.png',
+  metadata:{title:'Trainwreck Poster',tags:['9x16']}};
+ await assert.rejects(g.executeAiGateway(args),/Explicit confirmation/);
+ await assert.rejects(g.executeAiGateway({...args,confirmed:true,metadata:{approvalStatus:'approved'}}),/Unsupported metadata/);
+ assert.equal(calls.length,0);
+ const first=await g.executeAiGateway({...args,confirmed:true});
+ const retry=await g.executeAiGateway({...args,confirmed:true});
+ assert.equal(first.assetId,ELETTRO_ASSET.id);
+ assert.equal(first.approvalStatus,'needs_review');
+ assert.equal(first.metadataUpdated,true);
+ assert.equal(retry.assetId,first.assetId);
+ assert.equal(retry.alreadyRegistered,true);
+ assert.equal(retry.metadataUpdated,false);
+ assert.equal(calls.length,2);
+ assert.ok(calls.every(([url])=>url.endsWith('/assets/bulk-update')));
+ assert.deepEqual(calls[0][1],{
+  action:'register-existing-dropbox-asset',brandSlug:args.brandSlug,path:args.path,
+  metadata:args.metadata,confirmed:true
+ });
+});

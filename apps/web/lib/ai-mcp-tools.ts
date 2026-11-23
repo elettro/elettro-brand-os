@@ -44,8 +44,10 @@ export const MCP_TOOLS:ToolDefinition[]=[
   inputSchema:schema({assetId,metadata:{type:"object"},confirmed:approval},["assetId","metadata","confirmed"])},
  {name:"elettro_batch_update_metadata",description:"Update different titles, tags and creative notes for up to 25 existing brand assets after approval; reports each result separately",permission:"assets:write",action:"batch_update_asset_metadata",
   inputSchema:schema({items:{type:"array",minItems:1,maxItems:25,items:{type:"object",properties:{assetId,metadata:{type:"object"}},required:["assetId","metadata"],additionalProperties:false}},confirmed:approval},["items","confirmed"])},
- {name:"elettro_register_brand_asset",description:"Reuse a brand Dropbox file already indexed by its immutable Dropbox ID; new AI registrations are temporarily paused. Requires confirmation.",permission:"assets:register",action:"register_existing_asset",
+ {name:"elettro_register_brand_asset",description:"Register a brand Dropbox file in the approval queue or return its existing asset ID. Requires confirmation.",permission:"assets:register",action:"register_existing_asset",
   inputSchema:schema({path:{type:"string"},metadata:{type:"object"},confirmed:approval},["path","confirmed"])},
+ {name:"elettro_register_existing_brand_asset",description:"Register an existing Dropbox file with metadata, without uploading. New assets need approval; retries return the existing asset ID without editing it. Requires confirmation.",permission:"assets:register",action:"register_existing_asset",
+  inputSchema:schema({path:{type:"string",description:"Full existing Dropbox file path inside the brand"},metadata:{type:"object",description:"Title, topic, contentGroup, creativeFamily, creativeNotes, tags or priority"},confirmed:approval},["path","metadata","confirmed"])},
  {name:"elettro_list_brand_folders",description:"List Dropbox directories for the specified brand",permission:"folders:read",action:"list_folders",
   inputSchema:schema({path:{type:"string"}},[])},
  {name:"elettro_create_brand_folder",description:"Create a folder in the selected brand with approval",permission:"folders:write",action:"create_folder",
@@ -77,7 +79,9 @@ export function toolsForClient(identity:McpIdentity){
    // registry or Dropbox, making read-only client review more predictable.
    annotations:readOnly
     ? {readOnlyHint:true,destructiveHint:false,idempotentHint:true}
-    : {readOnlyHint:false,destructiveHint:true,idempotentHint:false},
+    : t.action==="register_existing_asset"
+      ? {readOnlyHint:false,destructiveHint:false,idempotentHint:true}
+      : {readOnlyHint:false,destructiveHint:true,idempotentHint:false},
    inputSchema:{...t.inputSchema,properties:{...t.inputSchema.properties,brandSlug:{...brandSlug,enum:identity.brandSlugs}}}
   };
  });

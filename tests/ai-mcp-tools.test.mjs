@@ -14,7 +14,7 @@ const all={
 test("brand-only tools are exposed, without stock, deletion or publishing; Claude-only folder moves are explicit",()=>{
  const names=MCP_TOOLS.map(t=>t.name);
  assert.equal(names.length,new Set(names).size);
- assert.equal(names.length,24); // 17 asset/folder tools + 7 Elettro AR tools (drafts only; none publishes)
+ assert.equal(names.length,25); // 18 asset/folder tools + 7 Elettro AR tools (drafts only; none publishes)
  assert.ok(!names.some(name=>/stock|delete|publish/.test(name)));
 });
 
@@ -22,7 +22,7 @@ test("two AI clients with matching scopes see equivalent operations",()=>{
  const chatgpt=toolsForClient(all);
  const claude=toolsForClient({...all,clientId:"claude"});
  assert.deepEqual(chatgpt,claude);
- assert.equal(chatgpt.length,10);
+ assert.equal(chatgpt.length,11);
 });
 
 test("each tool exposes only the caller's allowed brand slugs",()=>{
@@ -56,8 +56,11 @@ test("read-only MCP credentials advertise precisely scoped, non-mutating tools",
 
 test("MCP tools declare mutating operations as not read-only",()=>{
  const writable=toolsForClient(all).filter(t=>!t.annotations.readOnlyHint);
- assert.equal(writable.length,4);
- assert.ok(writable.every(t=>t.annotations.destructiveHint));
+ assert.equal(writable.length,5);
+ const registration=writable.find(t=>t.name==="elettro_register_existing_brand_asset");
+ assert.deepEqual(registration.annotations,{readOnlyHint:false,destructiveHint:false,idempotentHint:true});
+ assert.deepEqual(registration.inputSchema.required,["brandSlug","path","metadata","confirmed"]);
+ assert.equal(findAuthorizedTool(registration.name,{...all,permissions:["assets:write"]}),undefined);
 });
 
 test("write tools declare explicit human confirmation",()=>{
@@ -255,11 +258,11 @@ test("Step 9 Windows credential bootstrap protects raw tokens and grants read-on
  assert.match(auth,/MCP credentials not provisioned/);
 });
 
-test("gateway metadata cannot mark Ready; new AI registration remains paused until atomic uniqueness",()=>{
+test("gateway metadata cannot mark Ready; preflight requires the database uniqueness guard",()=>{
  const source=readFileSync(new URL("../apps/web/lib/ai-gateway.ts",import.meta.url),"utf8");
  assert.match(source,/markReady:\s*false/);
- assert.match(source,/New AI registration is paused until atomic Dropbox-ID uniqueness enforcement/);
- assert.match(source,/safeToRegister:false/);
+ assert.match(source,/safeToRegister=!existing && registry.uniquenessEnforced/);
+ assert.match(source,/lookup.uniquenessIndexValid===true && lookup.identityCheckValidated===true/);
  assert.match(source,/registrationStatus:existing\?"registered":"not_found"/);
  assert.match(source,/lookup\.lookupComplete !== true/);
  assert.match(source,/lookup\.lookupVersion !== 2/);
@@ -295,8 +298,9 @@ test("Step 5 identity inspection is read-only, and registration avoids Raw reset
  const src=readFileSync(new URL("../apps/web/lib/ai-gateway.ts",import.meta.url),"utf8");
  assert.match(src,/action==="inspect_registered_asset"/);
  assert.match(src,/action === "inspect_brand_registration"/);
- assert.match(src,/if\(existing\)\{/);
- assert.match(src,/Existing asset reused\. Registration was skipped/);
+ const backend=readFileSync(new URL("../services/dev-api-lambda/index.mjs",import.meta.url),"utf8");
+ assert.match(backend,/if \(existing\) return reuse\(existing\)/);
+ assert.match(backend,/ON CONFLICT \(\(COALESCE\("sourceExternalId", "sourceFileId"\)\)\)/);
  assert.match(src,/Conflicting registrations for this Dropbox file ID/);
  const verifyTool=MCP_TOOLS.find(t=>t.name==="elettro_verify_brand_asset");
  assert.equal(verifyTool?.permission,"assets:read");
@@ -326,7 +330,6 @@ test("direct Dropbox uploads resolve via sourceExternalId/sourceUrl while sync u
  assert.match(source,/recordData\.sourceExternalId/);
  assert.match(source,/recordData\.sourceFileId/);
  assert.match(source,/lookupVersion !== 2/);
- assert.match(source,/enforces global uniqueness across BOTH Dropbox source columns/);
  assert.match(source,/sourceType!=="dropbox"/);
 });
 
